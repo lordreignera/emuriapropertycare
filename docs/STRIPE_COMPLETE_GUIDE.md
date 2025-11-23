@@ -179,11 +179,13 @@ Test mode is like a **practice environment** where:
 
 #### API Keys in `.env`:
 ```env
-STRIPE_KEY=pk_test_51SSnwi5Yg6BUm7TZz8GMIDdCCoEwt6glFOdJV92xYD8764nmNh6jZEtBfVEu2aoEOoirujGIzO53qTEnHX7Sqm5K004I3J3fy6
-STRIPE_SECRET=sk_test_51SSnwi5Yg6BUm7TZPzFDbo2qdxQ6szV5Khy2L3Nt7LCYBoRI5JT0lXkwUCSsO7xFjA3ZPY2i6O3QFfsHUIXgH0gO00xNWGY1lq
+STRIPE_KEY=pk_test_YOUR_PUBLISHABLE_KEY_HERE
+STRIPE_SECRET=sk_test_YOUR_SECRET_KEY_HERE
 ```
 
 Notice: Both start with `pk_test_` and `sk_test_` = TEST MODE
+
+**Important:** Get your actual keys from your Stripe Dashboard at https://dashboard.stripe.com/test/apikeys
 
 ### Test Credit Cards
 
