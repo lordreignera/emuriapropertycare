@@ -35,7 +35,7 @@ return new class extends Migration
             $table->string('postal_code')->nullable();
             $table->string('country')->default('Canada');
             
-            $table->enum('type', ['house', 'townhome', 'condo', 'duplex', 'multi-unit']);
+            $table->enum('type', ['residential', 'commercial', 'industrial', 'mixed_use', 'house', 'townhome', 'condo', 'duplex', 'multi-unit']);
             $table->integer('year_built')->nullable();
             $table->decimal('square_footage_interior', 10, 2)->default(0);
             $table->decimal('square_footage_green', 10, 2)->default(0);

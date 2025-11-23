@@ -12,11 +12,11 @@ class SuperAdminSeeder extends Seeder
     public function run(): void
     {
         // Create Super Admin User
-        $superAdmin = User::firstOrCreate(
+        $superAdmin = User::updateOrCreate(
             ['email' => 'admin@emuria.com'],
             [
                 'name' => 'Super Administrator',
-                'password' => Hash::make('password'), // Change this in production!
+                'password' => Hash::make('@dm1n2@25'),
                 'email_verified_at' => now(),
             ]
         );
@@ -29,7 +29,7 @@ class SuperAdminSeeder extends Seeder
 
         $this->command->info('Super Admin created successfully!');
         $this->command->info('Email: admin@emuria.com');
-        $this->command->info('Password: password');
-        $this->command->warn('⚠️  IMPORTANT: Change the password in production!');
+        $this->command->info('Password: @dm1n2@25');
+        $this->command->warn('🔒 Strong password set!');
     }
 }

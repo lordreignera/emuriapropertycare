@@ -11,7 +11,10 @@ class Subscription extends Model
     protected $fillable = [
         'user_id',
         'tier_id',
+        'property_id',
+        'custom_product_id',
         'payment_cadence',
+        'payment_model',
         'start_date',
         'end_date',
         'next_billing_date',
@@ -28,7 +31,10 @@ class Subscription extends Model
         'auto_renew' => 'boolean',
     ];
 
-    // Relationships
+    // ========================================
+    // RELATIONSHIPS
+    // ========================================
+    
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
@@ -37,6 +43,19 @@ class Subscription extends Model
     public function tier(): BelongsTo
     {
         return $this->belongsTo(Tier::class);
+    }
+
+    public function property(): BelongsTo
+    {
+        return $this->belongsTo(Property::class);
+    }
+
+    /**
+     * Get the custom product this subscription is for
+     */
+    public function customProduct(): BelongsTo
+    {
+        return $this->belongsTo(ClientCustomProduct::class, 'custom_product_id');
     }
 
     public function properties(): HasMany
@@ -73,10 +92,34 @@ class Subscription extends Model
 
     public function getAmountAttribute(): float
     {
+        // If using custom product
+        if ($this->customProduct) {
+            return $this->payment_cadence === 'annual' 
+                ? ($this->customProduct->annual_price ?? $this->customProduct->total_price * 10)
+                : ($this->customProduct->monthly_price ?? $this->customProduct->total_price);
+        }
+        
+        // Fallback to tier (legacy)
         if (!$this->tier) return 0;
         return $this->payment_cadence === 'annual' 
             ? $this->tier->annual_price 
             : $this->tier->monthly_price;
+    }
+
+    /**
+     * Check if this is a pay-as-you-go subscription
+     */
+    public function isPayAsYouGo(): bool
+    {
+        return $this->payment_model === 'pay_as_you_go';
+    }
+
+    /**
+     * Check if this is a hybrid subscription
+     */
+    public function isHybrid(): bool
+    {
+        return $this->payment_model === 'hybrid';
     }
 
     // Scopes

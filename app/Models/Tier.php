@@ -16,6 +16,8 @@ class Tier extends Model
         'features',
         'monthly_price',
         'annual_price',
+        'stripe_price_id_monthly',
+        'stripe_price_id_annual',
         'coverage_limit',
         'designed_for',
         'is_active',
