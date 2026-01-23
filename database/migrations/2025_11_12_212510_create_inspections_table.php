@@ -10,8 +10,9 @@ return new class extends Migration
     {
         Schema::create('inspections', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('project_id')->constrained()->onDelete('cascade');
-            $table->foreignId('inspector_id')->constrained('users')->onDelete('restrict');
+            $table->foreignId('property_id')->nullable()->constrained()->onDelete('cascade'); // Property for which inspection is scheduled
+            $table->foreignId('project_id')->nullable()->constrained()->onDelete('cascade'); // Nullable since inspection can be scheduled before project creation
+            $table->foreignId('inspector_id')->nullable()->constrained('users')->onDelete('restrict'); // Nullable since client schedules before inspector assigned
             $table->foreignId('assigned_by')->nullable()->constrained('users')->onDelete('set null'); // PM
             
             $table->dateTime('scheduled_date')->nullable();
@@ -47,6 +48,12 @@ return new class extends Migration
             
             $table->enum('status', ['scheduled', 'in_progress', 'completed', 'approved', 'revision_needed'])->default('scheduled');
             
+            // Inspection Fee Payment
+            $table->enum('inspection_fee_status', ['pending', 'paid', 'failed'])->default('pending');
+            $table->timestamp('inspection_fee_paid_at')->nullable();
+            $table->string('stripe_payment_intent_id')->nullable();
+            $table->decimal('inspection_fee_amount', 10, 2)->nullable();
+            
             // Client Approval
             $table->boolean('approved_by_client')->default(false);
             $table->timestamp('client_approved_at')->nullable();
@@ -56,6 +63,7 @@ return new class extends Migration
             
             $table->timestamps();
             
+            $table->index(['property_id', 'status']);
             $table->index(['project_id', 'status']);
             $table->index('inspector_id');
         });

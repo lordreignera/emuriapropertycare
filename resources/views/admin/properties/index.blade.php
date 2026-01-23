@@ -1,6 +1,6 @@
 @extends('admin.layout')
 
-@section('title', 'Property Approvals')
+@section('title', 'Property Management')
 
 @section('content')
 <div class="content-wrapper">
@@ -11,7 +11,7 @@
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <div>
                             <h4 class="card-title mb-0">Property Management</h4>
-                            <p class="text-muted small mb-0">Review and approve client property submissions</p>
+                            <p class="text-muted small mb-0">Manage client properties and inspection assignments</p>
                         </div>
                     </div>
 
@@ -32,37 +32,32 @@
                     <!-- Filter Tabs -->
                     <ul class="nav nav-pills mb-3" role="tablist">
                         <li class="nav-item">
-                            <a class="nav-link {{ request('status') == 'pending_approval' || !request('status') ? 'active' : '' }}" 
-                               href="{{ route('properties.index', ['status' => 'pending_approval']) }}">
-                                Pending Approval 
-                                <span class="badge bg-warning ms-1">{{ \App\Models\Property::where('status', 'pending_approval')->count() }}</span>
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {{ request('status') == 'approved' ? 'active' : '' }}" 
-                               href="{{ route('properties.index', ['status' => 'approved']) }}">
-                                Approved
-                                <span class="badge bg-success ms-1">{{ \App\Models\Property::where('status', 'approved')->count() }}</span>
-                            </a>
-                        </li>
-                        <li class="nav-item">
                             <a class="nav-link {{ request('status') == 'awaiting_inspection' ? 'active' : '' }}" 
                                href="{{ route('properties.index', ['status' => 'awaiting_inspection']) }}">
-                                Awaiting Inspection
-                                <span class="badge bg-info ms-1">{{ \App\Models\Property::where('status', 'awaiting_inspection')->count() }}</span>
+                                <i class="mdi mdi-calendar-check"></i> Scheduled & Paid
+                                <span class="badge bg-success ms-1">
+                                    {{ \App\Models\Inspection::where('inspection_fee_status', 'paid')
+                                        ->where('status', 'scheduled')
+                                        ->whereNull('inspector_id')
+                                        ->count() }}
+                                </span>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {{ request('status') == 'rejected' ? 'active' : '' }}" 
-                               href="{{ route('properties.index', ['status' => 'rejected']) }}">
-                                Rejected
-                                <span class="badge bg-danger ms-1">{{ \App\Models\Property::where('status', 'rejected')->count() }}</span>
+                            <a class="nav-link {{ request('status') == 'active' ? 'active' : '' }}" 
+                               href="{{ route('properties.index', ['status' => 'active']) }}">
+                                <i class="mdi mdi-home-alert"></i> Not Scheduled
+                                <span class="badge bg-warning ms-1">
+                                    {{ \App\Models\Property::where('status', 'active')
+                                        ->whereDoesntHave('inspections')
+                                        ->count() }}
+                                </span>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {{ request('status') == '' && request()->has('status') ? 'active' : '' }}" 
+                            <a class="nav-link {{ !request('status') ? 'active' : '' }}" 
                                href="{{ route('properties.index') }}">
-                                All Properties
+                                <i class="mdi mdi-view-list"></i> All Properties
                             </a>
                         </li>
                     </ul>
@@ -128,19 +123,27 @@
                                         @endif
                                     </td>
                                     <td>
-                                        @if($property->status === 'pending_approval')
-                                        <span class="badge badge-warning">Pending Approval</span>
-                                        @elseif($property->status === 'approved')
-                                        <span class="badge badge-success">Approved</span>
-                                        <br><small class="text-muted">{{ $property->approved_at?->format('M d, Y') }}</small>
-                                        @if(!$property->project_manager_id || !$property->inspector_id)
-                                        <br><small class="text-danger"><i class="mdi mdi-alert"></i> Not Assigned</small>
-                                        @endif
-                                        @elseif($property->status === 'awaiting_inspection')
-                                        <span class="badge badge-info">Awaiting Inspection</span>
-                                        <br><small class="text-muted">Assigned {{ $property->assigned_at?->format('M d, Y') }}</small>
-                                        @elseif($property->status === 'rejected')
-                                        <span class="badge badge-danger">Rejected</span>
+                                        @php
+                                            $paidInspection = $property->inspections()
+                                                ->where('inspection_fee_status', 'paid')
+                                                ->first();
+                                        @endphp
+                                        
+                                        @if($paidInspection)
+                                            <span class="badge badge-success">
+                                                <i class="mdi mdi-check-circle"></i> Scheduled & Paid
+                                            </span>
+                                            <br><small class="text-muted">{{ $paidInspection->inspection_fee_paid_at->format('M d, Y') }}</small>
+                                            @if(!$paidInspection->inspector_id)
+                                                <br><small class="text-danger"><i class="mdi mdi-alert"></i> Inspector Not Assigned</small>
+                                            @else
+                                                <br><small class="text-success"><i class="mdi mdi-check"></i> Inspector Assigned</small>
+                                            @endif
+                                        @else
+                                            <span class="badge badge-warning">
+                                                <i class="mdi mdi-alert-circle-outline"></i> Not Scheduled
+                                            </span>
+                                            <br><small class="text-muted">Awaiting client payment</small>
                                         @endif
                                     </td>
                                     <td>{{ $property->created_at->format('M d, Y') }}</td>
@@ -151,25 +154,20 @@
                                                 <i class="mdi mdi-eye"></i>
                                             </a>
                                             
-                                            @if($property->status === 'pending_approval')
-                                            <button type="button" class="btn btn-sm btn-success" 
-                                                    onclick="approveProperty({{ $property->id }})" 
-                                                    title="Approve">
-                                                <i class="mdi mdi-check"></i>
-                                            </button>
-                                            <button type="button" class="btn btn-sm btn-danger" 
-                                                    onclick="rejectProperty({{ $property->id }})" 
-                                                    title="Reject">
-                                                <i class="mdi mdi-close"></i>
-                                            </button>
-                                            @endif
+                                            @php
+                                                $paidInspection = $property->inspections()
+                                                    ->where('inspection_fee_status', 'paid')
+                                                    ->where('status', 'scheduled')
+                                                    ->first();
+                                                $hasInspectorAssigned = $paidInspection && $paidInspection->inspector_id;
+                                            @endphp
                                             
-                                            @if($property->status === 'approved' && (!$property->project_manager_id || !$property->inspector_id))
-                                            <button type="button" class="btn btn-sm btn-primary" 
-                                                    onclick="assignStaff({{ $property->id }})" 
-                                                    title="Assign Staff">
-                                                <i class="mdi mdi-account-multiple-plus"></i>
-                                            </button>
+                                            @if($paidInspection && !$hasInspectorAssigned)
+                                                <button type="button" class="btn btn-sm btn-primary" 
+                                                        onclick="assignStaff({{ $property->id }})" 
+                                                        title="Assign Inspector">
+                                                    <i class="mdi mdi-account-plus"></i>
+                                                </button>
                                             @endif
                                             
                                             <form action="{{ route('properties.destroy', $property->id) }}" 
@@ -244,7 +242,7 @@
     </div>
 </div>
 
-<!-- Assign Staff Modal -->
+<!-- Assign Project Manager & Inspector Modal -->
 <div class="modal fade" id="assignModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content" style="background-color: #ffffff !important;">
@@ -257,6 +255,19 @@
             <form id="assignForm" method="POST">
                 @csrf
                 <div class="modal-body" style="background-color: #ffffff !important; color: #000000 !important;">
+                    <div class="alert alert-info" style="background-color: #e7f3ff !important; border-color: #b3d9ff !important; color: #004085 !important;">
+                        <i class="mdi mdi-information"></i> 
+                        The client has already scheduled and paid for this inspection.
+                    </div>
+
+                    <!-- Display scheduled date from client -->
+                    <div id="inspectionDetails" class="bg-light p-3 rounded mb-3" style="display: none;">
+                        <p class="mb-2"><strong>Inspection Details:</strong></p>
+                        <p class="mb-1"><i class="mdi mdi-calendar"></i> <span id="scheduledDate"></span></p>
+                        <p class="mb-1"><i class="mdi mdi-cash"></i> <span id="feePaid"></span></p>
+                        <p class="mb-0" id="notesSection" style="display: none;"><i class="mdi mdi-note-text"></i> <span id="inspectionNotes"></span></p>
+                    </div>
+                    
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group mb-3">
@@ -267,25 +278,21 @@
                                     <option value="{{ $pm->id }}">{{ $pm->name }}</option>
                                     @endforeach
                                 </select>
+                                <small class="text-muted" style="color: #666666 !important;">PM supervises the inspection process</small>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="form-group mb-3">
                                 <label for="inspector_id" style="color: #000000 !important;">Inspector <span class="text-danger">*</span></label>
                                 <select name="inspector_id" id="inspector_id" class="form-control" required style="background-color: #ffffff !important; color: #000000 !important;">
-                                    <option value="">-- Select Inspector --</option>
+                                    <option value="">-- Choose Inspector --</option>
                                     @foreach(\App\Models\User::role('Inspector')->get() as $inspector)
-                                    <option value="{{ $inspector->id }}">{{ $inspector->name }}</option>
+                                    <option value="{{ $inspector->id }}">{{ $inspector->name }} ({{ $inspector->email }})</option>
                                     @endforeach
                                 </select>
+                                <small class="text-muted" style="color: #666666 !important;">Assign an inspector to conduct the assessment</small>
                             </div>
                         </div>
-                    </div>
-                    <div class="form-group">
-                        <label for="inspection_scheduled_at" style="color: #000000 !important;">Schedule Inspection (Optional)</label>
-                        <input type="datetime-local" name="inspection_scheduled_at" id="inspection_scheduled_at" 
-                               class="form-control" min="{{ date('Y-m-d\TH:i') }}" style="background-color: #ffffff !important; color: #000000 !important;">
-                        <small class="text-muted" style="color: #666666 !important;">Leave empty to schedule later</small>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -318,6 +325,28 @@ function rejectProperty(propertyId) {
 }
 
 function assignStaff(propertyId) {
+    // Fetch property inspection details via AJAX
+    fetch(`/api/properties/${propertyId}/inspection-details`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.inspection) {
+                // Show inspection details
+                document.getElementById('inspectionDetails').style.display = 'block';
+                document.getElementById('scheduledDate').textContent = 'Scheduled: ' + data.inspection.scheduled_date;
+                document.getElementById('feePaid').textContent = 'Fee Paid: $' + data.inspection.fee_amount;
+                
+                if (data.inspection.notes) {
+                    document.getElementById('notesSection').style.display = 'block';
+                    document.getElementById('inspectionNotes').textContent = 'Notes: ' + data.inspection.notes;
+                } else {
+                    document.getElementById('notesSection').style.display = 'none';
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error fetching inspection details:', error);
+        });
+    
     const form = document.getElementById('assignForm');
     form.action = '/properties/' + propertyId + '/assign';
     const modal = new bootstrap.Modal(document.getElementById('assignModal'));

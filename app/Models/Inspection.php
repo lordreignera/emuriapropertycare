@@ -10,17 +10,22 @@ class Inspection extends Model
 {
     protected $fillable = [
         'project_id',
+        'property_id',
         'inspector_id',
         'assigned_by',
         'scheduled_date',
         'completed_date',
         'summary',
         'findings',
+        'notes',
         'report_file',
         'photos',
         'status',
         'approved_by_client',
         'client_approved_at',
+        'inspection_fee_amount',
+        'inspection_fee_status',
+        'inspection_fee_paid_at',
     ];
 
     protected $casts = [
@@ -30,12 +35,19 @@ class Inspection extends Model
         'photos' => 'array',
         'approved_by_client' => 'boolean',
         'client_approved_at' => 'datetime',
+        'inspection_fee_amount' => 'decimal:2',
+        'inspection_fee_paid_at' => 'datetime',
     ];
 
     // Relationships
     public function project(): BelongsTo
     {
         return $this->belongsTo(Project::class);
+    }
+
+    public function property(): BelongsTo
+    {
+        return $this->belongsTo(Property::class);
     }
 
     public function inspector(): BelongsTo

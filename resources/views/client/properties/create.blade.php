@@ -66,15 +66,14 @@
                                 <label for="type">Property Type <span class="text-danger">*</span></label>
                                 <select class="form-control @error('type') is-invalid @enderror" id="type" name="type" required>
                                     <option value="">Select Type</option>
-                                    <option value="house" {{ old('type') == 'house' ? 'selected' : '' }}>House</option>
-                                    <option value="townhome" {{ old('type') == 'townhome' ? 'selected' : '' }}>Townhome</option>
-                                    <option value="condo" {{ old('type') == 'condo' ? 'selected' : '' }}>Condo</option>
-                                    <option value="duplex" {{ old('type') == 'duplex' ? 'selected' : '' }}>Duplex</option>
-                                    <option value="multi-unit" {{ old('type') == 'multi-unit' ? 'selected' : '' }}>Multi-Unit</option>
+                                    <option value="residential" {{ old('type') == 'residential' ? 'selected' : '' }}>Residential</option>
+                                    <option value="commercial" {{ old('type') == 'commercial' ? 'selected' : '' }}>Commercial</option>
+                                    <option value="mixed_use" {{ old('type') == 'mixed_use' ? 'selected' : '' }}>Mixed-Use</option>
                                 </select>
                                 @error('type')
                                 <span class="invalid-feedback">{{ $message }}</span>
                                 @enderror
+                                <small class="form-text text-muted">This determines pricing calculation method</small>
                             </div>
                         </div>
 
@@ -95,6 +94,71 @@
                                 @enderror
                             </div>
                         </div>
+
+                        {{-- Residential Units (shown for residential and mixed-use) --}}
+                        <div class="col-md-6" id="residential_units_wrapper" style="display:none;">
+                            <div class="form-group">
+                                <label for="residential_units">Number of Residential Units <span class="text-danger">*</span></label>
+                                <input type="number" class="form-control @error('residential_units') is-invalid @enderror" 
+                                    id="residential_units" name="residential_units" value="{{ old('residential_units', 1) }}" 
+                                    min="1" placeholder="e.g., 10 units">
+                                @error('residential_units')
+                                <span class="invalid-feedback">{{ $message }}</span>
+                                @enderror
+                                <small class="form-text text-muted">Used to calculate your pricing tier</small>
+                            </div>
+                        </div>
+
+                        {{-- Mixed-Use Commercial Weight (only for mixed-use) --}}
+                        <div class="col-md-6" id="commercial_weight_wrapper" style="display:none;">
+                            <div class="form-group">
+                                <label for="mixed_use_commercial_weight">Commercial Area Percentage</label>
+                                <input type="number" class="form-control @error('mixed_use_commercial_weight') is-invalid @enderror" 
+                                    id="mixed_use_commercial_weight" name="mixed_use_commercial_weight" 
+                                    value="{{ old('mixed_use_commercial_weight', 50) }}" 
+                                    min="0" max="100" step="0.1" placeholder="50">
+                                @error('mixed_use_commercial_weight')
+                                <span class="invalid-feedback">{{ $message }}</span>
+                                @enderror
+                                <small class="form-text text-muted">What % of the property is commercial? (0-100)</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <script>
+                        document.getElementById('type').addEventListener('change', function() {
+                            const type = this.value;
+                            const unitsWrapper = document.getElementById('residential_units_wrapper');
+                            const weightWrapper = document.getElementById('commercial_weight_wrapper');
+                            const unitsInput = document.getElementById('residential_units');
+                            
+                            if (type === 'residential') {
+                                unitsWrapper.style.display = 'block';
+                                weightWrapper.style.display = 'none';
+                                unitsInput.required = true;
+                            } else if (type === 'mixed_use') {
+                                unitsWrapper.style.display = 'block';
+                                weightWrapper.style.display = 'block';
+                                unitsInput.required = true;
+                            } else if (type === 'commercial') {
+                                unitsWrapper.style.display = 'none';
+                                weightWrapper.style.display = 'none';
+                                unitsInput.required = false;
+                            } else {
+                                unitsWrapper.style.display = 'none';
+                                weightWrapper.style.display = 'none';
+                                unitsInput.required = false;
+                            }
+                        });
+                        
+                        // Trigger on page load if value exists
+                        document.addEventListener('DOMContentLoaded', function() {
+                            const typeSelect = document.getElementById('type');
+                            if (typeSelect.value) {
+                                typeSelect.dispatchEvent(new Event('change'));
+                            }
+                        });
+                    </script>
                     </div>
                 </div>
             </div>

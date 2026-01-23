@@ -110,24 +110,31 @@
       <div class="collapse {{ request()->routeIs('properties.*') ? 'show' : '' }}" id="property-management">
         <ul class="nav flex-column sub-menu">
           <li class="nav-item">
-            <a class="nav-link {{ request()->get('status') == 'pending_approval' ? 'active' : '' }}" href="{{ route('properties.index') }}?status=pending_approval">
-              <i class="mdi mdi-clock-alert"></i> Pending Approval
+            <a class="nav-link {{ request()->get('status') == 'awaiting_inspection' ? 'active' : '' }}" href="{{ route('properties.index') }}?status=awaiting_inspection">
+              <i class="mdi mdi-calendar-check"></i> Scheduled & Paid
               @php
-                  $pendingPropertiesCount = \App\Models\Property::where('status', 'pending_approval')->count();
+                  // Properties with scheduled and paid inspections
+                  $scheduledPaidCount = \App\Models\Inspection::where('inspection_fee_status', 'paid')
+                      ->where('status', 'scheduled')
+                      ->whereNull('inspector_id')
+                      ->count();
               @endphp
-              @if($pendingPropertiesCount > 0)
-              <span class="badge badge-pill badge-warning ms-auto">{{ $pendingPropertiesCount }}</span>
+              @if($scheduledPaidCount > 0)
+              <span class="badge badge-pill badge-success ms-auto">{{ $scheduledPaidCount }}</span>
               @endif
             </a>
           </li>
           <li class="nav-item">
-            <a class="nav-link {{ request()->get('status') == 'approved' ? 'active' : '' }}" href="{{ route('properties.index') }}?status=approved">
-              <i class="mdi mdi-check-circle"></i> Approved Properties
+            <a class="nav-link {{ request()->get('status') == 'active' ? 'active' : '' }}" href="{{ route('properties.index') }}?status=active">
+              <i class="mdi mdi-home-alert"></i> Not Scheduled
               @php
-                  $approvedPropertiesCount = \App\Models\Property::where('status', 'approved')->count();
+                  // Properties without inspections yet (newly added by clients)
+                  $unscheduledCount = \App\Models\Property::where('status', 'active')
+                      ->whereDoesntHave('inspections')
+                      ->count();
               @endphp
-              @if($approvedPropertiesCount > 0)
-              <span class="badge badge-pill badge-success ms-auto">{{ $approvedPropertiesCount }}</span>
+              @if($unscheduledCount > 0)
+              <span class="badge badge-pill badge-warning ms-auto">{{ $unscheduledCount }}</span>
               @endif
             </a>
           </li>
@@ -434,6 +441,171 @@
         </span>
         <span class="menu-title">Manage Products</span>
       </a>
+    </li>
+
+    {{-- CPI Pricing System Management --}}
+    <li class="nav-item menu-items {{ 
+        request()->routeIs('admin.pricing-packages.*') || 
+        request()->routeIs('admin.property-types.*') ||
+        request()->routeIs('admin.cpi-bands.*') ||
+        request()->routeIs('admin.cpi-multipliers.*') ||
+        request()->routeIs('admin.cpi-domains.*') ||
+        request()->routeIs('admin.supply-materials.*') ||
+        request()->routeIs('admin.age-brackets.*') ||
+        request()->routeIs('admin.containment-categories.*') ||
+        request()->routeIs('admin.crawl-access.*') ||
+        request()->routeIs('admin.roof-access.*') ||
+        request()->routeIs('admin.equipment-requirements.*') ||
+        request()->routeIs('admin.complexity-categories.*') ||
+        request()->routeIs('admin.residential-tiers.*') ||
+        request()->routeIs('admin.commercial-settings.*') ||
+        request()->routeIs('admin.mixed-use-settings.*') ||
+        request()->routeIs('admin.pricing-config.*')
+        ? 'active' : '' }}">
+      <a class="nav-link" data-bs-toggle="collapse" href="#cpi-pricing-system" aria-expanded="{{ 
+        request()->routeIs('admin.pricing-packages.*') || 
+        request()->routeIs('admin.property-types.*') ||
+        request()->routeIs('admin.cpi-bands.*') ||
+        request()->routeIs('admin.cpi-multipliers.*') ||
+        request()->routeIs('admin.cpi-domains.*') ||
+        request()->routeIs('admin.supply-materials.*') ||
+        request()->routeIs('admin.age-brackets.*') ||
+        request()->routeIs('admin.containment-categories.*') ||
+        request()->routeIs('admin.crawl-access.*') ||
+        request()->routeIs('admin.roof-access.*') ||
+        request()->routeIs('admin.equipment-requirements.*') ||
+        request()->routeIs('admin.complexity-categories.*') ||
+        request()->routeIs('admin.residential-tiers.*') ||
+        request()->routeIs('admin.commercial-settings.*') ||
+        request()->routeIs('admin.mixed-use-settings.*') ||
+        request()->routeIs('admin.pricing-config.*')
+        ? 'true' : 'false' }}" aria-controls="cpi-pricing-system">
+        <span class="menu-icon">
+          <i class="mdi mdi-calculator"></i>
+        </span>
+        <span class="menu-title">CPI Pricing System</span>
+        <i class="menu-arrow"></i>
+      </a>
+      <div class="collapse {{ 
+        request()->routeIs('admin.pricing-packages.*') || 
+        request()->routeIs('admin.property-types.*') ||
+        request()->routeIs('admin.cpi-bands.*') ||
+        request()->routeIs('admin.cpi-multipliers.*') ||
+        request()->routeIs('admin.cpi-domains.*') ||
+        request()->routeIs('admin.supply-materials.*') ||
+        request()->routeIs('admin.age-brackets.*') ||
+        request()->routeIs('admin.containment-categories.*') ||
+        request()->routeIs('admin.crawl-access.*') ||
+        request()->routeIs('admin.roof-access.*') ||
+        request()->routeIs('admin.equipment-requirements.*') ||
+        request()->routeIs('admin.complexity-categories.*') ||
+        request()->routeIs('admin.residential-tiers.*') ||
+        request()->routeIs('admin.commercial-settings.*') ||
+        request()->routeIs('admin.mixed-use-settings.*') ||
+        request()->routeIs('admin.pricing-config.*')
+        ? 'show' : '' }}" id="cpi-pricing-system">
+        <ul class="nav flex-column sub-menu">
+          {{-- Package & Property Settings --}}
+          <li class="nav-item">
+            <a class="nav-link {{ request()->routeIs('admin.pricing-packages.*') ? 'active' : '' }}" href="{{ route('admin.pricing-packages.index') }}">
+              <i class="mdi mdi-package-variant-closed"></i> Pricing Packages
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {{ request()->routeIs('admin.property-types.*') ? 'active' : '' }}" href="{{ route('admin.property-types.index') }}">
+              <i class="mdi mdi-home-variant"></i> Property Types
+            </a>
+          </li>
+          
+          {{-- CPI Band Settings --}}
+          <li class="nav-item">
+            <a class="nav-link {{ request()->routeIs('admin.cpi-bands.*') ? 'active' : '' }}" href="{{ route('admin.cpi-bands.index') }}">
+              <i class="mdi mdi-chart-box"></i> CPI Band Ranges
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {{ request()->routeIs('admin.cpi-multipliers.*') ? 'active' : '' }}" href="{{ route('admin.cpi-multipliers.index') }}">
+              <i class="mdi mdi-percent"></i> CPI Multipliers
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {{ request()->routeIs('admin.cpi-domains.*') ? 'active' : '' }}" href="{{ route('admin.cpi-domains.index') }}">
+              <i class="mdi mdi-view-module"></i> CPI Domains
+            </a>
+          </li>
+          
+          {{-- Lookup Tables --}}
+          <li class="nav-item">
+            <a class="nav-link {{ request()->routeIs('admin.supply-materials.*') ? 'active' : '' }}" href="{{ route('admin.supply-materials.index') }}">
+              <i class="mdi mdi-pipe"></i> Supply Materials
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {{ request()->routeIs('admin.age-brackets.*') ? 'active' : '' }}" href="{{ route('admin.age-brackets.index') }}">
+              <i class="mdi mdi-calendar-range"></i> Age Brackets
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {{ request()->routeIs('admin.containment-categories.*') ? 'active' : '' }}" href="{{ route('admin.containment-categories.index') }}">
+              <i class="mdi mdi-checkbox-marked-circle"></i> Containment Categories
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {{ request()->routeIs('admin.crawl-access.*') ? 'active' : '' }}" href="{{ route('admin.crawl-access.index') }}">
+              <i class="mdi mdi-arrow-down-bold"></i> Crawl Space Access
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {{ request()->routeIs('admin.roof-access.*') ? 'active' : '' }}" href="{{ route('admin.roof-access.index') }}">
+              <i class="mdi mdi-arrow-up-bold"></i> Roof Access
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {{ request()->routeIs('admin.equipment-requirements.*') ? 'active' : '' }}" href="{{ route('admin.equipment-requirements.index') }}">
+              <i class="mdi mdi-toolbox"></i> Equipment Requirements
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {{ request()->routeIs('admin.complexity-categories.*') ? 'active' : '' }}" href="{{ route('admin.complexity-categories.index') }}">
+              <i class="mdi mdi-puzzle"></i> Complexity Categories
+            </a>
+          </li>
+          
+          {{-- Size Settings --}}
+          <li class="nav-item">
+            <a class="nav-link {{ request()->routeIs('admin.residential-tiers.*') ? 'active' : '' }}" href="{{ route('admin.residential-tiers.index') }}">
+              <i class="mdi mdi-home-group"></i> Residential Size Tiers
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {{ request()->routeIs('admin.commercial-settings.*') ? 'active' : '' }}" href="{{ route('admin.commercial-settings.index') }}">
+              <i class="mdi mdi-office-building"></i> Commercial Size Settings
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {{ request()->routeIs('admin.mixed-use-settings.*') ? 'active' : '' }}" href="{{ route('admin.mixed-use-settings.index') }}">
+              <i class="mdi mdi-home-city"></i> Mixed-Use Settings
+            </a>
+          </li>
+          
+          {{-- System Configuration --}}
+          <li class="nav-item">
+            <a class="nav-link {{ request()->routeIs('admin.pricing-config.*') ? 'active' : '' }}" href="{{ route('admin.pricing-config.index') }}">
+              <i class="mdi mdi-cog"></i> System Configuration
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {{ request()->routeIs('admin.reactive-costs.*') ? 'active' : '' }}" href="{{ route('admin.reactive-costs.index') }}">
+              <i class="mdi mdi-currency-usd"></i> Reactive Cost Assumptions
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {{ request()->routeIs('admin.stewardship-loss.*') ? 'active' : '' }}" href="{{ route('admin.stewardship-loss.index') }}">
+              <i class="mdi mdi-shield-check"></i> Stewardship Loss Reduction
+            </a>
+          </li>
+        </ul>
+      </div>
     </li>
 
     <li class="nav-item menu-items {{ request()->routeIs('admin.reports.*') ? 'active' : '' }}">

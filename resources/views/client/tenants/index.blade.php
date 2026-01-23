@@ -9,13 +9,34 @@
 @endsection
 
 @section('content')
+<!-- Page Header -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border-0 shadow-sm" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+            <div class="card-body text-white p-4">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h3 class="fw-bold mb-1">My Tenants</h3>
+                        <p class="mb-0 opacity-75">Manage tenant information and access</p>
+                    </div>
+                    <div class="text-end">
+                        <div class="badge bg-light text-dark fs-5 px-3 py-2">
+                            <i class="mdi mdi-account-group me-2"></i>{{ $tenants->count() }} Tenants
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Property Selection Card -->
 @if($properties->count() > 0)
 <div class="row mb-4">
     <div class="col-12">
-        <div class="card border-primary">
-            <div class="card-body">
-                <h5 class="card-title mb-3">
+        <div class="card border-0 shadow-sm border-start border-primary border-4">
+            <div class="card-body p-4">
+                <h5 class="fw-bold mb-3">
                     <i class="mdi mdi-home-search text-primary me-2"></i>Select Property to Manage Tenants
                 </h5>
                 <div class="row align-items-end">
@@ -68,8 +89,8 @@
 
 <div class="row">
     <div class="col-12">
-        <div class="card">
-            <div class="card-body">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body p-4">
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <div>
                         <h4 class="card-title mb-0">Tenant List</h4>
@@ -137,9 +158,9 @@
                 @endif
 
                 <div class="table-responsive">
-                    <table id="tenantsTable" class="table table-hover table-striped">
-                        <thead>
-                            <tr>
+                    <table id="tenantsTable" class="table table-hover align-middle">
+                        <thead class="bg-light">
+                            <tr class="text-uppercase small fw-semibold">
                                 <th>Tenant Login</th>
                                 <th>Name</th>
                                 <th>Property</th>

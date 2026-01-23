@@ -1,0 +1,70 @@
+@extends('admin.layout')
+
+@section('content')
+<div class="row">
+    <div class="col-lg-8 mx-auto grid-margin stretch-card">
+        <div class="card">
+            <div class="card-body">
+                <h4 class="card-title">Create Equipment Requirement</h4>
+                
+                <form action="{{ route('admin.equipment-requirements.store') }}" method="POST" class="forms-sample">
+                    @csrf
+
+                    <div class="form-group">
+                        <label for="requirement_code">Requirement Code</label>
+                        <input type="text" class="form-control @error('requirement_code') is-invalid @enderror" 
+                               id="requirement_code" name="requirement_code" value="{{ old('requirement_code') }}" placeholder="Leave empty for auto-generation (EQUIP_001)">
+                        @error('requirement_code')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                        <small class="form-text text-muted">Leave empty to auto-generate</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="requirement_name">Requirement Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control @error('requirement_name') is-invalid @enderror" 
+                               id="requirement_name" name="requirement_name" value="{{ old('requirement_name') }}" required>
+                        @error('requirement_name')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                    </div>
+
+                    <div class="form-group">
+                        <label for="score_points">Score Points <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control @error('score_points') is-invalid @enderror" 
+                               id="score_points" name="score_points" value="{{ old('score_points') }}" required>
+                        @error('score_points')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                        <small class="form-text text-muted">Points contributed to CPI score</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="description">Description</label>
+                        <textarea class="form-control @error('description') is-invalid @enderror" 
+                                  id="description" name="description" rows="3">{{ old('description') }}</textarea>
+                        @error('description')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                    </div>
+
+                    <div class="form-check">
+                        <label class="form-check-label">
+                            <input type="checkbox" class="form-check-input" name="is_active" value="1" 
+                                   {{ old('is_active', true) ? 'checked' : '' }}>
+                            Active
+                        </label>
+                    </div>
+
+                    <div class="mt-4">
+                        <button type="submit" class="btn btn-primary me-2">
+                            <i class="mdi mdi-content-save"></i> Create Requirement
+                        </button>
+                        <a href="{{ route('admin.equipment-requirements.index') }}" class="btn btn-light">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+@endsection

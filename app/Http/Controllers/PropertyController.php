@@ -35,10 +35,23 @@ class PropertyController extends Controller
             // Admins see all properties with status filter
             // Filter by status
             if ($request->filled('status')) {
-                $query->where('status', $request->status);
-            } else {
-                // Default to pending approval for admins
-                $query->where('status', 'pending_approval');
+                $status = $request->status;
+                
+                if ($status === 'awaiting_inspection') {
+                    // Properties with scheduled and paid inspections (no inspector assigned yet)
+                    $propertyIds = \App\Models\Inspection::where('inspection_fee_status', 'paid')
+                        ->where('status', 'scheduled')
+                        ->whereNull('inspector_id')
+                        ->pluck('property_id');
+                    $query->whereIn('id', $propertyIds);
+                } elseif ($status === 'active') {
+                    // Properties without any inspections (not scheduled yet)
+                    $query->where('status', 'active')
+                        ->whereDoesntHave('inspections');
+                } else {
+                    // Other status filters
+                    $query->where('status', $status);
+                }
             }
         }
 
@@ -143,29 +156,51 @@ class PropertyController extends Controller
     }
 
     /**
-     * Assign project manager and inspector to property.
+     * Assign project manager and inspector to a paid inspection.
      */
     public function assign(Request $request, Property $property)
     {
         $validated = $request->validate([
             'project_manager_id' => 'required|exists:users,id',
             'inspector_id' => 'required|exists:users,id',
-            'inspection_scheduled_at' => 'nullable|date|after:now',
         ]);
 
-        $property->project_manager_id = $validated['project_manager_id'];
-        $property->inspector_id = $validated['inspector_id'];
-        $property->assigned_at = now();
-        
-        if (!empty($validated['inspection_scheduled_at'])) {
-            $property->inspection_scheduled_at = $validated['inspection_scheduled_at'];
+        // Find the paid inspection for this property
+        $inspection = $property->inspections()
+            ->where('inspection_fee_status', 'paid')
+            ->where('status', 'scheduled')
+            ->whereNull('inspector_id')
+            ->first();
+
+        if (!$inspection) {
+            return redirect()->back()
+                ->with('error', 'No paid inspection found for this property or staff already assigned.');
         }
-        
-        $property->status = 'awaiting_inspection';
+
+        // Verify the users have correct roles
+        $projectManager = User::findOrFail($validated['project_manager_id']);
+        if (!$projectManager->hasRole('Project Manager')) {
+            return redirect()->back()
+                ->with('error', 'Selected user is not a project manager.');
+        }
+
+        $inspector = User::findOrFail($validated['inspector_id']);
+        if (!$inspector->hasRole('Inspector')) {
+            return redirect()->back()
+                ->with('error', 'Selected user is not an inspector.');
+        }
+
+        // Assign both PM and inspector to the inspection
+        $inspection->inspector_id = $validated['inspector_id'];
+        $inspection->assigned_by = Auth::id();
+        $inspection->save();
+
+        // Also update the property with PM assignment
+        $property->project_manager_id = $validated['project_manager_id'];
         $property->save();
 
         return redirect()->back()
-            ->with('success', "Staff assigned successfully! Property is now awaiting inspection.");
+            ->with('success', "Project Manager and Inspector assigned successfully! Inspection is ready to be conducted.");
     }
 
     /**

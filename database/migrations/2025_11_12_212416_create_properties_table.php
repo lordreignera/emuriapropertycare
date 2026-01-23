@@ -35,7 +35,10 @@ return new class extends Migration
             $table->string('postal_code')->nullable();
             $table->string('country')->default('Canada');
             
-            $table->enum('type', ['residential', 'commercial', 'industrial', 'mixed_use', 'house', 'townhome', 'condo', 'duplex', 'multi-unit']);
+            $table->enum('type', ['residential', 'commercial', 'mixed_use']);
+            $table->string('property_subtype')->nullable(); // house, townhome, condo, duplex, multi-unit, office, retail, warehouse, etc.
+            $table->integer('residential_units')->nullable(); // For residential/mixed-use: used for size factor calculation
+            $table->decimal('mixed_use_commercial_weight', 5, 2)->nullable()->comment('Percentage (0-100) of commercial area for mixed-use properties');
             $table->integer('year_built')->nullable();
             $table->decimal('square_footage_interior', 10, 2)->default(0);
             $table->decimal('square_footage_green', 10, 2)->default(0);
@@ -75,6 +78,12 @@ return new class extends Migration
             $table->enum('status', ['pending_approval', 'approved', 'rejected'])->default('pending_approval');
             $table->timestamp('approved_at')->nullable();
             $table->foreignId('approved_by')->nullable()->constrained('users')->onDelete('set null');
+            
+            // Staff assignments
+            $table->foreignId('project_manager_id')->nullable()->constrained('users')->onDelete('set null');
+            $table->foreignId('inspector_id')->nullable()->constrained('users')->onDelete('set null');
+            $table->timestamp('assigned_at')->nullable();
+            $table->timestamp('inspection_scheduled_at')->nullable();
             
             $table->timestamps();
             

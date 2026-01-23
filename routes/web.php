@@ -93,6 +93,16 @@ Route::middleware([
         Route::get('/inspections', function() {
             return view('client.inspections.index');
         })->name('inspections.index');
+
+        // Schedule & pay for inspection
+        Route::get('/inspections/{property}/schedule', [App\Http\Controllers\Client\InspectionController::class, 'scheduleCreate'])
+            ->name('inspections.schedule');
+        Route::post('/inspections/{property}/schedule', [App\Http\Controllers\Client\InspectionController::class, 'scheduleStore'])
+            ->name('inspections.store-schedule');
+        Route::get('/inspections/checkout-success', [App\Http\Controllers\Client\InspectionController::class, 'checkoutSuccess'])
+            ->name('inspections.checkout-success');
+        Route::get('/inspections/checkout-cancel', [App\Http\Controllers\Client\InspectionController::class, 'checkoutCancel'])
+            ->name('inspections.checkout-cancel');
         
         // Projects
         Route::get('/projects', function() {
@@ -146,6 +156,26 @@ Route::middleware([
         Route::post('products/{product}/recalculate', [App\Http\Controllers\Admin\ProductManagementController::class, 'recalculateComponents'])->name('products.recalculate');
         Route::post('products/{product}/toggle-status', [App\Http\Controllers\Admin\ProductManagementController::class, 'toggleStatus'])->name('products.toggle-status');
         Route::post('products/{product}/duplicate', [App\Http\Controllers\Admin\ProductManagementController::class, 'duplicate'])->name('products.duplicate');
+        
+        // CPI Pricing System Management
+        Route::resource('pricing-packages', App\Http\Controllers\Admin\PricingPackageController::class)->names('pricing-packages');
+        Route::resource('property-types', App\Http\Controllers\Admin\PropertyTypeController::class)->names('property-types');
+        Route::resource('cpi-bands', App\Http\Controllers\Admin\CpiBandController::class)->names('cpi-bands');
+        Route::resource('cpi-multipliers', App\Http\Controllers\Admin\CpiMultiplierController::class)->names('cpi-multipliers');
+        Route::resource('cpi-domains', App\Http\Controllers\Admin\CpiDomainController::class)->names('cpi-domains');
+        Route::resource('supply-materials', App\Http\Controllers\Admin\SupplyMaterialController::class)->names('supply-materials');
+        Route::resource('age-brackets', App\Http\Controllers\Admin\AgeBracketController::class)->names('age-brackets');
+        Route::resource('containment-categories', App\Http\Controllers\Admin\ContainmentCategoryController::class)->names('containment-categories');
+        Route::resource('crawl-access', App\Http\Controllers\Admin\CrawlAccessController::class)->names('crawl-access');
+        Route::resource('roof-access', App\Http\Controllers\Admin\RoofAccessController::class)->names('roof-access');
+        Route::resource('equipment-requirements', App\Http\Controllers\Admin\EquipmentRequirementController::class)->names('equipment-requirements');
+        Route::resource('complexity-categories', App\Http\Controllers\Admin\ComplexityCategoryController::class)->names('complexity-categories');
+        Route::resource('residential-tiers', App\Http\Controllers\Admin\ResidentialTierController::class)->names('residential-tiers');
+        Route::resource('commercial-settings', App\Http\Controllers\Admin\CommercialSettingController::class)->names('commercial-settings');
+        Route::resource('mixed-use-settings', App\Http\Controllers\Admin\MixedUseSettingController::class)->names('mixed-use-settings');
+        Route::resource('pricing-config', App\Http\Controllers\Admin\PricingConfigController::class)->names('pricing-config');
+        Route::resource('reactive-costs', App\Http\Controllers\Admin\ReactiveCostAssumptionController::class)->names('reactive-costs');
+        Route::resource('stewardship-loss', App\Http\Controllers\Admin\StewardshipLossReductionController::class)->names('stewardship-loss');
         
         // Reports
         Route::get('/reports', function() {

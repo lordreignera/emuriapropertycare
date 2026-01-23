@@ -34,30 +34,54 @@
                 <div class="card-body">
                     <div class="row align-items-center">
                         <div class="col-md-6">
-                            <h5 class="mb-2">Property Status</h5>
-                            @if($property->status === 'pending_approval')
-                            <span class="badge badge-warning fs-6">Pending Approval</span>
-                            @elseif($property->status === 'approved')
-                            <span class="badge badge-success fs-6">Approved</span>
-                            <p class="text-muted mt-2 mb-0">
-                                Approved on {{ $property->approved_at?->format('M d, Y') }}
-                            </p>
-                            @elseif($property->status === 'rejected')
-                            <span class="badge badge-danger fs-6">Rejected</span>
+                            <h5 class="mb-2">Inspection Status</h5>
+                            @php
+                                $paidInspection = $property->inspections()
+                                    ->where('inspection_fee_status', 'paid')
+                                    ->first();
+                            @endphp
+                            
+                            @if($paidInspection)
+                                <span class="badge badge-success fs-6">
+                                    <i class="mdi mdi-check-circle"></i> Scheduled & Paid
+                                </span>
+                                <p class="text-muted mt-2 mb-0">
+                                    Paid on {{ $paidInspection->inspection_fee_paid_at->format('M d, Y') }}<br>
+                                    Scheduled for {{ $paidInspection->scheduled_date->format('M d, Y \a\t g:i A') }}
+                                </p>
+                                @if($paidInspection->inspector_id)
+                                    @php
+                                        $inspector = \App\Models\User::find($paidInspection->inspector_id);
+                                    @endphp
+                                    <p class="text-success mt-2 mb-0">
+                                        <i class="mdi mdi-account-check"></i> Inspector: <strong>{{ $inspector->name }}</strong>
+                                    </p>
+                                    @if($property->project_manager_id)
+                                        @php
+                                            $pm = \App\Models\User::find($property->project_manager_id);
+                                        @endphp
+                                        <p class="text-success mt-1 mb-0">
+                                            <i class="mdi mdi-account-supervisor"></i> Project Manager: <strong>{{ $pm->name }}</strong>
+                                        </p>
+                                    @endif
+                                @else
+                                    <p class="text-warning mt-2 mb-0">
+                                        <i class="mdi mdi-alert"></i> Staff not assigned yet
+                                    </p>
+                                @endif
+                            @else
+                                <span class="badge badge-warning fs-6">
+                                    <i class="mdi mdi-alert-circle-outline"></i> Not Scheduled
+                                </span>
+                                <p class="text-muted mt-2 mb-0">
+                                    Awaiting client to schedule and pay for inspection
+                                </p>
                             @endif
                         </div>
                         <div class="col-md-6 text-end">
-                            @if($property->status === 'pending_approval')
-                            <form action="{{ route('properties.update', $property->id) }}" method="POST" class="d-inline">
-                                @csrf
-                                @method('PUT')
-                                <input type="hidden" name="status" value="approved">
-                                <button type="submit" class="btn btn-success me-2" onclick="return confirm('Approve this property?')">
-                                    <i class="mdi mdi-check-circle me-2"></i>Approve Property
-                                </button>
-                            </form>
-                            <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#rejectModal">
-                                <i class="mdi mdi-close-circle me-2"></i>Reject Property
+                            @if($paidInspection && !$paidInspection->inspector_id && Auth::user()->hasRole(['Super Admin', 'Administrator']))
+                            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#assignInspectorModal">
+                                <i class="mdi mdi-account-multiple-plus me-2"></i>Assign Staff
                             </button>
                             @endif
                         </div>
@@ -332,6 +356,80 @@
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="submit" class="btn btn-danger">Reject Property</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Assign Project Manager & Inspector Modal -->
+<div class="modal fade" id="assignInspectorModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Assign Project Manager & Inspector</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form action="{{ route('properties.assign', $property->id) }}" method="POST">
+                @csrf
+                <div class="modal-body">
+                    <div class="alert alert-info">
+                        <i class="mdi mdi-information"></i> 
+                        The client has paid for this inspection. Please assign a Project Manager and Inspector.
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="project_manager_id">Project Manager <span class="text-danger">*</span></label>
+                                <select name="project_manager_id" id="project_manager_id" class="form-control" required>
+                                    <option value="">-- Select Project Manager --</option>
+                                    @php
+                                        $projectManagers = \App\Models\User::role('Project Manager')->get();
+                                    @endphp
+                                    @foreach($projectManagers as $pm)
+                                        <option value="{{ $pm->id }}">{{ $pm->name }} ({{ $pm->email }})</option>
+                                    @endforeach
+                                </select>
+                                <small class="text-muted">PM supervises the inspection process</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group mb-3">
+                                <label for="inspector_id">Inspector <span class="text-danger">*</span></label>
+                                <select name="inspector_id" id="inspector_id" class="form-control" required>
+                                    <option value="">-- Choose Inspector --</option>
+                                    @php
+                                        $inspectors = \App\Models\User::role('Inspector')->get();
+                                    @endphp
+                                    @foreach($inspectors as $inspector)
+                                        <option value="{{ $inspector->id }}">{{ $inspector->name }} ({{ $inspector->email }})</option>
+                                    @endforeach
+                                </select>
+                                <small class="text-muted">Conducts the assessment</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    @php
+                        $paidInspection = $property->inspections()
+                            ->where('inspection_fee_status', 'paid')
+                            ->first();
+                    @endphp
+                    @if($paidInspection)
+                    <div class="bg-light p-3 rounded">
+                        <p class="mb-2"><strong>Inspection Details:</strong></p>
+                        <p class="mb-1"><i class="mdi mdi-calendar"></i> Scheduled: {{ $paidInspection->scheduled_date->format('M d, Y \a\t g:i A') }}</p>
+                        <p class="mb-1"><i class="mdi mdi-cash"></i> Fee Paid: ${{ number_format($paidInspection->inspection_fee_amount, 2) }}</p>
+                        @if($paidInspection->notes)
+                        <p class="mb-0"><i class="mdi mdi-note-text"></i> Notes: {{ $paidInspection->notes }}</p>
+                        @endif
+                    </div>
+                    @endif
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Assign Staff</button>
                 </div>
             </form>
         </div>

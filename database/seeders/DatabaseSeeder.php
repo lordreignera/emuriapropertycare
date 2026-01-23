@@ -17,6 +17,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             RolePermissionSeeder::class,
             SuperAdminSeeder::class,
+            CPIPricingSystemSeeder::class,
             // TierSeeder::class, // REMOVED: Tiers are now generated per client after inspection
         ]);
         
