@@ -41,7 +41,7 @@
 
         .register-left {
             flex: 1;
-            background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+            background: linear-gradient(135deg, #5b67ca 0%, #4854b8 100%);
             padding: 60px 40px;
             color: white;
             display: flex;
@@ -199,9 +199,9 @@
 
         .form-control:focus {
             outline: none;
-            border-color: #2ecc71;
+            border-color: #5b67ca;
             background: white;
-            box-shadow: 0 0 0 3px rgba(46, 204, 113, 0.1);
+            box-shadow: 0 0 0 3px rgba(91, 103, 202, 0.1);
         }
 
         .password-toggle {
@@ -225,7 +225,7 @@
         }
 
         .password-toggle:hover {
-            color: #2ecc71;
+            color: #5b67ca;
         }
 
         .password-toggle:active {
@@ -244,7 +244,7 @@
             margin-right: 10px;
             margin-top: 2px;
             cursor: pointer;
-            accent-color: #2ecc71;
+            accent-color: #5b67ca;
             flex-shrink: 0;
         }
 
@@ -257,7 +257,7 @@
         }
 
         .checkbox-wrapper label a {
-            color: #2ecc71;
+            color: #5b67ca;
             text-decoration: none;
             font-weight: 500;
         }
@@ -269,7 +269,7 @@
         .btn-register {
             width: 100%;
             padding: 16px;
-            background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+            background: linear-gradient(135deg, #5b67ca 0%, #4854b8 100%);
             color: white;
             border: none;
             border-radius: 10px;
@@ -277,7 +277,7 @@
             font-weight: 700;
             cursor: pointer;
             transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(46, 204, 113, 0.3);
+            box-shadow: 0 4px 15px rgba(91, 103, 202, 0.3);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -286,7 +286,7 @@
 
         .btn-register:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(46, 204, 113, 0.4);
+            box-shadow: 0 6px 20px rgba(91, 103, 202, 0.4);
         }
 
         .btn-register:active {
@@ -325,7 +325,7 @@
         }
 
         .login-link a {
-            color: #2ecc71;
+            color: #5b67ca;
             font-weight: 600;
             text-decoration: none;
         }

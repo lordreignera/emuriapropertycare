@@ -62,7 +62,7 @@
                             @foreach($properties as $property)
                             <tr>
                                 <td>
-                                    <span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25 fw-semibold">
+                                    <span class="text-dark fw-semibold">
                                         {{ $property->property_code }}
                                     </span>
                                 </td>
@@ -75,7 +75,7 @@
                                     </div>
                                 </td>
                                 <td>
-                                    <span class="badge bg-secondary bg-opacity-10 text-secondary">
+                                    <span class="text-dark">
                                         {{ ucfirst(str_replace('_', ' ', $property->type)) }}
                                     </span>
                                 </td>
@@ -106,8 +106,8 @@
                                 </td>
                                 <td>
                                     @if($property->property_photos && count($property->property_photos) > 0)
-                                        <span class="badge bg-primary bg-opacity-10 text-primary">
-                                            <i class="mdi mdi-image me-1"></i>{{ count($property->property_photos) }} photos
+                                        <span class="text-dark">
+                                            <i class="mdi mdi-image me-1 text-primary"></i>{{ count($property->property_photos) }} photos
                                         </span>
                                     @else
                                         <span class="text-muted small">No photos</span>

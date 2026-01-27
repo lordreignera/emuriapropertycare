@@ -14,11 +14,18 @@
     {{-- Property Status Banner --}}
     <div class="col-12 mb-3">
         @if($property->status === 'pending_approval')
-        <div class="alert alert-warning d-flex align-items-center" role="alert">
-            <i class="mdi mdi-clock-outline me-3" style="font-size: 2rem;"></i>
+        <div class="alert alert-info d-flex align-items-center" role="alert">
+            <i class="mdi mdi-calendar-check me-3" style="font-size: 2rem;"></i>
             <div class="flex-grow-1">
-                <h5 class="alert-heading mb-1">Pending Approval</h5>
-                <p class="mb-0">Your property is currently under review. You'll be notified once it's approved.</p>
+                <h5 class="alert-heading mb-1">Action Required: Schedule Your Inspection</h5>
+                <p class="mb-2">Your property has been added successfully! To get started, you need to:</p>
+                <ol class="mb-2 ps-3">
+                    <li>Schedule your property for inspection/assessment</li>
+                    <li>Complete the payment to confirm your assessment</li>
+                </ol>
+                <a href="{{ route('client.inspections.schedule', $property->id) }}" class="btn btn-primary btn-sm mt-2">
+                    <i class="mdi mdi-calendar-plus me-1"></i> Schedule Inspection Now
+                </a>
             </div>
         </div>
         @elseif($property->status === 'approved')

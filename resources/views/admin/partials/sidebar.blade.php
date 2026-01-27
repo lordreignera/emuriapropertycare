@@ -3,7 +3,7 @@
   <div class="sidebar-brand-wrapper d-none d-lg-flex align-items-center justify-content-center fixed-top">
     <a class="sidebar-brand brand-logo" href="{{ route('dashboard') }}">
       <span style="color: #fff; font-size: 1.5rem; font-weight: 700;">
-        EMURIA<span style="color: #FFB800;">PropertyCare</span>
+        ETOGO<span style="color: #FFB800;"></span>
       </span>
     </a>
     <a class="sidebar-brand brand-logo-mini" href="{{ route('dashboard') }}">
@@ -434,14 +434,7 @@
       </div>
     </li>
 
-    <li class="nav-item menu-items {{ request()->routeIs('admin.products.*') ? 'active' : '' }}">
-      <a class="nav-link" href="{{ route('admin.products.index') }}">
-        <span class="menu-icon">
-          <i class="mdi mdi-package-variant"></i>
-        </span>
-        <span class="menu-title">Manage Products</span>
-      </a>
-    </li>
+    {{-- Client & Subscription Management --}}
 
     {{-- CPI Pricing System Management --}}
     <li class="nav-item menu-items {{ 
@@ -622,111 +615,160 @@
 </nav>
 
 <style>
-/* Override sidebar dark theme with white background - More specific selectors */
+/* CRITICAL: Sidebar with blue background - Maximum specificity */
 body .sidebar,
 body.light-theme .sidebar,
-.sidebar.sidebar-offcanvas {
-    background: #ffffff !important;
-    background-image: none !important;
-    background-color: #ffffff !important;
-    box-shadow: 0 0 20px rgba(0, 0, 0, 0.1) !important;
+.sidebar.sidebar-offcanvas,
+body .sidebar.sidebar-offcanvas,
+body.light-theme .sidebar.sidebar-offcanvas,
+html body .sidebar,
+html body.light-theme .sidebar {
+    background: linear-gradient(180deg, #5b67ca 0%, #4854b8 100%) !important;
+    background-image: linear-gradient(180deg, #5b67ca 0%, #4854b8 100%) !important;
+    background-color: #5b67ca !important;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.3) !important;
+    border: none !important;
 }
 
-/* Update brand wrapper to match */
+/* Update brand wrapper to match - Maximum specificity */
 body .sidebar .sidebar-brand-wrapper,
-body.light-theme .sidebar .sidebar-brand-wrapper {
-    background: #ffffff !important;
+body.light-theme .sidebar .sidebar-brand-wrapper,
+html body .sidebar .sidebar-brand-wrapper,
+.sidebar.sidebar-offcanvas .sidebar-brand-wrapper {
+    background: rgba(255, 255, 255, 0.1) !important;
     background-image: none !important;
-    border-bottom: 1px solid #e5e5e5 !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
 }
 
-/* Change brand text colors for visibility on white */
-.sidebar .sidebar-brand-wrapper .sidebar-brand span {
-    color: #2c3e50 !important;
+/* Change brand text colors for visibility on blue */
+.sidebar .sidebar-brand-wrapper .sidebar-brand span,
+body .sidebar .sidebar-brand-wrapper .sidebar-brand span {
+    color: #ffffff !important;
 }
 
-.sidebar .sidebar-brand-wrapper .brand-logo-mini span {
+.sidebar .sidebar-brand-wrapper .brand-logo-mini span,
+body .sidebar .sidebar-brand-wrapper .brand-logo-mini span {
     color: #FFB800 !important;
 }
 
-/* Update navigation text colors */
-.sidebar .nav .nav-item .nav-link {
-    color: #2c3e50 !important;
+/* Update navigation text colors - Maximum specificity */
+.sidebar .nav .nav-item .nav-link,
+body .sidebar .nav .nav-item .nav-link,
+body.light-theme .sidebar .nav .nav-item .nav-link {
+    color: rgba(255, 255, 255, 0.9) !important;
 }
 
-.sidebar .nav .nav-item .nav-link .menu-icon {
-    color: #6c757d !important;
+.sidebar .nav .nav-item .nav-link .menu-icon,
+body .sidebar .nav .nav-item .nav-link .menu-icon,
+body.light-theme .sidebar .nav .nav-item .nav-link .menu-icon {
+    color: rgba(255, 255, 255, 0.7) !important;
 }
 
-.sidebar .nav .nav-item .nav-link .menu-title {
-    color: #2c3e50 !important;
+.sidebar .nav .nav-item .nav-link .menu-title,
+body .sidebar .nav .nav-item .nav-link .menu-title,
+body.light-theme .sidebar .nav .nav-item .nav-link .menu-title {
+    color: rgba(255, 255, 255, 0.9) !important;
 }
 
-/* Active menu item */
-.sidebar .nav .nav-item.active > .nav-link {
-    background: #f8f9fa !important;
-    color: #191c24 !important;
+/* Active menu item - Maximum specificity */
+.sidebar .nav .nav-item.active > .nav-link,
+body .sidebar .nav .nav-item.active > .nav-link,
+body.light-theme .sidebar .nav .nav-item.active > .nav-link {
+    background: rgba(0, 0, 0, 0.2) !important;
+    color: #ffffff !important;
 }
 
-.sidebar .nav .nav-item.active > .nav-link .menu-icon {
-    color: #FFB800 !important;
+.sidebar .nav .nav-item.active > .nav-link .menu-icon,
+body .sidebar .nav .nav-item.active > .nav-link .menu-icon {
+    color: #ffffff !important;
 }
 
-/* Hover effect - WHITE BACKGROUND */
-.sidebar .nav .nav-item .nav-link:hover {
-    background: #f8f9fa !important;
+.sidebar .nav .nav-item.active > .nav-link .menu-title,
+body .sidebar .nav .nav-item.active > .nav-link .menu-title {
+    color: #ffffff !important;
+}
+
+/* Hover effect - Maximum specificity */
+.sidebar .nav .nav-item .nav-link:hover,
+body .sidebar .nav .nav-item .nav-link:hover,
+body.light-theme .sidebar .nav .nav-item .nav-link:hover {
+    background: rgba(255, 255, 255, 0.15) !important;
+    color: #ffffff !important;
+}
+
+.sidebar .nav .nav-item .nav-link:hover .menu-icon,
+.sidebar .nav .nav-item .nav-link:hover .menu-title,
+body .sidebar .nav .nav-item .nav-link:hover .menu-icon,
+body .sidebar .nav .nav-item .nav-link:hover .menu-title {
+    color: #ffffff !important;
 }
 
 /* Submenu hover */
 .sidebar .nav .nav-item .sub-menu .nav-item .nav-link:hover {
-    background: #f8f9fa !important;
+    background: rgba(255, 255, 255, 0.15) !important;
+    color: #ffffff !important;
+}
+
+/* Submenu active */
+.sidebar .nav .nav-item .sub-menu .nav-item .nav-link.active {
+    background: rgba(0, 0, 0, 0.2) !important;
+    color: #ffffff !important;
 }
 
 /* Category headers */
-.sidebar .nav .nav-category {
-    color: #6c757d !important;
+.sidebar .nav .nav-category,
+body .sidebar .nav .nav-category,
+body.light-theme .sidebar .nav .nav-category {
+    color: rgba(255, 255, 255, 0.6) !important;
 }
 
 /* Profile section */
 .sidebar .nav .nav-item.profile {
-    border-bottom: 1px solid #e5e5e5;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .sidebar .nav .nav-item.profile .profile-name h5 {
-    color: #2c3e50 !important;
+    color: #ffffff !important;
 }
 
 .sidebar .nav .nav-item.profile .profile-name span {
-    color: #6c757d !important;
+    color: rgba(255, 255, 255, 0.7) !important;
 }
 
 /* Badges */
 .sidebar .badge {
-    background-color: #FFB800 !important;
-    color: #000000 !important;
+    background-color: #ffffff !important;
+    color: #5b67ca !important;
+    font-weight: 600 !important;
 }
 
 .sidebar .badge-warning {
-    background-color: #ffc107 !important;
+    background-color: #ffffff !important;
+    color: #5b67ca !important;
+    font-weight: 600 !important;
 }
 
 .sidebar .badge-success {
-    background-color: #28a745 !important;
-    color: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #5b67ca !important;
+    font-weight: 600 !important;
 }
 
 .sidebar .badge-danger {
-    background-color: #dc3545 !important;
-    color: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #5b67ca !important;
+    font-weight: 600 !important;
 }
 
 .sidebar .badge-info {
-    background-color: #17a2b8 !important;
-    color: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #5b67ca !important;
+    font-weight: 600 !important;
 }
 
 .sidebar .badge-primary {
-    background-color: #007bff !important;
-    color: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #5b67ca !important;
+    font-weight: 600 !important;
 }
 </style>

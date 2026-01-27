@@ -8,6 +8,39 @@
     <title>{{ config('app.name', 'EMURIA Property Care') }} - @yield('title', 'Dashboard')</title>
     
     @include('admin.partials.styles')
+    
+    {{-- Fix layout for client dashboard --}}
+    <style>
+        /* Override black background */
+        body.light-theme .content-wrapper,
+        .light-theme .content-wrapper,
+        .content-wrapper {
+            background: #f5f7ff !important;
+            min-height: calc(100vh - 150px) !important;
+        }
+        
+        /* Footer styling - fixed at bottom */
+        .footer {
+            background: #ffffff !important;
+            border-top: 1px solid #e5e5e5 !important;
+            width: 100% !important;
+            margin-left: 0 !important;
+        }
+        
+        .footer .text-muted {
+            color: #6c757d !important;
+        }
+        
+        .footer a {
+            color: #5b67ca !important;
+            text-decoration: none !important;
+        }
+        
+        .footer a:hover {
+            color: #4854b8 !important;
+            text-decoration: underline !important;
+        }
+    </style>
 </head>
 <body class="light-theme">
     <div class="container-scroller">
@@ -73,9 +106,6 @@
                     {{-- Page Content --}}
                     @yield('content')
                 </div>
-                
-                {{-- Footer --}}
-                @include('admin.partials.footer')
             </div>
         </div>
     </div>

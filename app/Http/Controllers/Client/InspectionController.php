@@ -91,7 +91,7 @@ class InspectionController extends Controller
                 'project_id' => null, // Will be set when project is created later
                 'scheduled_date' => $validated['preferred_date'] . ' ' . ($validated['preferred_time'] ?? '09:00'),
                 'status' => 'scheduled',
-                'notes' => $validated['special_notes'] ?? null,
+                'summary' => $validated['special_notes'] ?? null,
                 'inspection_fee_amount' => self::INSPECTION_FEE_DOLLARS,
                 'inspection_fee_status' => 'paid',
                 'inspection_fee_paid_at' => now(),
