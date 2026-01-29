@@ -46,14 +46,38 @@
                         @enderror
                     </div>
 
-                    <div class="form-group">
-                        <label for="lookup_table">Lookup Table</label>
-                        <input type="text" class="form-control @error('lookup_table') is-invalid @enderror" 
-                               id="lookup_table" name="lookup_table" value="{{ old('lookup_table') }}">
+                    <div class="form-group" id="lookup_table_group" style="display: none;">
+                        <label for="lookup_table">Lookup Table <span class="text-danger">*</span></label>
+                        <select class="form-control @error('lookup_table') is-invalid @enderror" 
+                                id="lookup_table" name="lookup_table">
+                            <option value="">-- Select Lookup Table --</option>
+                            <option value="supply_line_materials" {{ old('lookup_table') == 'supply_line_materials' ? 'selected' : '' }}>
+                                Supply Line Materials (Max: 4 pts)
+                            </option>
+                            <option value="age_brackets" {{ old('lookup_table') == 'age_brackets' ? 'selected' : '' }}>
+                                Age Brackets (Max: 4 pts)
+                            </option>
+                            <option value="containment_categories" {{ old('lookup_table') == 'containment_categories' ? 'selected' : '' }}>
+                                Containment Categories (Max: 3 pts)
+                            </option>
+                            <option value="crawl_access_categories" {{ old('lookup_table') == 'crawl_access_categories' ? 'selected' : '' }}>
+                                Crawl Access Categories (Max: 4 pts)
+                            </option>
+                            <option value="roof_access_categories" {{ old('lookup_table') == 'roof_access_categories' ? 'selected' : '' }}>
+                                Roof Access Categories (Max: 3 pts)
+                            </option>
+                            <option value="equipment_requirements" {{ old('lookup_table') == 'equipment_requirements' ? 'selected' : '' }}>
+                                Equipment Requirements (Max: 3 pts)
+                            </option>
+                            <option value="complexity_categories" {{ old('lookup_table') == 'complexity_categories' ? 'selected' : '' }}>
+                                Complexity Categories (Max: 3 pts)
+                            </option>
+                        </select>
                         @error('lookup_table')
                             <div class="invalid-feedback">{{ $message }}</div>
                         @enderror
-                        <small class="form-text text-muted">Required if field type is "lookup". e.g., supply_line_materials, age_brackets</small>
+                        <small class="form-text text-muted">Select which lookup table to use for dropdown options</small>
+                        <div id="lookup_table_info"></div>
                     </div>
 
                     <div class="form-group">
@@ -66,13 +90,73 @@
                     </div>
 
                     <div class="form-group">
-                        <label for="calculation_rule">Calculation Rule (JSON)</label>
-                        <textarea class="form-control @error('calculation_rule') is-invalid @enderror" 
-                                  id="calculation_rule" name="calculation_rule" rows="3">{{ old('calculation_rule') }}</textarea>
+                        <label for="calculation_rule">Calculation Rule</label>
+                        
+                        {{-- Hidden field to store JSON --}}
+                        <input type="hidden" id="calculation_rule" name="calculation_rule" value="{{ old('calculation_rule') }}">
+                        
+                        {{-- Yes/No Scoring Inputs --}}
+                        <div id="yes_no_scoring" style="display: none;">
+                            <div class="card bg-light p-3">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <label>Points when answer is "No"</label>
+                                        <input type="number" class="form-control" id="score_no" min="0" placeholder="e.g., 3">
+                                        <small class="text-muted">Higher risk = more points</small>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label>Points when answer is "Yes"</label>
+                                        <input type="number" class="form-control" id="score_yes" min="0" placeholder="e.g., 0">
+                                        <small class="text-muted">Lower risk = fewer points</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {{-- Lookup Scoring --}}
+                        <div id="lookup_scoring" style="display: none;">
+                            <div class="alert alert-info">
+                                <i class="mdi mdi-information-outline"></i>
+                                <strong>Lookup Scoring:</strong> Points come from the selected lookup table's score_points column.
+                            </div>
+                        </div>
+                        
+                        {{-- Numeric Threshold Scoring --}}
+                        <div id="numeric_threshold_scoring" style="display: none;">
+                            <div class="card bg-light p-3">
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <label>Threshold Value</label>
+                                        <input type="number" class="form-control" id="threshold_value" placeholder="e.g., 90">
+                                        <small class="text-muted">If value exceeds this...</small>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label>Points when exceeded</label>
+                                        <input type="number" class="form-control" id="threshold_points" min="0" placeholder="e.g., 2">
+                                        <small class="text-muted">Award this many points</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {{-- Numeric Age Lookup --}}
+                        <div id="numeric_age_scoring" style="display: none;">
+                            <div class="alert alert-info">
+                                <i class="mdi mdi-information-outline"></i>
+                                <strong>Age Bracket Scoring:</strong> Age value will be looked up in age_brackets table to get score.
+                            </div>
+                        </div>
+                        
+                        {{-- Manual JSON (fallback) --}}
+                        <div id="manual_json_scoring" style="display: none;">
+                            <textarea class="form-control @error('calculation_rule') is-invalid @enderror" 
+                                      id="manual_rule" rows="3" placeholder='{"key": "value"}'></textarea>
+                            <small class="form-text text-muted">Advanced: Enter custom JSON calculation rule</small>
+                        </div>
+                        
                         @error('calculation_rule')
-                            <div class="invalid-feedback">{{ $message }}</div>
+                            <div class="invalid-feedback d-block">{{ $message }}</div>
                         @enderror
-                        <small class="form-text text-muted">e.g., {"no": 3, "yes": 0} or {"source": "lookup_score"}</small>
                     </div>
 
                     <div class="form-group">
@@ -120,4 +204,144 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const fieldTypeSelect = document.getElementById('field_type');
+    const lookupTableGroup = document.getElementById('lookup_table_group');
+    const lookupTableSelect = document.getElementById('lookup_table');
+    const calculationRuleInput = document.getElementById('calculation_rule');
+    
+    // Scoring input sections
+    const yesNoScoring = document.getElementById('yes_no_scoring');
+    const lookupScoring = document.getElementById('lookup_scoring');
+    const numericThresholdScoring = document.getElementById('numeric_threshold_scoring');
+    const numericAgeScoring = document.getElementById('numeric_age_scoring');
+    const manualJsonScoring = document.getElementById('manual_json_scoring');
+    
+    // Individual inputs
+    const scoreNo = document.getElementById('score_no');
+    const scoreYes = document.getElementById('score_yes');
+    const thresholdValue = document.getElementById('threshold_value');
+    const thresholdPoints = document.getElementById('threshold_points');
+    const manualRule = document.getElementById('manual_rule');
+    
+    // Update UI based on field type
+    function updateFormFields() {
+        const fieldType = fieldTypeSelect.value;
+        
+        // Hide all sections first
+        lookupTableGroup.style.display = 'none';
+        yesNoScoring.style.display = 'none';
+        lookupScoring.style.display = 'none';
+        numericThresholdScoring.style.display = 'none';
+        numericAgeScoring.style.display = 'none';
+        manualJsonScoring.style.display = 'none';
+        
+        // Make lookup table not required by default
+        lookupTableSelect.removeAttribute('required');
+        
+        if (fieldType === 'yes_no') {
+            yesNoScoring.style.display = 'block';
+        } else if (fieldType === 'lookup') {
+            lookupTableGroup.style.display = 'block';
+            lookupScoring.style.display = 'block';
+            lookupTableSelect.setAttribute('required', 'required');
+        } else if (fieldType === 'numeric') {
+            numericThresholdScoring.style.display = 'block';
+        } else if (fieldType === 'calculated') {
+            manualJsonScoring.style.display = 'block';
+        }
+    }
+    
+    // Build JSON from UI inputs
+    function buildCalculationRule() {
+        const fieldType = fieldTypeSelect.value;
+        let rule = {};
+        
+        if (fieldType === 'yes_no') {
+            rule = {
+                no: parseInt(scoreNo.value) || 0,
+                yes: parseInt(scoreYes.value) || 0
+            };
+        } else if (fieldType === 'lookup') {
+            rule = {
+                source: 'lookup_score'
+            };
+        } else if (fieldType === 'numeric') {
+            if (lookupTableSelect.value === 'age_brackets') {
+                rule = {
+                    lookup_by_age: true
+                };
+            } else if (thresholdValue.value) {
+                rule = {
+                    range: [parseInt(thresholdValue.value), 999],
+                    points: parseInt(thresholdPoints.value) || 0
+                };
+            }
+        } else if (fieldType === 'calculated' && manualRule.value) {
+            try {
+                rule = JSON.parse(manualRule.value);
+            } catch (e) {
+                console.error('Invalid JSON in manual rule');
+            }
+        }
+        
+        calculationRuleInput.value = JSON.stringify(rule);
+    }
+    
+    // Lookup table max points mapping
+    const lookupTableMaxPoints = {
+        'supply_line_materials': 4,
+        'age_brackets': 4,
+        'containment_categories': 3,
+        'crawl_access_categories': 4,
+        'roof_access_categories': 3,
+        'equipment_requirements': 3,
+        'complexity_categories': 3
+    };
+    
+    // Event listeners
+    fieldTypeSelect.addEventListener('change', updateFormFields);
+    lookupTableSelect.addEventListener('change', function() {
+        if (fieldTypeSelect.value === 'numeric' && this.value === 'age_brackets') {
+            numericThresholdScoring.style.display = 'none';
+            numericAgeScoring.style.display = 'block';
+        }
+        
+        // Auto-populate max_points based on selected lookup table
+        if (this.value && lookupTableMaxPoints[this.value]) {
+            document.getElementById('max_points').value = lookupTableMaxPoints[this.value];
+            // Show info message
+            showLookupInfo(this.value, lookupTableMaxPoints[this.value]);
+        }
+    });
+    
+    // Show info about selected lookup table
+    function showLookupInfo(tableName, maxPoints) {
+        const infoDiv = document.getElementById('lookup_table_info');
+        if (infoDiv) {
+            infoDiv.innerHTML = `<div class="alert alert-success mt-2">
+                <i class="mdi mdi-check-circle"></i>
+                <strong>${tableName.replace(/_/g, ' ')}:</strong> Maximum ${maxPoints} points from this lookup table
+            </div>`;
+        }
+    }
+    
+    // Update JSON before form submission
+    document.querySelector('form').addEventListener('submit', function(e) {
+        buildCalculationRule();
+    });
+    
+    // Update JSON when inputs change
+    [scoreNo, scoreYes, thresholdValue, thresholdPoints, manualRule].forEach(input => {
+        if (input) {
+            input.addEventListener('input', buildCalculationRule);
+        }
+    });
+    
+    // Initialize
+    updateFormFields();
+});
+</script>
 @endsection

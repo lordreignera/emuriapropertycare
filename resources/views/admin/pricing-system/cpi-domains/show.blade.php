@@ -56,15 +56,16 @@
                     <table class="table table-bordered table-hover">
                         <thead class="table-light">
                             <tr>
-                                <th width="5%">#</th>
-                                <th width="25%">Factor Code</th>
-                                <th width="30%">Label</th>
-                                <th width="10%">Field Type</th>
-                                <th width="10%">Max Points</th>
+                                <th width="3%">#</th>
+                                <th width="15%">Factor Code</th>
+                                <th width="20%">Label & Help Text</th>
+                                <th width="8%">Field Type</th>
+                                <th width="20%">Scoring Logic</th>
+                                <th width="6%">Max Pts</th>
                                 <th width="10%">Lookup Table</th>
                                 <th width="5%">Required</th>
                                 <th width="5%">Status</th>
-                                <th width="10%">Actions</th>
+                                <th width="8%">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -73,12 +74,39 @@
                                     <td>{{ $loop->iteration }}</td>
                                     <td><code>{{ $factor->factor_code }}</code></td>
                                     <td>
-                                        {{ $factor->factor_label }}
+                                        <strong>{{ $factor->factor_label }}</strong>
                                         @if($factor->help_text)
-                                            <br><small class="text-muted">{{ $factor->help_text }}</small>
+                                            <br><small class="text-primary"><i class="mdi mdi-information-outline"></i> {{ $factor->help_text }}</small>
                                         @endif
                                     </td>
                                     <td><span class="badge badge-secondary">{{ $factor->field_type }}</span></td>
+                                    <td>
+                                        @php
+                                            $rule = is_array($factor->calculation_rule) ? $factor->calculation_rule : json_decode($factor->calculation_rule, true);
+                                        @endphp
+                                        
+                                        {{-- Display based on field_type FIRST, not calculation_rule content --}}
+                                        @if($factor->field_type === 'yes_no')
+                                            <span class="badge badge-danger">No: {{ $rule['no'] ?? 0 }} pts</span>
+                                            <span class="badge badge-success">Yes: {{ $rule['yes'] ?? 0 }} pts</span>
+                                        @elseif($factor->field_type === 'lookup')
+                                            <span class="badge badge-info"><i class="mdi mdi-table-search"></i> From {{ $factor->lookup_table ?? 'lookup table' }}</span>
+                                        @elseif($factor->field_type === 'numeric')
+                                            @if(isset($rule['lookup_by_age']) && $rule['lookup_by_age'])
+                                                <span class="badge badge-info"><i class="mdi mdi-calendar"></i> Age Brackets ({{ $factor->lookup_table }})</span>
+                                            @elseif(isset($rule['range']))
+                                                <span class="badge badge-warning">&gt;{{ $rule['range'][0] }}: {{ $rule['points'] }} pts</span>
+                                            @elseif(isset($rule['threshold']))
+                                                <span class="badge badge-warning">&gt;{{ $rule['threshold'] }}: {{ $rule['points'] }} pts</span>
+                                            @else
+                                                <span class="badge badge-secondary">Numeric input</span>
+                                            @endif
+                                        @elseif($factor->field_type === 'calculated')
+                                            <span class="badge badge-light"><i class="mdi mdi-calculator"></i> Auto-calculated</span>
+                                        @else
+                                            <span class="text-muted">-</span>
+                                        @endif
+                                    </td>
                                     <td><strong>{{ $factor->max_points }}</strong></td>
                                     <td>
                                         @if($factor->lookup_table)
