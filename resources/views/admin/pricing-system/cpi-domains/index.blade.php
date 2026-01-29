@@ -23,9 +23,12 @@
                     <table class="table table-hover">
                         <thead>
                             <tr>
-                                <th>Name</th>
-                                <th>Slug</th>
+                                <th>#</th>
+                                <th>Domain Name</th>
+                                <th>Code</th>
                                 <th>Max Points</th>
+                                <th>Calculation Method</th>
+                                <th>Factors</th>
                                 <th>Status</th>
                                 <th>Actions</th>
                             </tr>
@@ -33,14 +36,19 @@
                         <tbody>
                             @forelse($domains as $domain)
                                 <tr>
+                                    <td><strong>#{{ $domain->domain_number }}</strong></td>
                                     <td>
-                                        <strong>{{ $domain->name }}</strong>
+                                        <strong>{{ $domain->domain_name }}</strong>
                                         @if($domain->description)
                                             <br><small class="text-muted">{{ Str::limit($domain->description, 60) }}</small>
                                         @endif
                                     </td>
-                                    <td><code>{{ $domain->slug }}</code></td>
-                                    <td><span class="badge badge-primary">{{ $domain->max_points }} points</span></td>
+                                    <td><code>{{ $domain->domain_code }}</code></td>
+                                    <td><span class="badge badge-primary">{{ $domain->max_possible_points }} pts</span></td>
+                                    <td><span class="badge badge-info">{{ ucfirst($domain->calculation_method) }}</span></td>
+                                    <td>
+                                        <span class="badge badge-secondary">{{ $domain->activeFactors->count() }} factors</span>
+                                    </td>
                                     <td>
                                         @if($domain->is_active)
                                             <span class="badge badge-success">Active</span>
@@ -49,6 +57,9 @@
                                         @endif
                                     </td>
                                     <td>
+                                        <a href="{{ route('admin.cpi-domains.show', $domain) }}" class="btn btn-sm btn-info">
+                                            <i class="mdi mdi-eye"></i> View
+                                        </a>
                                         <a href="{{ route('admin.cpi-domains.edit', $domain) }}" class="btn btn-sm btn-warning">
                                             <i class="mdi mdi-pencil"></i> Edit
                                         </a>
@@ -63,7 +74,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="5" class="text-center py-4">
+                                    <td colspan="8" class="text-center py-4">
                                         <p class="text-muted">No CPI domains found.</p>
                                         <a href="{{ route('admin.cpi-domains.create') }}" class="btn btn-primary btn-sm">
                                             <i class="mdi mdi-plus"></i> Create First Domain

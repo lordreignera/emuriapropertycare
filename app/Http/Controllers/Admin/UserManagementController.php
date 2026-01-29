@@ -29,7 +29,22 @@ class UserManagementController extends Controller
         $this->checkAuthorization();
 
         $users = User::with('roles')->get(); // Get all users for DataTables
-        return view('admin.users.index', compact('users'));
+        
+        // Calculate role-based statistics
+        $totalClients = User::role('Client')->count();
+        $totalInspectors = User::role('Inspector')->count();
+        $totalProjectManagers = User::role('Project Manager')->count();
+        $totalAdmins = User::role(['Super Admin', 'Administrator'])->count();
+        $totalUsers = User::count();
+        
+        return view('admin.users.index', compact(
+            'users',
+            'totalClients',
+            'totalInspectors',
+            'totalProjectManagers',
+            'totalAdmins',
+            'totalUsers'
+        ));
     }
 
     /**

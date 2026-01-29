@@ -109,12 +109,10 @@
 
       {{-- Profile Dropdown --}}
       <li class="nav-item dropdown">
-        <a class="nav-link" id="profileDropdown" href="#" data-bs-toggle="dropdown">
-          <div class="navbar-profile">
-            <img class="img-xs rounded-circle" src="{{ Auth::user()->profile_photo_url }}" alt="{{ Auth::user()->name }}">
-            <p class="mb-0 d-none d-sm-block navbar-profile-name">{{ Auth::user()->name }}</p>
-            <i class="mdi mdi-menu-down d-none d-sm-block"></i>
-          </div>
+        <a class="nav-link d-flex align-items-center" id="profileDropdown" href="#" data-bs-toggle="dropdown" style="gap: 0.5rem;">
+          <img class="img-xs rounded-circle" src="{{ Auth::user()->profile_photo_url }}" alt="{{ Auth::user()->name }}" style="width: 32px; height: 32px;">
+          <span class="d-none d-md-inline-block" style="font-weight: 500; color: #1e293b;">{{ Auth::user()->name }}</span>
+          <i class="mdi mdi-chevron-down" style="font-size: 1.2rem; color: #64748b;"></i>
         </a>
         <div class="dropdown-menu dropdown-menu-right navbar-dropdown preview-list" aria-labelledby="profileDropdown">
           <h6 class="p-3 mb-0">Profile</h6>
@@ -132,18 +130,28 @@
           <div class="dropdown-divider"></div>
           <form method="POST" action="{{ route('logout') }}" class="dropdown-item preview-item" style="padding: 0;">
             @csrf
-            <button type="submit" style="border: none; background: none; width: 100%; text-align: left; padding: 0.75rem 1.5rem;">
+            <button type="submit" style="border: none; background: none; width: 100%; text-align: left; padding: 0.75rem 1.5rem; display: flex; align-items: center;">
               <div class="preview-thumbnail">
                 <div class="preview-icon bg-dark rounded-circle">
                   <i class="mdi mdi-logout text-danger"></i>
                 </div>
               </div>
               <div class="preview-item-content">
-                <p class="preview-subject mb-1">Log out</p>
+                <p class="preview-subject mb-1">Logout</p>
               </div>
             </button>
           </form>
         </div>
+      </li>
+      
+      {{-- Direct Logout Button (Alternative) --}}
+      <li class="nav-item d-none d-lg-block">
+        <form method="POST" action="{{ route('logout') }}" style="margin: 0;">
+          @csrf
+          <button type="submit" class="btn btn-sm btn-outline-danger" style="padding: 0.5rem 1rem; font-weight: 500;">
+            <i class="mdi mdi-logout"></i> Logout
+          </button>
+        </form>
       </li>
     </ul>
     <button class="navbar-toggler navbar-toggler-right d-lg-none align-self-center" type="button" data-toggle="offcanvas">

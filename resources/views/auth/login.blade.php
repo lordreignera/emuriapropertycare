@@ -323,10 +323,15 @@
             color: #5b67ca;
             font-weight: 600;
             text-decoration: none;
+            margin: 0 3px;
         }
 
         .register-link a:hover {
             text-decoration: underline;
+        }
+        
+        .register-link a i {
+            margin-right: 5px;
         }
 
         @media (max-width: 768px) {
@@ -353,6 +358,7 @@
     </style>
 </head>
 <body>
+    
     <div class="login-container">
         <!-- Left Side - Branding -->
         <div class="login-left">
@@ -485,6 +491,10 @@
                     Don't have an account? 
                     <a href="{{ route('register') }}">
                         <i class="fas fa-user-plus"></i> Get Started FREE
+                    </a>
+                    or 
+                    <a href="/home/index.html">
+                        <i class="fas fa-home"></i> Go Back Home
                     </a>
                 </div>
             </form>

@@ -10,45 +10,51 @@ use Illuminate\Support\Facades\Auth;
 class InspectionController extends Controller
 {
     /**
-     * Display a listing of properties awaiting inspection.
+     * Display a listing of inspections.
      */
     public function index(Request $request)
     {
         $user = Auth::user();
         
-        // Base query for properties awaiting inspection
-        $query = Property::with(['user', 'inspector', 'projectManager'])
-            ->where('status', 'awaiting_inspection');
-
-        // If user is an inspector, only show properties assigned to them
-        if ($user->hasRole('Inspector')) {
-            $query->where('inspector_id', $user->id);
-        }
+        // Base query for inspections
+        $query = Inspection::with(['property.user', 'property.projectManager', 'inspector', 'assignedBy', 'project.projectManager'])
+            ->whereNotNull('property_id');
 
         // Filter by status if provided
         if ($request->filled('status')) {
             if ($request->status === 'scheduled') {
-                $query->whereNotNull('inspection_scheduled_at');
-            } elseif ($request->status === 'unscheduled') {
-                $query->whereNull('inspection_scheduled_at');
+                // Show inspections that are scheduled and paid but not yet completed
+                $query->where('inspection_fee_status', 'paid')
+                      ->where('status', 'scheduled');
+            } elseif ($request->status === 'in_progress') {
+                $query->where('status', 'in_progress');
+            } elseif ($request->status === 'completed') {
+                $query->where('status', 'completed');
             }
+        } else {
+            // By default, show scheduled and in_progress inspections
+            $query->whereIn('status', ['scheduled', 'in_progress']);
+        }
+
+        // If user is an inspector, only show inspections assigned to them
+        if ($user->hasRole('Inspector')) {
+            $query->where('inspector_id', $user->id);
         }
 
         // Search functionality
         if ($request->filled('search')) {
             $search = $request->search;
-            $query->where(function($q) use ($search) {
+            $query->whereHas('property', function($q) use ($search) {
                 $q->where('property_name', 'like', "%{$search}%")
                   ->orWhere('property_code', 'like', "%{$search}%")
                   ->orWhere('city', 'like', "%{$search}%");
             });
         }
 
-        $properties = $query->orderBy('inspection_scheduled_at', 'asc')
-            ->orderBy('assigned_at', 'asc')
+        $inspections = $query->orderBy('scheduled_date', 'asc')
             ->paginate(15);
 
-        return view('admin.inspections.index', compact('properties'));
+        return view('admin.inspections.index', compact('inspections'));
     }
 
     /**
@@ -72,7 +78,59 @@ class InspectionController extends Controller
             abort(403, 'You are not assigned to inspect this property.');
         }
 
-        return view('admin.inspections.create', compact('property'));
+        // Get existing inspection if it exists
+        $inspection = Inspection::where('property_id', $property->id)
+            ->where('inspection_fee_status', 'paid')
+            ->first();
+
+        // Load ALL CPI lookup data from database
+        $pricingPackages = \App\Models\PricingPackage::with(['packagePricing' => function($query) {
+            $query->where('is_active', true);
+        }])
+        ->where('is_active', true)
+        ->orderBy('sort_order')
+        ->get();
+        
+        // Load CPI domains with their factors
+        $cpiDomains = \App\Models\CpiDomain::with(['activeFactors'])
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->get();
+        
+        $supplyMaterials = \App\Models\SupplyLineMaterial::where('is_active', true)->orderBy('sort_order')->get();
+        $ageBrackets = \App\Models\AgeBracket::where('is_active', true)->orderBy('sort_order')->get();
+        $containmentCategories = \App\Models\ContainmentCategory::where('is_active', true)->orderBy('sort_order')->get();
+        $crawlAccessCategories = \App\Models\CrawlAccessCategory::where('is_active', true)->orderBy('sort_order')->get();
+        $roofAccessCategories = \App\Models\RoofAccessCategory::where('is_active', true)->orderBy('sort_order')->get();
+        $equipmentRequirements = \App\Models\EquipmentRequirement::where('is_active', true)->orderBy('sort_order')->get();
+        $complexityCategories = \App\Models\ComplexityCategory::where('is_active', true)->orderBy('sort_order')->get();
+        
+        // Load CPI band ranges with their multipliers
+        $cpiBandRanges = \App\Models\CpiBandRange::with('multiplier')
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->get();
+        
+        // Load residential size tiers for size factor calculation
+        $residentialSizeTiers = \App\Models\ResidentialSizeTier::where('is_active', true)
+            ->orderBy('sort_order')
+            ->get();
+
+        return view('admin.inspections.form-cpi', compact(
+            'property',
+            'inspection',
+            'pricingPackages',
+            'cpiDomains',
+            'supplyMaterials',
+            'ageBrackets',
+            'containmentCategories',
+            'crawlAccessCategories',
+            'roofAccessCategories',
+            'equipmentRequirements',
+            'complexityCategories',
+            'cpiBandRanges',
+            'residentialSizeTiers'
+        ));
     }
 
     /**

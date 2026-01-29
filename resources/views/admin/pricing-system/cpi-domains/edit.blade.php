@@ -12,32 +12,66 @@
                     @method('PUT')
 
                     <div class="form-group">
-                        <label for="name">Domain Name <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control @error('name') is-invalid @enderror" 
-                               id="name" name="name" value="{{ old('name', $cpiDomain->name) }}" required>
-                        @error('name')
+                        <label for="domain_number">Domain Number <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control @error('domain_number') is-invalid @enderror" 
+                               id="domain_number" name="domain_number" value="{{ old('domain_number', $cpiDomain->domain_number) }}" required>
+                        @error('domain_number')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                        <small class="form-text text-muted">e.g., 1, 2, 3</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="domain_name">Domain Name <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control @error('domain_name') is-invalid @enderror" 
+                               id="domain_name" name="domain_name" value="{{ old('domain_name', $cpiDomain->domain_name) }}" required>
+                        @error('domain_name')
                             <div class="invalid-feedback">{{ $message }}</div>
                         @enderror
                     </div>
 
                     <div class="form-group">
-                        <label for="slug">Slug <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control @error('slug') is-invalid @enderror" 
-                               id="slug" name="slug" value="{{ old('slug', $cpiDomain->slug) }}" required>
-                        @error('slug')
+                        <label for="domain_code">Domain Code <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control @error('domain_code') is-invalid @enderror" 
+                               id="domain_code" name="domain_code" value="{{ old('domain_code', $cpiDomain->domain_code) }}" required>
+                        @error('domain_code')
                             <div class="invalid-feedback">{{ $message }}</div>
                         @enderror
                         <small class="form-text text-muted">e.g., system_design, materials, age</small>
                     </div>
 
                     <div class="form-group">
-                        <label for="max_points">Maximum Points <span class="text-danger">*</span></label>
-                        <input type="number" class="form-control @error('max_points') is-invalid @enderror" 
-                               id="max_points" name="max_points" value="{{ old('max_points', $cpiDomain->max_points) }}" required>
-                        @error('max_points')
+                        <label for="max_possible_points">Maximum Points <span class="text-danger">*</span></label>
+                        <input type="number" class="form-control @error('max_possible_points') is-invalid @enderror" 
+                               id="max_possible_points" name="max_possible_points" value="{{ old('max_possible_points', $cpiDomain->max_possible_points) }}" required>
+                        @error('max_possible_points')
                             <div class="invalid-feedback">{{ $message }}</div>
                         @enderror
                         <small class="form-text text-muted">Total possible points for this domain</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="calculation_method">Calculation Method <span class="text-danger">*</span></label>
+                        <select class="form-control @error('calculation_method') is-invalid @enderror" 
+                                id="calculation_method" name="calculation_method" required>
+                            <option value="">-- Select Method --</option>
+                            <option value="sum" {{ old('calculation_method', $cpiDomain->calculation_method) == 'sum' ? 'selected' : '' }}>Sum (Add all scores)</option>
+                            <option value="max" {{ old('calculation_method', $cpiDomain->calculation_method) == 'max' ? 'selected' : '' }}>Max (Highest score)</option>
+                            <option value="lookup" {{ old('calculation_method', $cpiDomain->calculation_method) == 'lookup' ? 'selected' : '' }}>Lookup (From table)</option>
+                            <option value="formula" {{ old('calculation_method', $cpiDomain->calculation_method) == 'formula' ? 'selected' : '' }}>Formula (Custom)</option>
+                        </select>
+                        @error('calculation_method')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                    </div>
+
+                    <div class="form-group">
+                        <label for="sort_order">Sort Order</label>
+                        <input type="number" class="form-control @error('sort_order') is-invalid @enderror" 
+                               id="sort_order" name="sort_order" value="{{ old('sort_order', $cpiDomain->sort_order) }}">
+                        @error('sort_order')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
                     </div>
 
                     <div class="form-group">

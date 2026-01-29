@@ -84,34 +84,34 @@
       <span class="nav-link">Property Management</span>
     </li>
 
-    {{-- Add Property --}}
-    <li class="nav-item menu-items {{ request()->routeIs('client.properties.create') ? 'active' : '' }}">
-      <a class="nav-link" href="{{ route('client.properties.create') }}">
-        <span class="menu-icon">
-          <i class="mdi mdi-home-plus"></i>
-        </span>
-        <span class="menu-title">Add Property</span>
-      </a>
-    </li>
-
-    {{-- My Properties --}}
-    <li class="nav-item menu-items {{ request()->routeIs('client.properties.index') || request()->routeIs('client.properties.show') || request()->routeIs('client.properties.edit') ? 'active' : '' }}">
-      <a class="nav-link" href="{{ route('client.properties.index') }}">
+    {{-- Property Management Dropdown --}}
+    <li class="nav-item menu-items {{ request()->routeIs('client.properties.*') || request()->routeIs('client.tenants.*') ? 'active' : '' }}">
+      <a class="nav-link" data-bs-toggle="collapse" href="#property-management" aria-expanded="{{ request()->routeIs('client.properties.*') || request()->routeIs('client.tenants.*') ? 'true' : 'false' }}" aria-controls="property-management">
         <span class="menu-icon">
           <i class="mdi mdi-home-modern"></i>
         </span>
-        <span class="menu-title">My Properties</span>
+        <span class="menu-title">Property Management</span>
+        <i class="menu-arrow"></i>
       </a>
-    </li>
-
-    {{-- Tenants --}}
-    <li class="nav-item menu-items {{ request()->routeIs('client.tenants.*') ? 'active' : '' }}">
-      <a class="nav-link" href="{{ route('client.tenants.index') }}">
-        <span class="menu-icon">
-          <i class="mdi mdi-account-group"></i>
-        </span>
-        <span class="menu-title">Tenants</span>
-      </a>
+      <div class="collapse {{ request()->routeIs('client.properties.*') || request()->routeIs('client.tenants.*') ? 'show' : '' }}" id="property-management">
+        <ul class="nav flex-column sub-menu">
+          <li class="nav-item">
+            <a class="nav-link {{ request()->routeIs('client.properties.create') ? 'active' : '' }}" href="{{ route('client.properties.create') }}">
+              <i class="mdi mdi-home-plus"></i> Add Property
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {{ request()->routeIs('client.properties.index') || request()->routeIs('client.properties.show') || request()->routeIs('client.properties.edit') ? 'active' : '' }}" href="{{ route('client.properties.index') }}">
+              <i class="mdi mdi-view-list"></i> My Properties
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {{ request()->routeIs('client.tenants.*') ? 'active' : '' }}" href="{{ route('client.tenants.index') }}">
+              <i class="mdi mdi-account-group"></i> Tenants
+            </a>
+          </li>
+        </ul>
+      </div>
     </li>
 
     {{-- Services Section --}}
@@ -119,68 +119,78 @@
       <span class="nav-link">Services</span>
     </li>
 
-    {{-- Inspections --}}
-    <li class="nav-item menu-items {{ request()->routeIs('client.inspections.*') ? 'active' : '' }}">
-      <a class="nav-link" href="{{ route('client.inspections.index') }}">
+    {{-- Services Dropdown --}}
+    <li class="nav-item menu-items {{ request()->routeIs('client.inspections.*') || request()->routeIs('client.projects.*') ? 'active' : '' }}">
+      <a class="nav-link" data-bs-toggle="collapse" href="#services-menu" aria-expanded="{{ request()->routeIs('client.inspections.*') || request()->routeIs('client.projects.*') ? 'true' : 'false' }}" aria-controls="services-menu">
         <span class="menu-icon">
           <i class="mdi mdi-clipboard-check"></i>
         </span>
-        <span class="menu-title">Inspections</span>
-        @php
-            $userPropertyIds = \App\Models\Property::where('user_id', Auth::id())->pluck('id');
-            $userProjectIds = \App\Models\Project::whereIn('property_id', $userPropertyIds)->pluck('id');
-            $pendingInspections = \App\Models\Inspection::whereIn('project_id', $userProjectIds)
-                ->where('status', 'scheduled')->count();
-        @endphp
-        @if($pendingInspections > 0)
-        <span class="badge badge-pill badge-warning ms-auto">{{ $pendingInspections }}</span>
-        @endif
+        <span class="menu-title">Services</span>
+        <i class="menu-arrow"></i>
       </a>
+      <div class="collapse {{ request()->routeIs('client.inspections.*') || request()->routeIs('client.projects.*') ? 'show' : '' }}" id="services-menu">
+        <ul class="nav flex-column sub-menu">
+          <li class="nav-item">
+            <a class="nav-link {{ request()->routeIs('client.inspections.*') ? 'active' : '' }}" href="{{ route('client.inspections.index') }}">
+              <i class="mdi mdi-clipboard-check"></i> Inspections
+              @php
+                  $userPropertyIds = \App\Models\Property::where('user_id', Auth::id())->pluck('id');
+                  $userProjectIds = \App\Models\Project::whereIn('property_id', $userPropertyIds)->pluck('id');
+                  $pendingInspections = \App\Models\Inspection::whereIn('project_id', $userProjectIds)
+                      ->where('status', 'scheduled')->count();
+              @endphp
+              @if($pendingInspections > 0)
+              <span class="badge badge-pill badge-warning ms-auto">{{ $pendingInspections }}</span>
+              @endif
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {{ request()->routeIs('client.projects.*') ? 'active' : '' }}" href="{{ route('client.projects.index') }}">
+              <i class="mdi mdi-briefcase"></i> Projects
+              @php
+                  $userPropertyIds = \App\Models\Property::where('user_id', Auth::id())->pluck('id');
+                  $activeProjects = \App\Models\Project::whereIn('property_id', $userPropertyIds)
+                      ->where('status', 'active')->count();
+              @endphp
+              @if($activeProjects > 0)
+              <span class="badge badge-pill badge-success ms-auto">{{ $activeProjects }}</span>
+              @endif
+            </a>
+          </li>
+        </ul>
+      </div>
     </li>
 
-    {{-- Projects --}}
-    <li class="nav-item menu-items {{ request()->routeIs('client.projects.*') ? 'active' : '' }}">
-      <a class="nav-link" href="{{ route('client.projects.index') }}">
+    {{-- Billing Dropdown --}}
+    <li class="nav-item menu-items {{ request()->routeIs('client.invoices.*') || request()->routeIs('client.subscription.*') ? 'active' : '' }}">
+      <a class="nav-link" data-bs-toggle="collapse" href="#billing-menu" aria-expanded="{{ request()->routeIs('client.invoices.*') || request()->routeIs('client.subscription.*') ? 'true' : 'false' }}" aria-controls="billing-menu">
         <span class="menu-icon">
-          <i class="mdi mdi-briefcase"></i>
+          <i class="mdi mdi-cash-multiple"></i>
         </span>
-        <span class="menu-title">Projects</span>
-        @php
-            $userPropertyIds = \App\Models\Property::where('user_id', Auth::id())->pluck('id');
-            $activeProjects = \App\Models\Project::whereIn('property_id', $userPropertyIds)
-                ->where('status', 'active')->count();
-        @endphp
-        @if($activeProjects > 0)
-        <span class="badge badge-pill badge-success ms-auto">{{ $activeProjects }}</span>
-        @endif
+        <span class="menu-title">Billing & Finance</span>
+        <i class="menu-arrow"></i>
       </a>
-    </li>
-
-    {{-- Billing Section --}}
-    <li class="nav-item nav-category">
-      <span class="nav-link">Billing</span>
-    </li>
-
-    {{-- Invoices --}}
-    <li class="nav-item menu-items {{ request()->routeIs('client.invoices.*') ? 'active' : '' }}">
-      <a class="nav-link" href="{{ route('client.invoices.index') }}">
-        <span class="menu-icon">
-          <i class="mdi mdi-file-document"></i>
-        </span>
-        <span class="menu-title">Invoices</span>
-        @php
-            $unpaidInvoices = \App\Models\Invoice::where('user_id', Auth::id())
-                ->where('status', 'pending')->count();
-        @endphp
-        @if($unpaidInvoices > 0)
-        <span class="badge badge-pill badge-danger ms-auto">{{ $unpaidInvoices }}</span>
-        @endif
-      </a>
-    </li>
-
-    {{-- Subscription --}}
-    <li class="nav-item menu-items {{ request()->routeIs('client.subscription.*') ? 'active' : '' }}">
-      <a class="nav-link" href="{{ route('client.subscription.show') }}">
+      <div class="collapse {{ request()->routeIs('client.invoices.*') || request()->routeIs('client.subscription.*') ? 'show' : '' }}" id="billing-menu">
+        <ul class="nav flex-column sub-menu">
+          <li class="nav-item">
+            <a class="nav-link {{ request()->routeIs('client.invoices.*') ? 'active' : '' }}" href="{{ route('client.invoices.index') }}">
+              <i class="mdi mdi-file-document"></i> Invoices
+              @php
+                  $unpaidInvoices = \App\Models\Invoice::where('user_id', Auth::id())
+                      ->where('status', 'pending')->count();
+              @endphp
+              @if($unpaidInvoices > 0)
+              <span class="badge badge-pill badge-danger ms-auto">{{ $unpaidInvoices }}</span>
+              @endif
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {{ request()->routeIs('client.subscription.*') ? 'active' : '' }}" href="{{ route('client.subscription.show') }}">
+              <i class="mdi mdi-crown"></i> My Subscription
+            </a>
+          </li>
+        </ul>
+      </divclass="nav-link" href="{{ route('client.subscription.show') }}">
         <span class="menu-icon">
           <i class="mdi mdi-crown"></i>
         </span>
@@ -188,34 +198,34 @@
       </a>
     </li>
 
-    {{-- Support Section --}}
-    <li class="nav-item nav-category">
-      <span class="nav-link">Support</span>
-    </li>
-
-    {{-- Complaints --}}
-    <li class="nav-item menu-items {{ request()->routeIs('client.complaints.*') ? 'active' : '' }}">
-      <a class="nav-link" href="{{ route('client.complaints.index') }}">
+    {{-- Support Dropdown --}}
+    <li class="nav-item menu-items {{ request()->routeIs('client.complaints.*') || request()->routeIs('client.emergency-reports.*') || request()->routeIs('client.support') ? 'active' : '' }}">
+      <a class="nav-link" data-bs-toggle="collapse" href="#support-menu" aria-expanded="{{ request()->routeIs('client.complaints.*') || request()->routeIs('client.emergency-reports.*') || request()->routeIs('client.support') ? 'true' : 'false' }}" aria-controls="support-menu">
         <span class="menu-icon">
-          <i class="mdi mdi-alert-circle"></i>
+          <i class="mdi mdi-help-circle"></i>
         </span>
-        <span class="menu-title">Complaints</span>
+        <span class="menu-title">Help & Support</span>
+        <i class="menu-arrow"></i>
       </a>
-    </li>
-
-    {{-- Emergency Reports --}}
-    <li class="nav-item menu-items {{ request()->routeIs('client.emergency-reports.*') ? 'active' : '' }}">
-      <a class="nav-link" href="{{ route('client.emergency-reports.index') }}">
-        <span class="menu-icon">
-          <i class="mdi mdi-alarm-light"></i>
-        </span>
-        <span class="menu-title">Emergency Reports</span>
-      </a>
-    </li>
-
-    {{-- Help & Support --}}
-    <li class="nav-item menu-items">
-      <a class="nav-link" href="{{ route('client.support') }}">
+      <div class="collapse {{ request()->routeIs('client.complaints.*') || request()->routeIs('client.emergency-reports.*') || request()->routeIs('client.support') ? 'show' : '' }}" id="support-menu">
+        <ul class="nav flex-column sub-menu">
+          <li class="nav-item">
+            <a class="nav-link {{ request()->routeIs('client.complaints.*') ? 'active' : '' }}" href="{{ route('client.complaints.index') }}">
+              <i class="mdi mdi-alert-circle"></i> Complaints
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {{ request()->routeIs('client.emergency-reports.*') ? 'active' : '' }}" href="{{ route('client.emergency-reports.index') }}">
+              <i class="mdi mdi-alarm-light"></i> Emergency Reports
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {{ request()->routeIs('client.support') ? 'active' : '' }}" href="{{ route('client.support') }}">
+              <i class="mdi mdi-lifebuoy"></i> Contact Support
+            </a>
+          </li>
+        </ul>
+      </divclass="nav-link" href="{{ route('client.support') }}">
         <span class="menu-icon">
           <i class="mdi mdi-help-circle"></i>
         </span>
@@ -338,6 +348,53 @@ body.light-theme .sidebar .nav .nav-category {
     letter-spacing: 0.5px !important;
     padding: 1.25rem 1.5625rem 0.625rem !important;
     margin-top: 0.5rem !important;
+}
+
+/* Dropdown Arrow */
+.sidebar .nav .nav-item .nav-link .menu-arrow,
+body .sidebar .nav .nav-item .nav-link .menu-arrow {
+    color: rgba(255, 255, 255, 0.7) !important;
+    margin-left: auto !important;
+    font-size: 1rem !important;
+    transition: transform 0.3s ease !important;
+}
+
+.sidebar .nav .nav-item .nav-link[aria-expanded="true"] .menu-arrow {
+    transform: rotate(90deg) !important;
+}
+
+/* Submenu Styling */
+.sidebar .nav .nav-item .sub-menu,
+body .sidebar .nav .nav-item .sub-menu {
+    background: rgba(0, 0, 0, 0.1) !important;
+    padding: 0.5rem 0 !important;
+    margin: 0.5rem 0.75rem !important;
+    border-radius: 0.5rem !important;
+}
+
+.sidebar .nav .nav-item .sub-menu .nav-item,
+body .sidebar .nav .nav-item .sub-menu .nav-item {
+    padding: 0 !important;
+}
+
+.sidebar .nav .nav-item .sub-menu .nav-item .nav-link,
+body .sidebar .nav .nav-item .sub-menu .nav-item .nav-link {
+    padding: 0.75rem 1.25rem !important;
+    color: rgba(255, 255, 255, 0.85) !important;
+    font-size: 0.875rem !important;
+    display: flex !important;
+    align-items: center !important;
+    white-space: normal !important;
+    word-wrap: break-word !important;
+    line-height: 1.4 !important;
+}
+
+.sidebar .nav .nav-item .sub-menu .nav-item .nav-link i,
+body .sidebar .nav .nav-item .sub-menu .nav-item .nav-link i {
+    margin-right: 0.75rem !important;
+    font-size: 1rem !important;
+    color: rgba(255, 255, 255, 0.7) !important;
+    flex-shrink: 0 !important;
 }
 
 .sidebar .nav .nav-category .nav-link,

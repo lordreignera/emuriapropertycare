@@ -10,6 +10,73 @@
 @endsection
 
 @section('content')
+{{-- KPI Cards --}}
+<div class="row mb-4">
+    <div class="col-md-3 stretch-card">
+        <div class="card stat-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <p class="text-muted mb-1 font-weight-medium">Total Users</p>
+                        <h2 class="mb-0 font-weight-bold">{{ $totalUsers }}</h2>
+                    </div>
+                    <div class="icon-wrapper bg-primary-light">
+                        <i class="mdi mdi-account-multiple text-primary" style="font-size: 28px;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 stretch-card">
+        <div class="card stat-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <p class="text-muted mb-1 font-weight-medium">Clients</p>
+                        <h2 class="mb-0 font-weight-bold">{{ $totalClients }}</h2>
+                    </div>
+                    <div class="icon-wrapper bg-success-light">
+                        <i class="mdi mdi-account-circle text-success" style="font-size: 28px;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 stretch-card">
+        <div class="card stat-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <p class="text-muted mb-1 font-weight-medium">Inspectors</p>
+                        <h2 class="mb-0 font-weight-bold">{{ $totalInspectors }}</h2>
+                    </div>
+                    <div class="icon-wrapper bg-info-light">
+                        <i class="mdi mdi-magnify text-info" style="font-size: 28px;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 stretch-card">
+        <div class="card stat-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <p class="text-muted mb-1 font-weight-medium">Project Managers</p>
+                        <h2 class="mb-0 font-weight-bold">{{ $totalProjectManagers }}</h2>
+                    </div>
+                    <div class="icon-wrapper bg-warning-light">
+                        <i class="mdi mdi-briefcase text-warning" style="font-size: 28px;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="row">
     <div class="col-lg-12 grid-margin stretch-card">
         <div class="card">

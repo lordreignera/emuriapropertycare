@@ -10,8 +10,8 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <div>
-                            <h4 class="card-title mb-0">Property Inspections</h4>
-                            <p class="text-muted small mb-0">Properties awaiting inspection</p>
+                            <h4 class="card-title mb-0">Inspections Management</h4>
+                            <p class="text-muted small mb-0">Scheduled and paid inspections</p>
                         </div>
                     </div>
 
@@ -25,24 +25,24 @@
                     <!-- Filter Tabs -->
                     <ul class="nav nav-pills mb-3" role="tablist">
                         <li class="nav-item">
-                            <a class="nav-link {{ !request('status') ? 'active' : '' }}" 
-                               href="{{ route('inspections.index') }}">
-                                All Pending 
-                                <span class="badge bg-primary ms-1">{{ \App\Models\Property::where('status', 'awaiting_inspection')->count() }}</span>
-                            </a>
-                        </li>
-                        <li class="nav-item">
                             <a class="nav-link {{ request('status') == 'scheduled' ? 'active' : '' }}" 
                                href="{{ route('inspections.index', ['status' => 'scheduled']) }}">
-                                Scheduled
-                                <span class="badge bg-success ms-1">{{ \App\Models\Property::where('status', 'awaiting_inspection')->whereNotNull('inspection_scheduled_at')->count() }}</span>
+                                Scheduled & Paid
+                                <span class="badge bg-success ms-1">{{ \App\Models\Inspection::where('inspection_fee_status', 'paid')->where('status', 'scheduled')->count() }}</span>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {{ request('status') == 'unscheduled' ? 'active' : '' }}" 
-                               href="{{ route('inspections.index', ['status' => 'unscheduled']) }}">
-                                Unscheduled
-                                <span class="badge bg-warning ms-1">{{ \App\Models\Property::where('status', 'awaiting_inspection')->whereNull('inspection_scheduled_at')->count() }}</span>
+                            <a class="nav-link {{ request('status') == 'in_progress' ? 'active' : '' }}" 
+                               href="{{ route('inspections.index', ['status' => 'in_progress']) }}">
+                                In Progress
+                                <span class="badge bg-primary ms-1">{{ \App\Models\Inspection::where('status', 'in_progress')->count() }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {{ request('status') == 'completed' ? 'active' : '' }}" 
+                               href="{{ route('inspections.index', ['status' => 'completed']) }}">
+                                Completed
+                                <span class="badge bg-info ms-1">{{ \App\Models\Inspection::where('status', 'completed')->count() }}</span>
                             </a>
                         </li>
                     </ul>
@@ -75,72 +75,90 @@
                                     <th>Owner</th>
                                     <th>Inspector</th>
                                     <th>Project Manager</th>
-                                    <th>Assigned Date</th>
-                                    <th>Inspection Date</th>
+                                    <th>Scheduled Date</th>
+                                    <th>Payment Status</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                @forelse($properties as $property)
+                                @forelse($inspections as $inspection)
                                 <tr>
-                                    <td><code>{{ $property->property_code }}</code></td>
+                                    <td><code>{{ $inspection->property->property_code }}</code></td>
                                     <td>
-                                        <strong>{{ $property->property_name }}</strong>
-                                        @if($property->property_brand)
-                                        <br><small class="text-muted">{{ $property->property_brand }}</small>
+                                        <strong>{{ $inspection->property->property_name }}</strong>
+                                        @if($inspection->property->property_brand)
+                                        <br><small class="text-muted">{{ $inspection->property->property_brand }}</small>
                                         @endif
                                     </td>
                                     <td>
-                                        {{ $property->city }}, {{ $property->province }}<br>
-                                        <small class="text-muted">{{ $property->country }}</small>
+                                        {{ $inspection->property->city }}, {{ $inspection->property->province }}<br>
+                                        <small class="text-muted">{{ $inspection->property->country }}</small>
                                     </td>
                                     <td>
-                                        {{ $property->owner_first_name }}<br>
-                                        <small class="text-muted">{{ $property->owner_phone }}</small>
+                                        {{ $inspection->property->user->name }}<br>
+                                        <small class="text-muted">{{ $inspection->property->user->email }}</small>
                                     </td>
                                     <td>
-                                        @if($property->inspector)
+                                        @if($inspection->inspector)
                                         <span class="badge badge-info">
-                                            <i class="mdi mdi-account-check"></i> {{ $property->inspector->name }}
+                                            <i class="mdi mdi-account-check"></i> {{ $inspection->inspector->name }}
                                         </span>
                                         @else
-                                        <span class="text-muted">Not assigned</span>
+                                        <span class="badge badge-warning">Not assigned</span>
                                         @endif
                                     </td>
                                     <td>
-                                        @if($property->projectManager)
+                                        @php
+                                            $projectManager = null;
+                                            if ($inspection->project && $inspection->project->projectManager) {
+                                                $projectManager = $inspection->project->projectManager;
+                                            } elseif ($inspection->property && $inspection->property->projectManager) {
+                                                $projectManager = $inspection->property->projectManager;
+                                            }
+                                        @endphp
+                                        @if($projectManager)
                                         <span class="badge badge-primary">
-                                            <i class="mdi mdi-account-hard-hat"></i> {{ $property->projectManager->name }}
+                                            <i class="mdi mdi-account-hard-hat"></i> {{ $projectManager->name }}
                                         </span>
                                         @else
-                                        <span class="text-muted">Not assigned</span>
+                                        <span class="badge badge-warning">Not assigned</span>
                                         @endif
                                     </td>
-                                    <td>{{ $property->assigned_at?->format('M d, Y') ?? 'N/A' }}</td>
                                     <td>
-                                        @if($property->inspection_scheduled_at)
+                                        @if($inspection->scheduled_date)
                                         <span class="badge badge-success">
-                                            {{ $property->inspection_scheduled_at->format('M d, Y') }}<br>
-                                            {{ $property->inspection_scheduled_at->format('h:i A') }}
+                                            {{ \Carbon\Carbon::parse($inspection->scheduled_date)->format('M d, Y') }}<br>
+                                            {{ \Carbon\Carbon::parse($inspection->scheduled_date)->format('h:i A') }}
                                         </span>
                                         @else
                                         <span class="badge badge-warning">Not Scheduled</span>
                                         @endif
                                     </td>
                                     <td>
+                                        @if($inspection->inspection_fee_status === 'paid')
+                                        <span class="badge badge-success">
+                                            <i class="mdi mdi-check-circle"></i> Paid
+                                        </span>
+                                        <br><small class="text-muted">${{ number_format($inspection->inspection_fee_amount, 2) }}</small>
+                                        <br><small class="text-muted">{{ $inspection->inspection_fee_paid_at->format('M d, Y') }}</small>
+                                        @else
+                                        <span class="badge badge-danger">{{ ucfirst($inspection->inspection_fee_status) }}</span>
+                                        @endif
+                                    </td>
+                                    <td>
                                         <div class="btn-group" role="group">
-                                            <a href="{{ route('properties.show', $property->id) }}" 
+                                            <a href="{{ route('properties.show', $inspection->property_id) }}" 
                                                class="btn btn-sm btn-info" title="View Property">
                                                 <i class="mdi mdi-eye"></i>
                                             </a>
-                                            @if(!$property->inspection_scheduled_at)
+                                            @if(!$inspection->inspector_id)
                                             <button type="button" class="btn btn-sm btn-primary" 
-                                                    onclick="scheduleInspection({{ $property->id }})" 
-                                                    title="Schedule Inspection">
-                                                <i class="mdi mdi-calendar-clock"></i>
+                                                    onclick="assignInspector({{ $inspection->id }})" 
+                                                    title="Assign Inspector">
+                                                <i class="mdi mdi-account-plus"></i>
                                             </button>
                                             @endif
-                                            <a href="{{ route('inspections.create', ['property_id' => $property->id]) }}" 
+                                            <a href="{{ route('inspections.create', ['property_id' => $inspection->property_id]) }}" 
                                                class="btn btn-sm btn-success" 
                                                title="Start Inspection">
                                                 <i class="mdi mdi-clipboard-check"></i>
@@ -155,10 +173,12 @@
                                         <p class="text-muted mt-2">
                                             @if(request('status') == 'scheduled')
                                                 No scheduled inspections found
-                                            @elseif(request('status') == 'unscheduled')
-                                                No unscheduled inspections found
+                                            @elseif(request('status') == 'in_progress')
+                                                No in progress inspections found
+                                            @elseif(request('status') == 'completed')
+                                                No completed inspections found
                                             @else
-                                                No properties awaiting inspection
+                                                No inspections found
                                             @endif
                                         </p>
                                     </td>
@@ -168,9 +188,9 @@
                         </table>
                     </div>
                     
-                    @if($properties->hasPages())
+                    @if($inspections->hasPages())
                     <div class="mt-3">
-                        {{ $properties->links() }}
+                        {{ $inspections->links() }}
                     </div>
                     @endif
                 </div>
@@ -214,23 +234,21 @@
 
 @push('scripts')
 <script>
-function scheduleInspection(propertyId) {
-    const form = document.getElementById('scheduleForm');
-    form.action = '/properties/' + propertyId;
-    const modal = new bootstrap.Modal(document.getElementById('scheduleModal'));
-    modal.show();
+function assignInspector(inspectionId) {
+    // TODO: Add modal for assigning inspector
+    alert('Assign Inspector feature - Inspection ID: ' + inspectionId);
 }
 
 $(document).ready(function() {
-    @if($properties->count() > 0)
+    @if($inspections->count() > 0)
     $('#inspectionsTable').DataTable({
         "pageLength": 15,
         "lengthMenu": [[15, 25, 50, -1], [15, 25, 50, "All"]],
-        "order": [[7, "asc"]],
+        "order": [[6, "asc"]],
         "language": {
             "search": "Search:",
-            "lengthMenu": "Show _MENU_ properties",
-            "info": "Showing _START_ to _END_ of _TOTAL_ properties"
+            "lengthMenu": "Show _MENU_ inspections",
+            "info": "Showing _START_ to _END_ of _TOTAL_ inspections"
         },
         "columnDefs": [
             { "orderable": false, "targets": [8] }

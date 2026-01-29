@@ -163,6 +163,14 @@ Route::middleware([
         Route::resource('cpi-bands', App\Http\Controllers\Admin\CpiBandController::class)->names('cpi-bands');
         Route::resource('cpi-multipliers', App\Http\Controllers\Admin\CpiMultiplierController::class)->names('cpi-multipliers');
         Route::resource('cpi-domains', App\Http\Controllers\Admin\CpiDomainController::class)->names('cpi-domains');
+        
+        // CPI Scoring Factors (nested under domains)
+        Route::get('cpi-domains/{cpiDomain}/factors/create', [App\Http\Controllers\Admin\CpiDomainController::class, 'createFactor'])->name('cpi-domains.factors.create');
+        Route::post('cpi-domains/{cpiDomain}/factors', [App\Http\Controllers\Admin\CpiDomainController::class, 'storeFactor'])->name('cpi-domains.factors.store');
+        Route::get('cpi-domains/{cpiDomain}/factors/{factor}/edit', [App\Http\Controllers\Admin\CpiDomainController::class, 'editFactor'])->name('cpi-domains.factors.edit');
+        Route::put('cpi-domains/{cpiDomain}/factors/{factor}', [App\Http\Controllers\Admin\CpiDomainController::class, 'updateFactor'])->name('cpi-domains.factors.update');
+        Route::delete('cpi-domains/{cpiDomain}/factors/{factor}', [App\Http\Controllers\Admin\CpiDomainController::class, 'destroyFactor'])->name('cpi-domains.factors.destroy');
+        
         Route::resource('supply-materials', App\Http\Controllers\Admin\SupplyMaterialController::class)->names('supply-materials');
         Route::resource('age-brackets', App\Http\Controllers\Admin\AgeBracketController::class)->names('age-brackets');
         Route::resource('containment-categories', App\Http\Controllers\Admin\ContainmentCategoryController::class)->names('containment-categories');
