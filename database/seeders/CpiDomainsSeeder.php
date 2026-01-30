@@ -9,9 +9,11 @@ class CpiDomainsSeeder extends Seeder
 {
     public function run(): void
     {
-        // Clear existing data
+        // Clear existing data (handle FK constraints)
+        DB::statement('SET FOREIGN_KEY_CHECKS=0');
         DB::table('cpi_scoring_factors')->truncate();
         DB::table('cpi_domains')->truncate();
+        DB::statement('SET FOREIGN_KEY_CHECKS=1');
         
         // Domain 1: System Design & Pressure
         $domain1Id = DB::table('cpi_domains')->insertGetId([
