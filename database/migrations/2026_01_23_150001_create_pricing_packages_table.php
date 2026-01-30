@@ -24,7 +24,7 @@ return new class extends Migration
         Schema::create('package_pricing', function (Blueprint $table) {
             $table->id();
             $table->foreignId('pricing_package_id')->constrained('pricing_packages')->onDelete('cascade');
-            $table->foreignId('property_type_id')->constrained('property_types')->onDelete('cascade');
+            $table->unsignedBigInteger('property_type_id');
             $table->decimal('base_monthly_price', 10, 2); // Base price per month
             $table->boolean('is_active')->default(true);
             $table->timestamps();
