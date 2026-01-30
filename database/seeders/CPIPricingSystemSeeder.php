@@ -38,8 +38,7 @@ class CPIPricingSystemSeeder extends Seeder
             ReactiveCostAssumptionsSeeder::class,
             StewardshipLossReductionsSeeder::class,
             
-            // CPI Scoring Factors (must be after domains and lookups)
-            CpiScoringFactorsSeeder::class,
+            // CPI Scoring Factors are seeded inside CpiDomainsSeeder
         ]);
 
         $this->command->info('✅ All CPI Pricing System tables seeded successfully!');
