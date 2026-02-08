@@ -6,6 +6,7 @@ use App\Models\Property;
 use App\Models\Inspection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 class InspectionController extends Controller
 {
@@ -190,11 +191,13 @@ class InspectionController extends Controller
         $inspection->summary = $validated['notes'] ?? 'Inspection for ' . $property->property_name;
         $inspection->findings = $findings;
 
+        $disk = config('filesystems.default', 's3');
+
         // Handle photos upload
         if ($request->hasFile('photos')) {
             $photosPaths = [];
             foreach ($request->file('photos') as $photo) {
-                $path = $photo->store('inspections/photos', 'public');
+                $path = $photo->store('inspections/photos', $disk);
                 $photosPaths[] = $path;
             }
             $inspection->photos = $photosPaths;
@@ -202,7 +205,7 @@ class InspectionController extends Controller
 
         // Handle report upload
         if ($request->hasFile('report')) {
-            $reportPath = $request->file('report')->store('inspections/reports', 'public');
+            $reportPath = $request->file('report')->store('inspections/reports', $disk);
             $inspection->report_file = $reportPath;
         }
 

@@ -111,12 +111,14 @@ class PropertyController extends Controller
         if (!empty($validated['sensitivities'])) {
             $validated['sensitivities'] = array_map('trim', explode(',', $validated['sensitivities']));
         }
+
+        $disk = config('filesystems.default', 's3');
         
         // Handle property photos upload
         if ($request->hasFile('property_photos')) {
             $photos = [];
             foreach ($request->file('property_photos') as $photo) {
-                $path = $photo->store('properties/photos', 'public');
+                $path = $photo->store('properties/photos', $disk);
                 $photos[] = $path;
             }
             $validated['property_photos'] = $photos;
@@ -124,7 +126,7 @@ class PropertyController extends Controller
         
         // Handle blueprint file upload
         if ($request->hasFile('blueprint_file')) {
-            $validated['blueprint_file'] = $request->file('blueprint_file')->store('properties/blueprints', 'public');
+            $validated['blueprint_file'] = $request->file('blueprint_file')->store('properties/blueprints', $disk);
         }
         
         // Create property
@@ -242,19 +244,21 @@ class PropertyController extends Controller
         if (!empty($validated['sensitivities'])) {
             $validated['sensitivities'] = array_map('trim', explode(',', $validated['sensitivities']));
         }
+
+        $disk = config('filesystems.default', 's3');
         
         // Handle new property photos
         if ($request->hasFile('property_photos')) {
             // Delete old photos
             if ($property->property_photos) {
                 foreach ($property->property_photos as $photo) {
-                    Storage::disk('public')->delete($photo);
+                    Storage::disk($disk)->delete($photo);
                 }
             }
             
             $photos = [];
             foreach ($request->file('property_photos') as $photo) {
-                $path = $photo->store('properties/photos', 'public');
+                $path = $photo->store('properties/photos', $disk);
                 $photos[] = $path;
             }
             $validated['property_photos'] = $photos;
@@ -264,10 +268,10 @@ class PropertyController extends Controller
         if ($request->hasFile('blueprint_file')) {
             // Delete old blueprint
             if ($property->blueprint_file) {
-                Storage::disk('public')->delete($property->blueprint_file);
+                Storage::disk($disk)->delete($property->blueprint_file);
             }
             
-            $validated['blueprint_file'] = $request->file('blueprint_file')->store('properties/blueprints', 'public');
+            $validated['blueprint_file'] = $request->file('blueprint_file')->store('properties/blueprints', $disk);
         }
         
         $property->update($validated);
@@ -294,16 +298,18 @@ class PropertyController extends Controller
                 ->with('error', 'Cannot delete approved properties. Please contact support.');
         }
 
+        $disk = config('filesystems.default', 's3');
+
         // Delete photos
         if ($property->property_photos) {
             foreach ($property->property_photos as $photo) {
-                Storage::disk('public')->delete($photo);
+                Storage::disk($disk)->delete($photo);
             }
         }
         
         // Delete blueprint
         if ($property->blueprint_file) {
-            Storage::disk('public')->delete($property->blueprint_file);
+            Storage::disk($disk)->delete($property->blueprint_file);
         }
         
         $property->delete();
