@@ -189,7 +189,7 @@ class PropertyController extends Controller
 
         $validated = $request->validate([
             'property_name' => 'required|string|max:255',
-            'type' => 'required|in:house,townhome,condo,duplex,multi-unit',
+            'type' => 'required|in:residential,commercial,mixed_use',
             'year_built' => 'nullable|integer|min:1800|max:' . date('Y'),
             
             // Address
@@ -197,7 +197,7 @@ class PropertyController extends Controller
             'city' => 'required|string|max:100',
             'province' => 'required|string|max:100',
             'postal_code' => 'required|string|max:20',
-            'country' => 'required|in:Canada,USA,El Salvador',
+            'country' => 'required|string|max:100',
             
             // Size
             'square_footage_interior' => 'nullable|numeric|min:0',

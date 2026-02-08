@@ -200,8 +200,8 @@
                             <div class="row">
                                 @foreach($property->property_photos as $photo)
                                 <div class="col-md-4 mb-3">
-                                    <a href="{{ asset('storage/' . $photo) }}" target="_blank">
-                                        <img src="{{ asset('storage/' . $photo) }}" class="img-fluid rounded" alt="Property Photo">
+                                    <a href="{{ $property->getStorageUrl($photo) }}" target="_blank">
+                                        <img src="{{ $property->getStorageUrl($photo) }}" class="img-fluid rounded" alt="Property Photo">
                                     </a>
                                 </div>
                                 @endforeach
@@ -217,7 +217,7 @@
                             <h5 class="card-title mb-3">
                                 <i class="mdi mdi-file-document text-warning me-2"></i>Blueprint
                             </h5>
-                            <a href="{{ asset('storage/' . $property->blueprint_file) }}" target="_blank" class="btn btn-primary">
+                            <a href="{{ $property->getStorageUrl($property->blueprint_file) }}" target="_blank" class="btn btn-primary">
                                 <i class="mdi mdi-download me-2"></i>Download Blueprint
                             </a>
                         </div>

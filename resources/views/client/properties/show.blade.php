@@ -59,26 +59,12 @@
                     @foreach($property->property_photos as $photo)
                     <div class="col-md-4 mb-3">
                         <div class="property-photo-wrapper">
-                            <img src="{{ Storage::url($photo) }}" 
-                                 alt="Property Photo" 
-                                 class="img-fluid property-photo"
-                                 data-bs-toggle="modal" 
-                                 data-bs-target="#photoModal{{ $loop->index }}">
-                        </div>
-                    </div>
-
-                    {{-- Photo Modal --}}
-                    <div class="modal fade" id="photoModal{{ $loop->index }}" tabindex="-1">
-                        <div class="modal-dialog modal-lg modal-dialog-centered">
-                            <div class="modal-content">
-                                <div class="modal-header">
-                                    <h5 class="modal-title">Photo {{ $loop->iteration }}</h5>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                </div>
-                                <div class="modal-body text-center">
-                                    <img src="{{ Storage::url($photo) }}" alt="Property Photo" class="img-fluid">
-                                </div>
-                            </div>
+                               <img src="{{ $property->getStorageUrl($photo) }}" 
+                                   alt="Property Photo" 
+                                   class="img-fluid property-photo js-media-open"
+                                   data-media-src="{{ $property->getStorageUrl($photo) }}"
+                                   data-media-group="property-photos"
+                                   data-media-index="{{ $loop->index }}">
                         </div>
                     </div>
                     @endforeach
@@ -263,26 +249,11 @@
                     <i class="mdi mdi-floor-plan text-danger"></i> Blueprint / Floor Plan
                 </h4>
                 @if(str_ends_with($property->blueprint_file, '.pdf'))
-                    <a href="{{ Storage::url($property->blueprint_file) }}" target="_blank" class="btn btn-outline-primary btn-block">
+                    <a href="{{ $property->getStorageUrl($property->blueprint_file) }}" target="_blank" class="btn btn-outline-primary btn-block">
                         <i class="mdi mdi-file-pdf"></i> View PDF Blueprint
                     </a>
                 @else
-                    <img src="{{ Storage::url($property->blueprint_file) }}" alt="Blueprint" class="img-fluid" style="cursor: pointer;" data-bs-toggle="modal" data-bs-target="#blueprintModal">
-                    
-                    {{-- Blueprint Modal --}}
-                    <div class="modal fade" id="blueprintModal" tabindex="-1">
-                        <div class="modal-dialog modal-xl modal-dialog-centered">
-                            <div class="modal-content">
-                                <div class="modal-header">
-                                    <h5 class="modal-title">Blueprint / Floor Plan</h5>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                </div>
-                                <div class="modal-body text-center">
-                                    <img src="{{ Storage::url($property->blueprint_file) }}" alt="Blueprint" class="img-fluid">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    <img src="{{ $property->getStorageUrl($property->blueprint_file) }}" alt="Blueprint" class="img-fluid js-media-open" style="cursor: pointer;" data-media-src="{{ $property->getStorageUrl($property->blueprint_file) }}" data-media-group="blueprint" data-media-index="0">
                 @endif
             </div>
         </div>
@@ -369,5 +340,174 @@
     overflow: hidden;
     border-radius: 8px;
 }
+
+.media-viewer {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1050;
+}
+
+.media-viewer.is-open {
+    display: flex;
+}
+
+.media-viewer__backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+}
+
+.media-viewer__content {
+    position: relative;
+    background: #ffffff;
+    border-radius: 8px;
+    padding: 16px;
+    max-width: 90vw;
+    max-height: 90vh;
+    z-index: 1;
+}
+
+.media-viewer__content img {
+    max-width: 85vw;
+    max-height: 80vh;
+    display: block;
+}
+
+.media-viewer__close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+}
+
+.media-viewer__nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2;
+}
+
+.media-viewer__nav--prev {
+    left: 8px;
+}
+
+.media-viewer__nav--next {
+    right: 8px;
+}
 </style>
+
+<div id="mediaViewer" class="media-viewer" aria-hidden="true">
+    <div class="media-viewer__backdrop"></div>
+    <div class="media-viewer__content">
+        <button type="button" class="btn btn-light media-viewer__nav media-viewer__nav--prev" aria-label="Previous">
+            <i class="mdi mdi-chevron-left"></i>
+        </button>
+        <button type="button" class="btn btn-light media-viewer__nav media-viewer__nav--next" aria-label="Next">
+            <i class="mdi mdi-chevron-right"></i>
+        </button>
+        <button type="button" class="btn-close media-viewer__close" aria-label="Close"></button>
+        <img id="mediaViewerImage" src="" alt="Media preview">
+    </div>
+</div>
+
+@push('scripts')
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const viewer = document.getElementById('mediaViewer');
+        const viewerImage = document.getElementById('mediaViewerImage');
+        const closeButton = viewer?.querySelector('.media-viewer__close');
+        const backdrop = viewer?.querySelector('.media-viewer__backdrop');
+        const prevButton = viewer?.querySelector('.media-viewer__nav--prev');
+        const nextButton = viewer?.querySelector('.media-viewer__nav--next');
+
+        const mediaGroups = {};
+        let currentGroup = null;
+        let currentIndex = 0;
+
+        document.querySelectorAll('.js-media-open').forEach((el) => {
+            const group = el.getAttribute('data-media-group') || 'default';
+            const index = parseInt(el.getAttribute('data-media-index') || '0', 10);
+            const src = el.getAttribute('data-media-src') || el.getAttribute('src');
+
+            if (!mediaGroups[group]) {
+                mediaGroups[group] = [];
+            }
+
+            mediaGroups[group][index] = src;
+        });
+
+        const updateNavVisibility = () => {
+            const groupItems = mediaGroups[currentGroup] || [];
+            const hasMultiple = groupItems.filter(Boolean).length > 1;
+            if (prevButton) prevButton.style.display = hasMultiple ? 'inline-flex' : 'none';
+            if (nextButton) nextButton.style.display = hasMultiple ? 'inline-flex' : 'none';
+        };
+
+        const openViewer = (src, group, index) => {
+            if (!viewer || !viewerImage) return;
+            viewerImage.src = src;
+            currentGroup = group;
+            currentIndex = index;
+            viewer.classList.add('is-open');
+            viewer.setAttribute('aria-hidden', 'false');
+            updateNavVisibility();
+        };
+
+        const closeViewer = () => {
+            if (!viewer || !viewerImage) return;
+            viewerImage.src = '';
+            viewer.classList.remove('is-open');
+            viewer.setAttribute('aria-hidden', 'true');
+            currentGroup = null;
+            currentIndex = 0;
+        };
+
+        const navigate = (direction) => {
+            const groupItems = mediaGroups[currentGroup] || [];
+            const total = groupItems.filter(Boolean).length;
+            if (total <= 1) return;
+
+            let nextIndex = currentIndex + direction;
+            if (nextIndex < 0) nextIndex = total - 1;
+            if (nextIndex >= total) nextIndex = 0;
+
+            const nextSrc = groupItems[nextIndex];
+            if (nextSrc) {
+                currentIndex = nextIndex;
+                viewerImage.src = nextSrc;
+            }
+        };
+
+        document.querySelectorAll('.js-media-open').forEach((el) => {
+            el.addEventListener('click', (event) => {
+                event.preventDefault();
+                const src = el.getAttribute('data-media-src') || el.getAttribute('src');
+                const group = el.getAttribute('data-media-group') || 'default';
+                const index = parseInt(el.getAttribute('data-media-index') || '0', 10);
+                if (src) {
+                    openViewer(src, group, index);
+                }
+            });
+        });
+
+        closeButton?.addEventListener('click', closeViewer);
+        backdrop?.addEventListener('click', closeViewer);
+        prevButton?.addEventListener('click', () => navigate(-1));
+        nextButton?.addEventListener('click', () => navigate(1));
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                closeViewer();
+            }
+            if (event.key === 'ArrowLeft') {
+                navigate(-1);
+            }
+            if (event.key === 'ArrowRight') {
+                navigate(1);
+            }
+        });
+    });
+</script>
+@endpush
 @endsection
