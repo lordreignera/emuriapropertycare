@@ -12,6 +12,7 @@
         "laravel/jetstream": "^5.3",
         "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.10.1",
+        "league/flysystem-aws-s3-v3": "^3.31",
         "livewire/livewire": "^3.6.4",
         "phpoffice/phpspreadsheet": "^5.4",
         "spatie/laravel-permission": "^6.23"
