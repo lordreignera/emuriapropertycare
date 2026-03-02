@@ -162,8 +162,19 @@
         <ul class="nav flex-column sub-menu">
           @php
               $user = Auth::user();
+              $scheduledInspectionsCount = 0;
+              $unscheduledInspectionsCount = 0;
+              $inProgressInspectionsCount = 0;
               // Calculate role-specific counts
-              if ($user->hasRole('Inspector')) {
+              if ($user->hasRole(['Super Admin', 'Administrator'])) {
+                // Admin sees all
+                $propertyIds = \App\Models\Property::where('status', 'approved')->pluck('id');
+                $projectIds = \App\Models\Project::whereIn('property_id', $propertyIds)->pluck('id');
+                $scheduledInspectionsCount = \App\Models\Inspection::whereIn('project_id', $projectIds)
+                  ->where('status', 'scheduled')->count();
+                $inProgressInspectionsCount = \App\Models\Inspection::whereIn('project_id', $projectIds)
+                  ->where('status', 'in_progress')->count();
+              } elseif ($user->hasRole('Inspector')) {
                   $scheduledInspectionsCount = \App\Models\Property::where('inspector_id', $user->id)
                       ->where('status', 'awaiting_inspection')
                       ->whereNotNull('inspection_scheduled_at')
@@ -181,14 +192,6 @@
                       ->where('status', 'awaiting_inspection')
                       ->whereNull('inspection_scheduled_at')
                       ->count();
-              } else {
-                  // Admin sees all
-                  $propertyIds = \App\Models\Property::where('status', 'approved')->pluck('id');
-                  $projectIds = \App\Models\Project::whereIn('property_id', $propertyIds)->pluck('id');
-                  $scheduledInspectionsCount = \App\Models\Inspection::whereIn('project_id', $projectIds)
-                      ->where('status', 'scheduled')->count();
-                  $inProgressInspectionsCount = \App\Models\Inspection::whereIn('project_id', $projectIds)
-                      ->where('status', 'in_progress')->count();
               }
           @endphp
           @if(Auth::user()->hasRole(['Super Admin', 'Administrator']))
@@ -585,6 +588,11 @@
           <li class="nav-item">
             <a class="nav-link {{ request()->routeIs('admin.pricing-config.*') ? 'active' : '' }}" href="{{ route('admin.pricing-config.index') }}">
               <i class="mdi mdi-cog"></i> System Configuration
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link {{ request()->routeIs('admin.settings.bdc*') ? 'active' : '' }}" href="{{ route('admin.settings.bdc') }}">
+              <i class="mdi mdi-calculator"></i> BDC Calibration Engine
             </a>
           </li>
           <li class="nav-item">

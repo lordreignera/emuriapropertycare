@@ -16,6 +16,157 @@ class InspectionController extends Controller
     private const INSPECTION_FEE_DOLLARS = 299;
 
     /**
+     * List client's completed inspections.
+     */
+    public function index()
+    {
+        $propertyIds = Property::where('user_id', Auth::id())->pluck('id');
+
+        $inspections = Inspection::with(['property', 'project'])
+            ->whereIn('property_id', $propertyIds)
+            ->where('status', 'completed')
+            ->orderByDesc('completed_date')
+            ->orderByDesc('id')
+            ->paginate(10);
+
+        return view('client.inspections.index', compact('inspections'));
+    }
+
+    /**
+     * Show client's inspection report & breakdown.
+     */
+    public function report(Inspection $inspection)
+    {
+        if (!$inspection->property || (int) $inspection->property->user_id !== (int) Auth::id()) {
+            abort(403, 'Unauthorized access to this inspection report.');
+        }
+
+        $findings = \App\Models\PHARFinding::where('inspection_id', $inspection->id)->get();
+
+        return view('client.inspections.report', compact('inspection', 'findings'));
+    }
+
+    /**
+     * Show Stripe payment page for starting work (monthly/annual).
+     */
+    public function workPayment(Request $request, Inspection $inspection)
+    {
+        if (!$inspection->property || (int) $inspection->property->user_id !== (int) Auth::id()) {
+            abort(403, 'Unauthorized access to this payment.');
+        }
+
+        if ($inspection->status !== 'completed') {
+            return redirect()->route('client.inspections.index')
+                ->with('error', 'Work payment is available only for completed inspections.');
+        }
+
+        if (($inspection->work_payment_status ?? null) === 'paid') {
+            return redirect()->route('client.inspections.report', $inspection->id)
+                ->with('info', 'Work payment has already been completed.');
+        }
+
+        $cadence = $request->query('cadence', 'monthly');
+        if (!in_array($cadence, ['monthly', 'annual'], true)) {
+            $cadence = 'monthly';
+        }
+
+        $monthlyBase = (float) max(
+            (float) ($inspection->scientific_final_monthly ?? 0),
+            (float) ($inspection->arp_equivalent_final ?? 0),
+            (float) ($inspection->base_package_price_snapshot ?? 0)
+        );
+
+        if ($monthlyBase <= 0) {
+            return redirect()->route('client.inspections.report', $inspection->id)
+                ->with('error', 'Pricing has not been calculated yet for this inspection.');
+        }
+
+        $amount = $cadence === 'annual' ? ($monthlyBase * 12) : $monthlyBase;
+
+        $stripe = new \Stripe\StripeClient(config('cashier.secret'));
+        $paymentIntent = $stripe->paymentIntents->create([
+            'amount' => (int) round($amount * 100),
+            'currency' => 'usd',
+            'metadata' => [
+                'inspection_id' => $inspection->id,
+                'property_id' => $inspection->property_id,
+                'project_id' => $inspection->project_id,
+                'payment_type' => 'work_start',
+                'cadence' => $cadence,
+                'client_user_id' => Auth::id(),
+            ],
+        ]);
+
+        return view('client.inspections.work-payment', [
+            'inspection' => $inspection,
+            'cadence' => $cadence,
+            'amount' => $amount,
+            'monthlyBase' => $monthlyBase,
+            'clientSecret' => $paymentIntent->client_secret,
+            'stripeKey' => config('cashier.key'),
+        ]);
+    }
+
+    /**
+     * Confirm Stripe payment and start work.
+     */
+    public function processWorkPayment(Request $request, Inspection $inspection)
+    {
+        if (!$inspection->property || (int) $inspection->property->user_id !== (int) Auth::id()) {
+            abort(403, 'Unauthorized payment action.');
+        }
+
+        $validated = $request->validate([
+            'payment_intent_id' => 'required|string',
+            'cadence' => 'required|in:monthly,annual',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $stripe = new \Stripe\StripeClient(config('cashier.secret'));
+            $paymentIntent = $stripe->paymentIntents->retrieve($validated['payment_intent_id']);
+
+            if (($paymentIntent->status ?? null) !== 'succeeded') {
+                throw new \RuntimeException('Payment not completed.');
+            }
+
+            $inspection->update([
+                'work_payment_status' => 'paid',
+                'work_payment_paid_at' => now(),
+                'work_payment_amount' => ((float) $paymentIntent->amount_received) / 100,
+                'work_payment_cadence' => $validated['cadence'],
+                'work_stripe_payment_intent_id' => $paymentIntent->id,
+            ]);
+
+            if ($inspection->project) {
+                $inspection->project->update([
+                    'status' => 'in_progress',
+                    'actual_start_date' => $inspection->project->actual_start_date ?: now()->toDateString(),
+                ]);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'redirect' => route('client.inspections.report', $inspection->id),
+                'message' => 'Payment successful. Work has started.',
+            ]);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            \Log::error('Client work payment failed', [
+                'inspection_id' => $inspection->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Payment verification failed. Please try again.',
+            ], 400);
+        }
+    }
+
+    /**
      * Show form to schedule inspection for a property
      * NEW FLOW: Client can schedule immediately after adding property (no approval needed)
      */

@@ -7,6 +7,9 @@ use App\Models\Inspection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Barryvdh\DomPDF\Facade\Pdf;
 
 class InspectionController extends Controller
 {
@@ -18,7 +21,7 @@ class InspectionController extends Controller
         $user = Auth::user();
         
         // Base query for inspections
-        $query = Inspection::with(['property.user', 'property.projectManager', 'inspector', 'assignedBy', 'project.projectManager'])
+        $query = Inspection::with(['property.user', 'property.projectManager', 'inspector', 'assignedBy', 'project.manager'])
             ->whereNotNull('property_id');
 
         // Filter by status if provided
@@ -30,7 +33,13 @@ class InspectionController extends Controller
             } elseif ($request->status === 'in_progress') {
                 $query->where('status', 'in_progress');
             } elseif ($request->status === 'completed') {
-                $query->where('status', 'completed');
+                $latestCompletedByProperty = Inspection::query()
+                    ->selectRaw('MAX(id) as id')
+                    ->where('status', 'completed')
+                    ->groupBy('property_id');
+
+                $query->where('status', 'completed')
+                    ->whereIn('id', $latestCompletedByProperty);
             }
         } else {
             // By default, show scheduled and in_progress inspections
@@ -141,55 +150,137 @@ class InspectionController extends Controller
     {
         $validated = $request->validate([
             'property_id' => 'required|exists:properties,id',
-            'inspection_date' => 'required|date',
-            'inspection_type' => 'required|in:initial,routine,follow-up,emergency',
             'status' => 'required|in:scheduled,in_progress,completed',
-            'overall_condition' => 'nullable|in:excellent,good,fair,poor',
-            'notes' => 'nullable|string',
-            'issues_found' => 'nullable|string',
+            
+            // CPI Domain Scores
+            'cpi_domain_*' => 'nullable|integer',
+            
+            // Service Package
+            'service_package_id' => 'nullable|exists:pricing_packages,id',
+            
+            // Overall Assessment
+            'overall_condition' => 'nullable|in:excellent,good,fair,poor,critical',
+            'inspector_notes' => 'nullable|string',
             'recommendations' => 'nullable|string',
-            'photos.*' => 'nullable|image|max:10240', // 10MB max per photo
-            'report' => 'nullable|file|mimes:pdf|max:20480', // 20MB max
+            'risk_summary' => 'nullable|string',
+            
+            // Photos
+            'photos.*' => 'nullable|image|max:10240',
+            
+            // Findings Array
+            'findings' => 'nullable|array',
+            'findings.*.task_question' => 'nullable|string',
+            'findings.*.category' => 'nullable|string',
+            'findings.*.priority' => 'nullable|in:1,2,3',
+            'findings.*.included_yn' => 'nullable|boolean',
+            'findings.*.labour_hours' => 'nullable|numeric|min:0',
+            'findings.*.material_cost' => 'nullable|numeric|min:0',
+            'findings.*.notes' => 'nullable|string',
+            'findings.*.property_id' => 'nullable|exists:properties,id',
+
+            // CPI hidden scores from phase 1 UI
+            'cpi_total_score' => 'nullable|integer|min:0',
+            'domain_1_score' => 'nullable|integer|min:0',
+            'domain_2_score' => 'nullable|integer|min:0',
+            'domain_3_score' => 'nullable|integer|min:0',
+            'domain_4_score' => 'nullable|integer|min:0',
+            'domain_5_score' => 'nullable|integer|min:0',
+            'domain_6_score' => 'nullable|integer|min:0',
         ]);
 
         $property = Property::findOrFail($validated['property_id']);
+
+        // Calculate CPI scores from submitted dynamic factors (fallback)
+        $cpiSnapshot = $this->calculateCpiSnapshot($request);
 
         // Create or find project for this property
         $project = \App\Models\Project::firstOrCreate(
             ['property_id' => $property->id],
             [
-                'name' => 'Property Inspection - ' . $property->property_name,
-                'description' => 'Initial inspection for ' . $property->property_name,
+                'title' => 'Property Inspection - ' . $property->property_name,
+                'description' => 'CPI Inspection for ' . $property->property_name,
                 'status' => 'pending',
+                'user_id' => $property->user_id, // Client/Owner
+                'managed_by' => $property->project_manager_id, // PM
+                'created_by' => Auth::id(),
+                'project_number' => 'PRJ-' . strtoupper(\Illuminate\Support\Str::random(8)),
             ]
         );
 
-        // Build findings array
-        $findings = [];
-        if (!empty($validated['issues_found'])) {
-            $findings['issues'] = $validated['issues_found'];
-        }
-        if (!empty($validated['recommendations'])) {
-            $findings['recommendations'] = $validated['recommendations'];
-        }
-        if (!empty($validated['overall_condition'])) {
-            $findings['condition'] = $validated['overall_condition'];
-        }
+        // Reuse an existing paid inspection for this property to avoid duplicate records
+        $inspection = Inspection::where('property_id', $property->id)
+            ->where('inspection_fee_status', 'paid')
+            ->whereIn('status', ['scheduled', 'in_progress', 'completed'])
+            ->latest('id')
+            ->first();
 
-        // Create inspection record
-        $inspection = new Inspection();
-        $inspection->project_id = $project->id;
-        $inspection->inspector_id = Auth::id();
-        $inspection->assigned_by = $property->project_manager_id ?? Auth::id();
-        $inspection->scheduled_date = $validated['inspection_date'];
+        if (!$inspection) {
+            $inspection = new Inspection();
+            $inspection->property_id = $property->id;
+            $inspection->project_id = $project->id;
+            $inspection->inspector_id = Auth::id();
+            $inspection->assigned_by = $property->project_manager_id ?? Auth::id();
+            $inspection->scheduled_date = now();
+        } else {
+            $inspection->project_id = $inspection->project_id ?: $project->id;
+            $inspection->inspector_id = $inspection->inspector_id ?: Auth::id();
+            $inspection->assigned_by = $inspection->assigned_by ?: ($property->project_manager_id ?? Auth::id());
+            $inspection->scheduled_date = $inspection->scheduled_date ?: now();
+        }
         
         if ($validated['status'] === 'completed') {
             $inspection->completed_date = now();
         }
         
         $inspection->status = $validated['status'];
-        $inspection->summary = $validated['notes'] ?? 'Inspection for ' . $property->property_name;
-        $inspection->findings = $findings;
+        $inspection->service_package_id = $validated['service_package_id'] ?? null;
+
+        if (!empty($inspection->service_package_id)) {
+            $selectedPackage = \App\Models\PricingPackage::with('packagePricing')->find($inspection->service_package_id);
+            if ($selectedPackage) {
+                $propertyTypeCode = strtolower((string) ($property->type ?? 'residential'));
+                if (str_contains($propertyTypeCode, 'mixed')) {
+                    $propertyTypeCode = 'mixed_use';
+                } elseif (str_contains($propertyTypeCode, 'commercial')) {
+                    $propertyTypeCode = 'commercial';
+                } else {
+                    $propertyTypeCode = 'residential';
+                }
+
+                $propertyTypeId = \Illuminate\Support\Facades\DB::table('property_types')
+                    ->where('type_code', $propertyTypeCode)
+                    ->value('id');
+
+                $price = $propertyTypeId ? $selectedPackage->getPriceForPropertyType($propertyTypeId) : null;
+                if ($price === null) {
+                    $price = optional($selectedPackage->packagePricing->where('is_active', true)->first())->base_monthly_price;
+                }
+
+                $inspection->service_package_name = $selectedPackage->package_name;
+                $inspection->base_price_snapshot = $price !== null ? (float) $price : null;
+            }
+        }
+
+        // CPI snapshot fields (Page 1)
+        $inspection->property_year_built = $request->input('property_year_built');
+        $inspection->domain_1_score = (int) ($validated['domain_1_score'] ?? ($cpiSnapshot['domain_scores'][1] ?? 0));
+        $inspection->domain_2_score = (int) ($validated['domain_2_score'] ?? ($cpiSnapshot['domain_scores'][2] ?? 0));
+        $inspection->domain_3_score = (int) ($validated['domain_3_score'] ?? ($cpiSnapshot['domain_scores'][3] ?? 0));
+        $inspection->domain_4_score = (int) ($validated['domain_4_score'] ?? ($cpiSnapshot['domain_scores'][4] ?? 0));
+        $inspection->domain_5_score = (int) ($validated['domain_5_score'] ?? ($cpiSnapshot['domain_scores'][5] ?? 0));
+        $inspection->domain_6_score = (int) ($validated['domain_6_score'] ?? ($cpiSnapshot['domain_scores'][6] ?? 0));
+        $inspection->cpi_total_score = (int) ($validated['cpi_total_score'] ?? ($inspection->domain_1_score + $inspection->domain_2_score + $inspection->domain_3_score + $inspection->domain_4_score + $inspection->domain_5_score + $inspection->domain_6_score));
+        $inspection->domain_1_notes = $request->input('domain_1_notes');
+        $inspection->domain_2_notes = $request->input('domain_2_notes');
+        $inspection->domain_3_notes = $request->input('domain_3_notes');
+        $inspection->domain_4_notes = $request->input('domain_4_notes');
+        $inspection->domain_5_notes = $request->input('domain_5_notes');
+        $inspection->domain_6_notes = $request->input('domain_6_notes');
+        
+        // Store overall assessment
+        $inspection->summary = $validated['inspector_notes'] ?? 'CPI Inspection for ' . $property->property_name;
+        $inspection->recommendations = $validated['recommendations'] ?? null;
+        $inspection->risk_summary = $validated['risk_summary'] ?? null;
 
         $disk = config('filesystems.default', 's3');
 
@@ -203,26 +294,112 @@ class InspectionController extends Controller
             $inspection->photos = $photosPaths;
         }
 
-        // Handle report upload
-        if ($request->hasFile('report')) {
-            $reportPath = $request->file('report')->store('inspections/reports', $disk);
-            $inspection->report_file = $reportPath;
-        }
-
         $inspection->save();
 
-        // Update property status if inspection is completed
-        if ($validated['status'] === 'completed') {
-            $property->status = 'inspected';
-            $property->save();
-        }
+        // ==== FINDINGS & MATERIALS ARE NOW COLLECTED ON PAGE 2 (PHAR DATA FORM) ====
+        // Findings processing moved to storePharData() method
+        // This keeps the two-page workflow clean: Page 1 = CPI scoring, Page 2 = PHAR data
 
-        $message = $request->action === 'save_draft' 
-            ? 'Inspection saved as draft successfully!' 
-            : 'Inspection submitted successfully!';
+        // NOTE: We don't run full calculations here anymore - only basic save
+        // Full calculations happen after PHAR data collection in storePharData()
+
+        $message = $request->status === 'in_progress' 
+            ? 'CPI scoring saved as draft successfully!' 
+            : 'CPI scoring completed! Please proceed to PHAR data collection.';
+
+        // Redirect to PHAR data form (Page 2) if status is completed
+        if ($validated['status'] === 'completed') {
+            return redirect()->route('inspections.phar-data', $inspection->id)
+                ->with('success', $message);
+        }
 
         return redirect()->route('inspections.index')
             ->with('success', $message);
+    }
+
+    /**
+     * Calculate CPI snapshot (domain scores + total) from dynamic factor inputs.
+     */
+    protected function calculateCpiSnapshot(Request $request): array
+    {
+        $domainScores = [];
+        $allowedLookupTables = [
+            'supply_line_materials',
+            'age_brackets',
+            'containment_categories',
+            'crawl_access_categories',
+            'roof_access_categories',
+            'equipment_requirements',
+            'complexity_categories',
+        ];
+
+        $domains = \App\Models\CpiDomain::with(['activeFactors' => function ($q) {
+            $q->orderBy('sort_order');
+        }])->where('is_active', true)->orderBy('domain_number')->get();
+
+        foreach ($domains as $domain) {
+            $factorScores = [];
+
+            foreach ($domain->activeFactors as $factor) {
+                $inputName = 'factor_' . $factor->id;
+                $inputValue = $request->input($inputName);
+                $score = 0;
+
+                if ($inputValue === null || $inputValue === '') {
+                    $factorScores[] = 0;
+                    continue;
+                }
+
+                $rule = $factor->calculation_rule ?? [];
+
+                if ($factor->field_type === 'yes_no') {
+                    $score = (int) ($rule[$inputValue] ?? 0);
+                } elseif ($factor->field_type === 'lookup' && $factor->lookup_table && in_array($factor->lookup_table, $allowedLookupTables, true)) {
+                    $score = (int) (DB::table($factor->lookup_table)
+                        ->where('id', $inputValue)
+                        ->value('score_points') ?? 0);
+                } elseif ($factor->field_type === 'numeric') {
+                    $numericValue = (float) $inputValue;
+
+                    if (!empty($rule['lookup_by_age'])) {
+                        $score = (int) (DB::table('age_brackets')
+                            ->where('is_active', true)
+                            ->where('min_age', '<=', $numericValue)
+                            ->where(function ($q) use ($numericValue) {
+                                $q->whereNull('max_age')->orWhere('max_age', '>=', $numericValue);
+                            })
+                            ->value('score_points') ?? 0);
+                    } elseif (!empty($rule['threshold']) && $numericValue > (float) $rule['threshold']) {
+                        $score = (int) ($rule['points'] ?? 0);
+                    } elseif (!empty($rule['range']) && is_array($rule['range']) && count($rule['range']) === 2) {
+                        $min = (float) $rule['range'][0];
+                        $max = (float) $rule['range'][1];
+                        if ($numericValue >= $min && $numericValue <= $max) {
+                            $score = (int) ($rule['points'] ?? 0);
+                        }
+                    }
+                }
+
+                $factorScores[] = max(0, (int) $score);
+            }
+
+            if (($domain->calculation_method ?? 'sum') === 'max') {
+                $domainScore = empty($factorScores) ? 0 : max($factorScores);
+            } else {
+                $domainScore = array_sum($factorScores);
+            }
+
+            if (!empty($domain->max_possible_points)) {
+                $domainScore = min((int) $domain->max_possible_points, (int) $domainScore);
+            }
+
+            $domainScores[(int) $domain->domain_number] = (int) $domainScore;
+        }
+
+        return [
+            'domain_scores' => $domainScores,
+            'cpi_total_score' => array_sum($domainScores),
+        ];
     }
 
     /**
@@ -230,7 +407,36 @@ class InspectionController extends Controller
      */
     public function show(string $id)
     {
-        //
+        $inspection = Inspection::with(['property.user', 'project', 'inspector', 'assignedBy'])
+            ->findOrFail($id);
+        
+        // Load findings for this inspection with inspection relationship
+        $findings = \App\Models\PHARFinding::with('inspection')
+            ->where('inspection_id', $inspection->id)
+            ->get();
+        
+        // Ensure property exists
+        if (!$inspection->property) {
+            return redirect()->route('inspections.index')
+                ->with('error', 'Property not found for this inspection.');
+        }
+        
+        // Check if calculations are missing and recalculate if needed
+        if ($inspection->status === 'completed' && 
+            ($inspection->bdc_annual === null || $inspection->bdc_annual == 0)) {
+            try {
+                $bdcCalculator = new \App\Services\BDCCalculator();
+                $calculator = new \App\Services\MergeBridgeCalculator($bdcCalculator);
+                $results = $calculator->calculate($inspection);
+                $calculator->saveToInspection($inspection, $results);
+                $inspection->refresh();
+            } catch (\Exception $e) {
+                // Log error but continue to show the view
+                \Log::error('Failed to recalculate inspection: ' . $e->getMessage());
+            }
+        }
+        
+        return view('admin.inspections.show', compact('inspection', 'findings'));
     }
 
     /**
@@ -256,4 +462,308 @@ class InspectionController extends Controller
     {
         //
     }
+
+    /**
+     * Download inspection report as PDF invoice
+     */
+    public function downloadInvoice(string $id)
+    {
+        $inspection = Inspection::with(['property.user', 'project', 'inspector', 'assignedBy'])
+            ->findOrFail($id);
+        
+        // Load findings for this inspection with inspection relationship
+        $findings = \App\Models\PHARFinding::with('inspection')
+            ->where('inspection_id', $inspection->id)
+            ->get();
+        
+        // Ensure property exists
+        if (!$inspection->property) {
+            return redirect()->route('inspections.index')
+                ->with('error', 'Property not found for this inspection.');
+        }
+        
+        // Generate PDF
+        $pdf = Pdf::loadView('admin.inspections.invoice-pdf', compact('inspection', 'findings'))
+            ->setPaper('a4', 'portrait')
+            ->setOption('margin-top', 10)
+            ->setOption('margin-right', 10)
+            ->setOption('margin-bottom', 10)
+            ->setOption('margin-left', 10);
+        
+        $filename = 'Invoice_' . $inspection->property->property_code . '_' . date('Ymd') . '.pdf';
+        
+        return $pdf->download($filename);
+    }
+
+    /**
+     * Show Stripe payment page for post-inspection work start.
+     */
+    public function workPayment(string $id)
+    {
+        $inspection = Inspection::with(['property.user', 'project'])->findOrFail($id);
+
+        if ($inspection->status !== 'completed') {
+            return redirect()->route('inspections.index', ['status' => 'completed'])
+                ->with('error', 'Work payment is only available after inspection completion.');
+        }
+
+        if (($inspection->work_payment_status ?? null) === 'paid') {
+            return redirect()->route('inspections.show', $inspection->id)
+                ->with('info', 'Work payment is already completed for this inspection.');
+        }
+
+        $workAmount = (float) max(
+            (float) ($inspection->scientific_final_monthly ?? 0),
+            (float) ($inspection->arp_equivalent_final ?? 0),
+            (float) ($inspection->base_package_price_snapshot ?? 0)
+        );
+
+        if ($workAmount <= 0) {
+            return redirect()->route('inspections.show', $inspection->id)
+                ->with('error', 'Cannot start payment because calculated work amount is zero. Complete PHAR calculation first.');
+        }
+
+        $stripe = new \Stripe\StripeClient(config('cashier.secret'));
+        $paymentIntent = $stripe->paymentIntents->create([
+            'amount' => (int) round($workAmount * 100),
+            'currency' => 'usd',
+            'metadata' => [
+                'inspection_id' => $inspection->id,
+                'property_id' => $inspection->property_id,
+                'project_id' => $inspection->project_id,
+                'payment_type' => 'work_start',
+            ],
+        ]);
+
+        return view('admin.inspections.work-payment', [
+            'inspection' => $inspection,
+            'workAmount' => $workAmount,
+            'clientSecret' => $paymentIntent->client_secret,
+            'stripeKey' => config('cashier.key'),
+        ]);
+    }
+
+    /**
+     * Confirm Stripe work payment and start project work.
+     */
+    public function processWorkPayment(Request $request, string $id)
+    {
+        $inspection = Inspection::with('project')->findOrFail($id);
+
+        $validated = $request->validate([
+            'payment_intent_id' => 'required|string',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $stripe = new \Stripe\StripeClient(config('cashier.secret'));
+            $paymentIntent = $stripe->paymentIntents->retrieve($validated['payment_intent_id']);
+
+            if (($paymentIntent->status ?? null) !== 'succeeded') {
+                throw new \RuntimeException('Payment not completed successfully.');
+            }
+
+            $inspection->update([
+                'work_payment_status' => 'paid',
+                'work_payment_paid_at' => now(),
+                'work_payment_amount' => ((float) $paymentIntent->amount_received) / 100,
+                'work_stripe_payment_intent_id' => $paymentIntent->id,
+            ]);
+
+            if ($inspection->project) {
+                $inspection->project->update([
+                    'status' => 'in_progress',
+                    'actual_start_date' => $inspection->project->actual_start_date ?: now()->toDateString(),
+                ]);
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Payment successful. Work has been started.',
+                'redirect' => route('inspections.show', $inspection->id),
+            ]);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            Log::error('Work payment processing failed', [
+                'inspection_id' => $inspection->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Payment verification failed. Please try again.',
+            ], 400);
+        }
+    }
+
+    /**
+     * Display PHAR data collection form (Page 2 of inspection workflow)
+     */
+    public function pharData(string $id)
+    {
+        $inspection = Inspection::with(['property', 'pharFindings'])->findOrFail($id);
+        $property = $inspection->property;
+
+        // Default property size from registered property record
+        $defaultPropertySizePsf = $property->total_square_footage
+            ?? $property->square_footage_interior
+            ?? 0;
+
+        // Fetch BDC settings for display in the form
+        $bdcSettings = \App\Models\BDCSetting::pluck('setting_value', 'setting_key')->toArray();
+
+        // Config-driven dropdown options (easy to extend)
+        $pharCategories = config('phar.categories', []);
+        $materialUnits = config('phar.material_units', []);
+
+        // Selected service package (from CPI step) and property-type-specific monthly floor price
+        $selectedServicePackage = null;
+        $selectedServicePackagePrice = 0;
+        if (!empty($inspection->service_package_id)) {
+            $selectedServicePackage = \App\Models\PricingPackage::with('packagePricing')->find($inspection->service_package_id);
+
+            if ($selectedServicePackage) {
+                $propertyType = strtolower((string) ($property->type ?? 'residential'));
+                $isCommercial = str_contains($propertyType, 'commercial');
+                $isResidential = str_contains($propertyType, 'residential');
+                $isMixed = str_contains($propertyType, 'mixed');
+
+                $resPrice = (float) ($selectedServicePackage->getPriceForPropertyType(1) ?? 0);
+                $comPrice = (float) ($selectedServicePackage->getPriceForPropertyType(2) ?? 0);
+
+                if ($isMixed) {
+                    $selectedServicePackagePrice = ($resPrice + $comPrice) / 2;
+                } elseif ($isCommercial && !$isResidential) {
+                    $selectedServicePackagePrice = $comPrice;
+                } else {
+                    $selectedServicePackagePrice = $resPrice;
+                }
+            }
+        }
+
+        return view('admin.inspections.form-phar-data', compact(
+            'inspection',
+            'property',
+            'bdcSettings',
+            'pharCategories',
+            'materialUnits',
+            'defaultPropertySizePsf',
+            'selectedServicePackage',
+            'selectedServicePackagePrice'
+        ));
+    }
+
+    /**
+     * Store PHAR data (findings + materials) and trigger final calculations
+     */
+    public function storePharData(Request $request, string $id)
+    {
+        $inspection = Inspection::findOrFail($id);
+        $property = $inspection->property;
+
+        $validated = $request->validate([
+            // PHAR Inputs
+            'property_size_psf' => 'required|numeric|min:0',
+            'estimated_task_hours' => 'required|numeric|min:0',
+            'minimum_required_hours' => 'required|numeric|min:0',
+            'labour_hourly_rate' => 'required|numeric|min:0',
+
+            // Findings Array
+            'findings' => 'nullable|array',
+            'findings.*.task_question' => 'required_with:findings|string',
+            'findings.*.labour_hours' => 'required_with:findings|numeric|min:0',
+            'findings.*.priority' => 'required_with:findings|in:1,2,3',
+            'findings.*.included_yn' => 'required_with:findings|boolean',
+            'findings.*.category' => 'required_with:findings|string',
+            'findings.*.notes' => 'nullable|string',
+            'findings.*.property_id' => 'required_with:findings|exists:properties,id',
+
+            // Materials Array
+            'materials' => 'nullable|array',
+            'materials.*.material_name' => 'required_with:materials|string',
+            'materials.*.quantity' => 'required_with:materials|numeric|min:0',
+            'materials.*.unit' => 'required_with:materials|string',
+            'materials.*.unit_cost' => 'required_with:materials|numeric|min:0',
+            'materials.*.line_total' => 'required_with:materials|numeric|min:0',
+            'materials.*.category' => 'required_with:materials|string',
+            'materials.*.notes' => 'nullable|string',
+            'materials.*.property_id' => 'required_with:materials|exists:properties,id',
+        ]);
+
+        // Update inspection with PHAR input parameters
+        $inspection->update([
+            'property_size_psf' => $validated['property_size_psf'],
+            'estimated_task_hours' => $validated['estimated_task_hours'],
+            'minimum_required_hours' => $validated['minimum_required_hours'],
+            'labour_hourly_rate' => $validated['labour_hourly_rate'],
+        ]);
+
+        // Delete old findings and materials (replace with new data)
+        $inspection->pharFindings()->delete();
+        $inspection->materials()->delete();
+
+        // ==== PROCESS FINDINGS ====
+        if (!empty($validated['findings'])) {
+            foreach ($validated['findings'] as $findingData) {
+                // Skip empty findings
+                if (empty($findingData['task_question']) && empty($findingData['labour_hours'])) {
+                    continue;
+                }
+
+                \App\Models\PHARFinding::create([
+                    'inspection_id' => $inspection->id,
+                    'property_id' => $property->id,
+                    'task_question' => $findingData['task_question'],
+                    'category' => $findingData['category'],
+                    'priority' => $findingData['priority'],
+                    'included_yn' => $findingData['included_yn'],
+                    'labour_hours' => $findingData['labour_hours'],
+                    'material_cost' => 0, // Deprecated field, materials tracked separately now
+                    'notes' => $findingData['notes'] ?? null,
+                ]);
+            }
+        }
+
+        // ==== PROCESS MATERIALS ====
+        if (!empty($validated['materials'])) {
+            foreach ($validated['materials'] as $materialData) {
+                // Skip empty materials
+                if (empty($materialData['material_name']) && empty($materialData['quantity'])) {
+                    continue;
+                }
+
+                \App\Models\InspectionMaterial::create([
+                    'inspection_id' => $inspection->id,
+                    'property_id' => $property->id,
+                    'material_name' => $materialData['material_name'],
+                    'description' => $materialData['notes'] ?? null,
+                    'quantity' => $materialData['quantity'],
+                    'unit' => $materialData['unit'],
+                    'unit_cost' => $materialData['unit_cost'],
+                    'line_total' => $materialData['line_total'],
+                    'notes' => $materialData['notes'] ?? null,
+                    'category' => $materialData['category'],
+                ]);
+            }
+        }
+
+        // ==== CALCULATE FINAL PRICING (BDC + FRLC + FMC + TIERS) ====
+        $bdcCalculator = new \App\Services\BDCCalculator();
+        $calculator = new \App\Services\MergeBridgeCalculator($bdcCalculator);
+        $results = $calculator->calculate($inspection);
+        $calculator->saveToInspection($inspection, $results);
+
+        // Mark inspection as completed
+        $inspection->update([
+            'status' => 'completed',
+            'completed_date' => now(),
+        ]);
+
+        return redirect()->route('inspections.show', $inspection->id)
+            ->with('success', 'PHAR data saved successfully! Final pricing calculated.');
+    }
+
 }

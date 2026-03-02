@@ -15,7 +15,12 @@ class PropertyController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
-        $query = Property::with('user');
+        $query = Property::with([
+            'user',
+            'inspections' => function ($q) {
+                $q->latest('created_at');
+            },
+        ]);
 
         // Role-based filtering
         if ($user->hasRole('Inspector')) {
@@ -38,16 +43,22 @@ class PropertyController extends Controller
                 $status = $request->status;
                 
                 if ($status === 'awaiting_inspection') {
-                    // Properties with scheduled and paid inspections (no inspector assigned yet)
-                    $propertyIds = \App\Models\Inspection::where('inspection_fee_status', 'paid')
-                        ->where('status', 'scheduled')
-                        ->whereNull('inspector_id')
-                        ->pluck('property_id');
-                    $query->whereIn('id', $propertyIds);
-                } elseif ($status === 'active') {
-                    // Properties without any inspections (not scheduled yet)
-                    $query->where('status', 'active')
-                        ->whereDoesntHave('inspections');
+                    // Properties with scheduled and paid inspections
+                    $query->whereHas('inspections', function ($inspectionQuery) {
+                        $inspectionQuery->where('inspection_fee_status', 'paid')
+                            ->where('status', 'scheduled');
+                    });
+                } elseif ($status === 'not_inspected' || $status === 'active') {
+                    // Backward compatible: old "active" maps to "not inspected"
+                    // Not inspected = no completed inspection yet
+                    $query->whereDoesntHave('inspections', function ($inspectionQuery) {
+                        $inspectionQuery->where('status', 'completed');
+                    });
+                } elseif ($status === 'inspected_completed') {
+                    // Has at least one completed inspection
+                    $query->whereHas('inspections', function ($inspectionQuery) {
+                        $inspectionQuery->where('status', 'completed');
+                    });
                 } else {
                     // Other status filters
                     $query->where('status', $status);

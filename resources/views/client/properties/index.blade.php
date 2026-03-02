@@ -60,6 +60,11 @@
                         </thead>
                         <tbody>
                             @foreach($properties as $property)
+                            @php
+                                $latestInspection = $property->latestInspection;
+                                $completedInspection = $property->latestCompletedInspection;
+                                $hasScheduledInspection = $latestInspection && $latestInspection->inspection_fee_status === 'paid';
+                            @endphp
                             <tr>
                                 <td>
                                     <span class="text-dark fw-semibold">
@@ -85,18 +90,30 @@
                                     </div>
                                 </td>
                                 <td>
-                                    @php
-                                        $paidInspection = $property->inspections()
-                                            ->where('inspection_fee_status', 'paid')
-                                            ->first();
-                                    @endphp
-                                    
-                                    @if($paidInspection)
+                                    @if($completedInspection)
+                                        <span class="badge bg-info d-inline-flex align-items-center">
+                                            <i class="mdi mdi-file-check me-1"></i> Inspected • Report Ready
+                                        </span>
+                                        <div class="text-muted small mt-1">
+                                            {{ optional($completedInspection->completed_date)->format('M d, Y') }}
+                                        </div>
+                                        @if(($completedInspection->work_payment_status ?? 'pending') === 'paid')
+                                            <div class="small mt-1 text-success">
+                                                <i class="mdi mdi-check-circle-outline me-1"></i>
+                                                Work Payment: Paid ({{ ucfirst($completedInspection->work_payment_cadence ?? 'monthly') }})
+                                            </div>
+                                        @else
+                                            <div class="small mt-1 text-warning">
+                                                <i class="mdi mdi-credit-card-clock-outline me-1"></i>
+                                                Work Payment: Pending
+                                            </div>
+                                        @endif
+                                    @elseif($hasScheduledInspection)
                                         <span class="badge bg-success d-inline-flex align-items-center">
                                             <i class="mdi mdi-check-circle me-1"></i> Scheduled & Paid
                                         </span>
                                         <div class="text-muted small mt-1">
-                                            {{ $paidInspection->inspection_fee_paid_at->format('M d, Y') }}
+                                            {{ optional($latestInspection->inspection_fee_paid_at)->format('M d, Y') }}
                                         </div>
                                     @else
                                         <span class="badge bg-warning d-inline-flex align-items-center">
@@ -121,14 +138,7 @@
                                            data-bs-toggle="tooltip">
                                             <i class="mdi mdi-eye"></i>
                                         </a>
-                                        
-                                        @php
-                                            // Check if inspection has been paid for this property
-                                            $hasScheduledInspection = $property->inspections()
-                                                ->where('inspection_fee_status', 'paid')
-                                                ->exists();
-                                        @endphp
-                                        
+
                                         @if(!$hasScheduledInspection)
                                             {{-- Show Schedule button if inspection not yet paid --}}
                                             <a href="{{ route('client.inspections.schedule', $property->id) }}" 
@@ -137,6 +147,32 @@
                                                data-bs-toggle="tooltip">
                                                 <i class="mdi mdi-calendar-check me-1"></i> Schedule
                                             </a>
+                                        @elseif($completedInspection)
+                                            <a href="{{ route('client.inspections.report', $completedInspection->id) }}"
+                                               class="btn btn-sm btn-primary"
+                                               title="View Inspection Report"
+                                               data-bs-toggle="tooltip">
+                                                <i class="mdi mdi-file-document-outline me-1"></i> Report
+                                            </a>
+
+                                            @if(($completedInspection->work_payment_status ?? 'pending') !== 'paid')
+                                                <a href="{{ route('client.inspections.work-payment', ['inspection' => $completedInspection->id, 'cadence' => 'monthly']) }}"
+                                                   class="btn btn-sm btn-success"
+                                                   title="Pay Monthly"
+                                                   data-bs-toggle="tooltip">
+                                                    <i class="mdi mdi-credit-card me-1"></i> Pay Monthly
+                                                </a>
+                                                <a href="{{ route('client.inspections.work-payment', ['inspection' => $completedInspection->id, 'cadence' => 'annual']) }}"
+                                                   class="btn btn-sm btn-outline-success"
+                                                   title="Pay Annual"
+                                                   data-bs-toggle="tooltip">
+                                                    <i class="mdi mdi-credit-card-settings me-1"></i> Pay Annual
+                                                </a>
+                                            @else
+                                                <button class="btn btn-sm btn-outline-success" disabled>
+                                                    <i class="mdi mdi-check-circle me-1"></i> Paid
+                                                </button>
+                                            @endif
                                         @else
                                             {{-- Inspection already scheduled and paid --}}
                                             <button class="btn btn-sm btn-outline-success" 

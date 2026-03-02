@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Storage;
 
@@ -143,6 +144,18 @@ class Property extends Model
     public function inspections(): HasMany
     {
         return $this->hasMany(Inspection::class);
+    }
+
+    public function latestInspection(): HasOne
+    {
+        return $this->hasOne(Inspection::class)->latestOfMany();
+    }
+
+    public function latestCompletedInspection(): HasOne
+    {
+        return $this->hasOne(Inspection::class)
+            ->where('status', 'completed')
+            ->latestOfMany();
     }
 
     // Helper methods

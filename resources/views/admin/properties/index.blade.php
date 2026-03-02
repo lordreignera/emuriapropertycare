@@ -32,24 +32,25 @@
                     <!-- Filter Tabs -->
                     <ul class="nav nav-pills mb-3" role="tablist">
                         <li class="nav-item">
-                            <a class="nav-link {{ request('status') == 'awaiting_inspection' ? 'active' : '' }}" 
-                               href="{{ route('properties.index', ['status' => 'awaiting_inspection']) }}">
-                                <i class="mdi mdi-calendar-check"></i> Scheduled & Paid
-                                <span class="badge bg-success ms-1">
-                                    {{ \App\Models\Inspection::where('inspection_fee_status', 'paid')
-                                        ->where('status', 'scheduled')
-                                        ->whereNull('inspector_id')
+                            <a class="nav-link {{ request('status') == 'not_inspected' ? 'active' : '' }}" 
+                               href="{{ route('properties.index', ['status' => 'not_inspected']) }}">
+                                <i class="mdi mdi-home-alert"></i> Not Inspected
+                                <span class="badge bg-warning ms-1">
+                                    {{ \App\Models\Property::whereDoesntHave('inspections', function($query) {
+                                            $query->where('status', 'completed');
+                                        })
                                         ->count() }}
                                 </span>
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {{ request('status') == 'active' ? 'active' : '' }}" 
-                               href="{{ route('properties.index', ['status' => 'active']) }}">
-                                <i class="mdi mdi-home-alert"></i> Not Scheduled
-                                <span class="badge bg-warning ms-1">
-                                    {{ \App\Models\Property::where('status', 'active')
-                                        ->whereDoesntHave('inspections')
+                            <a class="nav-link {{ request('status') == 'inspected_completed' ? 'active' : '' }}" 
+                               href="{{ route('properties.index', ['status' => 'inspected_completed']) }}">
+                                <i class="mdi mdi-check-decagram"></i> Inspected & Completed
+                                <span class="badge bg-success ms-1">
+                                    {{ \App\Models\Property::whereHas('inspections', function($query) {
+                                            $query->where('status', 'completed');
+                                        })
                                         ->count() }}
                                 </span>
                             </a>
@@ -124,26 +125,33 @@
                                     </td>
                                     <td>
                                         @php
-                                            $paidInspection = $property->inspections()
-                                                ->where('inspection_fee_status', 'paid')
-                                                ->first();
+                                            $latestInspection = $property->inspections->first();
                                         @endphp
-                                        
-                                        @if($paidInspection)
-                                            <span class="badge badge-success">
-                                                <i class="mdi mdi-check-circle"></i> Scheduled & Paid
-                                            </span>
-                                            <br><small class="text-muted">{{ $paidInspection->inspection_fee_paid_at->format('M d, Y') }}</small>
-                                            @if(!$paidInspection->inspector_id)
-                                                <br><small class="text-danger"><i class="mdi mdi-alert"></i> Inspector Not Assigned</small>
+
+                                        @if($latestInspection)
+                                            @if($latestInspection->status === 'completed')
+                                                <span class="badge badge-success">
+                                                    <i class="mdi mdi-check-circle"></i> Inspected & Completed
+                                                </span>
+                                                <br><small class="text-muted">{{ optional($latestInspection->completed_date)->format('M d, Y') ?? 'Completion date unavailable' }}</small>
                                             @else
-                                                <br><small class="text-success"><i class="mdi mdi-check"></i> Inspector Assigned</small>
+                                                <span class="badge badge-warning">
+                                                    <i class="mdi mdi-clock-outline"></i> Not Inspected
+                                                </span>
+                                                <br><small class="text-muted">Inspection status: {{ ucfirst(str_replace('_', ' ', $latestInspection->status)) }}</small>
+                                            @endif
+
+                                            <br>
+                                            @if($latestInspection->inspection_fee_status === 'paid')
+                                                <small class="text-success"><i class="mdi mdi-cash-check"></i> Paid</small>
+                                            @else
+                                                <small class="text-danger"><i class="mdi mdi-cash-remove"></i> Not Paid</small>
                                             @endif
                                         @else
                                             <span class="badge badge-warning">
-                                                <i class="mdi mdi-alert-circle-outline"></i> Not Scheduled
+                                                <i class="mdi mdi-alert-circle-outline"></i> Not Inspected
                                             </span>
-                                            <br><small class="text-muted">Awaiting client payment</small>
+                                            <br><small class="text-danger"><i class="mdi mdi-cash-remove"></i> Not Paid</small>
                                         @endif
                                     </td>
                                     <td>{{ $property->created_at->format('M d, Y') }}</td>

@@ -284,6 +284,15 @@ class DashboardController extends Controller
                 ->take(5)
                 ->get();
 
+            // Completed inspections with pricing breakdown visible to client
+            $completedInspections = Inspection::with(['property', 'project'])
+                ->whereIn('property_id', $propertyIds)
+                ->where('status', 'completed')
+                ->orderByDesc('completed_date')
+                ->orderByDesc('id')
+                ->take(5)
+                ->get();
+
             return view('client.dashboard', compact(
                 'propertiesCount',
                 'inspectionsCount',
@@ -292,7 +301,8 @@ class DashboardController extends Controller
                 'unpaidInvoices',
                 'pendingInspections',
                 'subscription',
-                'recentProperties'
+                'recentProperties',
+                'completedInspections'
             ));
         }
         

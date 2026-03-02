@@ -34,6 +34,13 @@
             <form action="{{ route('inspections.store') }}" method="POST" enctype="multipart/form-data" id="cpiInspectionForm">
                 @csrf
                 <input type="hidden" name="property_id" value="{{ $property->id }}">
+                <input type="hidden" name="cpi_total_score" id="hiddenCpiTotalScore" value="0">
+                <input type="hidden" name="domain_1_score" id="hiddenDomain1Score" value="0">
+                <input type="hidden" name="domain_2_score" id="hiddenDomain2Score" value="0">
+                <input type="hidden" name="domain_3_score" id="hiddenDomain3Score" value="0">
+                <input type="hidden" name="domain_4_score" id="hiddenDomain4Score" value="0">
+                <input type="hidden" name="domain_5_score" id="hiddenDomain5Score" value="0">
+                <input type="hidden" name="domain_6_score" id="hiddenDomain6Score" value="0">
 
                 <!-- SECTION 1: Inspection Overview & Property Details -->
                 <div class="card mb-4">
@@ -106,10 +113,10 @@
                             <div class="col-md-3">
                                 <div class="form-group">
                                     <label>Property Year Built <span class="text-danger">*</span></label>
-                                    <input type="number" name="property_year_built" class="form-control" 
+                                    <input type="number" id="propertyYearBuilt" name="property_year_built" class="form-control" 
                                            value="{{ old('property_year_built', $property->year_built ?? date('Y')) }}" 
-                                           min="1800" max="{{ date('Y') }}" required>
-                                    <small class="text-muted">Used for age calculation</small>
+                                           min="1800" max="{{ date('Y') }}" required readonly>
+                                    <small class="text-muted">Auto-fetched from property registration and used for Domain 3 age calculation</small>
                                 </div>
                             </div>
                             @if($property->type === 'residential' || $property->type === 'mixed_use')
@@ -218,6 +225,7 @@
                                                            id="factor_{{ $factor->id }}_yes" 
                                                            class="form-check-input cpi-factor" 
                                                            data-domain="{{ $domain->domain_number }}"
+                                                           data-factor-code="{{ $factor->factor_code }}"
                                                            data-score="{{ $yesScore }}"
                                                            {{ $factor->is_required ? 'required' : '' }}>
                                                     <label for="factor_{{ $factor->id }}_yes" class="form-check-label">
@@ -231,6 +239,7 @@
                                                            id="factor_{{ $factor->id }}_no" 
                                                            class="form-check-input cpi-factor" 
                                                            data-domain="{{ $domain->domain_number }}"
+                                                           data-factor-code="{{ $factor->factor_code }}"
                                                            data-score="{{ $noScore }}">
                                                     <label for="factor_{{ $factor->id }}_no" class="form-check-label">
                                                         No ({{ $noScore }} pts)
@@ -256,6 +265,7 @@
                                                     id="factor_{{ $factor->id }}" 
                                                     class="form-control cpi-factor" 
                                                     data-domain="{{ $domain->domain_number }}"
+                                                    data-factor-code="{{ $factor->factor_code }}"
                                                     {{ $factor->is_required ? 'required' : '' }}>
                                                 <option value="">-- Select {{ ucfirst(str_replace('_', ' ', $factor->lookup_table)) }} --</option>
                                                 @if($lookupData)
@@ -275,10 +285,12 @@
                                                    id="factor_{{ $factor->id }}" 
                                                    class="form-control cpi-factor" 
                                                    data-domain="{{ $domain->domain_number }}"
+                                                   data-factor-code="{{ $factor->factor_code }}"
                                                    data-max-points="{{ $factor->max_points }}"
                                                    data-calc-rule="{{ json_encode($factor->calculation_rule) }}"
                                                    placeholder="Enter value" 
                                                    min="0"
+                                                   {{ $factor->factor_code === 'building_age' ? 'readonly' : '' }}
                                                    {{ $factor->is_required ? 'required' : '' }}>
 
                                         @elseif($factor->field_type === 'calculated')
@@ -402,6 +414,9 @@
                     </div>
                 </div>
 
+                <!-- NOTE: Findings & Materials now collected on Page 2 (PHAR Data Form) -->
+                <!-- This keeps the workflow clean: Page 1 = CPI Scoring, Page 2 = PHAR Data -->
+
                 <!-- SECTION 10: Overall Assessment -->
                 <div class="card mb-4">
                     <div class="card-header bg-light">
@@ -455,7 +470,7 @@
                                     <i class="mdi mdi-content-save me-1"></i>Save as Draft
                                 </button>
                                 <button type="submit" name="status" value="completed" class="btn btn-success">
-                                    <i class="mdi mdi-check-circle me-1"></i>Complete Inspection
+                                    <i class="mdi mdi-arrow-right-bold-circle me-1"></i>Next: PHAR Form
                                 </button>
                             </div>
                         </div>
@@ -543,8 +558,25 @@ function calculateDomainScore(domainNumber) {
             const value = parseFloat(factor.value);
             const calcRule = JSON.parse(factor.dataset.calcRule || '{}');
             
-            // Handle numeric calculation rules (e.g., threshold-based)
-            if (calcRule.threshold && value > calcRule.threshold) {
+            // Handle age bracket lookup rules (Domain 3)
+            if (calcRule.lookup_by_age) {
+                const matchingBracket = ageBrackets.find(bracket => {
+                    const min = parseFloat(bracket.min) || 0;
+                    const max = parseFloat(bracket.max) || 999;
+                    return value >= min && value <= max;
+                });
+                score = matchingBracket ? (parseInt(matchingBracket.score) || 0) : 0;
+            }
+            // Handle explicit range rules
+            else if (Array.isArray(calcRule.range) && calcRule.range.length === 2) {
+                const min = parseFloat(calcRule.range[0]) || 0;
+                const max = parseFloat(calcRule.range[1]) || 999999;
+                if (value >= min && value <= max) {
+                    score = parseInt(calcRule.points) || 0;
+                }
+            }
+            // Handle threshold-based rules
+            else if (calcRule.threshold && value > calcRule.threshold) {
                 score = parseInt(calcRule.points) || 0;
             }
         }
@@ -583,6 +615,18 @@ function calculateCPITotal() {
     });
     
     document.getElementById('cpiTotalScore').textContent = totalScore;
+    const hiddenCpiTotalScoreEl = document.getElementById('hiddenCpiTotalScore');
+    if (hiddenCpiTotalScoreEl) {
+        hiddenCpiTotalScoreEl.value = totalScore;
+    }
+
+    for (let domainNum = 1; domainNum <= 6; domainNum++) {
+        const scoreText = document.getElementById(`domain${domainNum}Score`)?.textContent || '0';
+        const hiddenDomainEl = document.getElementById(`hiddenDomain${domainNum}Score`);
+        if (hiddenDomainEl) {
+            hiddenDomainEl.value = parseInt(scoreText, 10) || 0;
+        }
+    }
     
     // Determine CPI Band using DATABASE ranges
     let band = cpiBandRanges[0] || {code: 'CPI-0', name: 'Excellent', multiplier: 1.00};
@@ -647,8 +691,26 @@ function calculatePricing(cpiMultiplier) {
     document.getElementById('finalAnnual').textContent = '$' + finalAnnual.toFixed(2);
 }
 
+function syncDomain3BuildingAgeFromYearBuilt() {
+    const propertyYearBuiltEl = document.getElementById('propertyYearBuilt');
+    const buildingAgeFactorEl = document.querySelector('.cpi-factor[data-factor-code="building_age"]');
+
+    if (!propertyYearBuiltEl || !buildingAgeFactorEl) {
+        return;
+    }
+
+    const currentYear = new Date().getFullYear();
+    const yearBuilt = parseInt(propertyYearBuiltEl.value, 10) || currentYear;
+    const calculatedAge = Math.max(0, currentYear - yearBuilt);
+
+    buildingAgeFactorEl.value = calculatedAge;
+}
+
 // Event listeners
 document.addEventListener('DOMContentLoaded', function() {
+    // Auto-calculate Domain 3 building age from property year built
+    syncDomain3BuildingAgeFromYearBuilt();
+
     // Attach listeners to ALL CPI factor inputs dynamically
     document.querySelectorAll('.cpi-factor').forEach(factor => {
         if (factor.type === 'radio' || factor.tagName === 'SELECT') {
@@ -662,6 +724,14 @@ document.addEventListener('DOMContentLoaded', function() {
     const servicePackageEl = document.getElementById('servicePackage');
     if (servicePackageEl) {
         servicePackageEl.addEventListener('change', calculateCPITotal);
+    }
+
+    const propertyYearBuiltEl = document.getElementById('propertyYearBuilt');
+    if (propertyYearBuiltEl) {
+        propertyYearBuiltEl.addEventListener('input', function() {
+            syncDomain3BuildingAgeFromYearBuilt();
+            calculateCPITotal();
+        });
     }
     
     // Photo preview
@@ -681,6 +751,18 @@ document.addEventListener('DOMContentLoaded', function() {
                 };
                 reader.readAsDataURL(file);
             });
+        });
+    }
+    
+// ===== FINDINGS MANAGEMENT REMOVED =====
+    // Findings are now collected on Page 2 (PHAR Data Form)
+    // This keeps the workflow clean: Page 1 = CPI Scoring only
+    calculateCPITotal();
+
+    const cpiInspectionFormEl = document.getElementById('cpiInspectionForm');
+    if (cpiInspectionFormEl) {
+        cpiInspectionFormEl.addEventListener('submit', function() {
+            calculateCPITotal();
         });
     }
 });

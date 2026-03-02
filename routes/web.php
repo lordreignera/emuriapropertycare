@@ -44,6 +44,11 @@ Route::middleware([
     Route::post('/properties/{property}/reject', [App\Http\Controllers\PropertyController::class, 'reject'])->name('properties.reject');
     Route::post('/properties/{property}/assign', [App\Http\Controllers\PropertyController::class, 'assign'])->name('properties.assign');
     Route::resource('inspections', App\Http\Controllers\InspectionController::class);
+    Route::get('/inspections/{inspection}/download-invoice', [App\Http\Controllers\InspectionController::class, 'downloadInvoice'])->name('inspections.download-invoice');
+    Route::get('/inspections/{inspection}/work-payment', [App\Http\Controllers\InspectionController::class, 'workPayment'])->name('inspections.work-payment');
+    Route::post('/inspections/{inspection}/work-payment', [App\Http\Controllers\InspectionController::class, 'processWorkPayment'])->name('inspections.process-work-payment');
+    Route::get('/inspections/{inspection}/phar-data', [App\Http\Controllers\InspectionController::class, 'pharData'])->name('inspections.phar-data');
+    Route::post('/inspections/{inspection}/store-phar-data', [App\Http\Controllers\InspectionController::class, 'storePharData'])->name('inspections.store-phar-data');
     Route::resource('projects', App\Http\Controllers\ProjectController::class);
     Route::resource('invoices', App\Http\Controllers\InvoiceController::class);
     Route::resource('work-logs', App\Http\Controllers\WorkLogController::class);
@@ -90,9 +95,14 @@ Route::middleware([
         Route::get('/tenants/property-password/{property}', [App\Http\Controllers\Client\TenantController::class, 'getPropertyPassword'])->name('tenants.property-password');
         
         // Inspections
-        Route::get('/inspections', function() {
-            return view('client.inspections.index');
-        })->name('inspections.index');
+        Route::get('/inspections', [App\Http\Controllers\Client\InspectionController::class, 'index'])
+            ->name('inspections.index');
+        Route::get('/inspections/{inspection}/report', [App\Http\Controllers\Client\InspectionController::class, 'report'])
+            ->name('inspections.report');
+        Route::get('/inspections/{inspection}/work-payment', [App\Http\Controllers\Client\InspectionController::class, 'workPayment'])
+            ->name('inspections.work-payment');
+        Route::post('/inspections/{inspection}/work-payment', [App\Http\Controllers\Client\InspectionController::class, 'processWorkPayment'])
+            ->name('inspections.process-work-payment');
 
         // Schedule & pay for inspection
         Route::get('/inspections/{property}/schedule', [App\Http\Controllers\Client\InspectionController::class, 'scheduleCreate'])
@@ -184,6 +194,12 @@ Route::middleware([
         Route::resource('pricing-config', App\Http\Controllers\Admin\PricingConfigController::class)->names('pricing-config');
         Route::resource('reactive-costs', App\Http\Controllers\Admin\ReactiveCostAssumptionController::class)->names('reactive-costs');
         Route::resource('stewardship-loss', App\Http\Controllers\Admin\StewardshipLossReductionController::class)->names('stewardship-loss');
+        
+        // BDC Calibration Engine Settings
+        Route::get('settings/bdc', [App\Http\Controllers\Admin\BDCSettingsController::class, 'index'])->name('settings.bdc');
+        Route::put('settings/bdc', [App\Http\Controllers\Admin\BDCSettingsController::class, 'update'])->name('settings.bdc.update');
+        Route::post('settings/bdc/preview', [App\Http\Controllers\Admin\BDCSettingsController::class, 'preview'])->name('settings.bdc.preview');
+        Route::post('settings/bdc/reset', [App\Http\Controllers\Admin\BDCSettingsController::class, 'reset'])->name('settings.bdc.reset');
         
         // Reports
         Route::get('/reports', function() {

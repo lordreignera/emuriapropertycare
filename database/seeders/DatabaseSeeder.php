@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
             RolePermissionSeeder::class,
             SuperAdminSeeder::class,
             CPIPricingSystemSeeder::class,
+            BDCSettingsSeeder::class,
             // TierSeeder::class, // REMOVED: Tiers are now generated per client after inspection
         ]);
         

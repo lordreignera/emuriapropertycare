@@ -15,7 +15,8 @@ class PropertyController extends Controller
      */
     public function index()
     {
-        $properties = Property::where('user_id', auth()->id())
+        $properties = Property::with(['latestInspection', 'latestCompletedInspection'])
+            ->where('user_id', auth()->id())
             ->latest()
             ->paginate(10);
 
@@ -85,6 +86,15 @@ class PropertyController extends Controller
             'property_photos.*' => 'nullable|image|max:10240', // 10MB max
             'blueprint_file' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:20480', // 20MB max
         ]);
+
+        // Ensure DB-required unit count is never null
+        // (empty input from hidden/conditional field can validate as null)
+        $validated['number_of_units'] = (int) ($validated['number_of_units'] ?? 1);
+
+        // Normalize booleans from optional checkbox/toggle inputs
+        $validated['has_tenants'] = (bool) ($validated['has_tenants'] ?? false);
+        $validated['has_pets'] = (bool) ($validated['has_pets'] ?? false);
+        $validated['has_kids'] = (bool) ($validated['has_kids'] ?? false);
 
         // Generate property code
         $validated['property_code'] = Property::generatePropertyCode($validated['property_brand'] ?? null);
@@ -232,6 +242,14 @@ class PropertyController extends Controller
             'property_photos.*' => 'nullable|image|max:10240',
             'blueprint_file' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:20480',
         ]);
+
+        // Keep required unit count safe for DB writes
+        $validated['number_of_units'] = (int) ($validated['number_of_units'] ?? 1);
+
+        // Normalize booleans from optional checkbox/toggle inputs
+        $validated['has_tenants'] = (bool) ($validated['has_tenants'] ?? false);
+        $validated['has_pets'] = (bool) ($validated['has_pets'] ?? false);
+        $validated['has_kids'] = (bool) ($validated['has_kids'] ?? false);
 
         // Calculate total square footage
         $validated['total_square_footage'] = 

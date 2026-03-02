@@ -261,6 +261,70 @@
     </div>
 </div>
 
+@if(isset($completedInspections) && $completedInspections->count() > 0)
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card border-0 shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <h4 class="fw-bold mb-1">Completed Inspection Reports</h4>
+                        <p class="text-muted mb-0 small">View your pricing breakdown and choose monthly or annual payment to start work.</p>
+                    </div>
+                    <a href="{{ route('client.inspections.index') }}" class="btn btn-outline-primary btn-sm">View All</a>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="bg-light">
+                            <tr>
+                                <th>Property</th>
+                                <th>Completed</th>
+                                <th>Final Monthly</th>
+                                <th>Payment</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($completedInspections as $inspection)
+                                <tr>
+                                    <td>
+                                        <div class="fw-semibold">{{ $inspection->property?->property_name ?? 'N/A' }}</div>
+                                        <small class="text-muted">{{ $inspection->property?->property_code ?? '' }}</small>
+                                    </td>
+                                    <td>{{ optional($inspection->completed_date)->format('M d, Y') ?? '-' }}</td>
+                                    <td>${{ number_format((float)($inspection->scientific_final_monthly ?? $inspection->arp_equivalent_final ?? 0), 2) }}</td>
+                                    <td>
+                                        @if(($inspection->work_payment_status ?? 'pending') === 'paid')
+                                            <span class="badge bg-success">Paid ({{ ucfirst($inspection->work_payment_cadence ?? 'monthly') }})</span>
+                                        @else
+                                            <span class="badge bg-warning text-dark">Pending</span>
+                                        @endif
+                                    </td>
+                                    <td class="text-end">
+                                        <a href="{{ route('client.inspections.report', $inspection->id) }}" class="btn btn-sm btn-info">
+                                            <i class="mdi mdi-eye"></i> Report
+                                        </a>
+                                        @if(($inspection->work_payment_status ?? 'pending') !== 'paid')
+                                            <a href="{{ route('client.inspections.work-payment', ['inspection' => $inspection->id, 'cadence' => 'monthly']) }}" class="btn btn-sm btn-success">
+                                                Pay Monthly
+                                            </a>
+                                            <a href="{{ route('client.inspections.work-payment', ['inspection' => $inspection->id, 'cadence' => 'annual']) }}" class="btn btn-sm btn-outline-success">
+                                                Pay Annual
+                                            </a>
+                                        @endif
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+
 {{-- Alerts & Notifications --}}
 @if($unpaidInvoices > 0 || $pendingInspections > 0)
 <div class="row mt-4">

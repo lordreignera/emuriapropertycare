@@ -110,8 +110,8 @@
                                     <td>
                                         @php
                                             $projectManager = null;
-                                            if ($inspection->project && $inspection->project->projectManager) {
-                                                $projectManager = $inspection->project->projectManager;
+                                            if ($inspection->project && $inspection->project->manager) {
+                                                $projectManager = $inspection->project->manager;
                                             } elseif ($inspection->property && $inspection->property->projectManager) {
                                                 $projectManager = $inspection->property->projectManager;
                                             }
@@ -144,6 +144,20 @@
                                         @else
                                         <span class="badge badge-danger">{{ ucfirst($inspection->inspection_fee_status) }}</span>
                                         @endif
+
+                                        @if($inspection->status === 'completed')
+                                            <br>
+                                            @if(($inspection->work_payment_status ?? 'pending') === 'paid')
+                                                <span class="badge badge-info mt-1">
+                                                    <i class="mdi mdi-credit-card-check-outline"></i>
+                                                    Work: Paid {{ ucfirst($inspection->work_payment_cadence ?? 'monthly') }}
+                                                </span>
+                                            @else
+                                                <span class="badge badge-warning mt-1 text-dark">
+                                                    <i class="mdi mdi-credit-card-clock-outline"></i> Work: Pending
+                                                </span>
+                                            @endif
+                                        @endif
                                     </td>
                                     <td>
                                         <div class="btn-group" role="group">
@@ -151,6 +165,24 @@
                                                class="btn btn-sm btn-info" title="View Property">
                                                 <i class="mdi mdi-eye"></i>
                                             </a>
+                                            @if($inspection->status === 'completed')
+                                            <a href="{{ route('inspections.show', $inspection->id) }}" 
+                                               class="btn btn-sm btn-success" 
+                                               title="View Pricing Breakdown">
+                                                <i class="mdi mdi-currency-usd"></i> Breakdown
+                                            </a>
+                                            @if(($inspection->work_payment_status ?? 'pending') !== 'paid')
+                                            <a href="{{ route('inspections.work-payment', $inspection->id) }}"
+                                               class="btn btn-sm btn-warning"
+                                               title="Pay to Start Work">
+                                                <i class="mdi mdi-credit-card"></i> Pay
+                                            </a>
+                                            @else
+                                            <span class="btn btn-sm btn-outline-success disabled" title="Work Payment Completed">
+                                                <i class="mdi mdi-check-circle"></i> Paid
+                                            </span>
+                                            @endif
+                                            @endif
                                             @if(!$inspection->inspector_id)
                                             <button type="button" class="btn btn-sm btn-primary" 
                                                     onclick="assignInspector({{ $inspection->id }})" 
@@ -158,11 +190,13 @@
                                                 <i class="mdi mdi-account-plus"></i>
                                             </button>
                                             @endif
+                                            @if($inspection->status !== 'completed')
                                             <a href="{{ route('inspections.create', ['property_id' => $inspection->property_id]) }}" 
                                                class="btn btn-sm btn-success" 
                                                title="Start Inspection">
                                                 <i class="mdi mdi-clipboard-check"></i>
                                             </a>
+                                            @endif
                                         </div>
                                     </td>
                                 </tr>
