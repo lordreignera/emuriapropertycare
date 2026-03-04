@@ -41,9 +41,19 @@ class InspectionController extends Controller
             abort(403, 'Unauthorized access to this inspection report.');
         }
 
-        $findings = \App\Models\PHARFinding::where('inspection_id', $inspection->id)->get();
+        $findings = \App\Models\PHARFinding::where('inspection_id', $inspection->id)
+            ->orderBy('id')
+            ->get();
 
-        return view('client.inspections.report', compact('inspection', 'findings'));
+        $materials = \App\Models\InspectionMaterial::where('inspection_id', $inspection->id)
+            ->orderBy('id')
+            ->get();
+
+        $domains = \App\Models\CpiDomain::where('is_active', true)
+            ->orderBy('domain_number')
+            ->get(['domain_number', 'domain_name', 'max_possible_points']);
+
+        return view('client.inspections.report', compact('inspection', 'findings', 'materials', 'domains'));
     }
 
     /**

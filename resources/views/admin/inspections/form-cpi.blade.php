@@ -34,13 +34,13 @@
             <form action="{{ route('inspections.store') }}" method="POST" enctype="multipart/form-data" id="cpiInspectionForm">
                 @csrf
                 <input type="hidden" name="property_id" value="{{ $property->id }}">
-                <input type="hidden" name="cpi_total_score" id="hiddenCpiTotalScore" value="0">
-                <input type="hidden" name="domain_1_score" id="hiddenDomain1Score" value="0">
-                <input type="hidden" name="domain_2_score" id="hiddenDomain2Score" value="0">
-                <input type="hidden" name="domain_3_score" id="hiddenDomain3Score" value="0">
-                <input type="hidden" name="domain_4_score" id="hiddenDomain4Score" value="0">
-                <input type="hidden" name="domain_5_score" id="hiddenDomain5Score" value="0">
-                <input type="hidden" name="domain_6_score" id="hiddenDomain6Score" value="0">
+                <input type="hidden" name="cpi_total_score" id="hiddenCpiTotalScore" value="{{ old('cpi_total_score', $inspection->cpi_total_score ?? 0) }}">
+                <input type="hidden" name="domain_1_score" id="hiddenDomain1Score" value="{{ old('domain_1_score', $inspection->domain_1_score ?? 0) }}">
+                <input type="hidden" name="domain_2_score" id="hiddenDomain2Score" value="{{ old('domain_2_score', $inspection->domain_2_score ?? 0) }}">
+                <input type="hidden" name="domain_3_score" id="hiddenDomain3Score" value="{{ old('domain_3_score', $inspection->domain_3_score ?? 0) }}">
+                <input type="hidden" name="domain_4_score" id="hiddenDomain4Score" value="{{ old('domain_4_score', $inspection->domain_4_score ?? 0) }}">
+                <input type="hidden" name="domain_5_score" id="hiddenDomain5Score" value="{{ old('domain_5_score', $inspection->domain_5_score ?? 0) }}">
+                <input type="hidden" name="domain_6_score" id="hiddenDomain6Score" value="{{ old('domain_6_score', $inspection->domain_6_score ?? 0) }}">
 
                 <!-- SECTION 1: Inspection Overview & Property Details -->
                 <div class="card mb-4">
@@ -160,7 +160,8 @@
                                             @endphp
                                             <option value="{{ $package->id }}" 
                                                     data-res-price="{{ $resPrice }}"
-                                                    data-com-price="{{ $comPrice }}">
+                                                    data-com-price="{{ $comPrice }}"
+                                                    {{ (string) old('service_package_id', $inspection->service_package_id ?? '') === (string) $package->id ? 'selected' : '' }}>
                                                 {{ $package->package_name }} 
                                                 (Res: ${{ number_format($resPrice, 2) }} | 
                                                  Com: ${{ number_format($comPrice, 2) }})
@@ -322,7 +323,7 @@
 
                         <div class="alert alert-info mt-3">
                             <strong>Domain {{ $domain->domain_number }} Score:</strong> 
-                            <span id="domain{{ $domain->domain_number }}Score" class="fw-bold">0</span> / {{ $domain->max_possible_points }} points
+                            <span id="domain{{ $domain->domain_number }}Score" class="fw-bold">{{ old('domain_'.$domain->domain_number.'_score', $inspection->{'domain_'.$domain->domain_number.'_score'} ?? 0) }}</span> / {{ $domain->max_possible_points }} points
                         </div>
                     </div>
                 </div>
@@ -341,7 +342,7 @@
                                 <div class="card bg-light">
                                     <div class="card-body">
                                         <h6 class="text-muted">CPI Total Score</h6>
-                                        <h2 class="mb-0 text-primary" id="cpiTotalScore">0</h2>
+                                        <h2 class="mb-0 text-primary" id="cpiTotalScore">{{ old('cpi_total_score', $inspection->cpi_total_score ?? 0) }}</h2>
                                         <small class="text-muted">points</small>
                                     </div>
                                 </div>
@@ -350,8 +351,8 @@
                                 <div class="card bg-light">
                                     <div class="card-body">
                                         <h6 class="text-muted">CPI Band</h6>
-                                        <h4 class="mb-0"><span class="badge bg-info" id="cpiBand">CPI-0</span></h4>
-                                        <small class="text-muted" id="cpiBandName">Excellent</small>
+                                        <h4 class="mb-0"><span class="badge bg-info" id="cpiBand">{{ old('cpi_band', $inspection->cpi_band ?? 'CPI-0') }}</span></h4>
+                                        <small class="text-muted" id="cpiBandName">{{ $inspection->cpi_band_name_snapshot ?? 'Excellent' }}</small>
                                     </div>
                                 </div>
                             </div>
@@ -359,7 +360,7 @@
                                 <div class="card bg-light">
                                     <div class="card-body">
                                         <h6 class="text-muted">CPI Multiplier</h6>
-                                        <h2 class="mb-0 text-danger" id="cpiMultiplier">1.00</h2>
+                                        <h2 class="mb-0 text-danger" id="cpiMultiplier">{{ number_format((float) old('cpi_multiplier', $inspection->cpi_multiplier ?? 1), 2) }}</h2>
                                         <small class="text-muted">x</small>
                                     </div>
                                 </div>
@@ -378,7 +379,7 @@
                             </tr>
                             <tr>
                                 <td class="fw-bold">CPI Multiplier</td>
-                                <td class="text-end"><span id="displayMultiplier">1.00</span>x</td>
+                                <td class="text-end"><span id="displayMultiplier">{{ number_format((float) old('cpi_multiplier', $inspection->cpi_multiplier ?? 1), 2) }}</span>x</td>
                             </tr>
                             <tr class="table-success">
                                 <td class="fw-bold fs-5">FINAL MONTHLY COST</td>
@@ -757,7 +758,20 @@ document.addEventListener('DOMContentLoaded', function() {
 // ===== FINDINGS MANAGEMENT REMOVED =====
     // Findings are now collected on Page 2 (PHAR Data Form)
     // This keeps the workflow clean: Page 1 = CPI Scoring only
-    calculateCPITotal();
+    const hasAnyFactorInput = Array.from(document.querySelectorAll('.cpi-factor')).some(factor => {
+        if (factor.type === 'radio') {
+            return factor.checked;
+        }
+
+        return String(factor.value || '').trim() !== '';
+    });
+
+    if (hasAnyFactorInput) {
+        calculateCPITotal();
+    } else {
+        const existingMultiplier = parseFloat(document.getElementById('displayMultiplier')?.textContent || '1');
+        calculatePricing(isNaN(existingMultiplier) ? 1 : existingMultiplier);
+    }
 
     const cpiInspectionFormEl = document.getElementById('cpiInspectionForm');
     if (cpiInspectionFormEl) {

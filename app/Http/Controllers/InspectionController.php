@@ -276,6 +276,31 @@ class InspectionController extends Controller
         $inspection->domain_4_notes = $request->input('domain_4_notes');
         $inspection->domain_5_notes = $request->input('domain_5_notes');
         $inspection->domain_6_notes = $request->input('domain_6_notes');
+
+        // Persist CPI band + multiplier snapshot from current score (Phase 1)
+        $cpiBandRange = \App\Models\CpiBandRange::with('multiplier')
+            ->where('is_active', true)
+            ->where('min_score', '<=', $inspection->cpi_total_score)
+            ->where(function ($query) use ($inspection) {
+                $query->whereNull('max_score')
+                    ->orWhere('max_score', '>=', $inspection->cpi_total_score);
+            })
+            ->orderBy('sort_order')
+            ->first();
+
+        if (!$cpiBandRange) {
+            $cpiBandRange = \App\Models\CpiBandRange::with('multiplier')
+                ->where('is_active', true)
+                ->orderBy('sort_order')
+                ->first();
+        }
+
+        $inspection->cpi_band = $cpiBandRange?->band_code;
+        $inspection->cpi_multiplier = (float) ($cpiBandRange?->multiplier?->multiplier ?? 1.00);
+        $inspection->cpi_band_name_snapshot = $cpiBandRange?->band_name;
+        $inspection->cpi_band_range_snapshot = $cpiBandRange
+            ? ((string) $cpiBandRange->min_score) . '-' . (($cpiBandRange->max_score === null) ? '+' : (string) $cpiBandRange->max_score)
+            : null;
         
         // Store overall assessment
         $inspection->summary = $validated['inspector_notes'] ?? 'CPI Inspection for ' . $property->property_name;
