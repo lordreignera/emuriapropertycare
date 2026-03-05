@@ -248,10 +248,17 @@
                 <h4 class="card-title mb-4">
                     <i class="mdi mdi-floor-plan text-danger"></i> Blueprint / Floor Plan
                 </h4>
-                @if(str_ends_with($property->blueprint_file, '.pdf'))
+                    @php
+                        $blueprintExt = strtolower(pathinfo((string) $property->blueprint_file, PATHINFO_EXTENSION));
+                    @endphp
+                    @if($blueprintExt === 'pdf')
                     <a href="{{ $property->getStorageUrl($property->blueprint_file) }}" target="_blank" class="btn btn-outline-primary btn-block">
                         <i class="mdi mdi-file-pdf"></i> View PDF Blueprint
                     </a>
+                    @elseif(in_array($blueprintExt, ['dwg', 'dxf']))
+                        <a href="{{ $property->getStorageUrl($property->blueprint_file) }}" target="_blank" class="btn btn-outline-primary btn-block">
+                            <i class="mdi mdi-file-cad"></i> Open {{ strtoupper($blueprintExt) }} Blueprint
+                        </a>
                 @else
                     <img src="{{ $property->getStorageUrl($property->blueprint_file) }}" alt="Blueprint" class="img-fluid js-media-open" style="cursor: pointer;" data-media-src="{{ $property->getStorageUrl($property->blueprint_file) }}" data-media-group="blueprint" data-media-index="0">
                 @endif
@@ -303,15 +310,31 @@
                 @if($property->known_problems)
                 <div class="mb-3">
                     <h6><strong>Known Problems/Issues:</strong></h6>
-                    <p class="text-muted">{{ $property->known_problems }}</p>
+                        @php
+                            $knownProblemsList = is_array($property->known_problems)
+                                ? $property->known_problems
+                                : array_values(array_filter(array_map('trim', preg_split('/[,\n]+/', (string) $property->known_problems))));
+                        @endphp
+                        @if(!empty($knownProblemsList))
+                            <ul class="list-unstyled mb-0">
+                                @foreach($knownProblemsList as $knownProblem)
+                                <li><i class="mdi mdi-alert-circle-outline text-warning"></i> {{ $knownProblem }}</li>
+                                @endforeach
+                            </ul>
+                        @endif
                 </div>
                 @endif
 
                 @if($property->sensitivities)
                 <div class="mb-3">
                     <h6><strong>Sensitivities or Special Considerations:</strong></h6>
+                        @php
+                            $sensitivitiesList = is_array($property->sensitivities)
+                                ? $property->sensitivities
+                                : array_values(array_filter(array_map('trim', preg_split('/[,\n]+/', (string) $property->sensitivities))));
+                        @endphp
                     <ul class="list-unstyled">
-                        @foreach($property->sensitivities as $sensitivity)
+                            @foreach($sensitivitiesList as $sensitivity)
                         <li><i class="mdi mdi-check text-success"></i> {{ $sensitivity }}</li>
                         @endforeach
                     </ul>

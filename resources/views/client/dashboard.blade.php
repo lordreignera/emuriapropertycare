@@ -55,7 +55,7 @@
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
                         <p class="text-muted mb-2 fw-semibold text-uppercase small">Inspections</p>
-                        <h2 class="fw-bold mb-0">{{ $pendingInspections }}</h2>
+                        <h2 class="fw-bold mb-0">{{ $inspectionsCount }}</h2>
                         @if($pendingInspections > 0)
                         <span class="badge bg-warning text-dark mt-2">Pending</span>
                         @endif
@@ -102,10 +102,12 @@
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
-                        <p class="text-muted mb-2 fw-semibold text-uppercase small">Invoices</p>
+                        <p class="text-muted mb-2 fw-semibold text-uppercase small">Unpaid Invoices</p>
                         <h2 class="fw-bold mb-0">{{ $unpaidInvoices }}</h2>
                         @if($unpaidInvoices > 0)
-                        <span class="badge bg-danger mt-2">Unpaid</span>
+                        <span class="badge bg-danger mt-2">Not Paid</span>
+                        @elseif($invoicesCount > 0)
+                        <span class="badge bg-success mt-2">All Paid</span>
                         @endif
                     </div>
                     <div class="rounded-3 p-3" style="background-color: rgba(220, 53, 69, 0.1);">
@@ -163,8 +165,16 @@
                                     </div>
                                 </td>
                                 <td>
+                                    @php
+                                        $propertyTypeLabel = match($property->type) {
+                                            'mixed_use' => 'Mixed-Use',
+                                            'residential' => 'Residential',
+                                            'commercial' => 'Commercial',
+                                            default => 'Not Set',
+                                        };
+                                    @endphp
                                     <span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25">
-                                        {{ ucfirst($property->property_type) }}
+                                        {{ $propertyTypeLabel }}
                                     </span>
                                 </td>
                                 <td>

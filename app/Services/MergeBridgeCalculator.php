@@ -32,7 +32,17 @@ class MergeBridgeCalculator
         }
         
         // Step 1: Get BDC (Base Deployment Cost)
-        $bdcResult = $this->bdcCalculator->calculate($property);
+        $bdcParams = [];
+        if ($inspection->bdc_visits_per_year !== null) {
+            $bdcParams['visits_per_year'] = (float) $inspection->bdc_visits_per_year;
+        }
+        if ($inspection->estimated_task_hours !== null) {
+            $bdcParams['hours_per_visit'] = (float) $inspection->estimated_task_hours;
+        }
+
+        $bdcResult = empty($bdcParams)
+            ? $this->bdcCalculator->calculate($property)
+            : $this->bdcCalculator->calculateWithParams($bdcParams);
         $bdcAnnual = $bdcResult['bdc_annual'];
         $bdcMonthly = $bdcResult['bdc_monthly'];
         $labourHourlyRate = $inspection->labour_hourly_rate ?? $bdcResult['loaded_hourly_rate'];

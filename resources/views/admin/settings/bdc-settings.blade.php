@@ -15,7 +15,7 @@
                                 <i class="mdi mdi-calculator me-2"></i>BDC Calibration Engine
                             </h3>
                             <p class="mb-0 opacity-75">
-                                Base Deployment Cost - Configure operational cost parameters
+                                Base Deployment Cost - Configure static operational cost parameters
                             </p>
                         </div>
                         <div>
@@ -120,6 +120,9 @@
                             </p>
                             <p class="mb-0 small">
                                 BDC includes: Direct labour + Infrastructure overhead + Administrative overhead
+                            </p>
+                            <p class="mb-0 mt-2 small text-muted">
+                                Visits per Year and Hours per Visit are now set per inspection on the PHAR form.
                             </p>
                         </div>
                     </div>
@@ -260,6 +263,9 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const fixedVisitsPerYear = {{ (float)($calculation['visits_per_year'] ?? 8) }};
+    const fixedHoursPerVisit = {{ (float)($calculation['hours_per_visit'] ?? 4.5) }};
+
     // Real-time calculation preview
     const inputs = document.querySelectorAll('.bdc-input');
     
@@ -275,7 +281,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
 
         // Calculate locally (same logic as backend)
-        const labourHours = data.visits_per_year * data.hours_per_visit;
+        const labourHours = fixedVisitsPerYear * fixedHoursPerVisit;
         const labourCost = labourHours * data.loaded_hourly_rate;
         const infraCost = labourCost * data.infrastructure_percentage;
         const adminCost = labourCost * data.administration_percentage;

@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\Property;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 
 class PropertyController extends Controller
 {
@@ -79,13 +78,18 @@ class PropertyController extends Controller
             
             // Details
             'personality' => 'nullable|in:calm,busy,luxury,high-use',
-            'known_problems' => 'nullable|string',
-            'sensitivities' => 'nullable|string',
+            'known_problems' => 'nullable',
+            'sensitivities' => 'nullable',
             
             // Files
             'property_photos.*' => 'nullable|image|max:10240', // 10MB max
-            'blueprint_file' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:20480', // 20MB max
+            'blueprint_file' => 'nullable|file|mimes:pdf,jpg,jpeg,png,dwg,dxf|max:20480', // 20MB max
         ]);
+
+        $blueprintError = $this->validateBlueprintQuality($request);
+        if ($blueprintError) {
+            return back()->withErrors(['blueprint_file' => $blueprintError])->withInput();
+        }
 
         // Ensure DB-required unit count is never null
         // (empty input from hidden/conditional field can validate as null)
@@ -117,10 +121,10 @@ class PropertyController extends Controller
             $validated['tenant_common_password'] = Property::generateTenantPassword();
         }
         
-        // Convert sensitivities to array (split by comma)
-        if (!empty($validated['sensitivities'])) {
-            $validated['sensitivities'] = array_map('trim', explode(',', $validated['sensitivities']));
-        }
+        $knownProblemsList = $this->normalizeListInput($request->input('known_problems'));
+        $validated['known_problems'] = !empty($knownProblemsList) ? implode(', ', $knownProblemsList) : null;
+
+        $validated['sensitivities'] = $this->normalizeListInput($request->input('sensitivities'));
 
         $disk = config('filesystems.default', 's3');
         
@@ -235,13 +239,18 @@ class PropertyController extends Controller
             
             // Details
             'personality' => 'nullable|in:calm,busy,luxury,high-use',
-            'known_problems' => 'nullable|string',
-            'sensitivities' => 'nullable|string',
+            'known_problems' => 'nullable',
+            'sensitivities' => 'nullable',
             
             // Files
             'property_photos.*' => 'nullable|image|max:10240',
-            'blueprint_file' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:20480',
+            'blueprint_file' => 'nullable|file|mimes:pdf,jpg,jpeg,png,dwg,dxf|max:20480',
         ]);
+
+        $blueprintError = $this->validateBlueprintQuality($request);
+        if ($blueprintError) {
+            return back()->withErrors(['blueprint_file' => $blueprintError])->withInput();
+        }
 
         // Keep required unit count safe for DB writes
         $validated['number_of_units'] = (int) ($validated['number_of_units'] ?? 1);
@@ -258,10 +267,10 @@ class PropertyController extends Controller
             ($validated['square_footage_paved'] ?? 0) + 
             ($validated['square_footage_extra'] ?? 0);
         
-        // Convert sensitivities to array
-        if (!empty($validated['sensitivities'])) {
-            $validated['sensitivities'] = array_map('trim', explode(',', $validated['sensitivities']));
-        }
+        $knownProblemsList = $this->normalizeListInput($request->input('known_problems'));
+        $validated['known_problems'] = !empty($knownProblemsList) ? implode(', ', $knownProblemsList) : null;
+
+        $validated['sensitivities'] = $this->normalizeListInput($request->input('sensitivities'));
 
         $disk = config('filesystems.default', 's3');
         
@@ -335,5 +344,51 @@ class PropertyController extends Controller
         return redirect()
             ->route('client.properties.index')
             ->with('success', 'Property deleted successfully!');
+    }
+
+    protected function normalizeListInput($value): array
+    {
+        if (is_array($value)) {
+            return array_values(array_filter(array_map('trim', $value), fn ($item) => $item !== ''));
+        }
+
+        $raw = trim((string) $value);
+        if ($raw === '' || strtolower($raw) === 'null') {
+            return [];
+        }
+
+        return array_values(array_filter(array_map('trim', preg_split('/[,\n]+/', $raw)), fn ($item) => $item !== ''));
+    }
+
+    protected function validateBlueprintQuality(Request $request): ?string
+    {
+        if (!$request->hasFile('blueprint_file')) {
+            return null;
+        }
+
+        $file = $request->file('blueprint_file');
+        $extension = strtolower((string) $file->getClientOriginalExtension());
+        $allowedExtensions = ['pdf', 'jpg', 'jpeg', 'png', 'dwg', 'dxf'];
+
+        if (!in_array($extension, $allowedExtensions, true)) {
+            return 'Unsupported blueprint format. Allowed: PDF, JPG/JPEG, PNG, DWG, DXF.';
+        }
+
+        if (in_array($extension, ['jpg', 'jpeg', 'png'], true)) {
+            $imageInfo = @getimagesize($file->getRealPath());
+            if (!$imageInfo || count($imageInfo) < 2) {
+                return 'Invalid image file. Please upload a clear PNG/JPG image.';
+            }
+
+            $width = (int) $imageInfo[0];
+            $height = (int) $imageInfo[1];
+            $shortestSide = min($width, $height);
+
+            if ($shortestSide < 1000) {
+                return 'Image blueprint resolution is too low. Please upload at least 1000px on the shortest side.';
+            }
+        }
+
+        return null;
     }
 }

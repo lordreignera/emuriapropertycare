@@ -55,16 +55,25 @@
                                     </div>
                                     <div class="col-md-6">
                                         <div class="form-group">
-                                            <label>Estimated Task Hours (ETH) <span class="text-danger">*</span></label>
-                                            <input type="number" name="estimated_task_hours" class="form-control" 
-                                                   value="{{ old('estimated_task_hours', $inspection->estimated_task_hours ?? '') }}" 
-                                                   placeholder="e.g., 4.5" step="0.1" min="0" required />
-                                            <small class="text-muted">Hands-on work hours per visit</small>
+                                            <label>Visits per Year (Property-specific) <span class="text-danger">*</span></label>
+                                            <input type="number" name="bdc_visits_per_year" id="bdcVisitsPerYear" class="form-control"
+                                                   value="{{ old('bdc_visits_per_year', $inspection->bdc_visits_per_year ?? ($bdcSettings['visits_per_year'] ?? 8)) }}"
+                                                   placeholder="e.g., 8" step="0.1" min="0" required />
+                                            <small class="text-muted">This can change per property inspection</small>
                                         </div>
                                     </div>
                                 </div>
 
                                 <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="form-group">
+                                            <label>Hours per Visit (Property-specific) <span class="text-danger">*</span></label>
+                                            <input type="number" name="estimated_task_hours" id="hoursPerVisit" class="form-control" 
+                                                   value="{{ old('estimated_task_hours', $inspection->estimated_task_hours ?? '') }}" 
+                                                   placeholder="e.g., 4.5" step="0.1" min="0" required />
+                                            <small class="text-muted">This can change per property inspection</small>
+                                        </div>
+                                    </div>
                                     <div class="col-md-6">
                                         <div class="form-group">
                                             <label>Minimum Required Hours (MRH) <span class="text-danger">*</span></label>
@@ -76,11 +85,11 @@
                                     </div>
                                     <div class="col-md-6">
                                         <div class="form-group">
-                                            <label>Labour Hourly Rate ($) <span class="text-danger">*</span></label>
-                                            <input type="number" name="labour_hourly_rate" class="form-control" 
-                                                   value="{{ old('labour_hourly_rate', 165) }}" 
-                                                   placeholder="165" step="0.01" min="0" required />
-                                            <small class="text-muted">Loaded labour rate (default: $165/hr)</small>
+                                            <label>Loaded Hourly Rate ($/hr) <span class="text-danger">*</span></label>
+                                            <input type="number" name="labour_hourly_rate" id="labourHourlyRate" class="form-control" 
+                                                   value="{{ old('labour_hourly_rate', $inspection->labour_hourly_rate ?? ($bdcSettings['loaded_hourly_rate'] ?? 165)) }}" 
+                                                  placeholder="165" step="0.01" min="0" required readonly />
+                                            <small class="text-muted">Static setting value (managed in BDC Settings)</small>
                                         </div>
                                     </div>
                                 </div>
@@ -461,6 +470,10 @@ document.addEventListener('DOMContentLoaded', function() {
     let findingIndex = 1;
     let materialIndex = 1;
     const labourRateInput = document.querySelector('input[name="labour_hourly_rate"]');
+    const visitsPerYearInput = document.getElementById('bdcVisitsPerYear');
+    const hoursPerVisitInput = document.getElementById('hoursPerVisit');
+    const infrastructurePercentage = {{ (float)($bdcSettings['infrastructure_percentage'] ?? 0.30) }};
+    const administrationPercentage = {{ (float)($bdcSettings['administration_percentage'] ?? 0.12) }};
 
     function getLabourRate() {
         return parseFloat(labourRateInput?.value) || 165;
@@ -513,6 +526,14 @@ document.addEventListener('DOMContentLoaded', function() {
     labourRateInput?.addEventListener('input', function() {
         updateFindingRowLabourCosts();
         updateFindingSummary();
+    });
+
+    visitsPerYearInput?.addEventListener('input', function() {
+        updateCalculationSummary();
+    });
+
+    hoursPerVisitInput?.addEventListener('input', function() {
+        updateCalculationSummary();
     });
     
     // Create finding row HTML
@@ -777,8 +798,15 @@ document.addEventListener('DOMContentLoaded', function() {
         // Get FMC from materials
         const fmc = parseFloat(document.getElementById('totalFMC').textContent.replace('$', '').replace(',', '')) || 0;
         
-        // BDC: Hardcoded from settings (you can fetch via AJAX or pass from backend)
-        const bdcAnnual = {{ $bdcSettings['bdc_annual'] ?? 8434.80 }};
+        const visitsPerYear = parseFloat(visitsPerYearInput?.value) || 0;
+        const hoursPerVisit = parseFloat(hoursPerVisitInput?.value) || 0;
+        const labourRate = getLabourRate();
+
+        const labourHoursPerYear = visitsPerYear * hoursPerVisit;
+        const labourCostPerYear = labourHoursPerYear * labourRate;
+        const infrastructureCost = labourCostPerYear * infrastructurePercentage;
+        const administrationCost = labourCostPerYear * administrationPercentage;
+        const bdcAnnual = labourCostPerYear + infrastructureCost + administrationCost;
         const bdcMonthly = bdcAnnual / 12;
         
         // Calculate annualized FRLC (assume one-time cost, divide by 12 for monthly)

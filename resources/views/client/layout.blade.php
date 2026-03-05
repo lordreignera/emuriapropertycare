@@ -40,6 +40,45 @@
             color: #4854b8 !important;
             text-decoration: underline !important;
         }
+
+        /* Client tables: keep selection/active rows readable */
+        .content-wrapper .table {
+            --bs-table-bg: #ffffff;
+            --bs-table-color: #1f2937;
+            --bs-table-striped-bg: #f8faff;
+            --bs-table-striped-color: #1f2937;
+            --bs-table-hover-bg: #eef3ff;
+            --bs-table-hover-color: #111827;
+            --bs-table-active-bg: #e3ecff;
+            --bs-table-active-color: #111827;
+            color: #1f2937 !important;
+            background-color: #ffffff !important;
+        }
+
+        .content-wrapper .table > :not(caption) > * > * {
+            color: #1f2937 !important;
+            background-color: #ffffff !important;
+            box-shadow: none !important;
+        }
+
+        .content-wrapper .table tbody tr:hover > * {
+            background-color: #eef3ff !important;
+            color: #111827 !important;
+        }
+
+        .content-wrapper .table tbody tr:active > *,
+        .content-wrapper .table tbody tr:focus > *,
+        .content-wrapper .table tbody tr.active > *,
+        .content-wrapper .table tbody tr.selected > *,
+        .content-wrapper .table tbody tr.table-active > * {
+            background-color: #e3ecff !important;
+            color: #111827 !important;
+        }
+
+        .content-wrapper .table *::selection {
+            background: #d7e4ff !important;
+            color: #111827 !important;
+        }
     </style>
 </head>
 <body class="light-theme">

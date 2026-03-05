@@ -676,25 +676,69 @@
 
                         <div class="col-md-12">
                             <div class="form-group">
-                                <label for="known_problems">Known Problems/Issues</label>
-                                <textarea class="form-control @error('known_problems') is-invalid @enderror" 
-                                    id="known_problems" name="known_problems" rows="3" 
-                                    placeholder="List any known problems, issues, or areas requiring attention...">{{ old('known_problems') }}</textarea>
+                                <label for="known_problem_input">Known Problems/Issues</label>
+                                @php
+                                    $oldKnownProblemsRaw = old('known_problems');
+                                    if (is_array($oldKnownProblemsRaw)) {
+                                        $oldKnownProblemsList = array_values(array_filter(array_map('trim', $oldKnownProblemsRaw)));
+                                    } else {
+                                        $oldKnownProblemsRaw = trim((string) $oldKnownProblemsRaw);
+                                        if ($oldKnownProblemsRaw === '' || strtolower($oldKnownProblemsRaw) === 'null') {
+                                            $oldKnownProblemsList = [];
+                                        } else {
+                                            $oldKnownProblemsList = array_values(array_filter(array_map('trim', preg_split('/[,\n]+/', $oldKnownProblemsRaw))));
+                                        }
+                                    }
+                                @endphp
+
+                                <div class="d-flex gap-2 mb-2">
+                                    <input type="text" class="form-control" id="known_problem_input" placeholder="Type an issue and click Add">
+                                    <button type="button" class="btn btn-outline-primary" id="add_known_problem_btn">
+                                        <i class="mdi mdi-plus"></i> Add
+                                    </button>
+                                </div>
+
+                                <input type="hidden" name="known_problems" id="known_problems" value="{{ is_array(old('known_problems')) ? implode(', ', old('known_problems')) : old('known_problems') }}">
+
+                                <div id="known_problems_list" class="list-input-container"></div>
+
                                 @error('known_problems')
-                                <span class="invalid-feedback">{{ $message }}</span>
+                                <span class="text-danger small d-block mt-1">{{ $message }}</span>
                                 @enderror
                             </div>
                         </div>
 
                         <div class="col-md-12">
                             <div class="form-group">
-                                <label for="sensitivities">Sensitivities or Special Considerations</label>
-                                <textarea class="form-control @error('sensitivities') is-invalid @enderror" 
-                                    id="sensitivities" name="sensitivities" rows="3" 
-                                    placeholder="Any allergies, chemical sensitivities, or special handling requirements...">{{ old('sensitivities') }}</textarea>
-                                <small class="form-text text-muted">This will be stored as an array. Separate items with commas.</small>
+                                <label for="sensitivity_input">Sensitivities or Special Considerations</label>
+                                @php
+                                    $oldSensitivitiesRaw = old('sensitivities');
+                                    if (is_array($oldSensitivitiesRaw)) {
+                                        $oldSensitivitiesList = array_values(array_filter(array_map('trim', $oldSensitivitiesRaw)));
+                                    } else {
+                                        $oldSensitivitiesRaw = trim((string) $oldSensitivitiesRaw);
+                                        if ($oldSensitivitiesRaw === '' || strtolower($oldSensitivitiesRaw) === 'null') {
+                                            $oldSensitivitiesList = [];
+                                        } else {
+                                            $oldSensitivitiesList = array_values(array_filter(array_map('trim', preg_split('/[,\n]+/', $oldSensitivitiesRaw))));
+                                        }
+                                    }
+                                @endphp
+
+                                <div class="d-flex gap-2 mb-2">
+                                    <input type="text" class="form-control" id="sensitivity_input" placeholder="Type a sensitivity/consideration and click Add">
+                                    <button type="button" class="btn btn-outline-primary" id="add_sensitivity_btn">
+                                        <i class="mdi mdi-plus"></i> Add
+                                    </button>
+                                </div>
+
+                                <input type="hidden" name="sensitivities" id="sensitivities" value="{{ is_array(old('sensitivities')) ? implode(', ', old('sensitivities')) : old('sensitivities') }}">
+
+                                <div id="sensitivities_list" class="list-input-container"></div>
+
+                                <small class="form-text text-muted">Add items one by one. You can remove any item before submitting.</small>
                                 @error('sensitivities')
-                                <span class="invalid-feedback">{{ $message }}</span>
+                                <span class="text-danger small d-block mt-1">{{ $message }}</span>
                                 @enderror
                             </div>
                         </div>
@@ -742,10 +786,10 @@
                     <div class="form-group">
                         <label for="blueprint_file">Upload Blueprint or Floor Plan</label>
                         <input type="file" class="form-control @error('blueprint_file') is-invalid @enderror" 
-                            id="blueprint_file" name="blueprint_file" accept="image/jpeg,image/png,image/jpg,application/pdf">
+                            id="blueprint_file" name="blueprint_file" accept="image/jpeg,image/png,image/jpg,application/pdf,.dwg,.dxf">
                         <small class="form-text text-muted">
                             <i class="mdi mdi-information"></i> Upload property blueprint or floor plan (max 20MB). 
-                            Supported formats: PDF, JPG, PNG
+                            Supported formats: PDF, JPG/JPEG, PNG, DWG, DXF. For images, use high-resolution files (minimum 1000px shortest side).
                         </small>
                         @error('blueprint_file')
                         <span class="invalid-feedback">{{ $message }}</span>
@@ -976,6 +1020,114 @@ document.addEventListener('DOMContentLoaded', function() {
         countrySelect.value = oldCountry;
     }
 
+    // Dynamic list inputs for known problems and sensitivities
+    const knownProblemsHidden = document.getElementById('known_problems');
+    const knownProblemsInput = document.getElementById('known_problem_input');
+    const knownProblemsList = document.getElementById('known_problems_list');
+    const addKnownProblemBtn = document.getElementById('add_known_problem_btn');
+
+    const sensitivitiesHidden = document.getElementById('sensitivities');
+    const sensitivitiesInput = document.getElementById('sensitivity_input');
+    const sensitivitiesList = document.getElementById('sensitivities_list');
+    const addSensitivityBtn = document.getElementById('add_sensitivity_btn');
+
+    const knownProblemsItems = @json($oldKnownProblemsList ?? []);
+    const sensitivitiesItems = @json($oldSensitivitiesList ?? []);
+
+    function normalizeValue(value) {
+        return String(value || '').trim();
+    }
+
+    function syncHiddenField(hiddenField, items) {
+        hiddenField.value = items.join(', ');
+    }
+
+    function renderItems(container, items, onRemove) {
+        container.innerHTML = '';
+
+        if (!items.length) {
+            const empty = document.createElement('div');
+            empty.className = 'text-muted small';
+            empty.textContent = 'No items added yet.';
+            container.appendChild(empty);
+            return;
+        }
+
+        items.forEach((item, index) => {
+            const badge = document.createElement('div');
+            badge.className = 'list-item-badge';
+            badge.innerHTML = `
+                <span>${item}</span>
+                <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-2" data-index="${index}" aria-label="Remove item">
+                    <i class="mdi mdi-close-circle"></i>
+                </button>
+            `;
+            badge.querySelector('button').addEventListener('click', function() {
+                onRemove(index);
+            });
+            container.appendChild(badge);
+        });
+    }
+
+    function addItem(input, items, hiddenField, container) {
+        const value = normalizeValue(input.value);
+        if (!value) {
+            return;
+        }
+
+        const exists = items.some(item => item.toLowerCase() === value.toLowerCase());
+        if (!exists) {
+            items.push(value);
+        }
+
+        input.value = '';
+        syncHiddenField(hiddenField, items);
+        render();
+    }
+
+    function removeKnownProblem(index) {
+        knownProblemsItems.splice(index, 1);
+        syncHiddenField(knownProblemsHidden, knownProblemsItems);
+        render();
+    }
+
+    function removeSensitivity(index) {
+        sensitivitiesItems.splice(index, 1);
+        syncHiddenField(sensitivitiesHidden, sensitivitiesItems);
+        render();
+    }
+
+    function render() {
+        renderItems(knownProblemsList, knownProblemsItems, removeKnownProblem);
+        renderItems(sensitivitiesList, sensitivitiesItems, removeSensitivity);
+    }
+
+    addKnownProblemBtn.addEventListener('click', function() {
+        addItem(knownProblemsInput, knownProblemsItems, knownProblemsHidden, knownProblemsList);
+    });
+
+    addSensitivityBtn.addEventListener('click', function() {
+        addItem(sensitivitiesInput, sensitivitiesItems, sensitivitiesHidden, sensitivitiesList);
+    });
+
+    knownProblemsInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            addItem(knownProblemsInput, knownProblemsItems, knownProblemsHidden, knownProblemsList);
+        }
+    });
+
+    sensitivitiesInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            addItem(sensitivitiesInput, sensitivitiesItems, sensitivitiesHidden, sensitivitiesList);
+        }
+    });
+
+    syncHiddenField(knownProblemsHidden, knownProblemsItems);
+    syncHiddenField(sensitivitiesHidden, sensitivitiesItems);
+    render();
+
     // Blueprint preview with validation
     const blueprintInput = document.getElementById('blueprint_file');
     const blueprintPreview = document.getElementById('blueprint-preview');
@@ -1001,6 +1153,20 @@ document.addEventListener('DOMContentLoaded', function() {
                                 <p class="mb-0"><strong>${file.name}</strong></p>
                                 <small class="text-muted">${(file.size / 1024 / 1024).toFixed(2)} MB</small>
                                 <span class="badge badge-success ms-2">PDF</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else if (file.name.toLowerCase().endsWith('.dwg') || file.name.toLowerCase().endsWith('.dxf')) {
+                const extension = file.name.toLowerCase().endsWith('.dwg') ? 'DWG' : 'DXF';
+                blueprintPreview.innerHTML = `
+                    <div class="blueprint-preview-item">
+                        <div class="d-flex align-items-center p-3">
+                            <i class="mdi mdi-file-cad" style="font-size: 3rem; color: #1565c0;"></i>
+                            <div class="ms-3">
+                                <p class="mb-0"><strong>${file.name}</strong></p>
+                                <small class="text-muted">${(file.size / 1024 / 1024).toFixed(2)} MB</small>
+                                <span class="badge badge-primary ms-2">${extension}</span>
                             </div>
                         </div>
                     </div>
@@ -1074,6 +1240,24 @@ small.form-text {
 
 .card-title {
     color: #212529 !important;
+}
+
+.list-input-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+}
+
+.list-item-badge {
+    display: inline-flex;
+    align-items: center;
+    background: #eef4ff;
+    color: #1f2937;
+    border: 1px solid #cfe0ff;
+    border-radius: 999px;
+    padding: 0.35rem 0.7rem;
+    font-size: 0.9rem;
 }
 </style>
 @endsection

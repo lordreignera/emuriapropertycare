@@ -120,9 +120,12 @@ Route::middleware([
         })->name('projects.index');
         
         // Invoices
-        Route::get('/invoices', function() {
-            return view('client.invoices.index');
-        })->name('invoices.index');
+        Route::get('/invoices', [App\Http\Controllers\Client\InvoiceController::class, 'index'])
+            ->name('invoices.index');
+        Route::get('/invoices/{invoice}/download', [App\Http\Controllers\Client\InvoiceController::class, 'download'])
+            ->name('invoices.download');
+        Route::get('/invoices/{invoice}', [App\Http\Controllers\Client\InvoiceController::class, 'show'])
+            ->name('invoices.show');
         
         // Subscription
         Route::get('/subscription', function() {

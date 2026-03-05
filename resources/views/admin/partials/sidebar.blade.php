@@ -1,782 +1,530 @@
-{{-- Sidebar Navigation --}}
-<nav class="sidebar sidebar-offcanvas" id="sidebar">
-  <div class="sidebar-brand-wrapper d-none d-lg-flex align-items-center justify-content-center fixed-top">
-    <a class="sidebar-brand brand-logo" href="{{ route('dashboard') }}">
-      <span style="color: #fff; font-size: 1.5rem; font-weight: 700;">
-        ETOGO<span style="color: #FFB800;"></span>
-      </span>
-    </a>
-    <a class="sidebar-brand brand-logo-mini" href="{{ route('dashboard') }}">
-      <span style="color: #FFB800; font-size: 1.2rem; font-weight: 700;">E</span>
-    </a>
-  </div>
-  <ul class="nav">
-    {{-- Profile Section --}}
-    <li class="nav-item profile">
-      <div class="profile-desc">
-        <div class="profile-pic">
-          <div class="count-indicator">
-            <img class="img-xs rounded-circle" src="{{ Auth::user()->profile_photo_url }}" alt="{{ Auth::user()->name }}">
-            <span class="count bg-success"></span>
-          </div>
-          <div class="profile-name">
-            <h5 class="mb-0 font-weight-normal">{{ Auth::user()->name }}</h5>
-            <span>
-              @if(Auth::user()->hasRole('Super Admin'))
-                Super Admin
-              @elseif(Auth::user()->hasRole('Administrator'))
-                Administrator
-              @elseif(Auth::user()->hasRole('Inspector'))
-                Inspector
-              @elseif(Auth::user()->hasRole('Project Manager'))
-                Project Manager
-              @elseif(Auth::user()->hasRole('Technician'))
-                Technician
-              @elseif(Auth::user()->hasRole('Finance'))
-                Finance
-              @elseif(Auth::user()->client && Auth::user()->client->subscription)
-                {{ Auth::user()->client->subscription->tier->name }}
-              @else
-                Member
-              @endif
-            </span>
-          </div>
+@php
+    $user = Auth::user();
+
+    $roleLabel = match (true) {
+        $user->hasRole('Super Admin') => 'Super Admin',
+        $user->hasRole('Administrator') => 'Administrator',
+        $user->hasRole('Inspector') => 'Inspector',
+        $user->hasRole('Project Manager') => 'Project Manager',
+        $user->hasRole('Technician') => 'Technician',
+        $user->hasRole('Finance') => 'Finance',
+        default => 'Member',
+    };
+
+    $propertiesOpen = request()->routeIs('properties.*');
+    $inspectionsOpen = request()->routeIs('inspections.*');
+    $projectsOpen = request()->routeIs('projects.*') || request()->routeIs('work-logs.*') || request()->routeIs('milestones.*') || request()->routeIs('change-orders.*');
+    $billingOpen = request()->routeIs('invoices.*') || request()->routeIs('budgets.*');
+    $reportsOpen = request()->routeIs('reports.*') || request()->routeIs('savings.*');
+    $accessControlOpen = request()->routeIs('admin.users.*') || request()->routeIs('admin.roles.*') || request()->routeIs('admin.permissions.*');
+    $cpiOpen = request()->routeIs('admin.pricing-packages.*')
+        || request()->routeIs('admin.property-types.*')
+        || request()->routeIs('admin.cpi-bands.*')
+        || request()->routeIs('admin.cpi-multipliers.*')
+        || request()->routeIs('admin.cpi-domains.*')
+        || request()->routeIs('admin.supply-materials.*')
+        || request()->routeIs('admin.age-brackets.*')
+        || request()->routeIs('admin.containment-categories.*')
+        || request()->routeIs('admin.crawl-access.*')
+        || request()->routeIs('admin.roof-access.*')
+        || request()->routeIs('admin.equipment-requirements.*')
+        || request()->routeIs('admin.complexity-categories.*')
+        || request()->routeIs('admin.residential-tiers.*')
+        || request()->routeIs('admin.commercial-settings.*')
+        || request()->routeIs('admin.mixed-use-settings.*')
+        || request()->routeIs('admin.pricing-config.*')
+        || request()->routeIs('admin.settings.bdc*')
+        || request()->routeIs('admin.reactive-costs.*')
+        || request()->routeIs('admin.stewardship-loss.*');
+
+    $scheduledPaidCount = 0;
+    $unscheduledCount = 0;
+    if ($user->can('view-all-properties')) {
+        $scheduledPaidCount = \App\Models\Inspection::where('inspection_fee_status', 'paid')
+            ->where('status', 'scheduled')
+            ->whereNull('inspector_id')
+            ->count();
+
+        $unscheduledCount = \App\Models\Property::where('status', 'active')
+            ->whereDoesntHave('inspections')
+            ->count();
+    }
+
+    $scheduledInspectionsCount = 0;
+    $unscheduledInspectionsCount = 0;
+    $inProgressInspectionsCount = 0;
+
+    if ($user->hasRole(['Super Admin', 'Administrator'])) {
+        $propertyIds = \App\Models\Property::where('status', 'approved')->pluck('id');
+        $projectIds = \App\Models\Project::whereIn('property_id', $propertyIds)->pluck('id');
+
+        $scheduledInspectionsCount = \App\Models\Inspection::whereIn('project_id', $projectIds)
+            ->where('status', 'scheduled')
+            ->count();
+
+        $inProgressInspectionsCount = \App\Models\Inspection::whereIn('project_id', $projectIds)
+            ->where('status', 'in_progress')
+            ->count();
+    } elseif ($user->hasRole('Inspector')) {
+        $scheduledInspectionsCount = \App\Models\Property::where('inspector_id', $user->id)
+            ->where('status', 'awaiting_inspection')
+            ->whereNotNull('inspection_scheduled_at')
+            ->count();
+
+        $unscheduledInspectionsCount = \App\Models\Property::where('inspector_id', $user->id)
+            ->where('status', 'awaiting_inspection')
+            ->whereNull('inspection_scheduled_at')
+            ->count();
+    } elseif ($user->hasRole('Project Manager')) {
+        $scheduledInspectionsCount = \App\Models\Property::where('project_manager_id', $user->id)
+            ->where('status', 'awaiting_inspection')
+            ->whereNotNull('inspection_scheduled_at')
+            ->count();
+
+        $unscheduledInspectionsCount = \App\Models\Property::where('project_manager_id', $user->id)
+            ->where('status', 'awaiting_inspection')
+            ->whereNull('inspection_scheduled_at')
+            ->count();
+    }
+
+    $projectsWithScopeCount = \App\Models\Project::whereHas('scopeOfWorks')->count();
+
+    $activeProjectsCount = $user->hasRole('Technician')
+        ? \App\Models\Project::where('assigned_to', $user->id)->where('status', 'active')->count()
+        : \App\Models\Project::where('status', 'active')->count();
+
+    $unpaidInvoicesCount = \App\Models\Invoice::pending()->count();
+@endphp
+
+<nav class="sidebar sidebar-offcanvas admin-client-sidebar" id="sidebar">
+    <div class="admin-client-sidebar-inner">
+        <div class="admin-client-brand">
+            <a href="{{ route('dashboard') }}">EMURIA</a>
         </div>
-        <a href="#" id="profile-dropdown" data-bs-toggle="dropdown"><i class="mdi mdi-dots-vertical"></i></a>
-        <div class="dropdown-menu dropdown-menu-right sidebar-dropdown preview-list" aria-labelledby="profile-dropdown">
-          <a href="{{ route('profile.show') }}" class="dropdown-item preview-item">
-            <div class="preview-thumbnail">
-              <div class="preview-icon bg-dark rounded-circle">
-                <i class="mdi mdi-settings text-primary"></i>
-              </div>
+
+        <div class="admin-client-user">
+            <img class="admin-client-avatar" src="{{ $user->profile_photo_url }}" alt="{{ $user->name }}">
+            <div>
+                <div class="admin-client-name">{{ $user->name }}</div>
+                <div class="admin-client-role">{{ $roleLabel }}</div>
             </div>
-            <div class="preview-item-content">
-              <p class="preview-subject ellipsis mb-1 text-small">Account settings</p>
-            </div>
-          </a>
-          <div class="dropdown-divider"></div>
-          <a href="{{ route('profile.show') }}" class="dropdown-item preview-item">
-            <div class="preview-thumbnail">
-              <div class="preview-icon bg-dark rounded-circle">
-                <i class="mdi mdi-onepassword text-info"></i>
-              </div>
-            </div>
-            <div class="preview-item-content">
-              <p class="preview-subject ellipsis mb-1 text-small">Change Password</p>
-            </div>
-          </a>
-          <div class="dropdown-divider"></div>
-          <form method="POST" action="{{ route('logout') }}">
-            @csrf
-            <button type="submit" class="dropdown-item preview-item" style="border: none; background: none; width: 100%; text-align: left;">
-              <div class="preview-thumbnail">
-                <div class="preview-icon bg-dark rounded-circle">
-                  <i class="mdi mdi-logout text-danger"></i>
+        </div>
+
+        <div class="admin-client-section-title">Main Navigation</div>
+        <a class="admin-client-link {{ request()->routeIs('dashboard') ? 'is-active' : '' }}" href="{{ route('dashboard') }}">
+            <i class="mdi mdi-view-dashboard"></i>
+            <span>Dashboard</span>
+        </a>
+
+        @can('view-all-properties')
+            <div class="admin-client-section-title">Property Management</div>
+            <details class="admin-client-group" {{ $propertiesOpen ? 'open' : '' }}>
+                <summary class="admin-client-link {{ $propertiesOpen ? 'is-active' : '' }}">
+                    <span class="admin-client-summary-left">
+                        <i class="mdi mdi-home-city"></i>
+                        <span>Property Management</span>
+                    </span>
+                    <span class="admin-client-arrow">▾</span>
+                </summary>
+                <div class="admin-client-submenu">
+                    <a class="admin-client-sublink {{ request()->get('status') == 'awaiting_inspection' ? 'is-active' : '' }}" href="{{ route('properties.index') }}?status=awaiting_inspection">
+                        <span class="admin-client-sublabel">Scheduled &amp; Paid</span>
+                        @if($scheduledPaidCount > 0)
+                            <span class="admin-client-badge">{{ $scheduledPaidCount }}</span>
+                        @endif
+                    </a>
+                    <a class="admin-client-sublink {{ request()->get('status') == 'active' ? 'is-active' : '' }}" href="{{ route('properties.index') }}?status=active">
+                        <span class="admin-client-sublabel">Not Scheduled</span>
+                        @if($unscheduledCount > 0)
+                            <span class="admin-client-badge">{{ $unscheduledCount }}</span>
+                        @endif
+                    </a>
+                    <a class="admin-client-sublink {{ !request()->has('status') ? 'is-active' : '' }}" href="{{ route('properties.index') }}">
+                        <span class="admin-client-sublabel">All Properties</span>
+                    </a>
                 </div>
-              </div>
-              <div class="preview-item-content">
-                <p class="preview-subject ellipsis mb-1 text-small">Logout</p>
-              </div>
-            </button>
-          </form>
-        </div>
-      </div>
-    </li>
+            </details>
+        @endcan
 
-    <li class="nav-item nav-category">
-      <span class="nav-link">Navigation</span>
-    </li>
+        @if($user->hasRole(['Inspector', 'Project Manager', 'Super Admin', 'Administrator']) || $user->can('view-inspections'))
+            <div class="admin-client-section-title">Services</div>
+            <details class="admin-client-group" {{ $inspectionsOpen ? 'open' : '' }}>
+                <summary class="admin-client-link {{ $inspectionsOpen ? 'is-active' : '' }}">
+                    <span class="admin-client-summary-left">
+                        <i class="mdi mdi-clipboard-check"></i>
+                        <span>Inspection Workflow</span>
+                    </span>
+                    <span class="admin-client-arrow">▾</span>
+                </summary>
+                <div class="admin-client-submenu">
+                    @if($user->hasRole(['Super Admin', 'Administrator']))
+                        <a class="admin-client-sublink {{ request()->get('status') == 'scheduled' ? 'is-active' : '' }}" href="{{ route('inspections.index') }}?status=scheduled">
+                            <span class="admin-client-sublabel">Awaiting Inspection</span>
+                            @if($scheduledInspectionsCount > 0)
+                                <span class="admin-client-badge">{{ $scheduledInspectionsCount }}</span>
+                            @endif
+                        </a>
+                        <a class="admin-client-sublink {{ request()->get('status') == 'in_progress' ? 'is-active' : '' }}" href="{{ route('inspections.index') }}?status=in_progress">
+                            <span class="admin-client-sublabel">In Progress</span>
+                            @if($inProgressInspectionsCount > 0)
+                                <span class="admin-client-badge">{{ $inProgressInspectionsCount }}</span>
+                            @endif
+                        </a>
+                        <a class="admin-client-sublink {{ request()->get('status') == 'completed' ? 'is-active' : '' }}" href="{{ route('inspections.index') }}?status=completed">
+                            <span class="admin-client-sublabel">Completed</span>
+                        </a>
+                        <a class="admin-client-sublink {{ !request()->has('status') ? 'is-active' : '' }}" href="{{ route('inspections.index') }}">
+                            <span class="admin-client-sublabel">All Inspections</span>
+                        </a>
+                    @else
+                        <a class="admin-client-sublink {{ request()->get('status') == 'scheduled' ? 'is-active' : '' }}" href="{{ route('inspections.index') }}?status=scheduled">
+                            <span class="admin-client-sublabel">Scheduled</span>
+                            @if($scheduledInspectionsCount > 0)
+                                <span class="admin-client-badge">{{ $scheduledInspectionsCount }}</span>
+                            @endif
+                        </a>
+                        <a class="admin-client-sublink {{ request()->get('status') == 'unscheduled' ? 'is-active' : '' }}" href="{{ route('inspections.index') }}?status=unscheduled">
+                            <span class="admin-client-sublabel">Unscheduled</span>
+                            @if($unscheduledInspectionsCount > 0)
+                                <span class="admin-client-badge">{{ $unscheduledInspectionsCount }}</span>
+                            @endif
+                        </a>
+                        <a class="admin-client-sublink {{ !request()->has('status') ? 'is-active' : '' }}" href="{{ route('inspections.index') }}">
+                            <span class="admin-client-sublabel">All Inspections</span>
+                        </a>
+                    @endif
+                </div>
+            </details>
+        @endif
 
-    {{-- Dashboard --}}
-    <li class="nav-item menu-items {{ request()->routeIs('dashboard') ? 'active' : '' }}">
-      <a class="nav-link" href="{{ route('dashboard') }}">
-        <span class="menu-icon">
-          <i class="mdi mdi-speedometer"></i>
-        </span>
-        <span class="menu-title">Dashboard</span>
-      </a>
-    </li>
+        @if($user->hasRole(['Technician', 'Project Manager', 'Super Admin', 'Administrator']) || $user->can('view-all-projects'))
+            <details class="admin-client-group" {{ $projectsOpen ? 'open' : '' }}>
+                <summary class="admin-client-link {{ $projectsOpen ? 'is-active' : '' }}">
+                    <span class="admin-client-summary-left">
+                        <i class="mdi mdi-briefcase"></i>
+                        <span>Project Management</span>
+                    </span>
+                    <span class="admin-client-arrow">▾</span>
+                </summary>
+                <div class="admin-client-submenu">
+                    @if($user->hasRole(['Project Manager', 'Super Admin', 'Administrator']) || $user->can('view-all-projects'))
+                        <a class="admin-client-sublink {{ request()->get('has_scope') == 'true' ? 'is-active' : '' }}" href="{{ route('projects.index') }}?has_scope=true">
+                            <span class="admin-client-sublabel">Scope of Work &amp; Quotes</span>
+                            @if($projectsWithScopeCount > 0)
+                                <span class="admin-client-badge">{{ $projectsWithScopeCount }}</span>
+                            @endif
+                        </a>
+                        <a class="admin-client-sublink {{ request()->routeIs('projects.index') && request()->get('view') == 'scheduling' ? 'is-active' : '' }}" href="{{ route('projects.index') }}?view=scheduling">
+                            <span class="admin-client-sublabel">Project Scheduling</span>
+                        </a>
+                    @endif
+                    <a class="admin-client-sublink {{ request()->get('status') == 'active' ? 'is-active' : '' }}" href="{{ route('projects.index') }}?status=active">
+                        <span class="admin-client-sublabel">Active Projects</span>
+                        @if($activeProjectsCount > 0)
+                            <span class="admin-client-badge">{{ $activeProjectsCount }}</span>
+                        @endif
+                    </a>
+                    <a class="admin-client-sublink {{ request()->routeIs('work-logs.*') ? 'is-active' : '' }}" href="{{ route('work-logs.index') }}">
+                        <span class="admin-client-sublabel">Work Logs &amp; Progress</span>
+                    </a>
+                    @if($user->hasRole(['Project Manager', 'Super Admin', 'Administrator']) || $user->can('view-all-projects'))
+                        <a class="admin-client-sublink {{ request()->routeIs('milestones.*') ? 'is-active' : '' }}" href="{{ route('milestones.index') }}">
+                            <span class="admin-client-sublabel">Milestones &amp; Budget</span>
+                        </a>
+                        <a class="admin-client-sublink {{ request()->routeIs('change-orders.*') ? 'is-active' : '' }}" href="{{ route('change-orders.index') }}">
+                            <span class="admin-client-sublabel">Change Orders</span>
+                        </a>
+                    @endif
+                    <a class="admin-client-sublink {{ !request()->has('status') && !request()->has('has_scope') && !request()->has('view') ? 'is-active' : '' }}" href="{{ route('projects.index') }}">
+                        <span class="admin-client-sublabel">All Projects</span>
+                    </a>
+                </div>
+            </details>
+        @endif
 
-    {{-- Property Management Submenu --}}
-    @can('view-all-properties')
-    <li class="nav-item menu-items {{ request()->routeIs('properties.*') ? 'active' : '' }}">
-      <a class="nav-link" data-bs-toggle="collapse" href="#property-management" aria-expanded="{{ request()->routeIs('properties.*') ? 'true' : 'false' }}" aria-controls="property-management">
-        <span class="menu-icon">
-          <i class="mdi mdi-home-modern"></i>
-        </span>
-        <span class="menu-title">Property Management</span>
-        <i class="menu-arrow"></i>
-      </a>
-      <div class="collapse {{ request()->routeIs('properties.*') ? 'show' : '' }}" id="property-management">
-        <ul class="nav flex-column sub-menu">
-          <li class="nav-item">
-            <a class="nav-link {{ request()->get('status') == 'awaiting_inspection' ? 'active' : '' }}" href="{{ route('properties.index') }}?status=awaiting_inspection">
-              <i class="mdi mdi-calendar-check"></i> Scheduled & Paid
-              @php
-                  // Properties with scheduled and paid inspections
-                  $scheduledPaidCount = \App\Models\Inspection::where('inspection_fee_status', 'paid')
-                      ->where('status', 'scheduled')
-                      ->whereNull('inspector_id')
-                      ->count();
-              @endphp
-              @if($scheduledPaidCount > 0)
-              <span class="badge badge-pill badge-success ms-auto">{{ $scheduledPaidCount }}</span>
-              @endif
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {{ request()->get('status') == 'active' ? 'active' : '' }}" href="{{ route('properties.index') }}?status=active">
-              <i class="mdi mdi-home-alert"></i> Not Scheduled
-              @php
-                  // Properties without inspections yet (newly added by clients)
-                  $unscheduledCount = \App\Models\Property::where('status', 'active')
-                      ->whereDoesntHave('inspections')
-                      ->count();
-              @endphp
-              @if($unscheduledCount > 0)
-              <span class="badge badge-pill badge-warning ms-auto">{{ $unscheduledCount }}</span>
-              @endif
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {{ !request()->has('status') ? 'active' : '' }}" href="{{ route('properties.index') }}">
-              <i class="mdi mdi-view-list"></i> All Properties
-            </a>
-          </li>
-        </ul>
-      </div>
-    </li>
-    @endcan
+        @can('view-invoices')
+            <div class="admin-client-section-title">Billing</div>
+            <details class="admin-client-group" {{ $billingOpen ? 'open' : '' }}>
+                <summary class="admin-client-link {{ $billingOpen ? 'is-active' : '' }}">
+                    <span class="admin-client-summary-left">
+                        <i class="mdi mdi-cash-multiple"></i>
+                        <span>Billing &amp; Finance</span>
+                    </span>
+                    <span class="admin-client-arrow">▾</span>
+                </summary>
+                <div class="admin-client-submenu">
+                    <a class="admin-client-sublink {{ request()->get('status') == 'pending' ? 'is-active' : '' }}" href="{{ route('invoices.index') }}?status=pending">
+                        <span class="admin-client-sublabel">Unpaid Invoices</span>
+                        @if($unpaidInvoicesCount > 0)
+                            <span class="admin-client-badge">{{ $unpaidInvoicesCount }}</span>
+                        @endif
+                    </a>
+                    <a class="admin-client-sublink {{ request()->routeIs('invoices.index') && !request()->has('status') ? 'is-active' : '' }}" href="{{ route('invoices.index') }}">
+                        <span class="admin-client-sublabel">All Invoices</span>
+                    </a>
+                    <a class="admin-client-sublink {{ request()->routeIs('budgets.*') ? 'is-active' : '' }}" href="{{ route('budgets.index') }}">
+                        <span class="admin-client-sublabel">Budget Management</span>
+                    </a>
+                </div>
+            </details>
+        @endcan
 
-    {{-- Inspection Workflow Submenu - For Inspectors, Project Managers, and Admins --}}
-    @if(Auth::user()->hasRole(['Inspector', 'Project Manager', 'Super Admin', 'Administrator']) || Auth::user()->can('view-inspections'))
-    <li class="nav-item menu-items {{ request()->routeIs('inspections.*') ? 'active' : '' }}">
-      <a class="nav-link" data-bs-toggle="collapse" href="#inspection-workflow" aria-expanded="{{ request()->routeIs('inspections.*') ? 'true' : 'false' }}" aria-controls="inspection-workflow">
-        <span class="menu-icon">
-          <i class="mdi mdi-clipboard-check"></i>
-        </span>
-        <span class="menu-title">Inspection Workflow</span>
-        <i class="menu-arrow"></i>
-      </a>
-      <div class="collapse {{ request()->routeIs('inspections.*') ? 'show' : '' }}" id="inspection-workflow">
-        <ul class="nav flex-column sub-menu">
-          @php
-              $user = Auth::user();
-              $scheduledInspectionsCount = 0;
-              $unscheduledInspectionsCount = 0;
-              $inProgressInspectionsCount = 0;
-              // Calculate role-specific counts
-              if ($user->hasRole(['Super Admin', 'Administrator'])) {
-                // Admin sees all
-                $propertyIds = \App\Models\Property::where('status', 'approved')->pluck('id');
-                $projectIds = \App\Models\Project::whereIn('property_id', $propertyIds)->pluck('id');
-                $scheduledInspectionsCount = \App\Models\Inspection::whereIn('project_id', $projectIds)
-                  ->where('status', 'scheduled')->count();
-                $inProgressInspectionsCount = \App\Models\Inspection::whereIn('project_id', $projectIds)
-                  ->where('status', 'in_progress')->count();
-              } elseif ($user->hasRole('Inspector')) {
-                  $scheduledInspectionsCount = \App\Models\Property::where('inspector_id', $user->id)
-                      ->where('status', 'awaiting_inspection')
-                      ->whereNotNull('inspection_scheduled_at')
-                      ->count();
-                  $unscheduledInspectionsCount = \App\Models\Property::where('inspector_id', $user->id)
-                      ->where('status', 'awaiting_inspection')
-                      ->whereNull('inspection_scheduled_at')
-                      ->count();
-              } elseif ($user->hasRole('Project Manager')) {
-                  $scheduledInspectionsCount = \App\Models\Property::where('project_manager_id', $user->id)
-                      ->where('status', 'awaiting_inspection')
-                      ->whereNotNull('inspection_scheduled_at')
-                      ->count();
-                  $unscheduledInspectionsCount = \App\Models\Property::where('project_manager_id', $user->id)
-                      ->where('status', 'awaiting_inspection')
-                      ->whereNull('inspection_scheduled_at')
-                      ->count();
-              }
-          @endphp
-          @if(Auth::user()->hasRole(['Super Admin', 'Administrator']))
-          {{-- Admin sees full inspection workflow --}}
-          <li class="nav-item">
-            <a class="nav-link {{ request()->get('status') == 'scheduled' ? 'active' : '' }}" href="{{ route('inspections.index') }}?status=scheduled">
-              <i class="mdi mdi-calendar-clock"></i> Awaiting Inspection
-              @if($scheduledInspectionsCount > 0)
-              <span class="badge badge-pill badge-info ms-auto">{{ $scheduledInspectionsCount }}</span>
-              @endif
+        @can('view-communications')
+            <a class="admin-client-link {{ request()->routeIs('communications.*') ? 'is-active' : '' }}" href="{{ route('communications.index') }}">
+                <i class="mdi mdi-message-text"></i>
+                <span>Communications</span>
             </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {{ request()->get('status') == 'in_progress' ? 'active' : '' }}" href="{{ route('inspections.index') }}?status=in_progress">
-              <i class="mdi mdi-clipboard-text"></i> In Progress
-              @if($inProgressInspectionsCount > 0)
-              <span class="badge badge-pill badge-primary ms-auto">{{ $inProgressInspectionsCount }}</span>
-              @endif
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {{ request()->get('status') == 'completed' ? 'active' : '' }}" href="{{ route('inspections.index') }}?status=completed">
-              <i class="mdi mdi-clipboard-check"></i> Completed
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {{ !request()->has('status') ? 'active' : '' }}" href="{{ route('inspections.index') }}">
-              <i class="mdi mdi-view-list"></i> All Inspections
-            </a>
-          </li>
-          @else
-          {{-- Inspector/PM sees simplified menu --}}
-          <li class="nav-item">
-            <a class="nav-link {{ request()->get('status') == 'scheduled' ? 'active' : '' }}" href="{{ route('inspections.index') }}?status=scheduled">
-              <i class="mdi mdi-calendar-clock"></i> Scheduled
-              @if($scheduledInspectionsCount > 0)
-              <span class="badge badge-pill badge-success ms-auto">{{ $scheduledInspectionsCount }}</span>
-              @endif
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {{ request()->get('status') == 'unscheduled' ? 'active' : '' }}" href="{{ route('inspections.index') }}?status=unscheduled">
-              <i class="mdi mdi-calendar-alert"></i> Unscheduled
-              @if($unscheduledInspectionsCount > 0)
-              <span class="badge badge-pill badge-warning ms-auto">{{ $unscheduledInspectionsCount }}</span>
-              @endif
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {{ !request()->has('status') ? 'active' : '' }}" href="{{ route('inspections.index') }}">
-              <i class="mdi mdi-view-list"></i> All Inspections
-            </a>
-          </li>
-          @endif
-        </ul>
-      </div>
-    </li>
-    @endif
+        @endcan
 
-    {{-- Project Management Submenu - For Technicians, Project Managers, and Admins --}}
-    @if(Auth::user()->hasRole(['Technician', 'Project Manager', 'Super Admin', 'Administrator']) || Auth::user()->can('view-all-projects'))
-    <li class="nav-item menu-items {{ request()->routeIs('projects.*') || request()->routeIs('work-logs.*') || request()->routeIs('milestones.*') ? 'active' : '' }}">
-      <a class="nav-link" data-bs-toggle="collapse" href="#project-management" aria-expanded="{{ request()->routeIs('projects.*') || request()->routeIs('work-logs.*') || request()->routeIs('milestones.*') ? 'true' : 'false' }}" aria-controls="project-management">
-        <span class="menu-icon">
-          <i class="mdi mdi-briefcase"></i>
-        </span>
-        <span class="menu-title">Project Management</span>
-        <i class="menu-arrow"></i>
-      </a>
-      <div class="collapse {{ request()->routeIs('projects.*') || request()->routeIs('work-logs.*') || request()->routeIs('milestones.*') ? 'show' : '' }}" id="project-management">
-        <ul class="nav flex-column sub-menu">
-          @if(Auth::user()->hasRole(['Project Manager', 'Super Admin', 'Administrator']) || Auth::user()->can('view-all-projects'))
-          <li class="nav-item">
-            <a class="nav-link {{ request()->get('has_scope') == 'true' ? 'active' : '' }}" href="{{ route('projects.index') }}?has_scope=true">
-              <i class="mdi mdi-file-document-edit"></i> Scope of Work & Quotes
-              @php
-                  $projectsWithScopeCount = \App\Models\Project::whereHas('scopeOfWorks')->count();
-              @endphp
-              @if($projectsWithScopeCount > 0)
-              <span class="badge badge-pill badge-info ms-auto">{{ $projectsWithScopeCount }}</span>
-              @endif
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {{ request()->routeIs('projects.index') && request()->get('view') == 'scheduling' ? 'active' : '' }}" href="{{ route('projects.index') }}?view=scheduling">
-              <i class="mdi mdi-calendar-clock"></i> Project Scheduling
-            </a>
-          </li>
-          @endif
-          <li class="nav-item">
-            <a class="nav-link {{ request()->get('status') == 'active' ? 'active' : '' }}" href="{{ route('projects.index') }}?status=active">
-              <i class="mdi mdi-briefcase-check"></i> Active Projects
-              @php
-                  $user = Auth::user();
-                  if ($user->hasRole('Technician')) {
-                      $activeProjectsCount = \App\Models\Project::where('assigned_to', $user->id)
-                          ->where('status', 'active')->count();
-                  } else {
-                      $activeProjectsCount = \App\Models\Project::where('status', 'active')->count();
-                  }
-              @endphp
-              @if($activeProjectsCount > 0)
-              <span class="badge badge-pill badge-success ms-auto">{{ $activeProjectsCount }}</span>
-              @endif
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {{ request()->routeIs('work-logs.*') ? 'active' : '' }}" href="{{ route('work-logs.index') }}">
-              <i class="mdi mdi-notebook"></i> Work Logs & Progress
-            </a>
-          </li>
-          @if(Auth::user()->hasRole(['Project Manager', 'Super Admin', 'Administrator']) || Auth::user()->can('view-all-projects'))
-          <li class="nav-item">
-            <a class="nav-link {{ request()->routeIs('milestones.*') ? 'active' : '' }}" href="{{ route('milestones.index') }}">
-              <i class="mdi mdi-flag-checkered"></i> Milestones & Budget
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {{ request()->routeIs('change-orders.*') ? 'active' : '' }}" href="{{ route('change-orders.index') }}">
-              <i class="mdi mdi-swap-horizontal"></i> Change Orders
-            </a>
-          </li>
-          @endif
-          <li class="nav-item">
-            <a class="nav-link {{ !request()->has('status') && !request()->has('has_scope') && !request()->has('view') ? 'active' : '' }}" href="{{ route('projects.index') }}">
-              <i class="mdi mdi-view-list"></i> All Projects
-            </a>
-          </li>
-        </ul>
-      </div>
-    </li>
-    @endif
+        @can('view-reports')
+            <details class="admin-client-group" {{ $reportsOpen ? 'open' : '' }}>
+                <summary class="admin-client-link {{ $reportsOpen ? 'is-active' : '' }}">
+                    <span class="admin-client-summary-left">
+                        <i class="mdi mdi-chart-areaspline"></i>
+                        <span>Reports &amp; Savings</span>
+                    </span>
+                    <span class="admin-client-arrow">▾</span>
+                </summary>
+                <div class="admin-client-submenu">
+                    <a class="admin-client-sublink {{ request()->routeIs('reports.index') ? 'is-active' : '' }}" href="{{ route('reports.index') }}">
+                        <span class="admin-client-sublabel">Performance Reports</span>
+                    </a>
+                    <a class="admin-client-sublink {{ request()->routeIs('savings.*') ? 'is-active' : '' }}" href="{{ route('savings.index') }}">
+                        <span class="admin-client-sublabel">Cost &amp; Savings Analysis</span>
+                    </a>
+                </div>
+            </details>
+        @endcan
 
-    {{-- Billing & Financial Management Submenu --}}
-    @can('view-invoices')
-    <li class="nav-item menu-items {{ request()->routeIs('invoices.*') || request()->routeIs('budgets.*') ? 'active' : '' }}">
-      <a class="nav-link" data-bs-toggle="collapse" href="#billing" aria-expanded="{{ request()->routeIs('invoices.*') || request()->routeIs('budgets.*') ? 'true' : 'false' }}" aria-controls="billing">
-        <span class="menu-icon">
-          <i class="mdi mdi-cash-multiple"></i>
-        </span>
-        <span class="menu-title">Billing & Finance</span>
-        <i class="menu-arrow"></i>
-      </a>
-      <div class="collapse {{ request()->routeIs('invoices.*') || request()->routeIs('budgets.*') ? 'show' : '' }}" id="billing">
-        <ul class="nav flex-column sub-menu">
-          <li class="nav-item">
-            <a class="nav-link {{ request()->get('status') == 'pending' ? 'active' : '' }}" href="{{ route('invoices.index') }}?status=pending">
-              <i class="mdi mdi-file-document-alert"></i> Unpaid Invoices
-              @php
-                  $unpaidInvoicesCount = \App\Models\Invoice::where('status', 'pending')->count();
-              @endphp
-              @if($unpaidInvoicesCount > 0)
-              <span class="badge badge-pill badge-danger ms-auto">{{ $unpaidInvoicesCount }}</span>
-              @endif
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {{ request()->routeIs('invoices.index') && !request()->has('status') ? 'active' : '' }}" href="{{ route('invoices.index') }}">
-              <i class="mdi mdi-file-document"></i> All Invoices
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {{ request()->routeIs('budgets.*') ? 'active' : '' }}" href="{{ route('budgets.index') }}">
-              <i class="mdi mdi-chart-line"></i> Budget Management
-            </a>
-          </li>
-        </ul>
-      </div>
-    </li>
-    @endcan
-    
-    {{-- Communications & Reports --}}
-    @can('view-communications')
-    <li class="nav-item menu-items {{ request()->routeIs('communications.*') ? 'active' : '' }}">
-      <a class="nav-link" href="{{ route('communications.index') }}">
-        <span class="menu-icon">
-          <i class="mdi mdi-message-text"></i>
-        </span>
-        <span class="menu-title">Communications</span>
-      </a>
-    </li>
-    @endcan
-    
-    @can('view-reports')
-    <li class="nav-item menu-items {{ request()->routeIs('reports.*') || request()->routeIs('savings.*') ? 'active' : '' }}">
-      <a class="nav-link" data-bs-toggle="collapse" href="#reports-savings" aria-expanded="{{ request()->routeIs('reports.*') || request()->routeIs('savings.*') ? 'true' : 'false' }}" aria-controls="reports-savings">
-        <span class="menu-icon">
-          <i class="mdi mdi-chart-areaspline"></i>
-        </span>
-        <span class="menu-title">Reports & Savings</span>
-        <i class="menu-arrow"></i>
-      </a>
-      <div class="collapse {{ request()->routeIs('reports.*') || request()->routeIs('savings.*') ? 'show' : '' }}" id="reports-savings">
-        <ul class="nav flex-column sub-menu">
-          <li class="nav-item">
-            <a class="nav-link {{ request()->routeIs('reports.index') ? 'active' : '' }}" href="{{ route('reports.index') }}">
-              <i class="mdi mdi-file-chart"></i> Performance Reports
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {{ request()->routeIs('savings.*') ? 'active' : '' }}" href="{{ route('savings.index') }}">
-              <i class="mdi mdi-cash-usd"></i> Cost & Savings Analysis
-            </a>
-          </li>
-        </ul>
-      </div>
-    </li>
-    @endcan
+        @role('Super Admin|Administrator')
+            <div class="admin-client-section-title">Admin</div>
+            <details class="admin-client-group" {{ $accessControlOpen ? 'open' : '' }}>
+                <summary class="admin-client-link {{ $accessControlOpen ? 'is-active' : '' }}">
+                    <span class="admin-client-summary-left">
+                        <i class="mdi mdi-shield-account"></i>
+                        <span>Access Control</span>
+                    </span>
+                    <span class="admin-client-arrow">▾</span>
+                </summary>
+                <div class="admin-client-submenu">
+                    <a class="admin-client-sublink {{ request()->routeIs('admin.users.*') ? 'is-active' : '' }}" href="{{ route('admin.users.index') }}"><span class="admin-client-sublabel">User Management</span></a>
+                    <a class="admin-client-sublink {{ request()->routeIs('admin.roles.*') ? 'is-active' : '' }}" href="{{ route('admin.roles.index') }}"><span class="admin-client-sublabel">Role Management</span></a>
+                    <a class="admin-client-sublink {{ request()->routeIs('admin.permissions.*') ? 'is-active' : '' }}" href="{{ route('admin.permissions.index') }}"><span class="admin-client-sublabel">Permission Management</span></a>
+                </div>
+            </details>
 
-    {{-- Admin Section --}}
-    @role('Super Admin|Administrator')
-    <li class="nav-item nav-category">
-      <span class="nav-link">Admin</span>
-    </li>
+            <details class="admin-client-group" {{ $cpiOpen ? 'open' : '' }}>
+                <summary class="admin-client-link {{ $cpiOpen ? 'is-active' : '' }}">
+                    <span class="admin-client-summary-left">
+                        <i class="mdi mdi-calculator"></i>
+                        <span>CPI Pricing System</span>
+                    </span>
+                    <span class="admin-client-arrow">▾</span>
+                </summary>
+                <div class="admin-client-submenu">
+                    <a class="admin-client-sublink {{ request()->routeIs('admin.pricing-packages.*') ? 'is-active' : '' }}" href="{{ route('admin.pricing-packages.index') }}"><span class="admin-client-sublabel">Pricing Packages</span></a>
+                    <a class="admin-client-sublink {{ request()->routeIs('admin.property-types.*') ? 'is-active' : '' }}" href="{{ route('admin.property-types.index') }}"><span class="admin-client-sublabel">Property Types</span></a>
+                    <a class="admin-client-sublink {{ request()->routeIs('admin.cpi-bands.*') ? 'is-active' : '' }}" href="{{ route('admin.cpi-bands.index') }}"><span class="admin-client-sublabel">CPI Band Ranges</span></a>
+                    <a class="admin-client-sublink {{ request()->routeIs('admin.cpi-multipliers.*') ? 'is-active' : '' }}" href="{{ route('admin.cpi-multipliers.index') }}"><span class="admin-client-sublabel">CPI Multipliers</span></a>
+                    <a class="admin-client-sublink {{ request()->routeIs('admin.cpi-domains.*') ? 'is-active' : '' }}" href="{{ route('admin.cpi-domains.index') }}"><span class="admin-client-sublabel">CPI Domains</span></a>
+                    <a class="admin-client-sublink {{ request()->routeIs('admin.supply-materials.*') ? 'is-active' : '' }}" href="{{ route('admin.supply-materials.index') }}"><span class="admin-client-sublabel">Supply Materials</span></a>
+                    <a class="admin-client-sublink {{ request()->routeIs('admin.age-brackets.*') ? 'is-active' : '' }}" href="{{ route('admin.age-brackets.index') }}"><span class="admin-client-sublabel">Age Brackets</span></a>
+                    <a class="admin-client-sublink {{ request()->routeIs('admin.containment-categories.*') ? 'is-active' : '' }}" href="{{ route('admin.containment-categories.index') }}"><span class="admin-client-sublabel">Containment Categories</span></a>
+                    <a class="admin-client-sublink {{ request()->routeIs('admin.crawl-access.*') ? 'is-active' : '' }}" href="{{ route('admin.crawl-access.index') }}"><span class="admin-client-sublabel">Crawl Space Access</span></a>
+                    <a class="admin-client-sublink {{ request()->routeIs('admin.roof-access.*') ? 'is-active' : '' }}" href="{{ route('admin.roof-access.index') }}"><span class="admin-client-sublabel">Roof Access</span></a>
+                    <a class="admin-client-sublink {{ request()->routeIs('admin.equipment-requirements.*') ? 'is-active' : '' }}" href="{{ route('admin.equipment-requirements.index') }}"><span class="admin-client-sublabel">Equipment Requirements</span></a>
+                    <a class="admin-client-sublink {{ request()->routeIs('admin.complexity-categories.*') ? 'is-active' : '' }}" href="{{ route('admin.complexity-categories.index') }}"><span class="admin-client-sublabel">Complexity Categories</span></a>
+                    <a class="admin-client-sublink {{ request()->routeIs('admin.residential-tiers.*') ? 'is-active' : '' }}" href="{{ route('admin.residential-tiers.index') }}"><span class="admin-client-sublabel">Residential Size Tiers</span></a>
+                    <a class="admin-client-sublink {{ request()->routeIs('admin.commercial-settings.*') ? 'is-active' : '' }}" href="{{ route('admin.commercial-settings.index') }}"><span class="admin-client-sublabel">Commercial Size Settings</span></a>
+                    <a class="admin-client-sublink {{ request()->routeIs('admin.mixed-use-settings.*') ? 'is-active' : '' }}" href="{{ route('admin.mixed-use-settings.index') }}"><span class="admin-client-sublabel">Mixed-Use Settings</span></a>
+                    <a class="admin-client-sublink {{ request()->routeIs('admin.pricing-config.*') ? 'is-active' : '' }}" href="{{ route('admin.pricing-config.index') }}"><span class="admin-client-sublabel">System Configuration</span></a>
+                    <a class="admin-client-sublink {{ request()->routeIs('admin.settings.bdc*') ? 'is-active' : '' }}" href="{{ route('admin.settings.bdc') }}"><span class="admin-client-sublabel">BDC Calibration Engine</span></a>
+                    <a class="admin-client-sublink {{ request()->routeIs('admin.reactive-costs.*') ? 'is-active' : '' }}" href="{{ route('admin.reactive-costs.index') }}"><span class="admin-client-sublabel">Reactive Cost Assumptions</span></a>
+                    <a class="admin-client-sublink {{ request()->routeIs('admin.stewardship-loss.*') ? 'is-active' : '' }}" href="{{ route('admin.stewardship-loss.index') }}"><span class="admin-client-sublabel">Stewardship Loss Reduction</span></a>
+                </div>
+            </details>
 
-    {{-- Access Control Submenu --}}
-    <li class="nav-item menu-items {{ request()->routeIs('admin.users.*') || request()->routeIs('admin.roles.*') || request()->routeIs('admin.permissions.*') ? 'active' : '' }}">
-      <a class="nav-link" data-bs-toggle="collapse" href="#access-control" aria-expanded="{{ request()->routeIs('admin.users.*') || request()->routeIs('admin.roles.*') || request()->routeIs('admin.permissions.*') ? 'true' : 'false' }}" aria-controls="access-control">
-        <span class="menu-icon">
-          <i class="mdi mdi-shield-account"></i>
-        </span>
-        <span class="menu-title">Access Control</span>
-        <i class="menu-arrow"></i>
-      </a>
-      <div class="collapse {{ request()->routeIs('admin.users.*') || request()->routeIs('admin.roles.*') || request()->routeIs('admin.permissions.*') ? 'show' : '' }}" id="access-control">
-        <ul class="nav flex-column sub-menu">
-          <li class="nav-item">
-            <a class="nav-link {{ request()->routeIs('admin.users.*') ? 'active' : '' }}" href="{{ route('admin.users.index') }}">
-              <i class="mdi mdi-account-multiple"></i> User Management
+            <a class="admin-client-link {{ request()->routeIs('admin.reports.*') ? 'is-active' : '' }}" href="{{ route('admin.reports.index') }}">
+                <i class="mdi mdi-chart-bar"></i>
+                <span>Reports</span>
             </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {{ request()->routeIs('admin.roles.*') ? 'active' : '' }}" href="{{ route('admin.roles.index') }}">
-              <i class="mdi mdi-account-key"></i> Role Management
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {{ request()->routeIs('admin.permissions.*') ? 'active' : '' }}" href="{{ route('admin.permissions.index') }}">
-              <i class="mdi mdi-lock"></i> Permission Management
-            </a>
-          </li>
-        </ul>
-      </div>
-    </li>
-
-    {{-- Client & Subscription Management --}}
-
-    {{-- CPI Pricing System Management --}}
-    <li class="nav-item menu-items {{ 
-        request()->routeIs('admin.pricing-packages.*') || 
-        request()->routeIs('admin.property-types.*') ||
-        request()->routeIs('admin.cpi-bands.*') ||
-        request()->routeIs('admin.cpi-multipliers.*') ||
-        request()->routeIs('admin.cpi-domains.*') ||
-        request()->routeIs('admin.supply-materials.*') ||
-        request()->routeIs('admin.age-brackets.*') ||
-        request()->routeIs('admin.containment-categories.*') ||
-        request()->routeIs('admin.crawl-access.*') ||
-        request()->routeIs('admin.roof-access.*') ||
-        request()->routeIs('admin.equipment-requirements.*') ||
-        request()->routeIs('admin.complexity-categories.*') ||
-        request()->routeIs('admin.residential-tiers.*') ||
-        request()->routeIs('admin.commercial-settings.*') ||
-        request()->routeIs('admin.mixed-use-settings.*') ||
-        request()->routeIs('admin.pricing-config.*')
-        ? 'active' : '' }}">
-      <a class="nav-link" data-bs-toggle="collapse" href="#cpi-pricing-system" aria-expanded="{{ 
-        request()->routeIs('admin.pricing-packages.*') || 
-        request()->routeIs('admin.property-types.*') ||
-        request()->routeIs('admin.cpi-bands.*') ||
-        request()->routeIs('admin.cpi-multipliers.*') ||
-        request()->routeIs('admin.cpi-domains.*') ||
-        request()->routeIs('admin.supply-materials.*') ||
-        request()->routeIs('admin.age-brackets.*') ||
-        request()->routeIs('admin.containment-categories.*') ||
-        request()->routeIs('admin.crawl-access.*') ||
-        request()->routeIs('admin.roof-access.*') ||
-        request()->routeIs('admin.equipment-requirements.*') ||
-        request()->routeIs('admin.complexity-categories.*') ||
-        request()->routeIs('admin.residential-tiers.*') ||
-        request()->routeIs('admin.commercial-settings.*') ||
-        request()->routeIs('admin.mixed-use-settings.*') ||
-        request()->routeIs('admin.pricing-config.*')
-        ? 'true' : 'false' }}" aria-controls="cpi-pricing-system">
-        <span class="menu-icon">
-          <i class="mdi mdi-calculator"></i>
-        </span>
-        <span class="menu-title">CPI Pricing System</span>
-        <i class="menu-arrow"></i>
-      </a>
-      <div class="collapse {{ 
-        request()->routeIs('admin.pricing-packages.*') || 
-        request()->routeIs('admin.property-types.*') ||
-        request()->routeIs('admin.cpi-bands.*') ||
-        request()->routeIs('admin.cpi-multipliers.*') ||
-        request()->routeIs('admin.cpi-domains.*') ||
-        request()->routeIs('admin.supply-materials.*') ||
-        request()->routeIs('admin.age-brackets.*') ||
-        request()->routeIs('admin.containment-categories.*') ||
-        request()->routeIs('admin.crawl-access.*') ||
-        request()->routeIs('admin.roof-access.*') ||
-        request()->routeIs('admin.equipment-requirements.*') ||
-        request()->routeIs('admin.complexity-categories.*') ||
-        request()->routeIs('admin.residential-tiers.*') ||
-        request()->routeIs('admin.commercial-settings.*') ||
-        request()->routeIs('admin.mixed-use-settings.*') ||
-        request()->routeIs('admin.pricing-config.*')
-        ? 'show' : '' }}" id="cpi-pricing-system">
-        <ul class="nav flex-column sub-menu">
-          {{-- Package & Property Settings --}}
-          <li class="nav-item">
-            <a class="nav-link {{ request()->routeIs('admin.pricing-packages.*') ? 'active' : '' }}" href="{{ route('admin.pricing-packages.index') }}">
-              <i class="mdi mdi-package-variant-closed"></i> Pricing Packages
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {{ request()->routeIs('admin.property-types.*') ? 'active' : '' }}" href="{{ route('admin.property-types.index') }}">
-              <i class="mdi mdi-home-variant"></i> Property Types
-            </a>
-          </li>
-          
-          {{-- CPI Band Settings --}}
-          <li class="nav-item">
-            <a class="nav-link {{ request()->routeIs('admin.cpi-bands.*') ? 'active' : '' }}" href="{{ route('admin.cpi-bands.index') }}">
-              <i class="mdi mdi-chart-box"></i> CPI Band Ranges
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {{ request()->routeIs('admin.cpi-multipliers.*') ? 'active' : '' }}" href="{{ route('admin.cpi-multipliers.index') }}">
-              <i class="mdi mdi-percent"></i> CPI Multipliers
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {{ request()->routeIs('admin.cpi-domains.*') ? 'active' : '' }}" href="{{ route('admin.cpi-domains.index') }}">
-              <i class="mdi mdi-view-module"></i> CPI Domains
-            </a>
-          </li>
-          
-          {{-- Lookup Tables --}}
-          <li class="nav-item">
-            <a class="nav-link {{ request()->routeIs('admin.supply-materials.*') ? 'active' : '' }}" href="{{ route('admin.supply-materials.index') }}">
-              <i class="mdi mdi-pipe"></i> Supply Materials
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {{ request()->routeIs('admin.age-brackets.*') ? 'active' : '' }}" href="{{ route('admin.age-brackets.index') }}">
-              <i class="mdi mdi-calendar-range"></i> Age Brackets
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {{ request()->routeIs('admin.containment-categories.*') ? 'active' : '' }}" href="{{ route('admin.containment-categories.index') }}">
-              <i class="mdi mdi-checkbox-marked-circle"></i> Containment Categories
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {{ request()->routeIs('admin.crawl-access.*') ? 'active' : '' }}" href="{{ route('admin.crawl-access.index') }}">
-              <i class="mdi mdi-arrow-down-bold"></i> Crawl Space Access
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {{ request()->routeIs('admin.roof-access.*') ? 'active' : '' }}" href="{{ route('admin.roof-access.index') }}">
-              <i class="mdi mdi-arrow-up-bold"></i> Roof Access
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {{ request()->routeIs('admin.equipment-requirements.*') ? 'active' : '' }}" href="{{ route('admin.equipment-requirements.index') }}">
-              <i class="mdi mdi-toolbox"></i> Equipment Requirements
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {{ request()->routeIs('admin.complexity-categories.*') ? 'active' : '' }}" href="{{ route('admin.complexity-categories.index') }}">
-              <i class="mdi mdi-puzzle"></i> Complexity Categories
-            </a>
-          </li>
-          
-          {{-- Size Settings --}}
-          <li class="nav-item">
-            <a class="nav-link {{ request()->routeIs('admin.residential-tiers.*') ? 'active' : '' }}" href="{{ route('admin.residential-tiers.index') }}">
-              <i class="mdi mdi-home-group"></i> Residential Size Tiers
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {{ request()->routeIs('admin.commercial-settings.*') ? 'active' : '' }}" href="{{ route('admin.commercial-settings.index') }}">
-              <i class="mdi mdi-office-building"></i> Commercial Size Settings
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {{ request()->routeIs('admin.mixed-use-settings.*') ? 'active' : '' }}" href="{{ route('admin.mixed-use-settings.index') }}">
-              <i class="mdi mdi-home-city"></i> Mixed-Use Settings
-            </a>
-          </li>
-          
-          {{-- System Configuration --}}
-          <li class="nav-item">
-            <a class="nav-link {{ request()->routeIs('admin.pricing-config.*') ? 'active' : '' }}" href="{{ route('admin.pricing-config.index') }}">
-              <i class="mdi mdi-cog"></i> System Configuration
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {{ request()->routeIs('admin.settings.bdc*') ? 'active' : '' }}" href="{{ route('admin.settings.bdc') }}">
-              <i class="mdi mdi-calculator"></i> BDC Calibration Engine
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {{ request()->routeIs('admin.reactive-costs.*') ? 'active' : '' }}" href="{{ route('admin.reactive-costs.index') }}">
-              <i class="mdi mdi-currency-usd"></i> Reactive Cost Assumptions
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link {{ request()->routeIs('admin.stewardship-loss.*') ? 'active' : '' }}" href="{{ route('admin.stewardship-loss.index') }}">
-              <i class="mdi mdi-shield-check"></i> Stewardship Loss Reduction
-            </a>
-          </li>
-        </ul>
-      </div>
-    </li>
-
-    <li class="nav-item menu-items {{ request()->routeIs('admin.reports.*') ? 'active' : '' }}">
-      <a class="nav-link" href="{{ route('admin.reports.index') }}">
-        <span class="menu-icon">
-          <i class="mdi mdi-chart-bar"></i>
-        </span>
-        <span class="menu-title">Reports</span>
-      </a>
-    </li>
-    @endrole
-
-  </ul>
+        @endrole
+    </div>
 </nav>
 
 <style>
-/* CRITICAL: Sidebar with blue background - Maximum specificity */
-body .sidebar,
-body.light-theme .sidebar,
-.sidebar.sidebar-offcanvas,
-body .sidebar.sidebar-offcanvas,
-body.light-theme .sidebar.sidebar-offcanvas,
-html body .sidebar,
-html body.light-theme .sidebar {
-    background: linear-gradient(180deg, #5b67ca 0%, #4854b8 100%) !important;
-    background-image: linear-gradient(180deg, #5b67ca 0%, #4854b8 100%) !important;
-    background-color: #5b67ca !important;
-    box-shadow: 0 0 20px rgba(0, 0, 0, 0.3) !important;
+.admin-client-sidebar,
+body .admin-client-sidebar,
+body.light-theme .admin-client-sidebar {
+    background: linear-gradient(180deg, #1f2f98 0%, #1a2a86 55%, #183075 100%) !important;
     border: none !important;
+    box-shadow: none !important;
 }
 
-/* Update brand wrapper to match - Maximum specificity */
-body .sidebar .sidebar-brand-wrapper,
-body.light-theme .sidebar .sidebar-brand-wrapper,
-html body .sidebar .sidebar-brand-wrapper,
-.sidebar.sidebar-offcanvas .sidebar-brand-wrapper {
-    background: rgba(255, 255, 255, 0.1) !important;
-    background-image: none !important;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2) !important;
+.admin-client-sidebar,
+.admin-client-sidebar *,
+.admin-client-sidebar *::before,
+.admin-client-sidebar *::after {
+    border: none !important;
+    box-shadow: none !important;
 }
 
-/* Change brand text colors for visibility on blue */
-.sidebar .sidebar-brand-wrapper .sidebar-brand span,
-body .sidebar .sidebar-brand-wrapper .sidebar-brand span {
+.admin-client-sidebar .admin-client-sidebar-inner {
+    padding: 0.7rem 0.85rem 1rem;
+}
+
+.admin-client-sidebar .admin-client-brand {
+    padding: 0.35rem 0.55rem 0.95rem;
+}
+
+.admin-client-sidebar .admin-client-brand a {
     color: #ffffff !important;
+    text-decoration: underline;
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    line-height: 1;
 }
 
-.sidebar .sidebar-brand-wrapper .brand-logo-mini span,
-body .sidebar .sidebar-brand-wrapper .brand-logo-mini span {
-    color: #FFB800 !important;
+.admin-client-sidebar .admin-client-user {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 0.4rem 0.5rem 0.9rem;
 }
 
-/* Update navigation text colors - Maximum specificity */
-.sidebar .nav .nav-item .nav-link,
-body .sidebar .nav .nav-item .nav-link,
-body.light-theme .sidebar .nav .nav-item .nav-link {
-    color: rgba(255, 255, 255, 0.9) !important;
+.admin-client-sidebar .admin-client-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 999px;
+    object-fit: cover;
 }
 
-.sidebar .nav .nav-item .nav-link .menu-icon,
-body .sidebar .nav .nav-item .nav-link .menu-icon,
-body.light-theme .sidebar .nav .nav-item .nav-link .menu-icon {
-    color: rgba(255, 255, 255, 0.7) !important;
+.admin-client-sidebar .admin-client-name {
+    color: #ffffff;
+    font-size: 1.02rem;
+    font-weight: 600;
+    line-height: 1.1;
 }
 
-.sidebar .nav .nav-item .nav-link .menu-title,
-body .sidebar .nav .nav-item .nav-link .menu-title,
-body.light-theme .sidebar .nav .nav-item .nav-link .menu-title {
-    color: rgba(255, 255, 255, 0.9) !important;
+.admin-client-sidebar .admin-client-role {
+    color: #ffffff;
+    font-size: 0.95rem;
+    opacity: 1;
 }
 
-/* Active menu item - Maximum specificity */
-.sidebar .nav .nav-item.active > .nav-link,
-body .sidebar .nav .nav-item.active > .nav-link,
-body.light-theme .sidebar .nav .nav-item.active > .nav-link {
-    background: rgba(0, 0, 0, 0.2) !important;
+.admin-client-sidebar .admin-client-section-title {
+    color: #ffffff;
+    text-transform: uppercase;
+    letter-spacing: 1.6px;
+    font-size: 0.77rem;
+    font-weight: 700;
+    padding: 0.85rem 0.55rem 0.45rem;
+}
+
+.admin-client-sidebar .admin-client-link {
     color: #ffffff !important;
+    text-decoration: none !important;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.65rem;
+    padding: 0.72rem 0.6rem;
+    border-radius: 0.6rem;
+    background: transparent !important;
 }
 
-.sidebar .nav .nav-item.active > .nav-link .menu-icon,
-body .sidebar .nav .nav-item.active > .nav-link .menu-icon {
+.admin-client-sidebar .admin-client-link i {
     color: #ffffff !important;
+    font-size: 1rem;
+    width: 20px;
+    text-align: center;
 }
 
-.sidebar .nav .nav-item.active > .nav-link .menu-title,
-body .sidebar .nav .nav-item.active > .nav-link .menu-title {
+.admin-client-sidebar .admin-client-link span,
+.admin-client-sidebar .admin-client-sublink,
+.admin-client-sidebar .admin-client-sublink:visited,
+.admin-client-sidebar .admin-client-sublink:focus,
+.admin-client-sidebar .admin-client-sublink:hover {
     color: #ffffff !important;
+    text-decoration: none !important;
 }
 
-/* Hover effect - Maximum specificity */
-.sidebar .nav .nav-item .nav-link:hover,
-body .sidebar .nav .nav-item .nav-link:hover,
-body.light-theme .sidebar .nav .nav-item .nav-link:hover {
-    background: rgba(255, 255, 255, 0.15) !important;
-    color: #ffffff !important;
+.admin-client-sidebar .admin-client-summary-left {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
 }
 
-.sidebar .nav .nav-item .nav-link:hover .menu-icon,
-.sidebar .nav .nav-item .nav-link:hover .menu-title,
-body .sidebar .nav .nav-item .nav-link:hover .menu-icon,
-body .sidebar .nav .nav-item .nav-link:hover .menu-title {
-    color: #ffffff !important;
+.admin-client-sidebar .admin-client-group {
+    margin: 0;
 }
 
-/* Submenu hover */
-.sidebar .nav .nav-item .sub-menu .nav-item .nav-link:hover {
-    background: rgba(255, 255, 255, 0.15) !important;
-    color: #ffffff !important;
+.admin-client-sidebar .admin-client-group summary {
+    list-style: none;
+    cursor: pointer;
 }
 
-/* Submenu active */
-.sidebar .nav .nav-item .sub-menu .nav-item .nav-link.active {
-    background: rgba(0, 0, 0, 0.2) !important;
-    color: #ffffff !important;
+.admin-client-sidebar .admin-client-group summary::-webkit-details-marker {
+    display: none;
 }
 
-/* Category headers */
-.sidebar .nav .nav-category,
-body .sidebar .nav .nav-category,
-body.light-theme .sidebar .nav .nav-category {
-    color: rgba(255, 255, 255, 0.6) !important;
+.admin-client-sidebar .admin-client-arrow {
+    color: #ffffff;
+    transition: transform 0.15s ease;
+    font-size: 0.9rem;
+    line-height: 1;
 }
 
-/* Profile section */
-.sidebar .nav .nav-item.profile {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+.admin-client-sidebar details[open] .admin-client-arrow {
+    transform: rotate(180deg);
 }
 
-.sidebar .nav .nav-item.profile .profile-name h5 {
-    color: #ffffff !important;
+.admin-client-sidebar .admin-client-submenu {
+    padding: 0.18rem 0 0.52rem 0;
 }
 
-.sidebar .nav .nav-item.profile .profile-name span {
-    color: rgba(255, 255, 255, 0.7) !important;
+.admin-client-sidebar .admin-client-sublink {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-left: 2rem;
+    padding: 0.44rem 0.55rem;
+    border-radius: 0.5rem;
+    background: transparent !important;
 }
 
-/* Badges */
-.sidebar .badge {
-    background-color: #ffffff !important;
-    color: #5b67ca !important;
-    font-weight: 600 !important;
+.admin-client-sidebar .admin-client-sublabel {
+    display: inline-block;
+    line-height: 1.2;
 }
 
-.sidebar .badge-warning {
-    background-color: #ffffff !important;
-    color: #5b67ca !important;
-    font-weight: 600 !important;
+.admin-client-sidebar .admin-client-badge {
+    min-width: 20px;
+    height: 20px;
+    padding: 0 0.45rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: auto;
+    line-height: 20px;
+    flex-shrink: 0;
+    border-radius: 999px;
+    background: #ffffff !important;
+    color: #1f2f98 !important;
+    font-size: 0.74rem;
+    font-weight: 700;
 }
 
-.sidebar .badge-success {
-    background-color: #ffffff !important;
-    color: #5b67ca !important;
-    font-weight: 600 !important;
+.admin-client-sidebar .is-active {
+    background: rgba(255, 255, 255, 0.12) !important;
 }
 
-.sidebar .badge-danger {
-    background-color: #ffffff !important;
-    color: #5b67ca !important;
-    font-weight: 600 !important;
-}
-
-.sidebar .badge-info {
-    background-color: #ffffff !important;
-    color: #5b67ca !important;
-    font-weight: 600 !important;
-}
-
-.sidebar .badge-primary {
-    background-color: #ffffff !important;
-    color: #5b67ca !important;
-    font-weight: 600 !important;
+.admin-client-sidebar .admin-client-link:hover,
+.admin-client-sidebar .admin-client-link:focus,
+.admin-client-sidebar .admin-client-sublink:hover,
+.admin-client-sidebar .admin-client-sublink:focus {
+    background: transparent !important;
 }
 </style>

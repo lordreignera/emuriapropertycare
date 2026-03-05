@@ -247,6 +247,8 @@ class DashboardController extends Controller
         if ($user->hasRole('Client')) {
             // Get user's property IDs first
             $propertyIds = Property::where('user_id', $user->id)->pluck('id');
+
+            $this->syncClientInspectionInvoices((int) $user->id, $propertyIds->all());
             
             // Count properties
             $propertiesCount = $propertyIds->count();
@@ -256,17 +258,20 @@ class DashboardController extends Controller
                 ->where('status', 'active')
                 ->count();
             
-            // Count inspections via projects
+            // Count inspections as unique completed properties (latest completed report per property)
             $projectIds = Project::whereIn('property_id', $propertyIds)->pluck('id');
-            $inspectionsCount = Inspection::whereIn('project_id', $projectIds)->count();
+            $inspectionsCount = Inspection::whereIn('property_id', $propertyIds)
+                ->where('status', 'completed')
+                ->distinct('property_id')
+                ->count('property_id');
             
-            // Count invoices
-            $invoicesCount = Invoice::where('user_id', $user->id)->count();
-            
-            // Get unpaid invoices
+            // Count unpaid invoices for KPI
             $unpaidInvoices = Invoice::where('user_id', $user->id)
-                ->where('status', 'pending')
+                ->pending()
                 ->count();
+
+            // Keep total invoices for optional secondary display
+            $invoicesCount = Invoice::where('user_id', $user->id)->count();
                 
             // Get pending inspections
             $pendingInspections = Inspection::whereIn('project_id', $projectIds)
@@ -285,7 +290,14 @@ class DashboardController extends Controller
                 ->get();
 
             // Completed inspections with pricing breakdown visible to client
+            $latestCompletedInspectionIds = Inspection::whereIn('property_id', $propertyIds)
+                ->where('status', 'completed')
+                ->selectRaw('MAX(id) as id')
+                ->groupBy('property_id')
+                ->pluck('id');
+
             $completedInspections = Inspection::with(['property', 'project'])
+                ->whereIn('id', $latestCompletedInspectionIds)
                 ->whereIn('property_id', $propertyIds)
                 ->where('status', 'completed')
                 ->orderByDesc('completed_date')
@@ -322,5 +334,79 @@ class DashboardController extends Controller
             'subscription',
             'recentActivities'
         ));
+    }
+
+    protected function syncClientInspectionInvoices(int $userId, array $propertyIds): void
+    {
+        if (empty($propertyIds)) {
+            return;
+        }
+
+        $inspections = Inspection::with(['project', 'property'])
+            ->whereIn('property_id', $propertyIds)
+            ->where('status', 'completed')
+            ->whereNotNull('project_id')
+            ->orderByDesc('completed_date')
+            ->orderByDesc('id')
+            ->get();
+
+        foreach ($inspections as $inspection) {
+            $projectId = (int) ($inspection->project_id ?? 0);
+            if ($projectId <= 0) {
+                continue;
+            }
+
+            $existingInvoice = Invoice::where('user_id', $userId)
+                ->where('project_id', $projectId)
+                ->where('type', 'project')
+                ->first();
+
+            if ($existingInvoice) {
+                continue;
+            }
+
+            $monthlyAmount = (float) max(
+                (float) ($inspection->scientific_final_monthly ?? 0),
+                (float) ($inspection->arp_equivalent_final ?? 0),
+                (float) ($inspection->base_package_price_snapshot ?? 0),
+                (float) ($inspection->trc_monthly ?? 0)
+            );
+
+            if ($monthlyAmount <= 0) {
+                continue;
+            }
+
+            $invoiceNumber = 'INV-' . now()->format('Ymd') . '-' . $inspection->id;
+            $counter = 1;
+            while (Invoice::where('invoice_number', $invoiceNumber)->exists()) {
+                $invoiceNumber = 'INV-' . now()->format('Ymd') . '-' . $inspection->id . '-' . $counter;
+                $counter++;
+            }
+
+            Invoice::create([
+                'invoice_number' => $invoiceNumber,
+                'project_id' => $projectId,
+                'user_id' => $userId,
+                'type' => 'project',
+                'subtotal' => $monthlyAmount,
+                'tax' => 0,
+                'total' => $monthlyAmount,
+                'paid_amount' => 0,
+                'balance' => $monthlyAmount,
+                'status' => 'sent',
+                'issue_date' => now()->toDateString(),
+                'due_date' => now()->addDays(14)->toDateString(),
+                'line_items' => [
+                    [
+                        'description' => 'Inspection Service - ' . ($inspection->property?->property_name ?? 'Property'),
+                        'inspection_id' => $inspection->id,
+                        'quantity' => 1,
+                        'unit_price' => $monthlyAmount,
+                        'total' => $monthlyAmount,
+                    ],
+                ],
+                'notes' => 'Auto-generated from completed inspection #' . $inspection->id,
+            ]);
+        }
     }
 }

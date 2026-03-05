@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Client;
 use App\Http\Controllers\Controller;
 use App\Models\Property;
 use App\Models\Inspection;
+use App\Models\Invoice;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -22,7 +23,14 @@ class InspectionController extends Controller
     {
         $propertyIds = Property::where('user_id', Auth::id())->pluck('id');
 
+        $latestCompletedInspectionIds = Inspection::whereIn('property_id', $propertyIds)
+            ->where('status', 'completed')
+            ->selectRaw('MAX(id) as id')
+            ->groupBy('property_id')
+            ->pluck('id');
+
         $inspections = Inspection::with(['property', 'project'])
+            ->whereIn('id', $latestCompletedInspectionIds)
             ->whereIn('property_id', $propertyIds)
             ->where('status', 'completed')
             ->orderByDesc('completed_date')
@@ -246,10 +254,23 @@ class InspectionController extends Controller
                 throw new \Exception('Payment not completed successfully.');
             }
 
+            $project = \App\Models\Project::firstOrCreate(
+                ['property_id' => $property->id],
+                [
+                    'title' => 'Property Inspection - ' . $property->property_name,
+                    'description' => 'Client scheduled inspection for ' . $property->property_name,
+                    'status' => 'pending',
+                    'user_id' => $property->user_id,
+                    'managed_by' => $property->project_manager_id,
+                    'created_by' => Auth::id(),
+                    'project_number' => 'PRJ-' . strtoupper(\Illuminate\Support\Str::random(8)),
+                ]
+            );
+
             // Create inspection record with paid status
             $inspection = Inspection::create([
                 'property_id' => $property->id,
-                'project_id' => null, // Will be set when project is created later
+                'project_id' => $project->id,
                 'scheduled_date' => $validated['preferred_date'] . ' ' . ($validated['preferred_time'] ?? '09:00'),
                 'status' => 'scheduled',
                 'summary' => $validated['special_notes'] ?? null,
@@ -257,6 +278,8 @@ class InspectionController extends Controller
                 'inspection_fee_status' => 'paid',
                 'inspection_fee_paid_at' => now(),
             ]);
+
+            $this->ensureInspectionFeeInvoice($inspection->fresh(['property', 'project']));
 
             // Update property status to awaiting_inspection
             $property->update(['status' => 'awaiting_inspection']);
@@ -308,6 +331,8 @@ class InspectionController extends Controller
             'status' => 'awaiting_inspection',
         ]);
 
+        $this->ensureInspectionFeeInvoice($inspection->fresh(['property', 'project']));
+
         return redirect()->route('client.properties.index')
             ->with('success', 'Inspection scheduled successfully! Your inspection fee of $' . number_format(self::INSPECTION_FEE_DOLLARS, 2) . ' has been processed. An inspector will be assigned to your property shortly.');
     }
@@ -329,5 +354,87 @@ class InspectionController extends Controller
 
         return redirect()->route('client.properties.index')
             ->with('info', 'Inspection scheduling was cancelled. You can try again anytime.');
+    }
+
+    protected function ensureInspectionFeeInvoice(Inspection $inspection): void
+    {
+        if (!$inspection->property || !$inspection->property->user_id) {
+            return;
+        }
+
+        if (!$inspection->project_id) {
+            $project = \App\Models\Project::firstOrCreate(
+                ['property_id' => $inspection->property_id],
+                [
+                    'title' => 'Property Inspection - ' . ($inspection->property->property_name ?? 'Property'),
+                    'description' => 'Client scheduled inspection for ' . ($inspection->property->property_name ?? 'Property'),
+                    'status' => 'pending',
+                    'user_id' => $inspection->property->user_id,
+                    'managed_by' => $inspection->property->project_manager_id,
+                    'created_by' => Auth::id(),
+                    'project_number' => 'PRJ-' . strtoupper(\Illuminate\Support\Str::random(8)),
+                ]
+            );
+
+            $inspection->project_id = $project->id;
+            $inspection->save();
+            $inspection->refresh();
+        }
+
+        $amount = (float) ($inspection->inspection_fee_amount ?? 0);
+        if ($amount <= 0) {
+            return;
+        }
+
+        $userId = (int) $inspection->property->user_id;
+        $projectId = (int) $inspection->project_id;
+
+        $existingInvoice = Invoice::where('user_id', $userId)
+            ->where('project_id', $projectId)
+            ->where('type', 'additional')
+            ->get()
+            ->first(function (Invoice $invoice) use ($inspection) {
+                return (int) data_get($invoice->line_items, '0.inspection_id') === (int) $inspection->id;
+            });
+
+        if ($existingInvoice) {
+            return;
+        }
+
+        $invoiceNumber = 'INV-INSP-' . now()->format('Ymd') . '-' . $inspection->id;
+        $counter = 1;
+        while (Invoice::where('invoice_number', $invoiceNumber)->exists()) {
+            $invoiceNumber = 'INV-INSP-' . now()->format('Ymd') . '-' . $inspection->id . '-' . $counter;
+            $counter++;
+        }
+
+        $isPaid = ($inspection->inspection_fee_status ?? 'pending') === 'paid';
+
+        Invoice::create([
+            'invoice_number' => $invoiceNumber,
+            'project_id' => $projectId,
+            'user_id' => $userId,
+            'type' => 'additional',
+            'subtotal' => $amount,
+            'tax' => 0,
+            'total' => $amount,
+            'paid_amount' => $isPaid ? $amount : 0,
+            'balance' => $isPaid ? 0 : $amount,
+            'status' => $isPaid ? 'paid' : 'sent',
+            'issue_date' => optional($inspection->inspection_fee_paid_at)->toDateString() ?? now()->toDateString(),
+            'due_date' => $isPaid
+                ? (optional($inspection->inspection_fee_paid_at)->toDateString() ?? now()->toDateString())
+                : now()->addDays(14)->toDateString(),
+            'line_items' => [
+                [
+                    'description' => 'Pre-Inspection Fee - ' . ($inspection->property?->property_name ?? 'Property'),
+                    'inspection_id' => $inspection->id,
+                    'quantity' => 1,
+                    'unit_price' => $amount,
+                    'total' => $amount,
+                ],
+            ],
+            'notes' => 'Auto-generated pre-inspection fee invoice for inspection #' . $inspection->id,
+        ]);
     }
 }

@@ -191,7 +191,8 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Replace Blueprint (optional)</label>
-                        <input type="file" name="blueprint_file" class="form-control @error('blueprint_file') is-invalid @enderror" accept="image/*,application/pdf">
+                        <input type="file" name="blueprint_file" class="form-control @error('blueprint_file') is-invalid @enderror" accept="image/jpeg,image/png,image/jpg,application/pdf,.dwg,.dxf">
+                        <small class="form-text text-muted">Supported formats: PDF, JPG/JPEG, PNG, DWG, DXF. For images, use at least 1000px shortest side.</small>
                         @error('blueprint_file')
                         <div class="invalid-feedback">{{ $message }}</div>
                         @enderror

@@ -692,9 +692,9 @@ class InspectionController extends Controller
         $validated = $request->validate([
             // PHAR Inputs
             'property_size_psf' => 'required|numeric|min:0',
+            'bdc_visits_per_year' => 'required|numeric|min:0',
             'estimated_task_hours' => 'required|numeric|min:0',
             'minimum_required_hours' => 'required|numeric|min:0',
-            'labour_hourly_rate' => 'required|numeric|min:0',
 
             // Findings Array
             'findings' => 'nullable|array',
@@ -718,12 +718,15 @@ class InspectionController extends Controller
             'materials.*.property_id' => 'required_with:materials|exists:properties,id',
         ]);
 
+        $loadedHourlyRate = (float) (\App\Models\BDCSetting::getValue('loaded_hourly_rate', 165) ?? 165);
+
         // Update inspection with PHAR input parameters
         $inspection->update([
             'property_size_psf' => $validated['property_size_psf'],
+            'bdc_visits_per_year' => $validated['bdc_visits_per_year'],
             'estimated_task_hours' => $validated['estimated_task_hours'],
             'minimum_required_hours' => $validated['minimum_required_hours'],
-            'labour_hourly_rate' => $validated['labour_hourly_rate'],
+            'labour_hourly_rate' => $loadedHourlyRate,
         ]);
 
         // Delete old findings and materials (replace with new data)
@@ -787,8 +790,72 @@ class InspectionController extends Controller
             'completed_date' => now(),
         ]);
 
+        $this->ensureClientInvoiceFromInspection($inspection->fresh(['property', 'project']));
+
         return redirect()->route('inspections.show', $inspection->id)
             ->with('success', 'PHAR data saved successfully! Final pricing calculated.');
+    }
+
+    protected function ensureClientInvoiceFromInspection(Inspection $inspection): void
+    {
+        if (!$inspection->project_id || !$inspection->property || !$inspection->property->user_id) {
+            return;
+        }
+
+        $userId = (int) $inspection->property->user_id;
+        $projectId = (int) $inspection->project_id;
+
+        $existingInvoice = \App\Models\Invoice::where('user_id', $userId)
+            ->where('project_id', $projectId)
+            ->where('type', 'project')
+            ->first();
+
+        if ($existingInvoice) {
+            return;
+        }
+
+        $monthlyAmount = (float) max(
+            (float) ($inspection->scientific_final_monthly ?? 0),
+            (float) ($inspection->arp_equivalent_final ?? 0),
+            (float) ($inspection->base_package_price_snapshot ?? 0),
+            (float) ($inspection->trc_monthly ?? 0)
+        );
+
+        if ($monthlyAmount <= 0) {
+            return;
+        }
+
+        $invoiceNumber = 'INV-' . now()->format('Ymd') . '-' . $inspection->id;
+        $counter = 1;
+        while (\App\Models\Invoice::where('invoice_number', $invoiceNumber)->exists()) {
+            $invoiceNumber = 'INV-' . now()->format('Ymd') . '-' . $inspection->id . '-' . $counter;
+            $counter++;
+        }
+
+        \App\Models\Invoice::create([
+            'invoice_number' => $invoiceNumber,
+            'project_id' => $projectId,
+            'user_id' => $userId,
+            'type' => 'project',
+            'subtotal' => $monthlyAmount,
+            'tax' => 0,
+            'total' => $monthlyAmount,
+            'paid_amount' => 0,
+            'balance' => $monthlyAmount,
+            'status' => 'sent',
+            'issue_date' => now()->toDateString(),
+            'due_date' => now()->addDays(14)->toDateString(),
+            'line_items' => [
+                [
+                    'description' => 'Inspection Service - ' . ($inspection->property?->property_name ?? 'Property'),
+                    'inspection_id' => $inspection->id,
+                    'quantity' => 1,
+                    'unit_price' => $monthlyAmount,
+                    'total' => $monthlyAmount,
+                ],
+            ],
+            'notes' => 'Auto-generated from completed inspection #' . $inspection->id,
+        ]);
     }
 
 }

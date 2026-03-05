@@ -29,7 +29,15 @@
                                         <small class="text-muted">{{ $inspection->property?->property_code ?? '' }}</small>
                                     </td>
                                     <td>{{ optional($inspection->completed_date)->format('M d, Y') ?? '-' }}</td>
-                                    <td>${{ number_format((float)($inspection->scientific_final_monthly ?? 0), 2) }}</td>
+                                        @php
+                                            $displayMonthly = max(
+                                                (float) ($inspection->scientific_final_monthly ?? 0),
+                                                (float) ($inspection->arp_equivalent_final ?? 0),
+                                                (float) ($inspection->base_package_price_snapshot ?? 0),
+                                                (float) ($inspection->trc_monthly ?? 0)
+                                            );
+                                        @endphp
+                                        <td>${{ number_format($displayMonthly, 2) }}</td>
                                     <td>
                                         @if(($inspection->work_payment_status ?? 'pending') === 'paid')
                                             <span class="badge bg-success">Paid ({{ ucfirst($inspection->work_payment_cadence ?? 'monthly') }})</span>

@@ -22,7 +22,9 @@ class BDCSettingsController extends Controller
      */
     public function index()
     {
-        $settings = BDCSetting::getAllWithDetails();
+        $settings = BDCSetting::getAllWithDetails()->reject(function ($setting) {
+            return in_array($setting->setting_key, ['visits_per_year', 'hours_per_visit'], true);
+        })->values();
         $calculation = $this->bdcCalculator->calculate();
         
         return view('admin.settings.bdc-settings', [
@@ -76,8 +78,6 @@ class BDCSettingsController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'loaded_hourly_rate' => 'required|numeric|min:0',
-            'visits_per_year' => 'required|numeric|min:0',
-            'hours_per_visit' => 'required|numeric|min:0',
             'infrastructure_percentage' => 'required|numeric|min:0|max:1',
             'administration_percentage' => 'required|numeric|min:0|max:1',
         ]);
@@ -90,7 +90,11 @@ class BDCSettingsController extends Controller
         }
 
         try {
-            $calculation = $this->bdcCalculator->calculateWithParams($request->all());
+            $calculation = $this->bdcCalculator->calculateWithParams([
+                'loaded_hourly_rate' => $request->input('loaded_hourly_rate'),
+                'infrastructure_percentage' => $request->input('infrastructure_percentage'),
+                'administration_percentage' => $request->input('administration_percentage'),
+            ]);
             
             return response()->json([
                 'success' => true,
@@ -113,8 +117,6 @@ class BDCSettingsController extends Controller
             // Reset to default values from seeder
             $defaults = [
                 'loaded_hourly_rate' => 165.00,
-                'visits_per_year' => 8.00,
-                'hours_per_visit' => 4.50,
                 'infrastructure_percentage' => 0.30,
                 'administration_percentage' => 0.12,
             ];

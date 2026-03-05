@@ -21,7 +21,7 @@
                     </div>
                     <div class="text-end">
                         <div class="badge bg-light text-dark fs-5 px-3 py-2">
-                            <i class="mdi mdi-file-document me-2"></i>0 Invoices
+                            <i class="mdi mdi-file-document me-2"></i>{{ $invoices->total() ?? 0 }} Invoices
                         </div>
                     </div>
                 </div>
@@ -68,24 +68,53 @@
                             </tr>
                         </thead>
                         <tbody>
-                            <tr>
-                                <td colspan="7" class="text-center py-5">
-                                    <div class="py-5">
-                                        <div class="rounded-circle bg-light d-inline-flex p-5 mb-4">
-                                            <i class="mdi mdi-file-document-outline text-muted" style="font-size: 5rem;"></i>
+                            @forelse($invoices as $invoice)
+                                <tr>
+                                    <td class="fw-semibold">{{ $invoice->invoice_number }}</td>
+                                    <td>
+                                        {{ $invoice->project?->property?->property_name ?? 'N/A' }}
+                                        <div class="small text-muted">{{ $invoice->project?->property?->property_code ?? '' }}</div>
+                                    </td>
+                                    <td>{{ optional($invoice->issue_date)->format('M d, Y') ?? '-' }}</td>
+                                    <td>${{ number_format((float)($invoice->total ?? 0), 2) }}</td>
+                                    <td>
+                                        @if($invoice->status === 'paid')
+                                            <span class="badge bg-success">Sent / Paid</span>
+                                        @else
+                                            <span class="badge bg-warning text-dark">Sent / Not Paid</span>
+                                        @endif
+                                    </td>
+                                    <td>{{ optional($invoice->due_date)->format('M d, Y') ?? '-' }}</td>
+                                    <td class="text-end">
+                                        <a href="{{ route('client.invoices.show', $invoice) }}" class="btn btn-sm btn-outline-primary">
+                                            <i class="mdi mdi-eye me-1"></i>View
+                                        </a>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr>
+                                    <td colspan="7" class="text-center py-5">
+                                        <div class="py-5">
+                                            <div class="rounded-circle bg-light d-inline-flex p-5 mb-4">
+                                                <i class="mdi mdi-file-document-outline text-muted" style="font-size: 5rem;"></i>
+                                            </div>
+                                            <h4 class="fw-semibold mb-2">No Invoices Yet</h4>
+                                            <p class="text-muted mb-3">You don't have any invoices at the moment.</p>
+                                            <div class="alert alert-info border-0 shadow-sm d-inline-block mx-auto">
+                                                <i class="mdi mdi-information me-2"></i>
+                                                Invoices will appear here after you complete property inspections and accept service offers.
+                                            </div>
                                         </div>
-                                        <h4 class="fw-semibold mb-2">No Invoices Yet</h4>
-                                        <p class="text-muted mb-3">You don't have any invoices at the moment.</p>
-                                        <div class="alert alert-info border-0 shadow-sm d-inline-block mx-auto">
-                                            <i class="mdi mdi-information me-2"></i>
-                                            Invoices will appear here after you complete property inspections and accept service offers.
-                                        </div>
-                                    </div>
-                                </td>
-                            </tr>
+                                    </td>
+                                </tr>
+                            @endforelse
                         </tbody>
                     </table>
                 </div>
+
+                @if(method_exists($invoices, 'hasPages') && $invoices->hasPages())
+                    <div class="mt-3">{{ $invoices->links() }}</div>
+                @endif
             </div>
         </div>
     </div>

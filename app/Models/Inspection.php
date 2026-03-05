@@ -31,6 +31,10 @@ class Inspection extends Model
         'work_payment_cadence',
         'work_payment_paid_at',
         'work_stripe_payment_intent_id',
+        'property_size_psf',
+        'estimated_task_hours',
+        'minimum_required_hours',
+        'bdc_visits_per_year',
         // Calculation fields from phar_findings migration
         'bdc_annual',
         'bdc_monthly',
@@ -73,6 +77,10 @@ class Inspection extends Model
         'inspection_fee_paid_at' => 'datetime',
         'work_payment_amount' => 'decimal:2',
         'work_payment_paid_at' => 'datetime',
+        'property_size_psf' => 'decimal:2',
+        'estimated_task_hours' => 'decimal:2',
+        'minimum_required_hours' => 'decimal:2',
+        'bdc_visits_per_year' => 'decimal:2',
     ];
 
     // Relationships
