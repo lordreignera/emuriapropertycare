@@ -33,7 +33,8 @@
             <form action="{{ route('inspections.store') }}" method="POST" enctype="multipart/form-data" id="inspectionSystemsForm">
                 @csrf
                 <input type="hidden" name="property_id" value="{{ $property->id }}">
-                <input type="hidden" name="service_package_id" value="{{ old('service_package_id', $inspection->service_package_id ?? $defaultServicePackage?->id) }}">
+                <input type="hidden" name="service_package_id" value="{{ old('service_package_id', $inspection->service_package_id ?? '') }}">
+                <input type="hidden" name="status" value="in_progress">
 
                 <div class="card mb-4">
                     <div class="card-header" style="background: #5b67ca; color: white;">
@@ -89,7 +90,7 @@
                             <div class="col-md-4">
                                 <div class="form-group">
                                     <label>Phone</label>
-                                    <input type="text" class="form-control" value="{{ $property->user->phone ?? 'N/A' }}" readonly>
+                                    <input type="text" class="form-control" value="{{ $property->owner_phone ?: (($property->user->phone ?? null) ?: ($property->admin_phone ?: 'N/A')) }}" readonly>
                                 </div>
                             </div>
                         </div>
@@ -138,8 +139,13 @@
                         <hr class="my-4">
                         <h6 class="text-primary">Service Package</h6>
                         <div class="alert alert-light border mb-0">
-                            <strong>{{ $defaultServicePackage?->package_name ?? 'No active package found' }}</strong>
-                            <div class="small text-muted mt-1">Auto-selected by system</div>
+                            @if(!empty($inspection?->service_package_name))
+                                <strong>{{ $inspection->service_package_name }}</strong>
+                                <div class="small text-muted mt-1">Already assigned from completed inspection.</div>
+                            @else
+                                <strong>Pending auto-assignment</strong>
+                                <div class="small text-muted mt-1">Service package will be auto-generated after this inspection report is completed.</div>
+                            @endif
                         </div>
                     </div>
                 </div>
@@ -256,11 +262,11 @@
                                 <i class="mdi mdi-arrow-left me-1"></i>Cancel
                             </a>
                             <div>
-                                <button type="submit" name="status" value="in_progress" class="btn btn-warning me-2">
+                                <button type="submit" class="btn btn-warning me-2">
                                     <i class="mdi mdi-content-save me-1"></i>Save as Draft
                                 </button>
-                                <button type="submit" name="status" value="completed" class="btn btn-success">
-                                    <i class="mdi mdi-arrow-right-bold-circle me-1"></i>Next: PHAR Form
+                                <button type="submit" name="next_stage" value="phar" class="btn btn-success">
+                                    <i class="mdi mdi-arrow-right-bold-circle me-1"></i>Save & Next: PHAR Assessment/Pricing
                                 </button>
                             </div>
                         </div>
@@ -276,10 +282,12 @@
         return [
             'id' => $system->id,
             'name' => $system->name,
+            'recommended_actions' => collect($system->recommended_actions ?? [])->values()->all(),
             'subsystems' => $system->subsystems->map(function ($subsystem) {
                 return [
                     'id' => $subsystem->id,
                     'name' => $subsystem->name,
+                    'recommended_actions' => collect($subsystem->recommended_actions ?? [])->values()->all(),
                 ];
             })->values()->all(),
         ];
@@ -326,6 +334,43 @@ function buildSubsystemOptions(systemId, selectedSubsystemId = '') {
     return options;
 }
 
+function getSubsystemConfig(systemId, subsystemId) {
+    const system = getSystemConfig(systemId);
+    if (!system || !Array.isArray(system.subsystems)) {
+        return null;
+    }
+
+    return system.subsystems.find(subsystem => String(subsystem.id) === String(subsystemId)) || null;
+}
+
+function collectRecommendationOptions(systemId, subsystemId = '') {
+    const system = getSystemConfig(systemId);
+    const subsystem = subsystemId ? getSubsystemConfig(systemId, subsystemId) : null;
+    const systemRecommendations = Array.isArray(system?.recommended_actions) ? system.recommended_actions : [];
+    const subsystemRecommendations = Array.isArray(subsystem?.recommended_actions) ? subsystem.recommended_actions : [];
+
+    const unique = new Set();
+    [...subsystemRecommendations, ...systemRecommendations].forEach(item => {
+        const value = String(item || '').trim();
+        if (value) {
+            unique.add(value);
+        }
+    });
+
+    return Array.from(unique);
+}
+
+function normalizeRecommendationItems(value) {
+    if (Array.isArray(value)) {
+        return value.map(item => String(item || '').trim()).filter(item => item.length > 0);
+    }
+
+    return String(value || '')
+        .split(/\r\n|\r|\n|\|/)
+        .map(item => item.trim())
+        .filter(item => item.length > 0);
+}
+
 function addSystemFindingRow(systemId, prefill = {}) {
     const body = document.getElementById(`system-rows-${systemId}`);
     if (!body) {
@@ -341,12 +386,7 @@ function addSystemFindingRow(systemId, prefill = {}) {
         non_urgent: 'low'
     };
     const severity = severityAliasMap[prefill.severity] || prefill.severity || 'low';
-    const recommendationItems = Array.isArray(prefill.recommendations)
-        ? prefill.recommendations
-        : String(prefill.recommendations || '')
-            .split(/\r\n|\r|\n|\|/)
-            .map(item => item.trim())
-            .filter(item => item.length > 0);
+    const recommendationItems = normalizeRecommendationItems(prefill.recommendations);
 
     const row = document.createElement('tr');
     row.innerHTML = `
@@ -370,8 +410,15 @@ function addSystemFindingRow(systemId, prefill = {}) {
         <td><textarea name="system_findings[${currentIndex}][notes]" class="form-control form-control-sm" rows="2" placeholder="Notes">${escapeHtml(prefill.notes || '')}</textarea></td>
         <td>
             <div class="recommendation-builder" data-index="${currentIndex}">
+                <label class="small text-muted mb-1 d-block">Suggested for this system/subsystem</label>
                 <div class="input-group input-group-sm mb-2">
-                    <input type="text" class="form-control recommendation-input" placeholder="Type recommendation and press Enter">
+                    <select class="form-control form-control-sm recommendation-select">
+                        <option value="">Select recommendation</option>
+                    </select>
+                    <button type="button" class="btn btn-outline-primary recommendation-add-selected">Add</button>
+                </div>
+                <div class="input-group input-group-sm mb-2">
+                    <input type="text" class="form-control recommendation-input" placeholder="Add custom recommendation">
                     <button type="button" class="btn btn-outline-primary recommendation-add">Add</button>
                 </div>
                 <div class="recommendation-list small mb-1"></div>
@@ -387,23 +434,49 @@ function addSystemFindingRow(systemId, prefill = {}) {
 
     body.appendChild(row);
 
-    initRecommendationBuilder(row, currentIndex, recommendationItems);
+    initRecommendationBuilder(row, currentIndex, recommendationItems, systemId, prefill.subsystem_id || '');
 }
 
-function initRecommendationBuilder(row, rowIndex, initialItems = []) {
+function initRecommendationBuilder(row, rowIndex, initialItems = [], systemId = '', initialSubsystemId = '') {
     const builder = row.querySelector('.recommendation-builder');
     if (!builder) {
         return;
     }
 
+    const subsystemSelect = row.querySelector(`select[name="system_findings[${rowIndex}][subsystem_id]"]`);
+    const recommendationSelect = builder.querySelector('.recommendation-select');
+    const addSelectedButton = builder.querySelector('.recommendation-add-selected');
     const input = builder.querySelector('.recommendation-input');
     const addButton = builder.querySelector('.recommendation-add');
     const list = builder.querySelector('.recommendation-list');
     const hiddenInputs = builder.querySelector('.recommendation-hidden-inputs');
 
-    let recommendations = Array.isArray(initialItems)
-        ? initialItems.map(item => String(item || '').trim()).filter(item => item.length > 0)
-        : [];
+    let recommendations = normalizeRecommendationItems(initialItems);
+
+    function addRecommendationItem(value) {
+        const normalizedValue = String(value || '').trim();
+        if (!normalizedValue) {
+            return;
+        }
+
+        const exists = recommendations.some(item => item.toLowerCase() === normalizedValue.toLowerCase());
+        if (!exists) {
+            recommendations.push(normalizedValue);
+            renderRecommendations();
+        }
+    }
+
+    function refreshRecommendationDropdown(selectedSubsystemId = '') {
+        const options = collectRecommendationOptions(systemId, selectedSubsystemId || '');
+        recommendationSelect.innerHTML = '<option value="">Select recommendation</option>';
+
+        options.forEach(optionValue => {
+            const option = document.createElement('option');
+            option.value = optionValue;
+            option.textContent = optionValue;
+            recommendationSelect.appendChild(option);
+        });
+    }
 
     function renderRecommendations() {
         list.innerHTML = '';
@@ -411,8 +484,9 @@ function initRecommendationBuilder(row, rowIndex, initialItems = []) {
 
         recommendations.forEach((item, itemIndex) => {
             const badge = document.createElement('span');
-            badge.className = 'badge bg-light text-dark border me-1 mb-1';
-            badge.innerHTML = `${escapeHtml(item)} <button type="button" class="btn btn-sm p-0 ms-1 text-danger recommendation-remove" data-item-index="${itemIndex}" style="line-height:1; border:none; background:transparent;">&times;</button>`;
+            badge.className = 'badge me-1 mb-1';
+            badge.style.cssText = 'color:#212529 !important; background-color:#f8f9fa !important; border:1px solid #ced4da !important;';
+            badge.innerHTML = `${escapeHtml(item)} <button type="button" class="btn btn-sm p-0 ms-1 recommendation-remove" data-item-index="${itemIndex}" style="line-height:1; border:none; background:transparent; color:#dc3545 !important;">&times;</button>`;
             list.appendChild(badge);
 
             const hiddenInput = document.createElement('input');
@@ -440,15 +514,22 @@ function initRecommendationBuilder(row, rowIndex, initialItems = []) {
             return;
         }
 
-        const exists = recommendations.some(item => item.toLowerCase() === value.toLowerCase());
-        if (!exists) {
-            recommendations.push(value);
-            renderRecommendations();
-        }
+        addRecommendationItem(value);
 
         input.value = '';
     }
 
+    function addSelectedRecommendations() {
+        const selectedValue = String(recommendationSelect.value || '').trim();
+        if (!selectedValue) {
+            return;
+        }
+
+        addRecommendationItem(selectedValue);
+        recommendationSelect.value = '';
+    }
+
+    addSelectedButton.addEventListener('click', addSelectedRecommendations);
     addButton.addEventListener('click', addRecommendation);
     input.addEventListener('keydown', function (event) {
         if (event.key === 'Enter') {
@@ -456,6 +537,14 @@ function initRecommendationBuilder(row, rowIndex, initialItems = []) {
             addRecommendation();
         }
     });
+
+    if (subsystemSelect) {
+        subsystemSelect.addEventListener('change', function () {
+            refreshRecommendationDropdown(this.value || '');
+        });
+    }
+
+    refreshRecommendationDropdown(initialSubsystemId || (subsystemSelect ? subsystemSelect.value : ''));
 
     renderRecommendations();
 }

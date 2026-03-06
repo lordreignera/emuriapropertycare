@@ -291,14 +291,19 @@ class InspectionController extends Controller
             ->first();
 
         $inspection->service_package_id = $validated['service_package_id']
-            ?? $inspection->service_package_id
-            ?? $autoPackage?->id;
+            ?? $inspection->service_package_id;
+
+        if ($validated['status'] === 'completed' && empty($inspection->service_package_id)) {
+            $inspection->service_package_id = $autoPackage?->id;
+        }
 
         $inspection->weather_conditions = $validated['weather_conditions'] ?? null;
 
         $inspection->owner_name = $property->user->name ?? null;
         $inspection->owner_email = $property->user->email ?? null;
-        $inspection->owner_phone = $property->user->phone ?? null;
+        $inspection->owner_phone = $property->owner_phone
+            ?: (($property->user->phone ?? null)
+                ?: ($property->admin_phone ?: null));
         $inspection->property_code = $property->property_code;
         $inspection->property_name = $property->property_name;
         $inspection->property_address_snapshot = trim(($property->property_address ?? '') . ', ' . ($property->city ?? ''));
@@ -457,12 +462,14 @@ class InspectionController extends Controller
         // NOTE: We don't run full calculations here anymore - only basic save
         // Full calculations happen after PHAR data collection in storePharData()
 
-        $message = $request->status === 'in_progress' 
-            ? 'CPI scoring saved as draft successfully!' 
-            : 'CPI scoring completed! Please proceed to PHAR data collection.';
+        $proceedToPhar = $request->input('next_stage') === 'phar';
 
-        // Redirect to PHAR data form (Page 2) if status is completed
-        if ($validated['status'] === 'completed') {
+        $message = $proceedToPhar
+            ? 'CPI scoring saved. Proceed to PHAR assessment/pricing.'
+            : 'CPI scoring saved as draft successfully!';
+
+        // Redirect to PHAR data form (Page 2) when user chooses next stage
+        if ($proceedToPhar) {
             return redirect()->route('inspections.phar-data', $inspection->id)
                 ->with('success', $message);
         }

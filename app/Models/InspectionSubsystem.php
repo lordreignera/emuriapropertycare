@@ -14,11 +14,13 @@ class InspectionSubsystem extends Model
         'name',
         'slug',
         'description',
+        'recommended_actions',
         'sort_order',
         'is_active',
     ];
 
     protected $casts = [
+        'recommended_actions' => 'array',
         'is_active' => 'boolean',
     ];
 
