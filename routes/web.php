@@ -195,6 +195,14 @@ Route::middleware([
         Route::resource('commercial-settings', App\Http\Controllers\Admin\CommercialSettingController::class)->names('commercial-settings');
         Route::resource('mixed-use-settings', App\Http\Controllers\Admin\MixedUseSettingController::class)->names('mixed-use-settings');
         Route::resource('pricing-config', App\Http\Controllers\Admin\PricingConfigController::class)->names('pricing-config');
+        Route::post('parameters/reload-defaults', [App\Http\Controllers\Admin\ParameterController::class, 'reloadDefaults'])->name('parameters.reload-defaults');
+        Route::resource('parameters', App\Http\Controllers\Admin\ParameterController::class)->except(['show'])->names('parameters');
+        Route::post('fmc-material-settings/reload-defaults', [App\Http\Controllers\Admin\FmcMaterialSettingController::class, 'reloadDefaults'])->name('fmc-material-settings.reload-defaults');
+        Route::resource('fmc-material-settings', App\Http\Controllers\Admin\FmcMaterialSettingController::class)->except(['show'])->names('fmc-material-settings');
+        Route::post('finding-template-settings/reload-defaults', [App\Http\Controllers\Admin\FindingTemplateSettingController::class, 'reloadDefaults'])->name('finding-template-settings.reload-defaults');
+        Route::resource('finding-template-settings', App\Http\Controllers\Admin\FindingTemplateSettingController::class)->except(['show'])->names('finding-template-settings');
+        Route::resource('systems', App\Http\Controllers\Admin\SystemController::class)->except(['show'])->names('systems');
+        Route::resource('subsystems', App\Http\Controllers\Admin\SubsystemController::class)->except(['show'])->names('subsystems');
         Route::resource('reactive-costs', App\Http\Controllers\Admin\ReactiveCostAssumptionController::class)->names('reactive-costs');
         Route::resource('stewardship-loss', App\Http\Controllers\Admin\StewardshipLossReductionController::class)->names('stewardship-loss');
         

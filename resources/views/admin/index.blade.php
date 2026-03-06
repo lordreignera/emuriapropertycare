@@ -36,6 +36,8 @@
                         <h6 class="font-weight-normal mb-2">Inspections</h6>
                         <h2 class="mb-0">{{ $inspectionsCount ?? 0 }}</h2>
                         <p class="text-white-50 mb-0 mt-2 small">Total Inspections</p>
+                        <p class="text-white-50 mb-0 small">Actually inspected: {{ $completedInspectionsCount ?? 0 }}</p>
+                        <p class="text-white-50 mb-0 small">Paid for inspection: {{ $paidInspectionsCount ?? 0 }}</p>
                     </div>
                     <div>
                         <i class="mdi mdi-clipboard-check mdi-48px opacity-50"></i>
@@ -87,34 +89,34 @@
             <div class="card-body">
                 <h4 class="card-title mb-3">System Overview</h4>
                 <div class="system-stats">
-                    <div class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom">
+                    <a href="{{ route('properties.index', ['status' => 'pending_approval']) }}" class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom text-decoration-none text-dark">
                         <div class="d-flex align-items-center">
                             <i class="mdi mdi-clock-alert text-warning mdi-24px me-2"></i>
                             <span>Pending Approvals</span>
                         </div>
                         <span class="badge badge-warning">{{ \App\Models\Property::where('status', 'pending_approval')->count() }}</span>
-                    </div>
-                    <div class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom">
+                    </a>
+                    <a href="{{ route('admin.users.index') }}" class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom text-decoration-none text-dark">
                         <div class="d-flex align-items-center">
                             <i class="mdi mdi-account-multiple text-info mdi-24px me-2"></i>
                             <span>Total Users</span>
                         </div>
                         <span class="badge badge-info">{{ \App\Models\User::count() }}</span>
-                    </div>
-                    <div class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom">
+                    </a>
+                    <a href="{{ route('properties.index', ['status' => 'not_inspected']) }}" class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom text-decoration-none text-dark">
                         <div class="d-flex align-items-center">
                             <i class="mdi mdi-clipboard-check text-primary mdi-24px me-2"></i>
-                            <span>Active Inspections</span>
+                            <span>Not Inspected</span>
                         </div>
-                        <span class="badge badge-primary">{{ \App\Models\Inspection::where('status', 'in_progress')->count() }}</span>
-                    </div>
-                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="badge badge-primary">{{ \App\Models\Property::whereDoesntHave('inspections', function ($query) { $query->where('status', 'completed'); })->count() }}</span>
+                    </a>
+                    <a href="{{ route('invoices.index', ['status' => 'pending']) }}" class="d-flex justify-content-between align-items-center text-decoration-none text-dark">
                         <div class="d-flex align-items-center">
                             <i class="mdi mdi-file-document-alert text-danger mdi-24px me-2"></i>
                             <span>Unpaid Invoices</span>
                         </div>
-                        <span class="badge badge-danger">{{ \App\Models\Invoice::where('status', 'pending')->count() }}</span>
-                    </div>
+                        <span class="badge badge-danger">{{ \App\Models\Invoice::pending()->count() }}</span>
+                    </a>
                 </div>
             </div>
         </div>

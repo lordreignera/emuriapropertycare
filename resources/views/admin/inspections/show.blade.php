@@ -21,7 +21,7 @@
                         </a>
                         @if($inspection->status === 'completed')
                         <a href="{{ route('inspections.download-invoice', $inspection->id) }}" class="btn btn-success btn-sm">
-                            <i class="mdi mdi-download me-1"></i>Download Invoice
+                            <i class="mdi mdi-download me-1"></i>Download Full Report PDF
                         </a>
                         @endif
                     </div>
@@ -172,6 +172,97 @@
                                     <th class="text-end">{{ number_format($findings->sum('labour_hours'), 1) }} hrs</th>
                                     <th class="text-end">${{ number_format($findings->sum('material_cost'), 2) }}</th>
                                     <th class="text-end">${{ number_format($findings->sum('labour_cost') + $findings->sum('material_cost'), 2) }}</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            @endif
+
+            <!-- CPI Domain Breakdown -->
+            @if(($domains ?? collect())->count() > 0)
+            <div class="card mb-4">
+                <div class="card-header" style="background: #3f51b5; color: white;">
+                    <h5 class="mb-0">
+                        <i class="mdi mdi-chart-donut me-2"></i>CPI Domain Breakdown
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th width="10%">Domain #</th>
+                                    <th>Domain</th>
+                                    <th class="text-end" width="20%">Score</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($domains as $domain)
+                                @php
+                                    $field = 'domain_' . $domain->domain_number . '_score';
+                                    $score = (int) ($inspection->{$field} ?? 0);
+                                    $maxPoints = (int) ($domain->max_possible_points ?? 0);
+                                @endphp
+                                <tr>
+                                    <td>{{ $domain->domain_number }}</td>
+                                    <td>{{ $domain->domain_name }}</td>
+                                    <td class="text-end">
+                                        <strong>{{ $score }}</strong>
+                                        @if($maxPoints > 0)
+                                            / {{ $maxPoints }}
+                                        @endif
+                                    </td>
+                                </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            @endif
+
+            <!-- Materials Summary -->
+            @if(($materials ?? collect())->count() > 0)
+            <div class="card mb-4">
+                <div class="card-header" style="background: #009688; color: white;">
+                    <h5 class="mb-0">
+                        <i class="mdi mdi-package-variant-closed me-2"></i>Materials Summary ({{ $materials->count() }} items)
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th width="5%">#</th>
+                                    <th>Material</th>
+                                    <th width="12%" class="text-end">Quantity</th>
+                                    <th width="10%">Unit</th>
+                                    <th width="14%" class="text-end">Unit Cost</th>
+                                    <th width="14%" class="text-end">Line Total</th>
+                                    <th width="15%">Category</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($materials as $material)
+                                <tr>
+                                    <td>{{ $loop->iteration }}</td>
+                                    <td>{{ $material->material_name ?? '-' }}</td>
+                                    <td class="text-end">{{ number_format((float) ($material->quantity ?? 0), 2) }}</td>
+                                    <td>{{ $material->unit ?? '-' }}</td>
+                                    <td class="text-end">${{ number_format((float) ($material->unit_cost ?? 0), 2) }}</td>
+                                    <td class="text-end"><strong>${{ number_format((float) ($material->line_total ?? 0), 2) }}</strong></td>
+                                    <td>{{ $material->category ?? 'General' }}</td>
+                                </tr>
+                                @endforeach
+                            </tbody>
+                            <tfoot class="table-secondary">
+                                <tr>
+                                    <th colspan="5" class="text-end">TOTAL MATERIALS:</th>
+                                    <th class="text-end">${{ number_format((float) $materials->sum('line_total'), 2) }}</th>
+                                    <th></th>
                                 </tr>
                             </tfoot>
                         </table>
@@ -400,6 +491,26 @@
             </div>
 
             <!-- Assessment Notes -->
+            @php
+                $recommendationItems = [];
+                $rawRecommendations = $inspection->recommendations;
+
+                if (is_array($rawRecommendations)) {
+                    $recommendationItems = $rawRecommendations;
+                } elseif (is_string($rawRecommendations) && trim($rawRecommendations) !== '') {
+                    $decoded = json_decode($rawRecommendations, true);
+                    if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                        $recommendationItems = $decoded;
+                    } else {
+                        $recommendationItems = preg_split('/\r\n|\r|\n|\|/', $rawRecommendations) ?: [];
+                    }
+                }
+
+                $recommendationItems = collect($recommendationItems)
+                    ->map(fn ($item) => trim((string) $item))
+                    ->filter()
+                    ->values();
+            @endphp
             @if($inspection->summary || $inspection->recommendations || $inspection->risk_summary)
             <div class="card mb-4">
                 <div class="card-header bg-light">
@@ -415,10 +526,14 @@
                     </div>
                     @endif
                     
-                    @if($inspection->recommendations)
+                    @if($recommendationItems->isNotEmpty())
                     <div class="mb-3">
                         <h6 class="text-primary">Recommendations:</h6>
-                        <p>{{ $inspection->recommendations }}</p>
+                        <ul class="mb-0 ps-3">
+                            @foreach($recommendationItems as $item)
+                                <li>{{ $item }}</li>
+                            @endforeach
+                        </ul>
                     </div>
                     @endif
                     

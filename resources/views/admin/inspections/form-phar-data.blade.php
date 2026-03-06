@@ -148,7 +148,25 @@
                                         </div>
 
                                         <div class="row">
-                                            <div class="col-md-6">
+                                            <div class="col-md-3">
+                                                <div class="form-group">
+                                                    <label>Preset</label>
+                                                    <select class="form-control finding-template">
+                                                        <option value="">Custom / Manual</option>
+                                                        @foreach(($findingTemplateSettings ?? []) as $template)
+                                                            <option value="{{ $template->task_question }}"
+                                                                    data-category="{{ $template->category }}"
+                                                                    data-priority="{{ $template->default_priority }}"
+                                                                    data-included="{{ $template->default_included ? 1 : 0 }}"
+                                                                    data-hours="{{ number_format((float) $template->default_labour_hours, 2, '.', '') }}"
+                                                                    data-notes="{{ $template->default_notes }}">
+                                                                {{ $template->task_question }}
+                                                            </option>
+                                                        @endforeach
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-5">
                                                 <div class="form-group">
                                                     <label>Finding / Question <span class="text-danger">*</span></label>
                                                     <input type="text" name="findings[0][task_question]" class="form-control" 
@@ -268,7 +286,22 @@
                                         </div>
 
                                         <div class="row">
-                                            <div class="col-md-5">
+                                            <div class="col-md-3">
+                                                <div class="form-group">
+                                                    <label>Preset</label>
+                                                    <select class="form-control material-template">
+                                                        <option value="">Custom / Manual</option>
+                                                        @foreach(($fmcMaterialSettings ?? []) as $setting)
+                                                            <option value="{{ $setting->material_name }}"
+                                                                    data-unit="{{ $setting->default_unit }}"
+                                                                    data-cost="{{ number_format((float) $setting->default_unit_cost, 2, '.', '') }}">
+                                                                {{ $setting->material_name }}
+                                                            </option>
+                                                        @endforeach
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4">
                                                 <div class="form-group">
                                                     <label>Material / Part Description <span class="text-danger">*</span></label>
                                                     <input type="text" name="materials[0][material_name]" class="form-control" 
@@ -448,6 +481,23 @@
 document.addEventListener('DOMContentLoaded', function() {
     const PHAR_CATEGORIES = @json($pharCategories ?? []);
     const MATERIAL_UNITS = @json($materialUnits ?? []);
+    const FINDING_TEMPLATE_SETTINGS = @json(($findingTemplateSettings ?? collect())->map(function($item) {
+        return [
+            'task_question' => $item->task_question,
+            'category' => $item->category,
+            'default_priority' => (int) $item->default_priority,
+            'default_included' => (bool) $item->default_included,
+            'default_labour_hours' => (float) $item->default_labour_hours,
+            'default_notes' => $item->default_notes,
+        ];
+    })->values());
+    const FMC_MATERIAL_SETTINGS = @json(($fmcMaterialSettings ?? collect())->map(function($item) {
+        return [
+            'material_name' => $item->material_name,
+            'default_unit' => $item->default_unit,
+            'default_unit_cost' => (float) $item->default_unit_cost,
+        ];
+    })->values());
 
     function buildOptions(options, placeholder = null, defaultValue = null) {
         let html = '';
@@ -463,6 +513,31 @@ document.addEventListener('DOMContentLoaded', function() {
             html += `<option value="${option}" ${selected ? 'selected' : ''}>${option.replace(/\b\w/g, c => c.toUpperCase())}</option>`;
         });
 
+        return html;
+    }
+
+    function buildMaterialPresetOptions() {
+        let html = '<option value="">Custom / Manual</option>';
+        FMC_MATERIAL_SETTINGS.forEach((setting) => {
+            const safeName = String(setting.material_name ?? '');
+            const safeUnit = String(setting.default_unit ?? 'ea');
+            const safeCost = Number(setting.default_unit_cost ?? 0).toFixed(2);
+            html += `<option value="${safeName}" data-unit="${safeUnit}" data-cost="${safeCost}">${safeName}</option>`;
+        });
+        return html;
+    }
+
+    function buildFindingPresetOptions() {
+        let html = '<option value="">Custom / Manual</option>';
+        FINDING_TEMPLATE_SETTINGS.forEach((setting) => {
+            const question = String(setting.task_question ?? '');
+            const category = String(setting.category ?? '');
+            const priority = Number(setting.default_priority ?? 2);
+            const included = setting.default_included ? '1' : '0';
+            const hours = Number(setting.default_labour_hours ?? 0).toFixed(2);
+            const notes = String(setting.default_notes ?? '');
+            html += `<option value="${question}" data-category="${category}" data-priority="${priority}" data-included="${included}" data-hours="${hours}" data-notes="${notes}">${question}</option>`;
+        });
         return html;
     }
 
@@ -523,6 +598,39 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
+    document.getElementById('findingsContainer').addEventListener('change', function(e) {
+        if (e.target.classList.contains('finding-template')) {
+            const select = e.target;
+            const row = select.closest('.finding-row');
+            const selectedOption = select.options[select.selectedIndex];
+
+            if (selectedOption && selectedOption.value) {
+                const taskInput = row.querySelector('input[name$="[task_question]"]');
+                const categorySelect = row.querySelector('select[name$="[category]"]');
+                const prioritySelect = row.querySelector('select[name$="[priority]"]');
+                const includedSelect = row.querySelector('select[name$="[included_yn]"]');
+                const hoursInput = row.querySelector('input[name$="[labour_hours]"]');
+                const notesInput = row.querySelector('input[name$="[notes]"]');
+
+                const selectedCategory = selectedOption.dataset.category || '';
+                const selectedPriority = selectedOption.dataset.priority || '2';
+                const selectedIncluded = selectedOption.dataset.included || '1';
+                const selectedHours = selectedOption.dataset.hours || '0';
+                const selectedNotes = selectedOption.dataset.notes || '';
+
+                taskInput.value = selectedOption.value;
+                if (selectedCategory && [...categorySelect.options].some(option => option.value === selectedCategory)) {
+                    categorySelect.value = selectedCategory;
+                }
+                prioritySelect.value = selectedPriority;
+                includedSelect.value = selectedIncluded;
+                hoursInput.value = parseFloat(selectedHours).toFixed(1);
+                notesInput.value = selectedNotes;
+                hoursInput.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        }
+    });
+
     labourRateInput?.addEventListener('input', function() {
         updateFindingRowLabourCosts();
         updateFindingSummary();
@@ -550,7 +658,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
 
                 <div class="row">
-                    <div class="col-md-6">
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label>Preset</label>
+                            <select class="form-control finding-template">
+                                ${buildFindingPresetOptions()}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-5">
                         <div class="form-group">
                             <label>Finding / Question <span class="text-danger">*</span></label>
                             <input type="text" name="findings[${index}][task_question]" class="form-control" 
@@ -677,6 +793,33 @@ document.addEventListener('DOMContentLoaded', function() {
             updateMaterialsSummary();
         }
     });
+
+    document.getElementById('materialsContainer').addEventListener('change', function(e) {
+        if (e.target.classList.contains('material-template')) {
+            const select = e.target;
+            const row = select.closest('.material-row');
+            const selectedOption = select.options[select.selectedIndex];
+
+            const materialInput = row.querySelector('input[name$="[material_name]"]');
+            const unitSelect = row.querySelector('select[name$="[unit]"]');
+            const unitCostInput = row.querySelector('input[name$="[unit_cost]"]');
+
+            if (selectedOption && selectedOption.value) {
+                const selectedName = selectedOption.value;
+                const selectedUnit = selectedOption.dataset.unit || 'ea';
+                const selectedCost = parseFloat(selectedOption.dataset.cost || '0');
+
+                materialInput.value = selectedName;
+
+                if (![...unitSelect.options].some(option => option.value === selectedUnit)) {
+                    unitSelect.insertAdjacentHTML('beforeend', `<option value="${selectedUnit}">${selectedUnit}</option>`);
+                }
+                unitSelect.value = selectedUnit;
+                unitCostInput.value = selectedCost.toFixed(2);
+                unitCostInput.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        }
+    });
     
     // Create material row HTML
     function createMaterialRow(index) {
@@ -692,7 +835,15 @@ document.addEventListener('DOMContentLoaded', function() {
                 </div>
 
                 <div class="row">
-                    <div class="col-md-5">
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label>Preset</label>
+                            <select class="form-control material-template">
+                                ${buildMaterialPresetOptions()}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
                         <div class="form-group">
                             <label>Material / Part Description <span class="text-danger">*</span></label>
                             <input type="text" name="materials[${index}][material_name]" class="form-control" 

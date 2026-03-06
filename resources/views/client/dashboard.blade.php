@@ -55,9 +55,18 @@
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
                         <p class="text-muted mb-2 fw-semibold text-uppercase small">Inspections</p>
-                        <h2 class="fw-bold mb-0">{{ $inspectionsCount }}</h2>
-                        @if($pendingInspections > 0)
-                        <span class="badge bg-warning text-dark mt-2">Pending</span>
+                        <h2 class="fw-bold mb-0">{{ $paidInspectionsCount ?? 0 }}</h2>
+                        <div class="small text-muted mt-2">
+                            Total paid inspections: <span class="fw-semibold text-dark">{{ $paidInspectionsCount ?? 0 }}</span>
+                        </div>
+                        <div class="small text-muted">
+                            Actually inspected: <span class="fw-semibold text-dark">{{ $inspectionsCount }}</span>
+                        </div>
+                        <div class="small text-muted">
+                            Paid but not yet inspected: <span class="fw-semibold text-dark">{{ $paidPendingInspectionsCount ?? 0 }}</span>
+                        </div>
+                        @if(($paidPendingInspectionsCount ?? 0) > 0)
+                        <span class="badge bg-warning text-dark mt-2">{{ $paidPendingInspectionsCount }} Paid Pending</span>
                         @endif
                     </div>
                     <div class="rounded-3 p-3" style="background-color: rgba(255, 193, 7, 0.1);">
@@ -102,11 +111,19 @@
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
-                        <p class="text-muted mb-2 fw-semibold text-uppercase small">Unpaid Invoices</p>
-                        <h2 class="fw-bold mb-0">{{ $unpaidInvoices }}</h2>
+                        <p class="text-muted mb-2 fw-semibold text-uppercase small">Invoices</p>
+                        <h2 class="fw-bold mb-0">{{ $invoicesCount }}</h2>
+                        <div class="small text-muted mt-2">
+                            Inspection invoices: <span class="fw-semibold text-dark">{{ $inspectionInvoicesCount ?? 0 }}</span>
+                            <span class="ms-1">(Paid: {{ $inspectionInvoicesPaidCount ?? 0 }}, Pending: {{ $inspectionInvoicesPendingCount ?? 0 }})</span>
+                        </div>
+                        <div class="small text-muted">
+                            Work payment invoices: <span class="fw-semibold text-dark">{{ $workPaymentInvoicesCount ?? 0 }}</span>
+                            <span class="ms-1">(Paid: {{ $workPaymentInvoicesPaidCount ?? 0 }}, Pending: {{ $workPaymentInvoicesPendingCount ?? 0 }})</span>
+                        </div>
                         @if($unpaidInvoices > 0)
-                        <span class="badge bg-danger mt-2">Not Paid</span>
-                        @elseif($invoicesCount > 0)
+                        <span class="badge bg-danger mt-2">{{ $unpaidInvoices }} Pending</span>
+                        @elseif(($invoicesCount ?? 0) > 0)
                         <span class="badge bg-success mt-2">All Paid</span>
                         @endif
                     </div>

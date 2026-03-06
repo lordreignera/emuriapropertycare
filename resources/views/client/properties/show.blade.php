@@ -292,18 +292,76 @@
     </div>
 
     {{-- Property Details --}}
-    @if($property->personality || $property->known_problems || $property->sensitivities)
+    @if($property->personality || $property->known_problems || $property->sensitivities || $property->home_journey || $property->home_feel)
     <div class="col-12">
         <div class="card">
             <div class="card-body">
                 <h4 class="card-title mb-4">
                     <i class="mdi mdi-text-box text-info"></i> Additional Details
                 </h4>
+
+                @if($property->home_journey)
+                <div class="mb-3">
+                    <h6><strong>Home Journey:</strong></h6>
+                    @php
+                        $homeJourneyList = is_array($property->home_journey)
+                            ? $property->home_journey
+                            : array_values(array_filter(array_map('trim', preg_split('/[,\n]+/', (string) $property->home_journey))));
+
+                        $homeJourneyLabels = [
+                            'proactive_care' => 'I want proactive care so issues never become emergencies',
+                            'predictable_maintenance' => 'I want predictable maintenance & peace of mind',
+                            'improve_quality_of_life' => 'I want to improve quality of life & comfort',
+                            'maintain_property_value' => 'I want to maintain/increase property value',
+                            'support_repairs_and_renovations' => 'I need support managing repairs, trades, and renovations',
+                            'trusted_team' => 'I want a trusted team — not random contractors',
+                            'guest_ready' => 'I want my home to be always guest-ready / inspection-ready',
+                        ];
+                    @endphp
+                    <ul class="list-unstyled mb-0">
+                        @foreach($homeJourneyList as $journey)
+                        <li><i class="mdi mdi-check text-success"></i> {{ $homeJourneyLabels[$journey] ?? $journey }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+                @endif
+
+                @if($property->home_feel)
+                <div class="mb-3">
+                    <h6><strong>Well-Cared-For Home Feels Like:</strong></h6>
+                    @php
+                        $homeFeelList = is_array($property->home_feel)
+                            ? $property->home_feel
+                            : array_values(array_filter(array_map('trim', preg_split('/[,\n]+/', (string) $property->home_feel))));
+
+                        $homeFeelLabels = [
+                            'safe_healthy' => 'Safe & healthy',
+                            'organized_peaceful' => 'Organized & peaceful',
+                            'inviting_beautiful' => 'Inviting & beautiful',
+                            'efficient_modern' => 'Efficient & modern',
+                            'low_stress_effortless' => 'Low-stress & effortless',
+                            'ready_for_life_changes' => 'Ready for life changes (aging, kids, guests, rental plans)',
+                        ];
+                    @endphp
+                    <ul class="list-unstyled mb-0">
+                        @foreach($homeFeelList as $feel)
+                        <li><i class="mdi mdi-check text-success"></i> {{ $homeFeelLabels[$feel] ?? $feel }}</li>
+                        @endforeach
+                    </ul>
+                </div>
+                @endif
                 
                 @if($property->personality)
                 <div class="mb-3">
                     <h6><strong>Property Personality/Style:</strong></h6>
                     <p class="text-muted">{{ $property->personality }}</p>
+                </div>
+                @endif
+
+                @if($property->personality_notes)
+                <div class="mb-3">
+                    <h6><strong>Personality Notes:</strong></h6>
+                    <p class="text-muted mb-0">{{ $property->personality_notes }}</p>
                 </div>
                 @endif
 
@@ -332,10 +390,19 @@
                             $sensitivitiesList = is_array($property->sensitivities)
                                 ? $property->sensitivities
                                 : array_values(array_filter(array_map('trim', preg_split('/[,\n]+/', (string) $property->sensitivities))));
+
+                            $sensitivityLabels = [
+                                'allergies_air_quality' => 'Allergies / air quality',
+                                'water_damage_risk' => 'Water damage risk',
+                                'aging_in_place_needs' => 'Aging-in-place needs',
+                                'eco_friendly_products_only' => 'Eco-friendly products only',
+                                'pet_safe_cleaning_materials' => 'Pet-safe cleaning materials',
+                                'accessibility_modifications' => 'Accessibility Modifications',
+                            ];
                         @endphp
                     <ul class="list-unstyled">
                             @foreach($sensitivitiesList as $sensitivity)
-                        <li><i class="mdi mdi-check text-success"></i> {{ $sensitivity }}</li>
+                        <li><i class="mdi mdi-check text-success"></i> {{ $sensitivityLabels[$sensitivity] ?? $sensitivity }}</li>
                         @endforeach
                     </ul>
                 </div>

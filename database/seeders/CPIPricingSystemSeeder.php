@@ -15,6 +15,7 @@ class CPIPricingSystemSeeder extends Seeder
         $this->call([
             PropertyTypesSeeder::class,
             PricingPackagesSeeder::class,
+            ParametersSeeder::class,
             MixedUseCalculationSettingsSeeder::class,
             CpiBandRangesSeeder::class,
             CpiMultipliersSeeder::class,
@@ -22,6 +23,8 @@ class CPIPricingSystemSeeder extends Seeder
             
             // Lookup tables
             SupplyLineMaterialsSeeder::class,
+            FmcMaterialSettingsSeeder::class,
+            FindingTemplateSettingsSeeder::class,
             AgeBracketsSeeder::class,
             ContainmentCategoriesSeeder::class,
             CrawlAccessCategoriesSeeder::class,

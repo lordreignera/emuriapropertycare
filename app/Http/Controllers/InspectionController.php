@@ -9,7 +9,12 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Barryvdh\DomPDF\Facade\Pdf;
+use App\Services\BaseServicePricingService;
+use App\Models\InspectionSystem;
+use App\Models\PricingPackage;
 
 class InspectionController extends Controller
 {
@@ -19,6 +24,40 @@ class InspectionController extends Controller
     public function index(Request $request)
     {
         $user = Auth::user();
+
+        $countsBaseQuery = Inspection::query()->whereNotNull('property_id');
+
+        if ($user->hasRole('Inspector')) {
+            $countsBaseQuery->where('inspector_id', $user->id);
+        }
+
+        $scheduledCount = (clone $countsBaseQuery)
+            ->where('inspection_fee_status', 'paid')
+            ->where('status', 'scheduled')
+            ->whereHas('property')
+            ->whereDoesntHave('property.inspections', function ($q) {
+                $q->where('status', 'completed');
+            })
+            ->count();
+
+        $inProgressCount = (clone $countsBaseQuery)
+            ->where('status', 'in_progress')
+            ->count();
+
+        $latestCompletedByProperty = Inspection::query()
+            ->selectRaw('MAX(id) as id')
+            ->where('status', 'completed')
+            ->whereNotNull('property_id')
+            ->groupBy('property_id');
+
+        if ($user->hasRole('Inspector')) {
+            $latestCompletedByProperty->where('inspector_id', $user->id);
+        }
+
+        $completedCount = (clone $countsBaseQuery)
+            ->where('status', 'completed')
+            ->whereIn('id', $latestCompletedByProperty)
+            ->count();
         
         // Base query for inspections
         $query = Inspection::with(['property.user', 'property.projectManager', 'inspector', 'assignedBy', 'project.manager'])
@@ -29,7 +68,11 @@ class InspectionController extends Controller
             if ($request->status === 'scheduled') {
                 // Show inspections that are scheduled and paid but not yet completed
                 $query->where('inspection_fee_status', 'paid')
-                      ->where('status', 'scheduled');
+                      ->where('status', 'scheduled')
+                      ->whereHas('property')
+                      ->whereDoesntHave('property.inspections', function ($q) {
+                          $q->where('status', 'completed');
+                      });
             } elseif ($request->status === 'in_progress') {
                 $query->where('status', 'in_progress');
             } elseif ($request->status === 'completed') {
@@ -64,7 +107,15 @@ class InspectionController extends Controller
         $inspections = $query->orderBy('scheduled_date', 'asc')
             ->paginate(15);
 
-        return view('admin.inspections.index', compact('inspections'));
+        $inspectors = \App\Models\User::role('Inspector')
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        $projectManagers = \App\Models\User::role('Project Manager')
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        return view('admin.inspections.index', compact('inspections', 'scheduledCount', 'inProgressCount', 'completedCount', 'inspectors', 'projectManagers'));
     }
 
     /**
@@ -84,8 +135,16 @@ class InspectionController extends Controller
 
         // Check if user has permission to inspect this property
         $user = Auth::user();
-        if ($user->hasRole('Inspector') && $property->inspector_id !== $user->id) {
-            abort(403, 'You are not assigned to inspect this property.');
+        if ($user->hasRole('Inspector')) {
+            $isAssignedToProperty = (int) ($property->inspector_id ?? 0) === (int) $user->id;
+            $isAssignedToInspection = Inspection::where('property_id', $property->id)
+                ->where('inspector_id', $user->id)
+                ->whereIn('status', ['scheduled', 'in_progress', 'completed'])
+                ->exists();
+
+            if (!$isAssignedToProperty && !$isAssignedToInspection) {
+                abort(403, 'You are not assigned to inspect this property.');
+            }
         }
 
         // Get existing inspection if it exists
@@ -93,53 +152,30 @@ class InspectionController extends Controller
             ->where('inspection_fee_status', 'paid')
             ->first();
 
-        // Load ALL CPI lookup data from database
-        $pricingPackages = \App\Models\PricingPackage::with(['packagePricing' => function($query) {
+        $systems = collect();
+        if (Schema::hasTable('systems') && Schema::hasTable('subsystems')) {
+            $systems = InspectionSystem::with(['subsystems' => function ($query) {
+                $query->where('is_active', true)->orderBy('sort_order')->orderBy('name');
+            }])
+                ->where('is_active', true)
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get();
+        }
+
+        $defaultServicePackage = PricingPackage::with(['packagePricing' => function ($query) {
             $query->where('is_active', true);
         }])
-        ->where('is_active', true)
-        ->orderBy('sort_order')
-        ->get();
-        
-        // Load CPI domains with their factors
-        $cpiDomains = \App\Models\CpiDomain::with(['activeFactors'])
             ->where('is_active', true)
             ->orderBy('sort_order')
-            ->get();
-        
-        $supplyMaterials = \App\Models\SupplyLineMaterial::where('is_active', true)->orderBy('sort_order')->get();
-        $ageBrackets = \App\Models\AgeBracket::where('is_active', true)->orderBy('sort_order')->get();
-        $containmentCategories = \App\Models\ContainmentCategory::where('is_active', true)->orderBy('sort_order')->get();
-        $crawlAccessCategories = \App\Models\CrawlAccessCategory::where('is_active', true)->orderBy('sort_order')->get();
-        $roofAccessCategories = \App\Models\RoofAccessCategory::where('is_active', true)->orderBy('sort_order')->get();
-        $equipmentRequirements = \App\Models\EquipmentRequirement::where('is_active', true)->orderBy('sort_order')->get();
-        $complexityCategories = \App\Models\ComplexityCategory::where('is_active', true)->orderBy('sort_order')->get();
-        
-        // Load CPI band ranges with their multipliers
-        $cpiBandRanges = \App\Models\CpiBandRange::with('multiplier')
-            ->where('is_active', true)
-            ->orderBy('sort_order')
-            ->get();
-        
-        // Load residential size tiers for size factor calculation
-        $residentialSizeTiers = \App\Models\ResidentialSizeTier::where('is_active', true)
-            ->orderBy('sort_order')
-            ->get();
+            ->orderBy('id')
+            ->first();
 
         return view('admin.inspections.form-cpi', compact(
             'property',
             'inspection',
-            'pricingPackages',
-            'cpiDomains',
-            'supplyMaterials',
-            'ageBrackets',
-            'containmentCategories',
-            'crawlAccessCategories',
-            'roofAccessCategories',
-            'equipmentRequirements',
-            'complexityCategories',
-            'cpiBandRanges',
-            'residentialSizeTiers'
+            'systems',
+            'defaultServicePackage'
         ));
     }
 
@@ -151,6 +187,10 @@ class InspectionController extends Controller
         $validated = $request->validate([
             'property_id' => 'required|exists:properties,id',
             'status' => 'required|in:scheduled,in_progress,completed',
+            'inspection_date' => 'required|date',
+            'inspector_id' => 'nullable|exists:users,id',
+            'weather_conditions' => 'nullable|string|max:120',
+            'summary' => 'nullable|string',
             
             // CPI Domain Scores
             'cpi_domain_*' => 'nullable|integer',
@@ -177,6 +217,16 @@ class InspectionController extends Controller
             'findings.*.material_cost' => 'nullable|numeric|min:0',
             'findings.*.notes' => 'nullable|string',
             'findings.*.property_id' => 'nullable|exists:properties,id',
+            'system_findings' => 'nullable|array',
+            'system_findings.*.system_id' => 'nullable|exists:systems,id',
+            'system_findings.*.subsystem_id' => 'nullable|exists:subsystems,id',
+            'system_findings.*.issue' => 'nullable|string|max:255',
+            'system_findings.*.location' => 'nullable|string|max:255',
+            'system_findings.*.spot' => 'nullable|string|max:255',
+            'system_findings.*.severity' => 'nullable|in:low,medium,high,critical,urgent,health_safety_threatening,value_depreciation,non_urgent',
+            'system_findings.*.notes' => 'nullable|string',
+            'system_findings.*.recommendations' => 'nullable',
+            'system_findings.*.recommendations.*' => 'nullable|string|max:500',
 
             // CPI hidden scores from phase 1 UI
             'cpi_total_score' => 'nullable|integer|min:0',
@@ -218,14 +268,14 @@ class InspectionController extends Controller
             $inspection = new Inspection();
             $inspection->property_id = $property->id;
             $inspection->project_id = $project->id;
-            $inspection->inspector_id = Auth::id();
+            $inspection->inspector_id = $validated['inspector_id'] ?? Auth::id();
             $inspection->assigned_by = $property->project_manager_id ?? Auth::id();
-            $inspection->scheduled_date = now();
+            $inspection->scheduled_date = $validated['inspection_date'];
         } else {
             $inspection->project_id = $inspection->project_id ?: $project->id;
-            $inspection->inspector_id = $inspection->inspector_id ?: Auth::id();
+            $inspection->inspector_id = $validated['inspector_id'] ?? ($inspection->inspector_id ?: Auth::id());
             $inspection->assigned_by = $inspection->assigned_by ?: ($property->project_manager_id ?? Auth::id());
-            $inspection->scheduled_date = $inspection->scheduled_date ?: now();
+            $inspection->scheduled_date = $validated['inspection_date'];
         }
         
         if ($validated['status'] === 'completed') {
@@ -233,11 +283,34 @@ class InspectionController extends Controller
         }
         
         $inspection->status = $validated['status'];
-        $inspection->service_package_id = $validated['service_package_id'] ?? null;
+
+        $autoPackage = PricingPackage::with('packagePricing')
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->first();
+
+        $inspection->service_package_id = $validated['service_package_id']
+            ?? $inspection->service_package_id
+            ?? $autoPackage?->id;
+
+        $inspection->weather_conditions = $validated['weather_conditions'] ?? null;
+
+        $inspection->owner_name = $property->user->name ?? null;
+        $inspection->owner_email = $property->user->email ?? null;
+        $inspection->owner_phone = $property->user->phone ?? null;
+        $inspection->property_code = $property->property_code;
+        $inspection->property_name = $property->property_name;
+        $inspection->property_address_snapshot = trim(($property->property_address ?? '') . ', ' . ($property->city ?? ''));
+        $inspection->property_type_snapshot = $property->type;
+        $inspection->residential_units_snapshot = $property->residential_units;
+        $inspection->commercial_sqft_snapshot = $property->square_footage_interior;
+        $inspection->mixed_use_weight_snapshot = $property->mixed_use_commercial_weight;
 
         if (!empty($inspection->service_package_id)) {
-            $selectedPackage = \App\Models\PricingPackage::with('packagePricing')->find($inspection->service_package_id);
+            $selectedPackage = PricingPackage::with('packagePricing')->find($inspection->service_package_id);
             if ($selectedPackage) {
+                $pricingService = new BaseServicePricingService();
                 $propertyTypeCode = strtolower((string) ($property->type ?? 'residential'));
                 if (str_contains($propertyTypeCode, 'mixed')) {
                     $propertyTypeCode = 'mixed_use';
@@ -247,13 +320,10 @@ class InspectionController extends Controller
                     $propertyTypeCode = 'residential';
                 }
 
-                $propertyTypeId = \Illuminate\Support\Facades\DB::table('property_types')
-                    ->where('type_code', $propertyTypeCode)
-                    ->value('id');
+                $price = $pricingService->getPackageBasePrice($selectedPackage->package_name, $propertyTypeCode);
 
-                $price = $propertyTypeId ? $selectedPackage->getPriceForPropertyType($propertyTypeId) : null;
                 if ($price === null) {
-                    $price = optional($selectedPackage->packagePricing->where('is_active', true)->first())->base_monthly_price;
+                    $price = (float) (optional($selectedPackage->packagePricing->where('is_active', true)->first())->base_monthly_price ?? 0);
                 }
 
                 $inspection->service_package_name = $selectedPackage->package_name;
@@ -302,10 +372,69 @@ class InspectionController extends Controller
             ? ((string) $cpiBandRange->min_score) . '-' . (($cpiBandRange->max_score === null) ? '+' : (string) $cpiBandRange->max_score)
             : null;
         
+        $systemFindings = collect($request->input('system_findings', []));
+        $systemNameMap = collect();
+        $systemSlugMap = collect();
+        $subsystemNameMap = collect();
+
+        if (Schema::hasTable('systems') && Schema::hasTable('subsystems') && $systemFindings->isNotEmpty()) {
+            $systemIds = $systemFindings->pluck('system_id')->filter()->unique()->values();
+            $subsystemIds = $systemFindings->pluck('subsystem_id')->filter()->unique()->values();
+            $systemNameMap = InspectionSystem::whereIn('id', $systemIds)->pluck('name', 'id');
+            $systemSlugMap = InspectionSystem::whereIn('id', $systemIds)->pluck('slug', 'id');
+            $subsystemNameMap = \App\Models\InspectionSubsystem::whereIn('id', $subsystemIds)->pluck('name', 'id');
+        }
+
+        $severityAliases = [
+            'urgent' => 'critical',
+            'health_safety_threatening' => 'high',
+            'value_depreciation' => 'medium',
+            'non_urgent' => 'low',
+        ];
+
+        $normalizedFindings = $systemFindings
+            ->map(function ($finding) use ($systemNameMap, $systemSlugMap, $subsystemNameMap, $severityAliases) {
+                $systemId = $finding['system_id'] ?? null;
+                $subsystemId = $finding['subsystem_id'] ?? null;
+                $rawSeverity = (string) ($finding['severity'] ?? 'low');
+                $normalizedSeverity = $severityAliases[$rawSeverity] ?? $rawSeverity;
+
+                return [
+                    'system_id' => $systemId,
+                    'system' => $systemNameMap[$systemId] ?? null,
+                    'system_slug' => $systemSlugMap[$systemId] ?? null,
+                    'subsystem_id' => $subsystemId,
+                    'subsystem' => $subsystemNameMap[$subsystemId] ?? null,
+                    'issue' => trim((string) ($finding['issue'] ?? '')),
+                    'location' => trim((string) ($finding['location'] ?? '')),
+                    'spot' => trim((string) ($finding['spot'] ?? '')),
+                    'severity' => in_array($normalizedSeverity, ['low', 'medium', 'high', 'critical'], true) ? $normalizedSeverity : 'low',
+                    'notes' => trim((string) ($finding['notes'] ?? '')),
+                    'recommendations' => collect(is_array($finding['recommendations'] ?? null)
+                        ? ($finding['recommendations'] ?? [])
+                        : preg_split('/\r\n|\r|\n|\|/', (string) ($finding['recommendations'] ?? '')))
+                        ->map(fn ($item) => trim((string) $item))
+                        ->filter()
+                        ->values()
+                        ->all(),
+                    'type' => $systemSlugMap[$systemId] ?? null,
+                ];
+            })
+            ->filter(function ($finding) {
+                return $finding['system_id']
+                    && ($finding['issue'] !== ''
+                        || $finding['notes'] !== ''
+                        || !empty($finding['recommendations']));
+            })
+            ->values()
+            ->all();
+
         // Store overall assessment
-        $inspection->summary = $validated['inspector_notes'] ?? 'CPI Inspection for ' . $property->property_name;
+        $inspection->summary = $validated['summary'] ?? ('Inspection for ' . $property->property_name);
+        $inspection->inspector_notes = $validated['inspector_notes'] ?? null;
         $inspection->recommendations = $validated['recommendations'] ?? null;
         $inspection->risk_summary = $validated['risk_summary'] ?? null;
+        $inspection->findings = $normalizedFindings;
 
         $disk = config('filesystems.default', 's3');
 
@@ -439,6 +568,14 @@ class InspectionController extends Controller
         $findings = \App\Models\PHARFinding::with('inspection')
             ->where('inspection_id', $inspection->id)
             ->get();
+
+        $materials = \App\Models\InspectionMaterial::where('inspection_id', $inspection->id)
+            ->orderBy('id')
+            ->get();
+
+        $domains = \App\Models\CpiDomain::where('is_active', true)
+            ->orderBy('domain_number')
+            ->get(['domain_number', 'domain_name', 'max_possible_points']);
         
         // Ensure property exists
         if (!$inspection->property) {
@@ -461,7 +598,7 @@ class InspectionController extends Controller
             }
         }
         
-        return view('admin.inspections.show', compact('inspection', 'findings'));
+        return view('admin.inspections.show', compact('inspection', 'findings', 'materials', 'domains'));
     }
 
     /**
@@ -493,13 +630,21 @@ class InspectionController extends Controller
      */
     public function downloadInvoice(string $id)
     {
-        $inspection = Inspection::with(['property.user', 'project', 'inspector', 'assignedBy'])
+        $inspection = Inspection::with(['property.user', 'property.projectManager', 'project.manager', 'inspector', 'assignedBy'])
             ->findOrFail($id);
         
         // Load findings for this inspection with inspection relationship
         $findings = \App\Models\PHARFinding::with('inspection')
             ->where('inspection_id', $inspection->id)
             ->get();
+
+        $materials = \App\Models\InspectionMaterial::where('inspection_id', $inspection->id)
+            ->orderBy('id')
+            ->get();
+
+        $domains = \App\Models\CpiDomain::where('is_active', true)
+            ->orderBy('domain_number')
+            ->get(['domain_number', 'domain_name', 'max_possible_points']);
         
         // Ensure property exists
         if (!$inspection->property) {
@@ -508,14 +653,16 @@ class InspectionController extends Controller
         }
         
         // Generate PDF
-        $pdf = Pdf::loadView('admin.inspections.invoice-pdf', compact('inspection', 'findings'))
+        $pdf = Pdf::loadView('admin.inspections.invoice-pdf', compact('inspection', 'findings', 'materials', 'domains'))
             ->setPaper('a4', 'portrait')
             ->setOption('margin-top', 10)
             ->setOption('margin-right', 10)
             ->setOption('margin-bottom', 10)
             ->setOption('margin-left', 10);
         
-        $filename = 'Invoice_' . $inspection->property->property_code . '_' . date('Ymd') . '.pdf';
+        $clientName = Str::slug((string) ($inspection->property?->user?->name ?? 'client'));
+        $propertyName = Str::slug((string) ($inspection->property?->property_name ?? $inspection->property?->property_code ?? 'property'));
+        $filename = 'Inspection_Report_' . $clientName . '_' . $propertyName . '.pdf';
         
         return $pdf->download($filename);
     }
@@ -643,6 +790,16 @@ class InspectionController extends Controller
         // Config-driven dropdown options (easy to extend)
         $pharCategories = config('phar.categories', []);
         $materialUnits = config('phar.material_units', []);
+        $fmcMaterialSettings = \App\Models\FmcMaterialSetting::active()->get(['material_name', 'default_unit', 'default_unit_cost']);
+        $findingTemplateSettings = \App\Models\FindingTemplateSetting::active()->get([
+            'task_question',
+            'category',
+            'default_priority',
+            'default_included',
+            'default_labour_hours',
+            'photo_reference',
+            'default_notes',
+        ]);
 
         // Selected service package (from CPI step) and property-type-specific monthly floor price
         $selectedServicePackage = null;
@@ -652,20 +809,8 @@ class InspectionController extends Controller
 
             if ($selectedServicePackage) {
                 $propertyType = strtolower((string) ($property->type ?? 'residential'));
-                $isCommercial = str_contains($propertyType, 'commercial');
-                $isResidential = str_contains($propertyType, 'residential');
-                $isMixed = str_contains($propertyType, 'mixed');
-
-                $resPrice = (float) ($selectedServicePackage->getPriceForPropertyType(1) ?? 0);
-                $comPrice = (float) ($selectedServicePackage->getPriceForPropertyType(2) ?? 0);
-
-                if ($isMixed) {
-                    $selectedServicePackagePrice = ($resPrice + $comPrice) / 2;
-                } elseif ($isCommercial && !$isResidential) {
-                    $selectedServicePackagePrice = $comPrice;
-                } else {
-                    $selectedServicePackagePrice = $resPrice;
-                }
+                $pricingService = new BaseServicePricingService();
+                $selectedServicePackagePrice = (float) ($pricingService->getPackageBasePrice($selectedServicePackage->package_name, $propertyType) ?? 0);
             }
         }
 
@@ -675,6 +820,8 @@ class InspectionController extends Controller
             'bdcSettings',
             'pharCategories',
             'materialUnits',
+            'fmcMaterialSettings',
+            'findingTemplateSettings',
             'defaultPropertySizePsf',
             'selectedServicePackage',
             'selectedServicePackagePrice'

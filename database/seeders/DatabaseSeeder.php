@@ -17,8 +17,10 @@ class DatabaseSeeder extends Seeder
         $this->call([
             RolePermissionSeeder::class,
             SuperAdminSeeder::class,
+            StaffUsersSeeder::class,
             CPIPricingSystemSeeder::class,
             BDCSettingsSeeder::class,
+            InspectionSystemsSeeder::class,
             // TierSeeder::class, // REMOVED: Tiers are now generated per client after inspection
         ]);
         

@@ -79,6 +79,23 @@
 
                         <div class="col-md-6">
                             <div class="form-group">
+                                <label for="property_subtype">Home Style</label>
+                                <select class="form-control @error('property_subtype') is-invalid @enderror" id="property_subtype" name="property_subtype">
+                                    <option value="">Select Home Style</option>
+                                    <option value="house" {{ old('property_subtype') == 'house' ? 'selected' : '' }}>House</option>
+                                    <option value="townhome" {{ old('property_subtype') == 'townhome' ? 'selected' : '' }}>Townhome</option>
+                                    <option value="condo" {{ old('property_subtype') == 'condo' ? 'selected' : '' }}>Condo</option>
+                                    <option value="duplex" {{ old('property_subtype') == 'duplex' ? 'selected' : '' }}>Duplex</option>
+                                    <option value="multi_unit" {{ old('property_subtype') == 'multi_unit' ? 'selected' : '' }}>Multi-Unit</option>
+                                </select>
+                                @error('property_subtype')
+                                <span class="invalid-feedback">{{ $message }}</span>
+                                @enderror
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-group">
                                 <label for="year_built">Year Built</label>
                                 <select class="form-control @error('year_built') is-invalid @enderror" 
                                     id="year_built" name="year_built">
@@ -649,6 +666,128 @@
                 </div>
             </div>
 
+            {{-- Warm Welcome & Vision Setting (let us know you) --}}
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h4 class="card-title mb-4">
+                        <i class="mdi mdi-hand-heart text-primary"></i> Warm Welcome & Vision Setting (let us know you)
+                    </h4>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label class="mb-2">Tell us about your home journey <small class="text-muted">(Select all that resonate)</small></label>
+                                @php $oldHomeJourney = (array) old('home_journey', []); @endphp
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input js-select-all" type="checkbox" id="select_all_home_journey" data-target-name="home_journey[]">
+                                    <label class="form-check-label fw-semibold" for="select_all_home_journey">Select all</label>
+                                </div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="home_journey[]" id="hj_proactive" value="proactive_care" {{ in_array('proactive_care', $oldHomeJourney) ? 'checked' : '' }}><label class="form-check-label" for="hj_proactive">I want proactive care so issues never become emergencies</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="home_journey[]" id="hj_predictable" value="predictable_maintenance" {{ in_array('predictable_maintenance', $oldHomeJourney) ? 'checked' : '' }}><label class="form-check-label" for="hj_predictable">I want predictable maintenance & peace of mind</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="home_journey[]" id="hj_quality" value="improve_quality_of_life" {{ in_array('improve_quality_of_life', $oldHomeJourney) ? 'checked' : '' }}><label class="form-check-label" for="hj_quality">I want to improve quality of life & comfort</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="home_journey[]" id="hj_value" value="maintain_property_value" {{ in_array('maintain_property_value', $oldHomeJourney) ? 'checked' : '' }}><label class="form-check-label" for="hj_value">I want to maintain/increase property value</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="home_journey[]" id="hj_repairs" value="support_repairs_and_renovations" {{ in_array('support_repairs_and_renovations', $oldHomeJourney) ? 'checked' : '' }}><label class="form-check-label" for="hj_repairs">I need support managing repairs, trades, and renovations</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="home_journey[]" id="hj_team" value="trusted_team" {{ in_array('trusted_team', $oldHomeJourney) ? 'checked' : '' }}><label class="form-check-label" for="hj_team">I want a trusted team — not random contractors</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="home_journey[]" id="hj_ready" value="guest_ready" {{ in_array('guest_ready', $oldHomeJourney) ? 'checked' : '' }}><label class="form-check-label" for="hj_ready">I want my home to be always guest-ready / inspection-ready</label></div>
+                                <div class="mt-3">
+                                    <label for="custom_home_journey_input" class="form-label">Add custom home journey item</label>
+                                    <div class="d-flex gap-2 mb-2">
+                                        <input type="text" class="form-control" id="custom_home_journey_input" placeholder="Type custom journey item and click Add">
+                                        <button type="button" class="btn btn-outline-primary" id="add_custom_home_journey_btn">
+                                            <i class="mdi mdi-plus"></i> Add
+                                        </button>
+                                    </div>
+                                    <div id="custom_home_journey_list" class="list-input-container"></div>
+                                    <div id="custom_home_journey_inputs"></div>
+                                </div>
+                                @error('home_journey')<span class="text-danger small d-block mt-1">{{ $message }}</span>@enderror
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label class="mb-2">What does a well-cared-for home feel like to you?</label>
+                                @php $oldHomeFeel = (array) old('home_feel', []); @endphp
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input js-select-all" type="checkbox" id="select_all_home_feel" data-target-name="home_feel[]">
+                                    <label class="form-check-label fw-semibold" for="select_all_home_feel">Select all</label>
+                                </div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="home_feel[]" id="hf_safe" value="safe_healthy" {{ in_array('safe_healthy', $oldHomeFeel) ? 'checked' : '' }}><label class="form-check-label" for="hf_safe">Safe & healthy</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="home_feel[]" id="hf_organized" value="organized_peaceful" {{ in_array('organized_peaceful', $oldHomeFeel) ? 'checked' : '' }}><label class="form-check-label" for="hf_organized">Organized & peaceful</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="home_feel[]" id="hf_inviting" value="inviting_beautiful" {{ in_array('inviting_beautiful', $oldHomeFeel) ? 'checked' : '' }}><label class="form-check-label" for="hf_inviting">Inviting & beautiful</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="home_feel[]" id="hf_efficient" value="efficient_modern" {{ in_array('efficient_modern', $oldHomeFeel) ? 'checked' : '' }}><label class="form-check-label" for="hf_efficient">Efficient & modern</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="home_feel[]" id="hf_low_stress" value="low_stress_effortless" {{ in_array('low_stress_effortless', $oldHomeFeel) ? 'checked' : '' }}><label class="form-check-label" for="hf_low_stress">Low-stress & effortless</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="home_feel[]" id="hf_ready" value="ready_for_life_changes" {{ in_array('ready_for_life_changes', $oldHomeFeel) ? 'checked' : '' }}><label class="form-check-label" for="hf_ready">Ready for life changes (aging, kids, guests, rental plans)</label></div>
+                                <div class="mt-3">
+                                    <label for="custom_home_feel_input" class="form-label">Add custom home feel item</label>
+                                    <div class="d-flex gap-2 mb-2">
+                                        <input type="text" class="form-control" id="custom_home_feel_input" placeholder="Type custom home-feel item and click Add">
+                                        <button type="button" class="btn btn-outline-primary" id="add_custom_home_feel_btn">
+                                            <i class="mdi mdi-plus"></i> Add
+                                        </button>
+                                    </div>
+                                    <div id="custom_home_feel_list" class="list-input-container"></div>
+                                    <div id="custom_home_feel_inputs"></div>
+                                </div>
+                                @error('home_feel')<span class="text-danger small d-block mt-1">{{ $message }}</span>@enderror
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{--let us know your Home Care Goals --}}
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h4 class="card-title mb-4">
+                        <i class="mdi mdi-target text-success"></i> let us know your Home Care Goals
+                    </h4>
+                    @php $oldCareGoals = (array) old('care_goals', []); @endphp
+                    <div class="form-check mb-3">
+                        <input class="form-check-input js-select-all" type="checkbox" id="select_all_care_goals" data-target-name="care_goals[]">
+                        <label class="form-check-label fw-semibold" for="select_all_care_goals">Select all Home Care Goals</label>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label class="fw-bold mb-2">Comfort & Beauty</label>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="cg_walls" value="walls_paint_care" {{ in_array('walls_paint_care', $oldCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="cg_walls">Walls & paint care</label></div>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="cg_trim" value="trim_woodwork_finishing" {{ in_array('trim_woodwork_finishing', $oldCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="cg_trim">Trim & woodwork finishing</label></div>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="cg_flooring" value="flooring_care_patching" {{ in_array('flooring_care_patching', $oldCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="cg_flooring">Flooring care & patching</label></div>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="cg_appliance" value="appliance_support" {{ in_array('appliance_support', $oldCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="cg_appliance">Appliance support</label></div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="fw-bold mb-2">Protection & Safety</label>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="cg_electrical" value="electrical_safety" {{ in_array('electrical_safety', $oldCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="cg_electrical">Electrical safety</label></div>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="cg_moisture" value="moisture_leak_prevention" {{ in_array('moisture_leak_prevention', $oldCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="cg_moisture">Moisture & leak prevention</label></div>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="cg_hvac" value="hvac_filters_program" {{ in_array('hvac_filters_program', $oldCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="cg_hvac">HVAC & filters program</label></div>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="cg_pest" value="pest_prevention_sealing" {{ in_array('pest_prevention_sealing', $oldCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="cg_pest">Pest prevention & sealing</label></div>
+                        </div>
+
+                        <div class="col-md-6 mt-3">
+                            <label class="fw-bold mb-2">Exterior & Grounds</label>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="cg_gutter" value="gutter_cleaning_drainage" {{ in_array('gutter_cleaning_drainage', $oldCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="cg_gutter">Gutter cleaning & drainage</label></div>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="cg_pressure" value="pressure_washing" {{ in_array('pressure_washing', $oldCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="cg_pressure">Pressure washing</label></div>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="cg_garden" value="garden_lawn_care" {{ in_array('garden_lawn_care', $oldCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="cg_garden">Garden / lawn care</label></div>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="cg_tree" value="tree_pruning_yard_health" {{ in_array('tree_pruning_yard_health', $oldCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="cg_tree">Tree pruning & yard health</label></div>
+                        </div>
+
+                        <div class="col-md-6 mt-3">
+                            <label class="fw-bold mb-2">Convenience & Lifestyle</label>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="cg_seasonal" value="seasonal_prep" {{ in_array('seasonal_prep', $oldCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="cg_seasonal">Seasonal prep (fall/spring)</label></div>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="cg_travel" value="travel_away_watch" {{ in_array('travel_away_watch', $oldCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="cg_travel">Travel-away home watch</label></div>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="cg_move" value="moving_in_out_service" {{ in_array('moving_in_out_service', $oldCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="cg_move">Moving in or out service</label></div>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="cg_presale" value="pre_sale_refresh" {{ in_array('pre_sale_refresh', $oldCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="cg_presale">Pre-sale property refresh</label></div>
+                        </div>
+
+                        <div class="col-12">
+                            @error('care_goals')<span class="text-danger small d-block mt-2">{{ $message }}</span>@enderror
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {{-- Property Details --}}
             <div class="card mb-4">
                 <div class="card-body">
@@ -669,6 +808,18 @@
                                     <option value="high-use" {{ old('personality') == 'high-use' ? 'selected' : '' }}>High-Use & Heavy Traffic</option>
                                 </select>
                                 @error('personality')
+                                <span class="invalid-feedback">{{ $message }}</span>
+                                @enderror
+                            </div>
+                        </div>
+
+                        <div class="col-md-12">
+                            <div class="form-group">
+                                <label for="personality_notes">Describe your property personality further <small class="text-muted">(optional)</small></label>
+                                <textarea class="form-control @error('personality_notes') is-invalid @enderror"
+                                    id="personality_notes" name="personality_notes" rows="3"
+                                    placeholder="Add any extra details about style, vibe, usage patterns, or preferences...">{{ old('personality_notes') }}</textarea>
+                                @error('personality_notes')
                                 <span class="invalid-feedback">{{ $message }}</span>
                                 @enderror
                             </div>
@@ -710,33 +861,32 @@
 
                         <div class="col-md-12">
                             <div class="form-group">
-                                <label for="sensitivity_input">Sensitivities or Special Considerations</label>
-                                @php
-                                    $oldSensitivitiesRaw = old('sensitivities');
-                                    if (is_array($oldSensitivitiesRaw)) {
-                                        $oldSensitivitiesList = array_values(array_filter(array_map('trim', $oldSensitivitiesRaw)));
-                                    } else {
-                                        $oldSensitivitiesRaw = trim((string) $oldSensitivitiesRaw);
-                                        if ($oldSensitivitiesRaw === '' || strtolower($oldSensitivitiesRaw) === 'null') {
-                                            $oldSensitivitiesList = [];
-                                        } else {
-                                            $oldSensitivitiesList = array_values(array_filter(array_map('trim', preg_split('/[,\n]+/', $oldSensitivitiesRaw))));
-                                        }
-                                    }
-                                @endphp
+                                <label class="mb-2">Any sensitivities? <small class="text-muted">(check all)</small></label>
+                                @php $selectedSensitivities = (array) old('sensitivities', []); @endphp
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input js-select-all" type="checkbox" id="select_all_sensitivities" data-target-name="sensitivities[]">
+                                    <label class="form-check-label fw-semibold" for="select_all_sensitivities">Select all</label>
+                                </div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="sensitivities[]" id="sens_allergies" value="allergies_air_quality" {{ in_array('allergies_air_quality', $selectedSensitivities) ? 'checked' : '' }}><label class="form-check-label" for="sens_allergies">Allergies / air quality</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="sensitivities[]" id="sens_water" value="water_damage_risk" {{ in_array('water_damage_risk', $selectedSensitivities) ? 'checked' : '' }}><label class="form-check-label" for="sens_water">Water damage risk</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="sensitivities[]" id="sens_aging" value="aging_in_place_needs" {{ in_array('aging_in_place_needs', $selectedSensitivities) ? 'checked' : '' }}><label class="form-check-label" for="sens_aging">Aging-in-place needs</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="sensitivities[]" id="sens_eco" value="eco_friendly_products_only" {{ in_array('eco_friendly_products_only', $selectedSensitivities) ? 'checked' : '' }}><label class="form-check-label" for="sens_eco">Eco-friendly products only</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="sensitivities[]" id="sens_pet" value="pet_safe_cleaning_materials" {{ in_array('pet_safe_cleaning_materials', $selectedSensitivities) ? 'checked' : '' }}><label class="form-check-label" for="sens_pet">Pet-safe cleaning materials</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="sensitivities[]" id="sens_accessibility" value="accessibility_modifications" {{ in_array('accessibility_modifications', $selectedSensitivities) ? 'checked' : '' }}><label class="form-check-label" for="sens_accessibility">Accessibility Modifications</label></div>
 
-                                <div class="d-flex gap-2 mb-2">
-                                    <input type="text" class="form-control" id="sensitivity_input" placeholder="Type a sensitivity/consideration and click Add">
-                                    <button type="button" class="btn btn-outline-primary" id="add_sensitivity_btn">
-                                        <i class="mdi mdi-plus"></i> Add
-                                    </button>
+                                <div class="mt-3">
+                                    <label for="custom_sensitivity_input" class="form-label">Add custom sensitivity</label>
+                                    <div class="d-flex gap-2 mb-2">
+                                        <input type="text" class="form-control" id="custom_sensitivity_input" placeholder="Type custom sensitivity and click Add">
+                                        <button type="button" class="btn btn-outline-primary" id="add_custom_sensitivity_btn">
+                                            <i class="mdi mdi-plus"></i> Add
+                                        </button>
+                                    </div>
+                                    <div id="custom_sensitivities_list" class="list-input-container"></div>
+                                    <div id="custom_sensitivities_inputs"></div>
+                                    <small class="form-text text-muted">You can add anything not listed above and remove it before submit.</small>
                                 </div>
 
-                                <input type="hidden" name="sensitivities" id="sensitivities" value="{{ is_array(old('sensitivities')) ? implode(', ', old('sensitivities')) : old('sensitivities') }}">
-
-                                <div id="sensitivities_list" class="list-input-container"></div>
-
-                                <small class="form-text text-muted">Add items one by one. You can remove any item before submitting.</small>
                                 @error('sensitivities')
                                 <span class="text-danger small d-block mt-1">{{ $message }}</span>
                                 @enderror
@@ -903,6 +1053,193 @@ document.addEventListener('DOMContentLoaded', function() {
         numberOfUnitsWrapper.style.display = this.checked ? 'block' : 'none';
     });
 
+    // Generic select-all support for grouped checkboxes
+    const selectAllToggles = document.querySelectorAll('.js-select-all');
+
+    // Custom checklist values add/remove (journey, feel, sensitivities)
+    const predefinedHomeJourneyValues = [
+        'proactive_care',
+        'predictable_maintenance',
+        'improve_quality_of_life',
+        'maintain_property_value',
+        'support_repairs_and_renovations',
+        'trusted_team',
+        'guest_ready'
+    ];
+
+    const predefinedHomeFeelValues = [
+        'safe_healthy',
+        'organized_peaceful',
+        'inviting_beautiful',
+        'efficient_modern',
+        'low_stress_effortless',
+        'ready_for_life_changes'
+    ];
+
+    const predefinedSensitivityValues = [
+        'allergies_air_quality',
+        'water_damage_risk',
+        'aging_in_place_needs',
+        'eco_friendly_products_only',
+        'pet_safe_cleaning_materials',
+        'accessibility_modifications'
+    ];
+
+    function normalizeCustomSensitivity(value) {
+        return String(value || '').trim();
+    }
+
+    function initCustomChecklistValues(config) {
+        const inputEl = document.getElementById(config.inputId);
+        const addBtn = document.getElementById(config.addBtnId);
+        const listEl = document.getElementById(config.listId);
+        const hiddenWrap = document.getElementById(config.hiddenContainerId);
+        const values = (config.selectedRaw || []).filter(value => !config.predefinedValues.includes(value));
+
+        function syncHiddenInputs() {
+            hiddenWrap.innerHTML = '';
+            values.forEach((value) => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = config.hiddenName;
+                input.value = value;
+                hiddenWrap.appendChild(input);
+            });
+        }
+
+        function renderValues() {
+            listEl.innerHTML = '';
+
+            if (!values.length) {
+                const empty = document.createElement('div');
+                empty.className = 'text-muted small';
+                empty.textContent = config.emptyText;
+                listEl.appendChild(empty);
+                syncHiddenInputs();
+                return;
+            }
+
+            values.forEach((item, index) => {
+                const badge = document.createElement('div');
+                badge.className = 'list-item-badge';
+                badge.innerHTML = `
+                    <span>${item}</span>
+                    <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-2" data-index="${index}" aria-label="${config.removeAriaLabel}">
+                        <i class="mdi mdi-close-circle"></i>
+                    </button>
+                `;
+
+                badge.querySelector('button').addEventListener('click', function() {
+                    values.splice(index, 1);
+                    renderValues();
+                });
+
+                listEl.appendChild(badge);
+            });
+
+            syncHiddenInputs();
+        }
+
+        function addValue() {
+            const value = normalizeCustomSensitivity(inputEl.value);
+            if (!value) {
+                return;
+            }
+
+            const existsInPredefined = config.predefinedValues.includes(value);
+            const existsInCustom = values.some(item => item.toLowerCase() === value.toLowerCase());
+
+            if (!existsInPredefined && !existsInCustom) {
+                values.push(value);
+            }
+
+            inputEl.value = '';
+            renderValues();
+        }
+
+        addBtn?.addEventListener('click', addValue);
+        inputEl?.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addValue();
+            }
+        });
+
+        renderValues();
+    }
+
+    initCustomChecklistValues({
+        inputId: 'custom_home_journey_input',
+        addBtnId: 'add_custom_home_journey_btn',
+        listId: 'custom_home_journey_list',
+        hiddenContainerId: 'custom_home_journey_inputs',
+        hiddenName: 'home_journey[]',
+        selectedRaw: @json($oldHomeJourney ?? []),
+        predefinedValues: predefinedHomeJourneyValues,
+        emptyText: 'No custom home journey items added.',
+        removeAriaLabel: 'Remove home journey item'
+    });
+
+    initCustomChecklistValues({
+        inputId: 'custom_home_feel_input',
+        addBtnId: 'add_custom_home_feel_btn',
+        listId: 'custom_home_feel_list',
+        hiddenContainerId: 'custom_home_feel_inputs',
+        hiddenName: 'home_feel[]',
+        selectedRaw: @json($oldHomeFeel ?? []),
+        predefinedValues: predefinedHomeFeelValues,
+        emptyText: 'No custom home feel items added.',
+        removeAriaLabel: 'Remove home feel item'
+    });
+
+    initCustomChecklistValues({
+        inputId: 'custom_sensitivity_input',
+        addBtnId: 'add_custom_sensitivity_btn',
+        listId: 'custom_sensitivities_list',
+        hiddenContainerId: 'custom_sensitivities_inputs',
+        hiddenName: 'sensitivities[]',
+        selectedRaw: @json($selectedSensitivities ?? []),
+        predefinedValues: predefinedSensitivityValues,
+        emptyText: 'No custom sensitivities added.',
+        removeAriaLabel: 'Remove sensitivity'
+    });
+
+    function getTargetCheckboxesByName(name) {
+        return Array.from(document.querySelectorAll(`input[type="checkbox"][name="${name}"]`));
+    }
+
+    function syncSelectAllState(name) {
+        const toggle = document.querySelector(`.js-select-all[data-target-name="${name}"]`);
+        if (!toggle) return;
+
+        const targets = getTargetCheckboxesByName(name);
+        if (!targets.length) {
+            toggle.checked = false;
+            return;
+        }
+
+        toggle.checked = targets.every(checkbox => checkbox.checked);
+    }
+
+    selectAllToggles.forEach(toggle => {
+        const targetName = toggle.dataset.targetName;
+        const targets = getTargetCheckboxesByName(targetName);
+
+        toggle.addEventListener('change', function() {
+            targets.forEach(checkbox => {
+                checkbox.checked = this.checked;
+            });
+        });
+
+        targets.forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                syncSelectAllState(targetName);
+            });
+        });
+
+        syncSelectAllState(targetName);
+    });
+
     // Photo preview with validation and accumulation
     const photoInput = document.getElementById('property_photos');
     const photoPreview = document.getElementById('photo-preview');
@@ -1026,13 +1363,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const knownProblemsList = document.getElementById('known_problems_list');
     const addKnownProblemBtn = document.getElementById('add_known_problem_btn');
 
-    const sensitivitiesHidden = document.getElementById('sensitivities');
-    const sensitivitiesInput = document.getElementById('sensitivity_input');
-    const sensitivitiesList = document.getElementById('sensitivities_list');
-    const addSensitivityBtn = document.getElementById('add_sensitivity_btn');
-
     const knownProblemsItems = @json($oldKnownProblemsList ?? []);
-    const sensitivitiesItems = @json($oldSensitivitiesList ?? []);
 
     function normalizeValue(value) {
         return String(value || '').trim();
@@ -1091,23 +1422,12 @@ document.addEventListener('DOMContentLoaded', function() {
         render();
     }
 
-    function removeSensitivity(index) {
-        sensitivitiesItems.splice(index, 1);
-        syncHiddenField(sensitivitiesHidden, sensitivitiesItems);
-        render();
-    }
-
     function render() {
         renderItems(knownProblemsList, knownProblemsItems, removeKnownProblem);
-        renderItems(sensitivitiesList, sensitivitiesItems, removeSensitivity);
     }
 
     addKnownProblemBtn.addEventListener('click', function() {
         addItem(knownProblemsInput, knownProblemsItems, knownProblemsHidden, knownProblemsList);
-    });
-
-    addSensitivityBtn.addEventListener('click', function() {
-        addItem(sensitivitiesInput, sensitivitiesItems, sensitivitiesHidden, sensitivitiesList);
     });
 
     knownProblemsInput.addEventListener('keydown', function(e) {
@@ -1117,15 +1437,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    sensitivitiesInput.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            addItem(sensitivitiesInput, sensitivitiesItems, sensitivitiesHidden, sensitivitiesList);
-        }
-    });
-
     syncHiddenField(knownProblemsHidden, knownProblemsItems);
-    syncHiddenField(sensitivitiesHidden, sensitivitiesItems);
     render();
 
     // Blueprint preview with validation

@@ -233,7 +233,7 @@
                                     <span class="text-muted">Not assigned</span>
                                     @endif
                                 </td>
-                                <td>{{ $property->assigned_at->format('M d, Y') }}</td>
+                                <td>{{ optional($property->assigned_at)->format('M d, Y') ?? '-' }}</td>
                                 <td>
                                     @if($property->inspection_scheduled_at)
                                     <span class="badge badge-success">
@@ -254,10 +254,11 @@
                                            class="btn btn-sm btn-info" title="View Property">
                                             <i class="mdi mdi-eye"></i>
                                         </a>
-                                        <button type="button" class="btn btn-sm btn-success" 
-                                                title="Start Inspection">
+                                        <a href="{{ route('inspections.create', ['property_id' => $property->id]) }}"
+                                           class="btn btn-sm btn-success"
+                                           title="Start Inspection">
                                             <i class="mdi mdi-clipboard-check"></i>
-                                        </button>
+                                        </a>
                                     </div>
                                 </td>
                             </tr>

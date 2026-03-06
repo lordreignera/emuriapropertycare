@@ -122,41 +122,68 @@ class DashboardController extends Controller
         
         // Inspector Dashboard
         if ($user->hasRole('Inspector')) {
-            // Get properties assigned to this inspector
-            $assignedProperties = Property::where('inspector_id', $user->id)
-                ->where('status', 'awaiting_inspection')
-                ->with(['user', 'projectManager'])
+            // Get properties assigned to this inspector (supports both property-level and inspection-level assignment)
+            $assignedProperties = Property::where('status', 'awaiting_inspection')
+                ->where(function ($query) use ($user) {
+                    $query->where('inspector_id', $user->id)
+                        ->orWhereHas('inspections', function ($inspectionQuery) use ($user) {
+                            $inspectionQuery->where('inspector_id', $user->id)
+                                ->whereIn('status', ['scheduled', 'in_progress']);
+                        });
+                })
+                ->with([
+                    'user',
+                    'projectManager',
+                    'inspections' => function ($inspectionQuery) use ($user) {
+                        $inspectionQuery->where('inspector_id', $user->id)
+                            ->whereIn('status', ['scheduled', 'in_progress'])
+                            ->orderByDesc('scheduled_date')
+                            ->orderByDesc('id');
+                    },
+                ])
                 ->get();
+
+            $assignedProperties = $assignedProperties->map(function ($property) {
+                $latestAssignedInspection = $property->inspections->first();
+
+                if (!$property->inspection_scheduled_at && $latestAssignedInspection?->scheduled_date) {
+                    $property->inspection_scheduled_at = $latestAssignedInspection->scheduled_date;
+                }
+
+                if (!$property->assigned_at) {
+                    $property->assigned_at = $latestAssignedInspection?->created_at ?? $property->updated_at;
+                }
+
+                return $property;
+            });
             
             // Count inspections assigned to this inspector
             $assignedCount = $assignedProperties->count();
             
             // Count scheduled inspections
-            $scheduledCount = Property::where('inspector_id', $user->id)
-                ->where('status', 'awaiting_inspection')
-                ->whereNotNull('inspection_scheduled_at')
-                ->count();
+            $scheduledCount = $assignedProperties->filter(function ($property) {
+                return !is_null($property->inspection_scheduled_at);
+            })->count();
             
             // Count unscheduled inspections
-            $unscheduledCount = Property::where('inspector_id', $user->id)
-                ->where('status', 'awaiting_inspection')
-                ->whereNull('inspection_scheduled_at')
-                ->count();
+            $unscheduledCount = $assignedProperties->filter(function ($property) {
+                return is_null($property->inspection_scheduled_at);
+            })->count();
             
             // Count completed inspections
-            $completedCount = Inspection::whereHas('project.property', function($query) use ($user) {
-                $query->where('inspector_id', $user->id);
-            })->where('status', 'completed')->count();
+            $completedCount = Inspection::where('inspector_id', $user->id)
+                ->where('status', 'completed')
+                ->distinct('property_id')
+                ->count('property_id');
             
             // Get upcoming inspections
-            $upcomingInspections = Property::where('inspector_id', $user->id)
-                ->where('status', 'awaiting_inspection')
-                ->whereNotNull('inspection_scheduled_at')
-                ->where('inspection_scheduled_at', '>=', now())
-                ->orderBy('inspection_scheduled_at', 'asc')
-                ->with(['user', 'projectManager'])
+            $upcomingInspections = $assignedProperties
+                ->filter(function ($property) {
+                    return $property->inspection_scheduled_at && $property->inspection_scheduled_at >= now();
+                })
+                ->sortBy('inspection_scheduled_at')
                 ->take(5)
-                ->get();
+                ->values();
 
             return view('admin.inspector-dashboard', compact(
                 'assignedProperties',
@@ -220,7 +247,16 @@ class DashboardController extends Controller
         if ($user->hasRole(['Super Admin', 'Administrator'])) {
             // Admins see all data
             $propertiesCount = Property::count();
-            $inspectionsCount = Inspection::count();
+            $inspectionsCount = Inspection::where('status', '!=', 'cancelled')
+                ->distinct('property_id')
+                ->count('property_id');
+            $paidInspectionsCount = Inspection::where('inspection_fee_status', 'paid')
+                ->where('status', '!=', 'cancelled')
+                ->distinct('property_id')
+                ->count('property_id');
+            $completedInspectionsCount = Inspection::where('status', 'completed')
+                ->distinct('property_id')
+                ->count('property_id');
             $projectsCount = Project::where('status', 'active')->count();
             $invoicesCount = Invoice::count();
             
@@ -236,6 +272,8 @@ class DashboardController extends Controller
             return view('admin.index', compact(
                 'propertiesCount',
                 'inspectionsCount',
+                'paidInspectionsCount',
+                'completedInspectionsCount',
                 'projectsCount',
                 'invoicesCount',
                 'subscription',
@@ -264,6 +302,15 @@ class DashboardController extends Controller
                 ->where('status', 'completed')
                 ->distinct('property_id')
                 ->count('property_id');
+
+            // Count properties with inspection fee paid
+            $paidInspectionsCount = Inspection::whereIn('property_id', $propertyIds)
+                ->where('inspection_fee_status', 'paid')
+                ->distinct('property_id')
+                ->count('property_id');
+
+            // Count paid inspections that are not yet completed
+            $paidPendingInspectionsCount = max($paidInspectionsCount - $inspectionsCount, 0);
             
             // Count unpaid invoices for KPI
             $unpaidInvoices = Invoice::where('user_id', $user->id)
@@ -272,6 +319,35 @@ class DashboardController extends Controller
 
             // Keep total invoices for optional secondary display
             $invoicesCount = Invoice::where('user_id', $user->id)->count();
+
+            // Invoice breakdown (inspection fee vs work payment) + paid/pending
+            $inspectionInvoicesCount = Invoice::where('user_id', $user->id)
+                ->where('type', 'additional')
+                ->count();
+
+            $inspectionInvoicesPaidCount = Invoice::where('user_id', $user->id)
+                ->where('type', 'additional')
+                ->paid()
+                ->count();
+
+            $inspectionInvoicesPendingCount = Invoice::where('user_id', $user->id)
+                ->where('type', 'additional')
+                ->pending()
+                ->count();
+
+            $workPaymentInvoicesCount = Invoice::where('user_id', $user->id)
+                ->where('type', 'project')
+                ->count();
+
+            $workPaymentInvoicesPaidCount = Invoice::where('user_id', $user->id)
+                ->where('type', 'project')
+                ->paid()
+                ->count();
+
+            $workPaymentInvoicesPendingCount = Invoice::where('user_id', $user->id)
+                ->where('type', 'project')
+                ->pending()
+                ->count();
                 
             // Get pending inspections
             $pendingInspections = Inspection::whereIn('project_id', $projectIds)
@@ -308,9 +384,17 @@ class DashboardController extends Controller
             return view('client.dashboard', compact(
                 'propertiesCount',
                 'inspectionsCount',
+                'paidInspectionsCount',
+                'paidPendingInspectionsCount',
                 'projectsCount',
                 'invoicesCount',
                 'unpaidInvoices',
+                'inspectionInvoicesCount',
+                'inspectionInvoicesPaidCount',
+                'inspectionInvoicesPendingCount',
+                'workPaymentInvoicesCount',
+                'workPaymentInvoicesPaidCount',
+                'workPaymentInvoicesPendingCount',
                 'pendingInspections',
                 'subscription',
                 'recentProperties',
@@ -321,6 +405,8 @@ class DashboardController extends Controller
         // Default for other roles
         $propertiesCount = 0;
         $inspectionsCount = 0;
+        $paidInspectionsCount = 0;
+        $completedInspectionsCount = 0;
         $projectsCount = 0;
         $invoicesCount = 0;
         $subscription = null;
@@ -329,6 +415,8 @@ class DashboardController extends Controller
         return view('admin.index', compact(
             'propertiesCount',
             'inspectionsCount',
+            'paidInspectionsCount',
+            'completedInspectionsCount',
             'projectsCount',
             'invoicesCount',
             'subscription',

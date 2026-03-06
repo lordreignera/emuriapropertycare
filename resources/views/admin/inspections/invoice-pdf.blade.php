@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Inspection Invoice - {{ $inspection->property?->property_code }}</title>
+    <title>Inspection Report - {{ $inspection->property?->property_code }}</title>
     <style>
         * {
             margin: 0;
@@ -199,7 +199,7 @@
 <body>
     <!-- Header -->
     <div class="header">
-        <h1>INSPECTION INVOICE</h1>
+        <h1>INSPECTION REPORT</h1>
         <p>Property Care Pricing Breakdown & Assessment Report</p>
     </div>
 
@@ -226,6 +226,12 @@
             <div class="info-row">
                 <div class="info-label">Inspector:</div>
                 <div class="info-value">{{ $inspection->inspector?->name ?? 'Not Assigned' }}</div>
+            </div>
+            <div class="info-row">
+                <div class="info-label">Project Manager:</div>
+                <div class="info-value">
+                    {{ $inspection->property?->projectManager?->name ?? $inspection->project?->manager?->name ?? 'Not Assigned' }}
+                </div>
             </div>
             <div class="info-row">
                 <div class="info-label">Inspection Date:</div>
@@ -285,6 +291,81 @@
                     <td class="text-right"><strong>{{ number_format($findings->sum('labour_hours'), 1) }} hrs</strong></td>
                     <td class="text-right"><strong>${{ number_format($findings->sum('material_cost'), 2) }}</strong></td>
                     <td class="text-right"><strong>${{ number_format($findings->sum('labour_cost') + $findings->sum('material_cost'), 2) }}</strong></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+    @endif
+
+    <!-- CPI Domain Breakdown -->
+    @if(($domains ?? collect())->count() > 0)
+    <div class="info-section">
+        <h3>CPI Domain Breakdown</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 12%">Domain #</th>
+                    <th>Domain</th>
+                    <th style="width: 18%" class="text-right">Score</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($domains as $domain)
+                @php
+                    $field = 'domain_' . $domain->domain_number . '_score';
+                    $score = (int) ($inspection->{$field} ?? 0);
+                    $maxPoints = (int) ($domain->max_possible_points ?? 0);
+                @endphp
+                <tr>
+                    <td>{{ $domain->domain_number }}</td>
+                    <td>{{ $domain->domain_name }}</td>
+                    <td class="text-right">
+                        <strong>{{ $score }}</strong>
+                        @if($maxPoints > 0)
+                            / {{ $maxPoints }}
+                        @endif
+                    </td>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
+    </div>
+    @endif
+
+    <!-- Materials Summary -->
+    @if(($materials ?? collect())->count() > 0)
+    <div class="info-section">
+        <h3>Materials Summary ({{ $materials->count() }} items)</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 5%">#</th>
+                    <th>Material</th>
+                    <th style="width: 12%" class="text-right">Qty</th>
+                    <th style="width: 10%">Unit</th>
+                    <th style="width: 14%" class="text-right">Unit Cost</th>
+                    <th style="width: 14%" class="text-right">Line Total</th>
+                    <th style="width: 16%">Category</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($materials as $material)
+                <tr>
+                    <td>{{ $loop->iteration }}</td>
+                    <td>{{ $material->material_name ?? '-' }}</td>
+                    <td class="text-right">{{ number_format((float) ($material->quantity ?? 0), 2) }}</td>
+                    <td>{{ $material->unit ?? '-' }}</td>
+                    <td class="text-right">${{ number_format((float) ($material->unit_cost ?? 0), 2) }}</td>
+                    <td class="text-right"><strong>${{ number_format((float) ($material->line_total ?? 0), 2) }}</strong></td>
+                    <td>{{ $material->category ?? 'General' }}</td>
+                </tr>
+                @endforeach
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="5" class="text-right"><strong>TOTAL MATERIALS:</strong></td>
+                    <td class="text-right"><strong>${{ number_format((float) $materials->sum('line_total'), 2) }}</strong></td>
+                    <td></td>
                 </tr>
             </tfoot>
         </table>
@@ -442,6 +523,26 @@
     @endif
 
     <!-- Assessment Notes -->
+    @php
+        $recommendationItems = [];
+        $rawRecommendations = $inspection->recommendations;
+
+        if (is_array($rawRecommendations)) {
+            $recommendationItems = $rawRecommendations;
+        } elseif (is_string($rawRecommendations) && trim($rawRecommendations) !== '') {
+            $decoded = json_decode($rawRecommendations, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                $recommendationItems = $decoded;
+            } else {
+                $recommendationItems = preg_split('/\r\n|\r|\n|\|/', $rawRecommendations) ?: [];
+            }
+        }
+
+        $recommendationItems = collect($recommendationItems)
+            ->map(fn ($item) => trim((string) $item))
+            ->filter()
+            ->values();
+    @endphp
     @if($inspection->summary || $inspection->recommendations || $inspection->risk_summary)
     <div class="info-section">
         <h3>Inspector Assessment</h3>
@@ -452,10 +553,14 @@
         </div>
         @endif
         
-        @if($inspection->recommendations)
+        @if($recommendationItems->isNotEmpty())
         <div style="margin-bottom: 10px;">
             <h4 style="font-size: 11px; color: #2c3e50; margin-bottom: 5px;">Recommendations:</h4>
-            <p style="font-size: 10px;">{{ $inspection->recommendations }}</p>
+            <ul style="font-size: 10px; margin: 0 0 0 15px; padding: 0;">
+                @foreach($recommendationItems as $item)
+                    <li style="margin-bottom: 2px;">{{ $item }}</li>
+                @endforeach
+            </ul>
         </div>
         @endif
         
@@ -471,7 +576,7 @@
     <!-- Footer -->
     <div class="footer">
         <p><strong>EMURIA Regenerative Property Care</strong></p>
-        <p>Generated on {{ date('F d, Y \a\t h:i A') }} | Invoice #{{ $inspection->property?->property_code }}-{{ date('Ymd') }}</p>
+        <p>Generated on {{ date('F d, Y \a\t h:i A') }} | Report #{{ $inspection->property?->property_code }}-{{ date('Ymd') }}</p>
         <p>This document contains proprietary pricing calculations and should be kept confidential.</p>
     </div>
 </body>

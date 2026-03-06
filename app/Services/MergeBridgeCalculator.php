@@ -6,6 +6,7 @@ use App\Models\Inspection;
 use App\Models\Property;
 use App\Models\PHARFinding;
 use App\Models\BDCSetting;
+use App\Services\BaseServicePricingService;
 
 class MergeBridgeCalculator
 {
@@ -196,8 +197,9 @@ class MergeBridgeCalculator
      */
     protected function getTierFromARP(float $arpMonthly, Inspection $inspection): string
     {
-        $propertyTypeId = $this->resolvePropertyTypeId($this->resolveInspectionPropertyTypeCode($inspection));
+        $propertyTypeCode = $this->resolveInspectionPropertyTypeCode($inspection) ?? 'residential';
         $selectedPackageName = null;
+        $pricingService = new BaseServicePricingService();
 
         if (!empty($inspection->service_package_name)) {
             $selectedPackageName = $inspection->service_package_name;
@@ -205,24 +207,10 @@ class MergeBridgeCalculator
 
         $prices = \App\Models\PricingPackage::query()
             ->where('is_active', true)
-            ->with(['packagePricing' => function ($query) use ($propertyTypeId) {
-                $query->where('is_active', true);
-                if ($propertyTypeId) {
-                    $query->where('property_type_id', $propertyTypeId);
-                }
-            }])
             ->orderBy('sort_order')
             ->get()
-            ->mapWithKeys(function ($package) use (&$selectedPackageName, $inspection, $propertyTypeId) {
-                $price = null;
-
-                if ($propertyTypeId) {
-                    $price = $package->getPriceForPropertyType($propertyTypeId);
-                }
-
-                if ($price === null) {
-                    $price = optional($package->packagePricing->first())->base_monthly_price;
-                }
+            ->mapWithKeys(function ($package) use (&$selectedPackageName, $inspection, $propertyTypeCode, $pricingService) {
+                $price = $pricingService->getPackageBasePrice($package->package_name, (string) $propertyTypeCode);
 
                 if ((int) $package->id === (int) $inspection->service_package_id) {
                     $selectedPackageName = $package->package_name;
@@ -308,13 +296,12 @@ class MergeBridgeCalculator
             return 0.0;
         }
 
-        $propertyTypeId = $this->resolvePropertyTypeId($this->resolveInspectionPropertyTypeCode($inspection));
+        $pricingService = new BaseServicePricingService();
+        $propertyTypeCode = $this->resolveInspectionPropertyTypeCode($inspection) ?? 'residential';
+        $price = $pricingService->getPackageBasePrice($package->package_name, (string) $propertyTypeCode);
 
-        if ($propertyTypeId) {
-            $price = $package->getPriceForPropertyType($propertyTypeId);
-            if ($price !== null) {
-                return (float) $price;
-            }
+        if ($price !== null) {
+            return (float) $price;
         }
 
         return (float) (optional($package->packagePricing->where('is_active', true)->first())->base_monthly_price ?? 0.0);

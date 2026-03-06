@@ -1,18 +1,17 @@
 @extends('admin.layout')
 
-@section('title', 'CPI Inspection Form')
+@section('title', 'Complete Regenerative Home Inspection Report')
 
 @section('content')
 <div class="content-wrapper">
     <div class="row">
         <div class="col-12">
-            <!-- Header -->
             <div class="card mb-3 border-0 shadow-sm" style="background: linear-gradient(135deg, #5b67ca 0%, #4854b8 100%);">
                 <div class="card-body text-white p-4">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <h3 class="mb-2 fw-bold">
-                                <i class="mdi mdi-clipboard-check me-2"></i>CPI Property Inspection Form
+                                <i class="mdi mdi-home-city-outline me-2"></i>Complete Regenerative Home Inspection Report
                             </h3>
                             <p class="mb-1 opacity-75">
                                 <span class="badge bg-light text-dark me-2">{{ $property->property_code }}</span>
@@ -31,22 +30,15 @@
                 </div>
             </div>
 
-            <form action="{{ route('inspections.store') }}" method="POST" enctype="multipart/form-data" id="cpiInspectionForm">
+            <form action="{{ route('inspections.store') }}" method="POST" enctype="multipart/form-data" id="inspectionSystemsForm">
                 @csrf
                 <input type="hidden" name="property_id" value="{{ $property->id }}">
-                <input type="hidden" name="cpi_total_score" id="hiddenCpiTotalScore" value="{{ old('cpi_total_score', $inspection->cpi_total_score ?? 0) }}">
-                <input type="hidden" name="domain_1_score" id="hiddenDomain1Score" value="{{ old('domain_1_score', $inspection->domain_1_score ?? 0) }}">
-                <input type="hidden" name="domain_2_score" id="hiddenDomain2Score" value="{{ old('domain_2_score', $inspection->domain_2_score ?? 0) }}">
-                <input type="hidden" name="domain_3_score" id="hiddenDomain3Score" value="{{ old('domain_3_score', $inspection->domain_3_score ?? 0) }}">
-                <input type="hidden" name="domain_4_score" id="hiddenDomain4Score" value="{{ old('domain_4_score', $inspection->domain_4_score ?? 0) }}">
-                <input type="hidden" name="domain_5_score" id="hiddenDomain5Score" value="{{ old('domain_5_score', $inspection->domain_5_score ?? 0) }}">
-                <input type="hidden" name="domain_6_score" id="hiddenDomain6Score" value="{{ old('domain_6_score', $inspection->domain_6_score ?? 0) }}">
+                <input type="hidden" name="service_package_id" value="{{ old('service_package_id', $inspection->service_package_id ?? $defaultServicePackage?->id) }}">
 
-                <!-- SECTION 1: Inspection Overview & Property Details -->
                 <div class="card mb-4">
                     <div class="card-header" style="background: #5b67ca; color: white;">
                         <h5 class="mb-0">
-                            <i class="mdi mdi-information me-2"></i>Section 1: Inspection Overview & Property Details
+                            <i class="mdi mdi-information-outline me-2"></i>Inspection Information
                         </h5>
                     </div>
                     <div class="card-body">
@@ -54,8 +46,7 @@
                             <div class="col-md-4">
                                 <div class="form-group">
                                     <label>Inspection Date & Time <span class="text-danger">*</span></label>
-                                    <input type="datetime-local" name="inspection_date" class="form-control" 
-                                           value="{{ old('inspection_date', $inspection->scheduled_date ?? now()->format('Y-m-d\TH:i')) }}" required>
+                                    <input type="datetime-local" name="inspection_date" class="form-control" value="{{ old('inspection_date', optional($inspection->scheduled_date)->format('Y-m-d\\TH:i') ?? now()->format('Y-m-d\\TH:i')) }}" required>
                                 </div>
                             </div>
                             <div class="col-md-4">
@@ -67,35 +58,37 @@
                             </div>
                             <div class="col-md-4">
                                 <div class="form-group">
-                                    <label>Weather Conditions</label>
+                                    <label>Weather Condition</label>
                                     <select name="weather_conditions" class="form-control">
-                                        <option value="clear">Clear</option>
-                                        <option value="cloudy">Cloudy</option>
-                                        <option value="rainy">Rainy</option>
-                                        <option value="snowy">Snowy</option>
+                                        <option value="" {{ old('weather_conditions', $inspection->weather_conditions ?? '') === '' ? 'selected' : '' }}>Select weather</option>
+                                        <option value="clear" {{ old('weather_conditions', $inspection->weather_conditions ?? '') === 'clear' ? 'selected' : '' }}>Clear</option>
+                                        <option value="cloudy" {{ old('weather_conditions', $inspection->weather_conditions ?? '') === 'cloudy' ? 'selected' : '' }}>Cloudy</option>
+                                        <option value="rainy" {{ old('weather_conditions', $inspection->weather_conditions ?? '') === 'rainy' ? 'selected' : '' }}>Rainy</option>
+                                        <option value="snowy" {{ old('weather_conditions', $inspection->weather_conditions ?? '') === 'snowy' ? 'selected' : '' }}>Snowy</option>
+                                        <option value="windy" {{ old('weather_conditions', $inspection->weather_conditions ?? '') === 'windy' ? 'selected' : '' }}>Windy</option>
                                     </select>
                                 </div>
                             </div>
                         </div>
 
                         <hr class="my-4">
-                        <h6 class="text-primary">Property Owner Information</h6>
+                        <h6 class="text-primary">Property Owner</h6>
                         <div class="row">
                             <div class="col-md-4">
                                 <div class="form-group">
-                                    <label>Owner Name</label>
-                                    <input type="text" class="form-control" value="{{ $property->user->name }}" readonly>
+                                    <label>Name</label>
+                                    <input type="text" class="form-control" value="{{ $property->user->name ?? 'N/A' }}" readonly>
                                 </div>
                             </div>
                             <div class="col-md-4">
                                 <div class="form-group">
-                                    <label>Owner Email</label>
-                                    <input type="email" class="form-control" value="{{ $property->user->email }}" readonly>
+                                    <label>Email</label>
+                                    <input type="text" class="form-control" value="{{ $property->user->email ?? 'N/A' }}" readonly>
                                 </div>
                             </div>
                             <div class="col-md-4">
                                 <div class="form-group">
-                                    <label>Owner Phone</label>
+                                    <label>Phone</label>
                                     <input type="text" class="form-control" value="{{ $property->user->phone ?? 'N/A' }}" readonly>
                                 </div>
                             </div>
@@ -112,313 +105,98 @@
                             </div>
                             <div class="col-md-3">
                                 <div class="form-group">
-                                    <label>Property Year Built <span class="text-danger">*</span></label>
-                                    <input type="number" id="propertyYearBuilt" name="property_year_built" class="form-control" 
-                                           value="{{ old('property_year_built', $property->year_built ?? date('Y')) }}" 
-                                           min="1800" max="{{ date('Y') }}" required readonly>
-                                    <small class="text-muted">Auto-fetched from property registration and used for Domain 3 age calculation</small>
+                                    <label>Year Built</label>
+                                    <input type="text" class="form-control" value="{{ $property->year_built ?? 'N/A' }}" readonly>
                                 </div>
                             </div>
-                            @if($property->type === 'residential' || $property->type === 'mixed_use')
-                            <div class="col-md-3">
-                                <div class="form-group">
-                                    <label>Residential Units</label>
-                                    <input type="number" class="form-control" value="{{ $property->residential_units }}" readonly>
+                            @if(in_array($property->type, ['residential', 'mixed_use']))
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label>Residential Units</label>
+                                        <input type="text" class="form-control" value="{{ $property->residential_units ?? 0 }}" readonly>
+                                    </div>
                                 </div>
-                            </div>
                             @endif
-                            @if($property->type === 'commercial' || $property->type === 'mixed_use')
-                            <div class="col-md-3">
-                                <div class="form-group">
-                                    <label>Commercial SqFt</label>
-                                    <input type="number" class="form-control" value="{{ $property->square_footage_interior }}" readonly>
+                            @if(in_array($property->type, ['commercial', 'mixed_use']))
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label>Commercial Insights (SqFt)</label>
+                                        <input type="text" class="form-control" value="{{ $property->square_footage_interior ?? 0 }}" readonly>
+                                    </div>
                                 </div>
-                            </div>
                             @endif
                             @if($property->type === 'mixed_use')
-                            <div class="col-md-3">
-                                <div class="form-group">
-                                    <label>Commercial Weight (%)</label>
-                                    <input type="number" class="form-control" value="{{ $property->mixed_use_commercial_weight }}" readonly>
+                                <div class="col-md-3">
+                                    <div class="form-group">
+                                        <label>Commercial Weight (%)</label>
+                                        <input type="text" class="form-control" value="{{ $property->mixed_use_commercial_weight ?? 0 }}" readonly>
+                                    </div>
                                 </div>
-                            </div>
                             @endif
                         </div>
 
                         <hr class="my-4">
-                        <h6 class="text-primary">Service Package Selection</h6>
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label>Select Service Package <span class="text-danger">*</span></label>
-                                    <select name="service_package_id" id="servicePackage" class="form-control" required>
-                                        <option value="">-- Select Package --</option>
-                                        @foreach($pricingPackages as $package)
-                                            @php
-                                                $resPrice = $package->getPriceForPropertyType(1); // 1 = residential
-                                                $comPrice = $package->getPriceForPropertyType(2); // 2 = commercial
-                                            @endphp
-                                            <option value="{{ $package->id }}" 
-                                                    data-res-price="{{ $resPrice }}"
-                                                    data-com-price="{{ $comPrice }}"
-                                                    {{ (string) old('service_package_id', $inspection->service_package_id ?? '') === (string) $package->id ? 'selected' : '' }}>
-                                                {{ $package->package_name }} 
-                                                (Res: ${{ number_format($resPrice, 2) }} | 
-                                                 Com: ${{ number_format($comPrice, 2) }})
-                                            </option>
-                                        @endforeach
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label>General Summary/Overview</label>
-                            <textarea name="summary" class="form-control" rows="3" 
-                                      placeholder="Provide a brief overview of the property condition...">{{ old('summary') }}</textarea>
+                        <h6 class="text-primary">Service Package</h6>
+                        <div class="alert alert-light border mb-0">
+                            <strong>{{ $defaultServicePackage?->package_name ?? 'No active package found' }}</strong>
+                            <div class="small text-muted mt-1">Auto-selected by system</div>
                         </div>
                     </div>
                 </div>
 
-                <!-- CPI DOMAINS: Dynamically Generated from Database -->
-                @foreach($cpiDomains as $domain)
                 <div class="card mb-4">
                     <div class="card-header bg-light">
                         <h5 class="mb-0">
-                            <i class="mdi mdi-clipboard-text me-2 text-primary"></i>Domain {{ $domain->domain_number }}: {{ $domain->domain_name }} 
-                            (Max {{ $domain->max_possible_points }} pts)
-                            @if($domain->calculation_method !== 'sum')
-                                <span class="badge bg-warning text-dark ms-2">{{ strtoupper($domain->calculation_method) }}</span>
-                            @endif
+                            <i class="mdi mdi-view-list-outline me-2 text-primary"></i>Property Systems Inspection
                         </h5>
                     </div>
                     <div class="card-body">
-                        @if($domain->description)
-                            <div class="alert alert-warning mb-3">
-                                <i class="mdi mdi-information me-2"></i>
-                                <strong>Note:</strong> {{ $domain->description }}
+                        <p class="text-muted mb-3">Add issues per system and subsystem (Issue, Location, Spot, Notes, Recommendations).</p>
+
+                        @if($systems->isEmpty())
+                            <div class="alert alert-warning mb-0">
+                                No systems found. Run database seeding for systems/subsystems first.
                             </div>
-                        @endif
-
-                        <div class="row">
-                            @foreach($domain->activeFactors as $factor)
-                                <div class="col-md-6 mb-3">
-                                    <div class="form-group">
-                                        <label>
-                                            {{ $factor->factor_label }}
-                                            @if($factor->is_required)
-                                                <span class="text-danger">*</span>
+                        @else
+                            @foreach($systems as $system)
+                                <div class="card mb-3 border">
+                                    <div class="card-header d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong>{{ $system->name }}</strong>
+                                            @if($system->description)
+                                                <span class="text-muted ms-2">{{ $system->description }}</span>
                                             @endif
-                                        </label>
-
-                                        @if($factor->field_type === 'yes_no')
-                                            {{-- Yes/No Radio Buttons --}}
-                                            <div>
-                                                @php
-                                                    $rules = $factor->calculation_rule ?? [];
-                                                    $yesScore = $rules['yes'] ?? 0;
-                                                    $noScore = $rules['no'] ?? 0;
-                                                @endphp
-                                                <div class="form-check form-check-inline">
-                                                    <input type="radio" 
-                                                           name="factor_{{ $factor->id }}" 
-                                                           value="yes" 
-                                                           id="factor_{{ $factor->id }}_yes" 
-                                                           class="form-check-input cpi-factor" 
-                                                           data-domain="{{ $domain->domain_number }}"
-                                                           data-factor-code="{{ $factor->factor_code }}"
-                                                           data-score="{{ $yesScore }}"
-                                                           {{ $factor->is_required ? 'required' : '' }}>
-                                                    <label for="factor_{{ $factor->id }}_yes" class="form-check-label">
-                                                        Yes ({{ $yesScore }} pts)
-                                                    </label>
-                                                </div>
-                                                <div class="form-check form-check-inline">
-                                                    <input type="radio" 
-                                                           name="factor_{{ $factor->id }}" 
-                                                           value="no" 
-                                                           id="factor_{{ $factor->id }}_no" 
-                                                           class="form-check-input cpi-factor" 
-                                                           data-domain="{{ $domain->domain_number }}"
-                                                           data-factor-code="{{ $factor->factor_code }}"
-                                                           data-score="{{ $noScore }}">
-                                                    <label for="factor_{{ $factor->id }}_no" class="form-check-label">
-                                                        No ({{ $noScore }} pts)
-                                                    </label>
-                                                </div>
-                                            </div>
-
-                                        @elseif($factor->field_type === 'lookup' && $factor->lookup_table)
-                                            {{-- Lookup Dropdown --}}
-                                            @php
-                                                $lookupData = null;
-                                                switch($factor->lookup_table) {
-                                                    case 'supply_line_materials': $lookupData = $supplyMaterials; break;
-                                                    case 'age_brackets': $lookupData = $ageBrackets; break;
-                                                    case 'containment_categories': $lookupData = $containmentCategories; break;
-                                                    case 'crawl_access_categories': $lookupData = $crawlAccessCategories; break;
-                                                    case 'roof_access_categories': $lookupData = $roofAccessCategories; break;
-                                                    case 'equipment_requirements': $lookupData = $equipmentRequirements; break;
-                                                    case 'complexity_categories': $lookupData = $complexityCategories; break;
-                                                }
-                                            @endphp
-                                            <select name="factor_{{ $factor->id }}" 
-                                                    id="factor_{{ $factor->id }}" 
-                                                    class="form-control cpi-factor" 
-                                                    data-domain="{{ $domain->domain_number }}"
-                                                    data-factor-code="{{ $factor->factor_code }}"
-                                                    {{ $factor->is_required ? 'required' : '' }}>
-                                                <option value="">-- Select {{ ucfirst(str_replace('_', ' ', $factor->lookup_table)) }} --</option>
-                                                @if($lookupData)
-                                                    @foreach($lookupData as $item)
-                                                        <option value="{{ $item->id }}" data-score="{{ $item->score_points ?? 0 }}">
-                                                            {{ $item->material_name ?? $item->category_name ?? $item->requirement_name ?? $item->bracket_name ?? 'Item' }}
-                                                            ({{ $item->score_points ?? 0 }} pts)
-                                                        </option>
-                                                    @endforeach
-                                                @endif
-                                            </select>
-
-                                        @elseif($factor->field_type === 'numeric')
-                                            {{-- Numeric Input --}}
-                                            <input type="number" 
-                                                   name="factor_{{ $factor->id }}" 
-                                                   id="factor_{{ $factor->id }}" 
-                                                   class="form-control cpi-factor" 
-                                                   data-domain="{{ $domain->domain_number }}"
-                                                   data-factor-code="{{ $factor->factor_code }}"
-                                                   data-max-points="{{ $factor->max_points }}"
-                                                   data-calc-rule="{{ json_encode($factor->calculation_rule) }}"
-                                                   placeholder="Enter value" 
-                                                   min="0"
-                                                   {{ $factor->factor_code === 'building_age' ? 'readonly' : '' }}
-                                                   {{ $factor->is_required ? 'required' : '' }}>
-
-                                        @elseif($factor->field_type === 'calculated')
-                                            {{-- Calculated/Readonly Field --}}
-                                            <input type="text" 
-                                                   name="factor_{{ $factor->id }}" 
-                                                   id="factor_{{ $factor->id }}" 
-                                                   class="form-control cpi-factor-calculated" 
-                                                   data-domain="{{ $domain->domain_number }}"
-                                                   readonly 
-                                                   style="background: #f0f0f0;">
-                                        @endif
-
-                                        @if($factor->help_text)
-                                            <small class="text-muted">{{ $factor->help_text }}</small>
-                                        @endif
+                                        </div>
+                                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="addSystemFindingRow({{ $system->id }})">
+                                            <i class="mdi mdi-plus"></i> Add Row
+                                        </button>
+                                    </div>
+                                    <div class="card-body p-0">
+                                        <div class="table-responsive">
+                                            <table class="table table-striped table-bordered mb-0">
+                                                <thead class="table-light">
+                                                    <tr>
+                                                        <th style="min-width: 180px;">Subsystem</th>
+                                                        <th style="min-width: 180px;">Issue</th>
+                                                        <th style="min-width: 160px;">Location</th>
+                                                        <th style="min-width: 160px;">Spot</th>
+                                                        <th style="min-width: 140px;">Severity</th>
+                                                        <th style="min-width: 220px;">Notes</th>
+                                                        <th style="min-width: 220px;">Recommendations</th>
+                                                        <th style="width: 90px;">Action</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="system-rows-{{ $system->id }}">
+                                                </tbody>
+                                            </table>
+                                        </div>
                                     </div>
                                 </div>
                             @endforeach
-                        </div>
-
-                        <div class="form-group mt-3">
-                            <label>Domain {{ $domain->domain_number }} Notes</label>
-                            <textarea name="domain_{{ $domain->domain_number }}_notes" 
-                                      class="form-control" 
-                                      rows="2" 
-                                      placeholder="Additional observations for {{ $domain->domain_name }}..."></textarea>
-                        </div>
-
-                        <div class="alert alert-info mt-3">
-                            <strong>Domain {{ $domain->domain_number }} Score:</strong> 
-                            <span id="domain{{ $domain->domain_number }}Score" class="fw-bold">{{ old('domain_'.$domain->domain_number.'_score', $inspection->{'domain_'.$domain->domain_number.'_score'} ?? 0) }}</span> / {{ $domain->max_possible_points }} points
-                        </div>
-                    </div>
-                </div>
-                @endforeach
-
-                <!-- SECTION 8: CPI Outputs & Pricing Preview -->
-                <div class="card mb-4 border-success">
-                    <div class="card-header" style="background: #4caf50; color: white;">
-                        <h5 class="mb-0">
-                            <i class="mdi mdi-chart-line me-2"></i>CPI Outputs & Pricing Calculation
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="row text-center mb-4">
-                            <div class="col-md-4">
-                                <div class="card bg-light">
-                                    <div class="card-body">
-                                        <h6 class="text-muted">CPI Total Score</h6>
-                                        <h2 class="mb-0 text-primary" id="cpiTotalScore">{{ old('cpi_total_score', $inspection->cpi_total_score ?? 0) }}</h2>
-                                        <small class="text-muted">points</small>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="card bg-light">
-                                    <div class="card-body">
-                                        <h6 class="text-muted">CPI Band</h6>
-                                        <h4 class="mb-0"><span class="badge bg-info" id="cpiBand">{{ old('cpi_band', $inspection->cpi_band ?? 'CPI-0') }}</span></h4>
-                                        <small class="text-muted" id="cpiBandName">{{ $inspection->cpi_band_name_snapshot ?? 'Excellent' }}</small>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <div class="card bg-light">
-                                    <div class="card-body">
-                                        <h6 class="text-muted">CPI Multiplier</h6>
-                                        <h2 class="mb-0 text-danger" id="cpiMultiplier">{{ number_format((float) old('cpi_multiplier', $inspection->cpi_multiplier ?? 1), 2) }}</h2>
-                                        <small class="text-muted">x</small>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <h6 class="text-success mb-3">Pricing Breakdown</h6>
-                        <table class="table table-bordered">
-                            <tr>
-                                <td class="fw-bold">Base Service Cost (Monthly)</td>
-                                <td class="text-end"><span id="basePrice">$0.00</span></td>
-                            </tr>
-                            <tr>
-                                <td class="fw-bold">Size Factor</td>
-                                <td class="text-end"><span id="sizeFactor">1.00</span>x</td>
-                            </tr>
-                            <tr>
-                                <td class="fw-bold">CPI Multiplier</td>
-                                <td class="text-end"><span id="displayMultiplier">{{ number_format((float) old('cpi_multiplier', $inspection->cpi_multiplier ?? 1), 2) }}</span>x</td>
-                            </tr>
-                            <tr class="table-success">
-                                <td class="fw-bold fs-5">FINAL MONTHLY COST</td>
-                                <td class="text-end fw-bold fs-5"><span id="finalMonthly">$0.00</span></td>
-                            </tr>
-                            <tr class="table-success">
-                                <td class="fw-bold fs-5">FINAL ANNUAL COST</td>
-                                <td class="text-end fw-bold fs-5"><span id="finalAnnual">$0.00</span></td>
-                            </tr>
-                        </table>
+                        @endif
                     </div>
                 </div>
 
-                <!-- SECTION 9: Photos & Documentation -->
-                <div class="card mb-4">
-                    <div class="card-header bg-light">
-                        <h5 class="mb-0">
-                            <i class="mdi mdi-camera me-2 text-primary"></i>Photos & Documentation
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="form-group">
-                            <label>Upload Inspection Photos (Max 20 photos, 10MB each)</label>
-                            <input type="file" name="inspection_photos[]" class="form-control" multiple accept="image/*" id="photoUpload">
-                            <small class="text-muted">Accepted formats: JPG, PNG, HEIC</small>
-                        </div>
-                        <div class="form-group">
-                            <label>Photo Upload Notes</label>
-                            <textarea name="photo_notes" class="form-control" rows="2" 
-                                      placeholder="Description of uploaded photos and documentation..."></textarea>
-                        </div>
-                        <div id="photoPreview" class="row mt-3"></div>
-                    </div>
-                </div>
-
-                <!-- NOTE: Findings & Materials now collected on Page 2 (PHAR Data Form) -->
-                <!-- This keeps the workflow clean: Page 1 = CPI Scoring, Page 2 = PHAR Data -->
-
-                <!-- SECTION 10: Overall Assessment -->
                 <div class="card mb-4">
                     <div class="card-header bg-light">
                         <h5 class="mb-0">
@@ -429,37 +207,48 @@
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="form-group">
-                                    <label>Overall Property Condition <span class="text-danger">*</span></label>
-                                    <select name="overall_condition" class="form-control" required>
-                                        <option value="">-- Select Condition --</option>
-                                        <option value="excellent">Excellent</option>
-                                        <option value="good">Good</option>
-                                        <option value="fair">Fair</option>
-                                        <option value="poor">Poor</option>
-                                        <option value="critical">Critical</option>
+                                    <label>Overall Condition</label>
+                                    <select name="overall_condition" class="form-control">
+                                        <option value="">Select condition</option>
+                                        <option value="excellent" {{ old('overall_condition', $inspection->overall_condition ?? '') === 'excellent' ? 'selected' : '' }}>Excellent</option>
+                                        <option value="good" {{ old('overall_condition', $inspection->overall_condition ?? '') === 'good' ? 'selected' : '' }}>Good</option>
+                                        <option value="fair" {{ old('overall_condition', $inspection->overall_condition ?? '') === 'fair' ? 'selected' : '' }}>Fair</option>
+                                        <option value="poor" {{ old('overall_condition', $inspection->overall_condition ?? '') === 'poor' ? 'selected' : '' }}>Poor</option>
+                                        <option value="critical" {{ old('overall_condition', $inspection->overall_condition ?? '') === 'critical' ? 'selected' : '' }}>Critical</option>
                                     </select>
                                 </div>
                             </div>
                         </div>
                         <div class="form-group">
                             <label>Inspector Notes</label>
-                            <textarea name="inspector_notes" class="form-control" rows="3" 
-                                      placeholder="Additional observations not covered in domain-specific notes..."></textarea>
+                            <textarea name="inspector_notes" class="form-control" rows="3" placeholder="Inspector observations">{{ old('inspector_notes', $inspection->inspector_notes ?? '') }}</textarea>
                         </div>
                         <div class="form-group">
                             <label>Recommendations</label>
-                            <textarea name="recommendations" class="form-control" rows="3" 
-                                      placeholder="Action items and follow-ups..."></textarea>
+                            <textarea name="recommendations" class="form-control" rows="3" placeholder="Final recommendations">{{ old('recommendations', $inspection->recommendations ?? '') }}</textarea>
                         </div>
-                        <div class="form-group">
+                        <div class="form-group mb-0">
                             <label>Risk Summary</label>
-                            <textarea name="risk_summary" class="form-control" rows="3" 
-                                      placeholder="Summary of major risks identified during inspection..."></textarea>
+                            <textarea name="risk_summary" class="form-control" rows="3" placeholder="Major risks identified">{{ old('risk_summary', $inspection->risk_summary ?? '') }}</textarea>
                         </div>
                     </div>
                 </div>
 
-                <!-- Form Actions -->
+                <div class="card mb-4">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">
+                            <i class="mdi mdi-camera me-2 text-primary"></i>Photos
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group mb-0">
+                            <label>Upload Photos</label>
+                            <input type="file" name="photos[]" class="form-control" multiple accept="image/*" id="photoUpload">
+                            <small class="text-muted">Max 10MB per photo.</small>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="card">
                     <div class="card-body">
                         <div class="d-flex justify-content-between">
@@ -482,301 +271,210 @@
     </div>
 </div>
 
+@php
+    $systemsConfig = $systems->map(function ($system) {
+        return [
+            'id' => $system->id,
+            'name' => $system->name,
+            'subsystems' => $system->subsystems->map(function ($subsystem) {
+                return [
+                    'id' => $subsystem->id,
+                    'name' => $subsystem->name,
+                ];
+            })->values()->all(),
+        ];
+    })->values()->all();
+@endphp
+
 <script>
-// Store property data for calculations
-const propertyData = {
-    type: '{{ $property->type }}',
-    residentialUnits: {{ $property->residential_units ?? 0 }},
-    commercialSqft: {{ $property->square_footage_interior ?? 0 }},
-    mixedUseWeight: {{ $property->mixed_use_commercial_weight ?? 0 }}
-};
+const systemsConfig = @json($systemsConfig);
 
-// Database-driven domain configuration
-const domainConfigs = {!! json_encode($cpiDomains->map(function($domain) {
-    return [
-        'number' => $domain->domain_number,
-        'max_points' => $domain->max_possible_points,
-        'calculation_method' => $domain->calculation_method
-    ];
-})->keyBy('number')) !!};
+const initialFindings = @json(old('system_findings', $inspection->findings ?? []));
+let findingIndex = 0;
 
-// CPI Band ranges FROM DATABASE
-const cpiBandRanges = {!! json_encode($cpiBandRanges->map(function($band) {
-    return [
-        'code' => $band->band_code,
-        'name' => $band->band_name,
-        'min' => $band->min_score,
-        'max' => $band->max_score ?? 999,
-        'multiplier' => $band->multiplier ? floatval($band->multiplier->multiplier) : 1.00
-    ];
-})->values()) !!};
+function escapeHtml(value) {
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
 
-// Age brackets FROM DATABASE
-const ageBrackets = {!! json_encode($ageBrackets->map(function($bracket) {
-    return [
-        'min' => $bracket->min_age,
-        'max' => $bracket->max_age ?? 999,
-        'score' => $bracket->score_points
-    ];
-})->values()) !!};
-
-// Residential size tiers FROM DATABASE
-const residentialSizeTiers = {!! json_encode($residentialSizeTiers->map(function($tier) {
-    return [
-        'min' => $tier->min_units,
-        'max' => $tier->max_units ?? 999,
-        'multiplier' => floatval($tier->size_multiplier)
-    ];
-})->values()) !!};
-
-// Service package prices FROM DATABASE
-const packagePrices = {
-    @foreach($pricingPackages as $package)
-        '{{ $package->id }}': {
-            residential: {{ $package->getPriceForPropertyType(1) ?? 0 }},
-            commercial: {{ $package->getPriceForPropertyType(2) ?? 0 }}
-        }{{ !$loop->last ? ',' : '' }}
-    @endforeach
-};
-
-// Dynamic domain score calculation
-function calculateDomainScore(domainNumber) {
-    const config = domainConfigs[domainNumber];
-    if (!config) return 0;
-    
-    const factors = document.querySelectorAll(`.cpi-factor[data-domain="${domainNumber}"]`);
-    let scores = [];
-    
-    factors.forEach(factor => {
-        let score = 0;
-        
-        if (factor.type === 'radio' && factor.checked) {
-            score = parseInt(factor.dataset.score) || 0;
-        } else if (factor.tagName === 'SELECT' && factor.value) {
-            const selectedOption = factor.options[factor.selectedIndex];
-            score = parseInt(selectedOption.dataset.score) || 0;
-        } else if (factor.type === 'number' && factor.value) {
-            const value = parseFloat(factor.value);
-            const calcRule = JSON.parse(factor.dataset.calcRule || '{}');
-            
-            // Handle age bracket lookup rules (Domain 3)
-            if (calcRule.lookup_by_age) {
-                const matchingBracket = ageBrackets.find(bracket => {
-                    const min = parseFloat(bracket.min) || 0;
-                    const max = parseFloat(bracket.max) || 999;
-                    return value >= min && value <= max;
-                });
-                score = matchingBracket ? (parseInt(matchingBracket.score) || 0) : 0;
-            }
-            // Handle explicit range rules
-            else if (Array.isArray(calcRule.range) && calcRule.range.length === 2) {
-                const min = parseFloat(calcRule.range[0]) || 0;
-                const max = parseFloat(calcRule.range[1]) || 999999;
-                if (value >= min && value <= max) {
-                    score = parseInt(calcRule.points) || 0;
-                }
-            }
-            // Handle threshold-based rules
-            else if (calcRule.threshold && value > calcRule.threshold) {
-                score = parseInt(calcRule.points) || 0;
-            }
-        }
-        
-        scores.push(score);
+    return String(value || '').replace(/[&<>"']/g, function (match) {
+        return map[match];
     });
-    
-    // Apply calculation method
-    let totalScore = 0;
-    if (config.calculation_method === 'max') {
-        totalScore = Math.max(...scores, 0);
-        // Apply cap if specified
-        if (config.max_points) {
-            totalScore = Math.min(totalScore, config.max_points);
-        }
-    } else {
-        // Default to sum
-        totalScore = scores.reduce((a, b) => a + b, 0);
-    }
-    
-    // Update display
-    const scoreElement = document.getElementById(`domain${domainNumber}Score`);
-    if (scoreElement) {
-        scoreElement.textContent = totalScore;
-    }
-    
-    return totalScore;
 }
 
-// Calculate CPI Total and Pricing using DATABASE CPI bands
-function calculateCPITotal() {
-    // Dynamically calculate all domain scores
-    let totalScore = 0;
-    Object.keys(domainConfigs).forEach(domainNum => {
-        totalScore += calculateDomainScore(parseInt(domainNum));
+function getSystemConfig(systemId) {
+    return systemsConfig.find(system => String(system.id) === String(systemId));
+}
+
+function buildSubsystemOptions(systemId, selectedSubsystemId = '') {
+    const system = getSystemConfig(systemId);
+    let options = '<option value="">General</option>';
+
+    if (!system || !Array.isArray(system.subsystems)) {
+        return options;
+    }
+
+    system.subsystems.forEach(subsystem => {
+        const selected = String(subsystem.id) === String(selectedSubsystemId) ? 'selected' : '';
+        options += `<option value="${subsystem.id}" ${selected}>${escapeHtml(subsystem.name)}</option>`;
     });
-    
-    document.getElementById('cpiTotalScore').textContent = totalScore;
-    const hiddenCpiTotalScoreEl = document.getElementById('hiddenCpiTotalScore');
-    if (hiddenCpiTotalScoreEl) {
-        hiddenCpiTotalScoreEl.value = totalScore;
-    }
 
-    for (let domainNum = 1; domainNum <= 6; domainNum++) {
-        const scoreText = document.getElementById(`domain${domainNum}Score`)?.textContent || '0';
-        const hiddenDomainEl = document.getElementById(`hiddenDomain${domainNum}Score`);
-        if (hiddenDomainEl) {
-            hiddenDomainEl.value = parseInt(scoreText, 10) || 0;
-        }
-    }
-    
-    // Determine CPI Band using DATABASE ranges
-    let band = cpiBandRanges[0] || {code: 'CPI-0', name: 'Excellent', multiplier: 1.00};
-    for (const range of cpiBandRanges) {
-        if (totalScore >= range.min && totalScore <= range.max) {
-            band = range;
-            break;
-        }
-    }
-    
-    document.getElementById('cpiBand').textContent = band.code;
-    document.getElementById('cpiBandName').textContent = band.name || band.code;
-    document.getElementById('cpiMultiplier').textContent = band.multiplier.toFixed(2);
-    document.getElementById('displayMultiplier').textContent = band.multiplier.toFixed(2);
-    
-    calculatePricing(band.multiplier);
+    return options;
 }
 
-// Calculate Pricing using DATABASE values
-function calculatePricing(cpiMultiplier) {
-    const packageSelect = document.getElementById('servicePackage');
-    if (!packageSelect.value) return;
-    
-    const packageId = packageSelect.value;
-    const prices = packagePrices[packageId];
-    
-    if (!prices) return;
-    
-    let basePrice = 0;
-    
-    if (propertyData.type === 'residential') {
-        basePrice = prices.residential;
-    } else if (propertyData.type === 'commercial') {
-        basePrice = prices.commercial;
-    } else if (propertyData.type === 'mixed_use') {
-        const weight = propertyData.mixedUseWeight / 100;
-        basePrice = (prices.residential * (1 - weight)) + (prices.commercial * weight);
-    }
-    
-    // Calculate size factor using DATABASE residential size tiers
-    let sizeFactor = 1.0;
-    if (propertyData.type === 'residential' || propertyData.type === 'mixed_use') {
-        const units = propertyData.residentialUnits;
-        for (const tier of residentialSizeTiers) {
-            if (units >= tier.min && units <= tier.max) {
-                sizeFactor = tier.multiplier;
-                break;
-            }
-        }
-    }
-    
-    if (propertyData.type === 'commercial') {
-        sizeFactor = Math.max(1.0, propertyData.commercialSqft / 10000);
-    }
-    
-    const finalMonthly = basePrice * sizeFactor * cpiMultiplier;
-    const finalAnnual = finalMonthly * 12;
-    
-    document.getElementById('basePrice').textContent = '$' + basePrice.toFixed(2);
-    document.getElementById('sizeFactor').textContent = sizeFactor.toFixed(2);
-    document.getElementById('finalMonthly').textContent = '$' + finalMonthly.toFixed(2);
-    document.getElementById('finalAnnual').textContent = '$' + finalAnnual.toFixed(2);
-}
-
-function syncDomain3BuildingAgeFromYearBuilt() {
-    const propertyYearBuiltEl = document.getElementById('propertyYearBuilt');
-    const buildingAgeFactorEl = document.querySelector('.cpi-factor[data-factor-code="building_age"]');
-
-    if (!propertyYearBuiltEl || !buildingAgeFactorEl) {
+function addSystemFindingRow(systemId, prefill = {}) {
+    const body = document.getElementById(`system-rows-${systemId}`);
+    if (!body) {
         return;
     }
 
-    const currentYear = new Date().getFullYear();
-    const yearBuilt = parseInt(propertyYearBuiltEl.value, 10) || currentYear;
-    const calculatedAge = Math.max(0, currentYear - yearBuilt);
+    const currentIndex = findingIndex++;
+    const subsystemOptions = buildSubsystemOptions(systemId, prefill.subsystem_id || '');
+    const severityAliasMap = {
+        urgent: 'critical',
+        health_safety_threatening: 'high',
+        value_depreciation: 'medium',
+        non_urgent: 'low'
+    };
+    const severity = severityAliasMap[prefill.severity] || prefill.severity || 'low';
+    const recommendationItems = Array.isArray(prefill.recommendations)
+        ? prefill.recommendations
+        : String(prefill.recommendations || '')
+            .split(/\r\n|\r|\n|\|/)
+            .map(item => item.trim())
+            .filter(item => item.length > 0);
 
-    buildingAgeFactorEl.value = calculatedAge;
+    const row = document.createElement('tr');
+    row.innerHTML = `
+        <td>
+            <input type="hidden" name="system_findings[${currentIndex}][system_id]" value="${systemId}">
+            <select name="system_findings[${currentIndex}][subsystem_id]" class="form-control form-control-sm">
+                ${subsystemOptions}
+            </select>
+        </td>
+        <td><input type="text" name="system_findings[${currentIndex}][issue]" class="form-control form-control-sm" value="${escapeHtml(prefill.issue || '')}" placeholder="Issue"></td>
+        <td><input type="text" name="system_findings[${currentIndex}][location]" class="form-control form-control-sm" value="${escapeHtml(prefill.location || '')}" placeholder="Location"></td>
+        <td><input type="text" name="system_findings[${currentIndex}][spot]" class="form-control form-control-sm" value="${escapeHtml(prefill.spot || '')}" placeholder="Spot"></td>
+        <td>
+            <select name="system_findings[${currentIndex}][severity]" class="form-control form-control-sm">
+                <option value="critical" ${severity === 'critical' ? 'selected' : ''}>Urgent</option>
+                <option value="high" ${severity === 'high' ? 'selected' : ''}>Health &amp; Safety Threatening</option>
+                <option value="medium" ${severity === 'medium' ? 'selected' : ''}>Value Depreciation Risk</option>
+                <option value="low" ${severity === 'low' ? 'selected' : ''}>Non-Urgent</option>
+            </select>
+        </td>
+        <td><textarea name="system_findings[${currentIndex}][notes]" class="form-control form-control-sm" rows="2" placeholder="Notes">${escapeHtml(prefill.notes || '')}</textarea></td>
+        <td>
+            <div class="recommendation-builder" data-index="${currentIndex}">
+                <div class="input-group input-group-sm mb-2">
+                    <input type="text" class="form-control recommendation-input" placeholder="Type recommendation and press Enter">
+                    <button type="button" class="btn btn-outline-primary recommendation-add">Add</button>
+                </div>
+                <div class="recommendation-list small mb-1"></div>
+                <div class="recommendation-hidden-inputs"></div>
+            </div>
+        </td>
+        <td class="text-center">
+            <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeSystemFindingRow(this)">
+                <i class="mdi mdi-delete"></i>
+            </button>
+        </td>
+    `;
+
+    body.appendChild(row);
+
+    initRecommendationBuilder(row, currentIndex, recommendationItems);
 }
 
-// Event listeners
-document.addEventListener('DOMContentLoaded', function() {
-    // Auto-calculate Domain 3 building age from property year built
-    syncDomain3BuildingAgeFromYearBuilt();
-
-    // Attach listeners to ALL CPI factor inputs dynamically
-    document.querySelectorAll('.cpi-factor').forEach(factor => {
-        if (factor.type === 'radio' || factor.tagName === 'SELECT') {
-            factor.addEventListener('change', calculateCPITotal);
-        } else if (factor.type === 'number') {
-            factor.addEventListener('input', calculateCPITotal);
-        }
-    });
-    
-    // Service package
-    const servicePackageEl = document.getElementById('servicePackage');
-    if (servicePackageEl) {
-        servicePackageEl.addEventListener('change', calculateCPITotal);
+function initRecommendationBuilder(row, rowIndex, initialItems = []) {
+    const builder = row.querySelector('.recommendation-builder');
+    if (!builder) {
+        return;
     }
 
-    const propertyYearBuiltEl = document.getElementById('propertyYearBuilt');
-    if (propertyYearBuiltEl) {
-        propertyYearBuiltEl.addEventListener('input', function() {
-            syncDomain3BuildingAgeFromYearBuilt();
-            calculateCPITotal();
+    const input = builder.querySelector('.recommendation-input');
+    const addButton = builder.querySelector('.recommendation-add');
+    const list = builder.querySelector('.recommendation-list');
+    const hiddenInputs = builder.querySelector('.recommendation-hidden-inputs');
+
+    let recommendations = Array.isArray(initialItems)
+        ? initialItems.map(item => String(item || '').trim()).filter(item => item.length > 0)
+        : [];
+
+    function renderRecommendations() {
+        list.innerHTML = '';
+        hiddenInputs.innerHTML = '';
+
+        recommendations.forEach((item, itemIndex) => {
+            const badge = document.createElement('span');
+            badge.className = 'badge bg-light text-dark border me-1 mb-1';
+            badge.innerHTML = `${escapeHtml(item)} <button type="button" class="btn btn-sm p-0 ms-1 text-danger recommendation-remove" data-item-index="${itemIndex}" style="line-height:1; border:none; background:transparent;">&times;</button>`;
+            list.appendChild(badge);
+
+            const hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.name = `system_findings[${rowIndex}][recommendations][]`;
+            hiddenInput.value = item;
+            hiddenInputs.appendChild(hiddenInput);
         });
-    }
-    
-    // Photo preview
-    const photoUploadEl = document.getElementById('photoUpload');
-    if (photoUploadEl) {
-        photoUploadEl.addEventListener('change', function(e) {
-            const preview = document.getElementById('photoPreview');
-            preview.innerHTML = '';
-            
-            Array.from(e.target.files).slice(0, 20).forEach(file => {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const col = document.createElement('div');
-                    col.className = 'col-md-3 mb-3';
-                    col.innerHTML = `<img src="${e.target.result}" class="img-fluid rounded" style="max-height: 150px; object-fit: cover;">`;
-                    preview.appendChild(col);
-                };
-                reader.readAsDataURL(file);
+
+        const removeButtons = list.querySelectorAll('.recommendation-remove');
+        removeButtons.forEach(button => {
+            button.addEventListener('click', function () {
+                const itemIndex = parseInt(this.dataset.itemIndex, 10);
+                if (!isNaN(itemIndex)) {
+                    recommendations.splice(itemIndex, 1);
+                    renderRecommendations();
+                }
             });
         });
     }
-    
-// ===== FINDINGS MANAGEMENT REMOVED =====
-    // Findings are now collected on Page 2 (PHAR Data Form)
-    // This keeps the workflow clean: Page 1 = CPI Scoring only
-    const hasAnyFactorInput = Array.from(document.querySelectorAll('.cpi-factor')).some(factor => {
-        if (factor.type === 'radio') {
-            return factor.checked;
+
+    function addRecommendation() {
+        const value = String(input.value || '').trim();
+        if (!value) {
+            return;
         }
 
-        return String(factor.value || '').trim() !== '';
-    });
+        const exists = recommendations.some(item => item.toLowerCase() === value.toLowerCase());
+        if (!exists) {
+            recommendations.push(value);
+            renderRecommendations();
+        }
 
-    if (hasAnyFactorInput) {
-        calculateCPITotal();
-    } else {
-        const existingMultiplier = parseFloat(document.getElementById('displayMultiplier')?.textContent || '1');
-        calculatePricing(isNaN(existingMultiplier) ? 1 : existingMultiplier);
+        input.value = '';
     }
 
-    const cpiInspectionFormEl = document.getElementById('cpiInspectionForm');
-    if (cpiInspectionFormEl) {
-        cpiInspectionFormEl.addEventListener('submit', function() {
-            calculateCPITotal();
+    addButton.addEventListener('click', addRecommendation);
+    input.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            addRecommendation();
+        }
+    });
+
+    renderRecommendations();
+}
+
+function removeSystemFindingRow(button) {
+    const row = button.closest('tr');
+    if (row) {
+        row.remove();
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    if (Array.isArray(initialFindings) && initialFindings.length > 0) {
+        initialFindings.forEach(finding => {
+            if (!finding || !finding.system_id) {
+                return;
+            }
+
+            addSystemFindingRow(finding.system_id, finding);
         });
     }
 });

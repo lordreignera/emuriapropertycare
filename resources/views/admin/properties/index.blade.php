@@ -157,6 +157,17 @@
                                     <td>{{ $property->created_at->format('M d, Y') }}</td>
                                     <td>
                                         <div class="btn-group" role="group">
+                                            @php
+                                                $completedInspection = $property->inspections->firstWhere('status', 'completed');
+                                            @endphp
+
+                                            @if($completedInspection)
+                                                <a href="{{ route('inspections.show', $completedInspection->id) }}"
+                                                   class="btn btn-sm btn-success" title="View Full Inspection Report">
+                                                    <i class="mdi mdi-file-document-outline"></i>
+                                                </a>
+                                            @endif
+
                                             <a href="{{ route('properties.show', $property->id) }}" 
                                                class="btn btn-sm btn-info" title="View Details">
                                                 <i class="mdi mdi-eye"></i>
@@ -168,7 +179,30 @@
                                                     ->where('status', 'scheduled')
                                                     ->first();
                                                 $hasInspectorAssigned = $paidInspection && $paidInspection->inspector_id;
+                                                $startableInspection = $property->inspections->first(function ($inspection) {
+                                                    return ($inspection->inspection_fee_status ?? null) === 'paid'
+                                                        && in_array($inspection->status, ['scheduled', 'in_progress'], true);
+                                                });
+                                                $canInspectorStart = $startableInspection
+                                                    && auth()->user()->hasRole('Inspector')
+                                                    && (
+                                                        (int) ($startableInspection->inspector_id ?? 0) === (int) auth()->id()
+                                                        || (int) ($property->inspector_id ?? 0) === (int) auth()->id()
+                                                    );
+                                                $canAdminStart = $startableInspection
+                                                    && (
+                                                        auth()->user()->can('create inspections')
+                                                        || auth()->user()->hasRole(['Super Admin', 'Super Administrator', 'Administrator', 'Project Manager'])
+                                                    );
                                             @endphp
+
+                                            @if($canInspectorStart || $canAdminStart)
+                                                <a href="{{ route('inspections.create', ['property_id' => $property->id]) }}"
+                                                   class="btn btn-sm btn-success fw-bold"
+                                                   title="Start Inspection">
+                                                    <i class="mdi mdi-clipboard-check me-1"></i> Start Inspection
+                                                </a>
+                                            @endif
                                             
                                             @if($paidInspection && !$hasInspectorAssigned)
                                                 <button type="button" class="btn btn-sm btn-primary" 
@@ -178,16 +212,18 @@
                                                 </button>
                                             @endif
                                             
-                                            <form action="{{ route('properties.destroy', $property->id) }}" 
-                                                  method="POST" 
-                                                  onsubmit="return confirm('Are you sure you want to delete this property?');"
-                                                  class="d-inline">
-                                                @csrf
-                                                @method('DELETE')
-                                                <button type="submit" class="btn btn-sm btn-dark" title="Delete">
-                                                    <i class="mdi mdi-delete"></i>
-                                                </button>
-                                            </form>
+                                            @if(!auth()->user()->hasRole('Inspector'))
+                                                <form action="{{ route('properties.destroy', $property->id) }}" 
+                                                      method="POST" 
+                                                      onsubmit="return confirm('Are you sure you want to delete this property?');"
+                                                      class="d-inline">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button type="submit" class="btn btn-sm btn-dark" title="Delete">
+                                                        <i class="mdi mdi-delete"></i>
+                                                    </button>
+                                                </form>
+                                            @endif
                                         </div>
                                     </td>
                                 </tr>

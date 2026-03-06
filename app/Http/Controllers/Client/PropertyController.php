@@ -39,6 +39,7 @@ class PropertyController extends Controller
             'property_name' => 'required|string|max:255',
             'property_brand' => 'nullable|string|max:50',
             'type' => 'required|in:residential,commercial,mixed_use',
+            'property_subtype' => 'nullable|in:house,townhome,condo,duplex,multi_unit',
             'year_built' => 'nullable|integer|min:1800|max:' . date('Y'),
             
             // Additional fields for property types
@@ -78,8 +79,16 @@ class PropertyController extends Controller
             
             // Details
             'personality' => 'nullable|in:calm,busy,luxury,high-use',
+            'personality_notes' => 'nullable|string|max:2000',
             'known_problems' => 'nullable',
-            'sensitivities' => 'nullable',
+            'sensitivities' => 'nullable|array',
+            'sensitivities.*' => 'string|max:255',
+            'home_journey' => 'nullable|array',
+            'home_journey.*' => 'string|max:255',
+            'home_feel' => 'nullable|array',
+            'home_feel.*' => 'string|max:255',
+            'care_goals' => 'nullable|array',
+            'care_goals.*' => 'string|in:walls_paint_care,trim_woodwork_finishing,flooring_care_patching,appliance_support,electrical_safety,moisture_leak_prevention,hvac_filters_program,pest_prevention_sealing,gutter_cleaning_drainage,pressure_washing,garden_lawn_care,tree_pruning_yard_health,seasonal_prep,travel_away_watch,moving_in_out_service,pre_sale_refresh',
             
             // Files
             'property_photos.*' => 'nullable|image|max:10240', // 10MB max
@@ -125,6 +134,9 @@ class PropertyController extends Controller
         $validated['known_problems'] = !empty($knownProblemsList) ? implode(', ', $knownProblemsList) : null;
 
         $validated['sensitivities'] = $this->normalizeListInput($request->input('sensitivities'));
+        $validated['home_journey'] = array_values(array_filter((array) ($validated['home_journey'] ?? [])));
+        $validated['home_feel'] = array_values(array_filter((array) ($validated['home_feel'] ?? [])));
+        $validated['care_goals'] = array_values(array_filter((array) ($validated['care_goals'] ?? [])));
 
         $disk = config('filesystems.default', 's3');
         
@@ -204,6 +216,7 @@ class PropertyController extends Controller
         $validated = $request->validate([
             'property_name' => 'required|string|max:255',
             'type' => 'required|in:residential,commercial,mixed_use',
+            'property_subtype' => 'nullable|in:house,townhome,condo,duplex,multi_unit',
             'year_built' => 'nullable|integer|min:1800|max:' . date('Y'),
             
             // Address
@@ -239,8 +252,16 @@ class PropertyController extends Controller
             
             // Details
             'personality' => 'nullable|in:calm,busy,luxury,high-use',
+            'personality_notes' => 'nullable|string|max:2000',
             'known_problems' => 'nullable',
-            'sensitivities' => 'nullable',
+            'sensitivities' => 'nullable|array',
+            'sensitivities.*' => 'string|max:255',
+            'home_journey' => 'nullable|array',
+            'home_journey.*' => 'string|max:255',
+            'home_feel' => 'nullable|array',
+            'home_feel.*' => 'string|max:255',
+            'care_goals' => 'nullable|array',
+            'care_goals.*' => 'string|in:walls_paint_care,trim_woodwork_finishing,flooring_care_patching,appliance_support,electrical_safety,moisture_leak_prevention,hvac_filters_program,pest_prevention_sealing,gutter_cleaning_drainage,pressure_washing,garden_lawn_care,tree_pruning_yard_health,seasonal_prep,travel_away_watch,moving_in_out_service,pre_sale_refresh',
             
             // Files
             'property_photos.*' => 'nullable|image|max:10240',
@@ -271,6 +292,9 @@ class PropertyController extends Controller
         $validated['known_problems'] = !empty($knownProblemsList) ? implode(', ', $knownProblemsList) : null;
 
         $validated['sensitivities'] = $this->normalizeListInput($request->input('sensitivities'));
+        $validated['home_journey'] = array_values(array_filter((array) ($validated['home_journey'] ?? [])));
+        $validated['home_feel'] = array_values(array_filter((array) ($validated['home_feel'] ?? [])));
+        $validated['care_goals'] = array_values(array_filter((array) ($validated['care_goals'] ?? [])));
 
         $disk = config('filesystems.default', 's3');
         

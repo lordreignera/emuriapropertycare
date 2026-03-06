@@ -45,6 +45,7 @@ class Property extends Model
         'has_pets',
         'has_kids',
         'personality',
+        'personality_notes',
         'known_problems',
         'sensitivities',
         'care_goals',

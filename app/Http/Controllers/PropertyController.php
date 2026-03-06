@@ -24,9 +24,39 @@ class PropertyController extends Controller
 
         // Role-based filtering
         if ($user->hasRole('Inspector')) {
-            // Inspectors only see properties assigned to them
-            $query->where('inspector_id', $user->id)
-                  ->where('status', 'awaiting_inspection');
+            // Inspectors only see properties assigned to them (property-level or inspection-level)
+            $query->where(function ($q) use ($user) {
+                $q->where('inspector_id', $user->id)
+                  ->orWhereHas('inspections', function ($inspectionQuery) use ($user) {
+                      $inspectionQuery->where('inspector_id', $user->id)
+                          ->whereIn('status', ['scheduled', 'in_progress', 'completed']);
+                  });
+            });
+
+            // Inspector status filtering
+            if ($request->filled('status')) {
+                $status = $request->status;
+
+                if ($status === 'awaiting_inspection') {
+                    $query->whereHas('inspections', function ($inspectionQuery) {
+                        $inspectionQuery->where('inspection_fee_status', 'paid')
+                            ->where('status', 'scheduled');
+                    })
+                    ->whereDoesntHave('inspections', function ($inspectionQuery) {
+                        $inspectionQuery->where('status', 'completed');
+                    });
+                } elseif ($status === 'not_inspected' || $status === 'active') {
+                    $query->whereDoesntHave('inspections', function ($inspectionQuery) {
+                        $inspectionQuery->where('status', 'completed');
+                    });
+                } elseif ($status === 'inspected_completed') {
+                    $query->whereHas('inspections', function ($inspectionQuery) {
+                        $inspectionQuery->where('status', 'completed');
+                    });
+                } else {
+                    $query->where('status', $status);
+                }
+            }
         } elseif ($user->hasRole('Project Manager')) {
             // Project Managers only see properties assigned to them
             $query->where('project_manager_id', $user->id)
@@ -47,6 +77,9 @@ class PropertyController extends Controller
                     $query->whereHas('inspections', function ($inspectionQuery) {
                         $inspectionQuery->where('inspection_fee_status', 'paid')
                             ->where('status', 'scheduled');
+                    })
+                    ->whereDoesntHave('inspections', function ($inspectionQuery) {
+                        $inspectionQuery->where('status', 'completed');
                     });
                 } elseif ($status === 'not_inspected' || $status === 'active') {
                     // Backward compatible: old "active" maps to "not inspected"
@@ -180,12 +213,12 @@ class PropertyController extends Controller
         $inspection = $property->inspections()
             ->where('inspection_fee_status', 'paid')
             ->where('status', 'scheduled')
-            ->whereNull('inspector_id')
+            ->latest('id')
             ->first();
 
         if (!$inspection) {
             return redirect()->back()
-                ->with('error', 'No paid inspection found for this property or staff already assigned.');
+                ->with('error', 'No scheduled paid inspection found for this property.');
         }
 
         // Verify the users have correct roles
@@ -208,6 +241,9 @@ class PropertyController extends Controller
 
         // Also update the property with PM assignment
         $property->project_manager_id = $validated['project_manager_id'];
+        $property->inspector_id = $validated['inspector_id'];
+        $property->assigned_at = $property->assigned_at ?: now();
+        $property->inspection_scheduled_at = $property->inspection_scheduled_at ?: $inspection->scheduled_date;
         $property->save();
 
         return redirect()->back()

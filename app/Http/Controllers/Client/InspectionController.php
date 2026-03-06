@@ -17,22 +17,22 @@ class InspectionController extends Controller
     private const INSPECTION_FEE_DOLLARS = 299;
 
     /**
-     * List client's completed inspections.
+     * List client's inspections (scheduled, in progress, completed).
      */
     public function index()
     {
         $propertyIds = Property::where('user_id', Auth::id())->pluck('id');
 
-        $latestCompletedInspectionIds = Inspection::whereIn('property_id', $propertyIds)
-            ->where('status', 'completed')
+        $latestInspectionIds = Inspection::whereIn('property_id', $propertyIds)
+            ->where('status', '!=', 'cancelled')
             ->selectRaw('MAX(id) as id')
             ->groupBy('property_id')
             ->pluck('id');
 
         $inspections = Inspection::with(['property', 'project'])
-            ->whereIn('id', $latestCompletedInspectionIds)
+            ->whereIn('id', $latestInspectionIds)
             ->whereIn('property_id', $propertyIds)
-            ->where('status', 'completed')
+            ->where('status', '!=', 'cancelled')
             ->orderByDesc('completed_date')
             ->orderByDesc('id')
             ->paginate(10);
