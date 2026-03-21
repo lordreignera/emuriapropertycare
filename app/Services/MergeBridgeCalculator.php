@@ -60,26 +60,22 @@ class MergeBridgeCalculator
         // Step 4: Calculate ARP (Annual Recurring Price - monthly)
         $arpMonthly = $trcMonthly;
         
-        // Step 5: Map CPI Score to Condition Score (0-100)
-        $conditionScore = $this->mapCPItoConditionScore($inspection->cpi_total_score ?? 0);
+        // Step 5: CPI is now a 0–100 weighted score; use it directly as the condition score
+        $conditionScore = $this->mapCPItoConditionScore((float) ($inspection->cpi_total_score ?? 100.0));
         
         // Step 6: Dual-Gate Tier Assignment
         $tierScore = $this->getTierFromConditionScore($conditionScore);
         $tierARP = $this->getTierFromARP($arpMonthly, $inspection);
         $tierFinal = $this->selectFinalTier($tierScore, $tierARP);
         
-        // Step 7: Get multiplier for final tier
-        $multiplierFinal = $this->getMultiplierForTier($tierFinal);
-        
-        // Step 8: Apply multiplier
-        $arpEquivalentFinal = $arpMonthly * $multiplierFinal;
-        
-        // Step 9: Get base package price (floor) - Use selected package from inspection
-        $basePackagePrice = $this->getBasePackagePrice($inspection);
-        
-        // Step 10: Scientific Final Monthly (apply floor)
-        $scientificFinalMonthly = max($arpEquivalentFinal, $basePackagePrice);
+        // Step 7: Tier multiplier recorded for reference only — not applied to pricing
+        $multiplierFinal = 1.0;
+
+        // Step 8: Final price = TRC / 12 (ARP Monthly)
+        $arpEquivalentFinal = $arpMonthly;
+        $scientificFinalMonthly = $arpMonthly;
         $scientificFinalAnnual = $scientificFinalMonthly * 12;
+        $basePackagePrice = 0.0;
         
         // Step 11: Per-Unit Breakdown (if multi-unit property)
         $perUnitBreakdown = $this->calculatePerUnitBreakdown(
@@ -169,21 +165,18 @@ class MergeBridgeCalculator
     }
 
     /**
-     * Map CPI Score (0-27) to Condition Score (0-100)
+     * CPI is now a weighted 0–100 score computed from findings × system weights.
+     * It already represents the property condition directly, so return it as-is.
      */
-    protected function mapCPItoConditionScore(int $cpiScore): int
+    protected function mapCPItoConditionScore(float $cpiScore): float
     {
-        if ($cpiScore <= 2) return 95;  // CPI-0: Excellent (90-100)
-        if ($cpiScore <= 5) return 82;  // CPI-1: Good (75-89)
-        if ($cpiScore <= 8) return 67;  // CPI-2: Fair (60-74)
-        if ($cpiScore <= 11) return 50; // CPI-3: Poor (40-59)
-        return 30;                       // CPI-4: Critical (0-39)
+        return max(0.0, min(100.0, (float) $cpiScore));
     }
 
     /**
      * Determine tier from condition score (Gate 1)
      */
-    protected function getTierFromConditionScore(int $conditionScore): string
+    protected function getTierFromConditionScore(float $conditionScore): string
     {
         if ($conditionScore >= 90) return 'Essentials';
         if ($conditionScore >= 75) return 'Essentials';

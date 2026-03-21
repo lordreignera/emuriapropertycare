@@ -15,6 +15,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use App\Services\BaseServicePricingService;
 use App\Models\InspectionSystem;
 use App\Models\PricingPackage;
+use App\Support\PharCatalog;
 
 class InspectionController extends Controller
 {
@@ -223,7 +224,7 @@ class InspectionController extends Controller
             'system_findings.*.issue' => 'nullable|string|max:255',
             'system_findings.*.location' => 'nullable|string|max:255',
             'system_findings.*.spot' => 'nullable|string|max:255',
-            'system_findings.*.severity' => 'nullable|in:low,medium,high,critical,urgent,health_safety_threatening,value_depreciation,non_urgent',
+            'system_findings.*.severity' => 'nullable|in:low,medium,high,critical,noi_protection,urgent,health_safety_threatening,value_depreciation,non_urgent',
             'system_findings.*.notes' => 'nullable|string',
             'system_findings.*.recommendations' => 'nullable',
             'system_findings.*.recommendations.*' => 'nullable|string|max:500',
@@ -284,18 +285,7 @@ class InspectionController extends Controller
         
         $inspection->status = $validated['status'];
 
-        $autoPackage = PricingPackage::with('packagePricing')
-            ->where('is_active', true)
-            ->orderBy('sort_order')
-            ->orderBy('id')
-            ->first();
-
-        $inspection->service_package_id = $validated['service_package_id']
-            ?? $inspection->service_package_id;
-
-        if ($validated['status'] === 'completed' && empty($inspection->service_package_id)) {
-            $inspection->service_package_id = $autoPackage?->id;
-        }
+        // Service package is NOT assigned at Step 1 — it is selected later in the sales/quoting process.
 
         $inspection->weather_conditions = $validated['weather_conditions'] ?? null;
 
@@ -312,29 +302,7 @@ class InspectionController extends Controller
         $inspection->commercial_sqft_snapshot = $property->square_footage_interior;
         $inspection->mixed_use_weight_snapshot = $property->mixed_use_commercial_weight;
 
-        if (!empty($inspection->service_package_id)) {
-            $selectedPackage = PricingPackage::with('packagePricing')->find($inspection->service_package_id);
-            if ($selectedPackage) {
-                $pricingService = new BaseServicePricingService();
-                $propertyTypeCode = strtolower((string) ($property->type ?? 'residential'));
-                if (str_contains($propertyTypeCode, 'mixed')) {
-                    $propertyTypeCode = 'mixed_use';
-                } elseif (str_contains($propertyTypeCode, 'commercial')) {
-                    $propertyTypeCode = 'commercial';
-                } else {
-                    $propertyTypeCode = 'residential';
-                }
-
-                $price = $pricingService->getPackageBasePrice($selectedPackage->package_name, $propertyTypeCode);
-
-                if ($price === null) {
-                    $price = (float) (optional($selectedPackage->packagePricing->where('is_active', true)->first())->base_monthly_price ?? 0);
-                }
-
-                $inspection->service_package_name = $selectedPackage->package_name;
-                $inspection->base_price_snapshot = $price !== null ? (float) $price : null;
-            }
-        }
+        // base_price_snapshot / service_package_name set later when package is selected.
 
         // CPI snapshot fields (Page 1)
         $inspection->property_year_built = $request->input('property_year_built');
@@ -391,14 +359,24 @@ class InspectionController extends Controller
         }
 
         $severityAliases = [
-            'urgent' => 'critical',
-            'health_safety_threatening' => 'high',
-            'value_depreciation' => 'medium',
-            'non_urgent' => 'low',
+            'urgent'                      => 'critical',
+            'health_safety_threatening'   => 'high',
+            'value_depreciation'          => 'medium',
+            'non_urgent'                  => 'low',
+        ];
+
+        $allowedSeverities = ['critical', 'high', 'noi_protection', 'medium', 'low'];
+
+        $priorityScores = [
+            'critical'       => 100, // Safety & Health
+            'high'           => 80,  // Urgent
+            'noi_protection' => 60,  // NOI Protection
+            'medium'         => 40,  // Value Depreciation
+            'low'            => 10,  // Non-Urgent
         ];
 
         $normalizedFindings = $systemFindings
-            ->map(function ($finding) use ($systemNameMap, $systemSlugMap, $subsystemNameMap, $severityAliases) {
+            ->map(function ($finding) use ($systemNameMap, $systemSlugMap, $subsystemNameMap, $severityAliases, $allowedSeverities) {
                 $systemId = $finding['system_id'] ?? null;
                 $subsystemId = $finding['subsystem_id'] ?? null;
                 $rawSeverity = (string) ($finding['severity'] ?? 'low');
@@ -413,7 +391,7 @@ class InspectionController extends Controller
                     'issue' => trim((string) ($finding['issue'] ?? '')),
                     'location' => trim((string) ($finding['location'] ?? '')),
                     'spot' => trim((string) ($finding['spot'] ?? '')),
-                    'severity' => in_array($normalizedSeverity, ['low', 'medium', 'high', 'critical'], true) ? $normalizedSeverity : 'low',
+                    'severity' => in_array($normalizedSeverity, $allowedSeverities, true) ? $normalizedSeverity : 'low',
                     'notes' => trim((string) ($finding['notes'] ?? '')),
                     'recommendations' => collect(is_array($finding['recommendations'] ?? null)
                         ? ($finding['recommendations'] ?? [])
@@ -436,10 +414,15 @@ class InspectionController extends Controller
 
         // Store overall assessment
         $inspection->summary = $validated['summary'] ?? ('Inspection for ' . $property->property_name);
+        $inspection->overall_condition = $validated['overall_condition'] ?? null;
         $inspection->inspector_notes = $validated['inspector_notes'] ?? null;
         $inspection->recommendations = $validated['recommendations'] ?? null;
         $inspection->risk_summary = $validated['risk_summary'] ?? null;
         $inspection->findings = $normalizedFindings;
+
+        // ==== COMPUTE WEIGHTED CPI FROM FINDINGS × SYSTEM WEIGHTS ====
+        $this->computeWeightedCPI($inspection, $normalizedFindings, $priorityScores);
+        $this->computeASI($inspection);
 
         $disk = config('filesystems.default', 's3');
 
@@ -564,6 +547,103 @@ class InspectionController extends Controller
     }
 
     /**
+     * Compute the weighted CPI (0–100) from findings × system weights and
+     * persist it plus the per-system breakdown on the Inspection model.
+     *
+     * Formula per finding:
+     *   CPI Deduction = (SystemWeight × PriorityScore × 9) / (MaxSystemWeight × 100)
+     *
+     * Per system:
+     *   SystemScore = max(0, 100 − Σ deductions)
+     *
+     * Overall CPI:
+     *   CPI = Σ(SystemScore × SystemWeight) / Σ(SystemWeights)
+     */
+    protected function computeWeightedCPI(
+        \App\Models\Inspection $inspection,
+        array $findings,
+        array $priorityScores
+    ): void {
+        $maxSystemWeight = 20;   // Structural — highest weight
+        $scalingFactor   = 9;    // Max possible deduction for a single finding
+
+        $allSystems  = InspectionSystem::where('is_active', true)->get(['id', 'name', 'weight']);
+        $totalWeight = $allSystems->sum('weight');
+
+        $systemScores = [];
+
+        foreach ($allSystems as $system) {
+            $systemFindings = array_filter(
+                $findings,
+                fn($f) => (int) ($f['system_id'] ?? 0) === (int) $system->id
+            );
+
+            $totalDeduction = 0.0;
+            foreach ($systemFindings as $finding) {
+                $priorityScore = (float) ($priorityScores[$finding['severity'] ?? 'low'] ?? 0);
+                $weight        = (int) $system->weight;
+                $totalDeduction += ($weight * $priorityScore * $scalingFactor) / ($maxSystemWeight * 100);
+            }
+
+            $systemScore = max(0.0, 100.0 - $totalDeduction);
+
+            $systemScores[(string) $system->id] = [
+                'name'      => $system->name,
+                'weight'    => $system->weight,
+                'deduction' => round($totalDeduction, 2),
+                'score'     => round($systemScore, 1),
+            ];
+        }
+
+        $weightedSum = 0.0;
+        foreach ($systemScores as $data) {
+            $weightedSum += $data['score'] * $data['weight'];
+        }
+
+        $cpi = $totalWeight > 0 ? round($weightedSum / $totalWeight, 1) : 100.0;
+
+        $inspection->cpi_total_score = $cpi;
+        $inspection->system_scores   = $systemScores;
+    }
+
+    /**
+     * Compute ASI (Asset Stability Index) from CPI + TUS and attach rating labels.
+     * Must be called after computeWeightedCPI() so cpi_total_score is set.
+     * Does NOT call $inspection->save() — caller is responsible.
+     */
+    protected function computeASI(\App\Models\Inspection $inspection): void
+    {
+        $cpiWeight = (float) (\App\Models\BDCSetting::getValue('cpi_weight', 0.60) ?? 0.60);
+        $tusWeight  = (float) (\App\Models\BDCSetting::getValue('tus_weight', 0.40) ?? 0.40);
+
+        $cpi = (float) ($inspection->cpi_total_score ?? 100.0);
+        $tus = (float) ($inspection->tus_score ?? 75.0);
+
+        $asi = round($cpi * $cpiWeight + $tus * $tusWeight, 1);
+
+        $cpiRating = match (true) {
+            $cpi >= 90 => 'Excellent',
+            $cpi >= 75 => 'Good',
+            $cpi >= 60 => 'Fair',
+            $cpi >= 40 => 'Poor',
+            default    => 'Critical',
+        };
+
+        $asiRating = match (true) {
+            $asi >= 90 => 'Highly stable asset',
+            $asi >= 80 => 'Stable asset',
+            $asi >= 70 => 'Moderate stability',
+            $asi >= 60 => 'Vulnerable stability',
+            $asi >= 50 => 'Unstable asset',
+            default    => 'Severe instability',
+        };
+
+        $inspection->asi_score  = $asi;
+        $inspection->cpi_rating = $cpiRating;
+        $inspection->asi_rating = $asiRating;
+    }
+
+    /**
      * Display the specified inspection.
      */
     public function show(string $id)
@@ -613,7 +693,9 @@ class InspectionController extends Controller
      */
     public function edit(string $id)
     {
-        //
+        $inspection = Inspection::findOrFail($id);
+
+        return redirect()->route('inspections.create', ['property_id' => $inspection->property_id]);
     }
 
     /**
@@ -661,11 +743,13 @@ class InspectionController extends Controller
         
         // Generate PDF
         $pdf = Pdf::loadView('admin.inspections.invoice-pdf', compact('inspection', 'findings', 'materials', 'domains'))
-            ->setPaper('a4', 'portrait')
+            ->setPaper('a4', 'landscape')
             ->setOption('margin-top', 10)
             ->setOption('margin-right', 10)
             ->setOption('margin-bottom', 10)
-            ->setOption('margin-left', 10);
+            ->setOption('margin-left', 10)
+            ->setOption('isHtml5ParserEnabled', true)
+            ->setOption('isRemoteEnabled', false);
         
         $clientName = Str::slug((string) ($inspection->property?->user?->name ?? 'client'));
         $propertyName = Str::slug((string) ($inspection->property?->property_name ?? $inspection->property?->property_code ?? 'property'));
@@ -786,6 +870,17 @@ class InspectionController extends Controller
         $inspection = Inspection::with(['property', 'pharFindings'])->findOrFail($id);
         $property = $inspection->property;
 
+        // Sort Phase 1 findings by severity: critical → high → noi_protection → medium → low
+        $severityOrder  = ['critical' => 0, 'high' => 1, 'noi_protection' => 2, 'medium' => 3, 'low' => 4];
+        $sortedFindings = collect($inspection->findings ?? [])
+            ->sortBy(fn($f) => $severityOrder[$f['severity'] ?? 'low'] ?? 99)
+            ->values()
+            ->all();
+        $sortedFindings = PharCatalog::applyDefaultsToFindings($sortedFindings);
+
+        // System weights keyed by name for display in the finding header
+        $systemWeightsMap = InspectionSystem::where('is_active', true)->pluck('weight', 'name')->toArray();
+
         // Default property size from registered property record
         $defaultPropertySizePsf = $property->total_square_footage
             ?? $property->square_footage_interior
@@ -795,18 +890,43 @@ class InspectionController extends Controller
         $bdcSettings = \App\Models\BDCSetting::pluck('setting_value', 'setting_key')->toArray();
 
         // Config-driven dropdown options (easy to extend)
-        $pharCategories = config('phar.categories', []);
-        $materialUnits = config('phar.material_units', []);
-        $fmcMaterialSettings = \App\Models\FmcMaterialSetting::active()->get(['material_name', 'default_unit', 'default_unit_cost']);
-        $findingTemplateSettings = \App\Models\FindingTemplateSetting::active()->get([
+        $pharCategories = array_values(array_unique(array_merge(
+            config('phar.categories', []),
+            PharCatalog::categories()
+        )));
+        $materialUnits = array_values(array_unique(array_merge(
+            config('phar.material_units', []),
+            PharCatalog::materialUnits()
+        )));
+        $dbMaterialSettings = \App\Models\FmcMaterialSetting::active()->get([
+            'material_name',
+            'default_unit',
+            'default_unit_cost',
+            'system_id',
+            'subsystem_id',
+        ]);
+        $catalogMaterialSettings = collect(PharCatalog::materials())->map(static fn(array $row) => (object) [
+            'material_name' => $row['material_name'],
+            'default_unit' => $row['default_unit'],
+            'default_unit_cost' => $row['default_unit_cost'],
+            'system_id' => null,
+            'subsystem_id' => null,
+        ]);
+        $fmcMaterialSettings = $dbMaterialSettings
+            ->concat($catalogMaterialSettings)
+            ->values();
+
+        $dbFindingTemplateSettings = \App\Models\FindingTemplateSetting::active()->get([
             'task_question',
             'category',
-            'default_priority',
             'default_included',
-            'default_labour_hours',
-            'photo_reference',
             'default_notes',
         ]);
+        $catalogFindingTemplateSettings = collect(PharCatalog::findingTemplates())->map(static fn(array $row) => (object) $row);
+        $findingTemplateSettings = $dbFindingTemplateSettings
+            ->concat($catalogFindingTemplateSettings)
+            ->unique('task_question')
+            ->values();
 
         // Selected service package (from CPI step) and property-type-specific monthly floor price
         $selectedServicePackage = null;
@@ -831,108 +951,143 @@ class InspectionController extends Controller
             'findingTemplateSettings',
             'defaultPropertySizePsf',
             'selectedServicePackage',
-            'selectedServicePackagePrice'
+            'selectedServicePackagePrice',
+            'sortedFindings',
+            'systemWeightsMap'
         ));
     }
 
     /**
-     * Store PHAR data (findings + materials) and trigger final calculations
+     * Store PHAR data (findings + materials) and trigger final calculations.
+     * Supports draft saving (action=save_draft_back) to persist and return to Step 1.
      */
     public function storePharData(Request $request, string $id)
     {
         $inspection = Inspection::findOrFail($id);
         $property = $inspection->property;
+        $isDraft = $request->input('action') === 'save_draft_back';
 
         $validated = $request->validate([
             // PHAR Inputs
-            'property_size_psf' => 'required|numeric|min:0',
-            'bdc_visits_per_year' => 'required|numeric|min:0',
-            'estimated_task_hours' => 'required|numeric|min:0',
-            'minimum_required_hours' => 'required|numeric|min:0',
+            'property_size_psf'       => 'nullable|numeric|min:0',
+            'bdc_visits_per_year'     => 'nullable|numeric|min:0',
+            'estimated_task_hours'    => 'nullable|numeric|min:0',
+            'minimum_required_hours'  => 'nullable|numeric|min:0',
+            'tus_score'               => 'nullable|numeric|min:0|max:100',
 
-            // Findings Array
-            'findings' => 'nullable|array',
-            'findings.*.task_question' => 'required_with:findings|string',
-            'findings.*.labour_hours' => 'required_with:findings|numeric|min:0',
-            'findings.*.priority' => 'required_with:findings|in:1,2,3',
-            'findings.*.included_yn' => 'required_with:findings|boolean',
-            'findings.*.category' => 'required_with:findings|string',
-            'findings.*.notes' => 'nullable|string',
-            'findings.*.property_id' => 'required_with:findings|exists:properties,id',
+            // Findings array — all nullable so draft can be partial
+            'findings'                          => 'nullable|array',
+            'findings.*.task_question'          => 'nullable|string',
+            'findings.*.labour_hours'           => 'nullable|numeric|min:0',
+            'findings.*.priority'               => 'nullable|in:1,2,3',
+            'findings.*.included_yn'            => 'nullable',
+            'findings.*.category'               => 'nullable|string',
+            'findings.*.notes'                  => 'nullable|string',
+            'findings.*.property_id'            => 'nullable|exists:properties,id',
 
-            // Materials Array
-            'materials' => 'nullable|array',
-            'materials.*.material_name' => 'required_with:materials|string',
-            'materials.*.quantity' => 'required_with:materials|numeric|min:0',
-            'materials.*.unit' => 'required_with:materials|string',
-            'materials.*.unit_cost' => 'required_with:materials|numeric|min:0',
-            'materials.*.line_total' => 'required_with:materials|numeric|min:0',
-            'materials.*.category' => 'required_with:materials|string',
-            'materials.*.notes' => 'nullable|string',
-            'materials.*.property_id' => 'required_with:materials|exists:properties,id',
+            // Per-finding materials
+            'findings.*.materials'              => 'nullable|array',
+            'findings.*.materials.*.material_name' => 'nullable|string',
+            'findings.*.materials.*.quantity'   => 'nullable|numeric|min:0',
+            'findings.*.materials.*.unit'       => 'nullable|string',
+            'findings.*.materials.*.unit_cost'  => 'nullable|numeric|min:0',
+            'findings.*.materials.*.line_total' => 'nullable|numeric|min:0',
+            'findings.*.materials.*.notes'      => 'nullable|string',
+            'findings.*.materials.*.property_id' => 'nullable|exists:properties,id',
         ]);
 
         $loadedHourlyRate = (float) (\App\Models\BDCSetting::getValue('loaded_hourly_rate', 165) ?? 165);
 
-        // Update inspection with PHAR input parameters
-        $inspection->update([
-            'property_size_psf' => $validated['property_size_psf'],
-            'bdc_visits_per_year' => $validated['bdc_visits_per_year'],
-            'estimated_task_hours' => $validated['estimated_task_hours'],
-            'minimum_required_hours' => $validated['minimum_required_hours'],
-            'labour_hourly_rate' => $loadedHourlyRate,
-        ]);
+        // Update inspection PHAR input parameters (only non-null values)
+        $pharParams = array_filter([
+            'property_size_psf'      => $validated['property_size_psf'] ?? null,
+            'bdc_visits_per_year'    => $validated['bdc_visits_per_year'] ?? null,
+            'estimated_task_hours'   => $validated['estimated_task_hours'] ?? null,
+            'minimum_required_hours' => $validated['minimum_required_hours'] ?? null,
+            'labour_hourly_rate'     => $loadedHourlyRate,
+            'tus_score'              => isset($validated['tus_score']) ? (float) $validated['tus_score'] : null,
+        ], fn($v) => $v !== null);
 
-        // Delete old findings and materials (replace with new data)
+        if (!empty($pharParams)) {
+            $inspection->update($pharParams);
+        }
+
+        // ==== MERGE PHAR DATA BACK INTO inspection->findings JSON ====
+        $currentFindings = collect($inspection->fresh()->findings ?? []);
+        $submittedFindings = collect($validated['findings'] ?? []);
+
+        $mergedFindings = $currentFindings->map(function ($finding, $index) use ($submittedFindings) {
+            $phar = $submittedFindings->get($index, []);
+            $pharMaterials = collect($phar['materials'] ?? [])
+                ->filter(fn($m) => !empty($m['material_name']))
+                ->values()
+                ->all();
+
+            return array_merge($finding, [
+                'phar_labour_hours' => isset($phar['labour_hours']) ? (float) $phar['labour_hours'] : ($finding['phar_labour_hours'] ?? 0),
+                'phar_category'     => $phar['category'] ?? ($finding['phar_category'] ?? null),
+                'phar_included_yn'  => isset($phar['included_yn']) ? (bool) $phar['included_yn'] : ($finding['phar_included_yn'] ?? true),
+                'phar_notes'        => $phar['notes'] ?? ($finding['phar_notes'] ?? ''),
+                'phar_materials'    => !empty($pharMaterials) ? $pharMaterials : ($finding['phar_materials'] ?? []),
+            ]);
+        })->all();
+
+        $inspection->findings = $mergedFindings;
+        $inspection->save();
+
+        // Draft: save and go back to Step 1 without running calculations
+        if ($isDraft) {
+            return redirect()->route('inspections.create', ['property_id' => $inspection->property_id])
+                ->with('success', 'Step 2 progress saved. You can review or add more findings in Step 1 and return here at any time.');
+        }
+
+        // ==== FINAL SAVE: process into relational tables ====
         $inspection->pharFindings()->delete();
         $inspection->materials()->delete();
 
-        // ==== PROCESS FINDINGS ====
-        if (!empty($validated['findings'])) {
-            foreach ($validated['findings'] as $findingData) {
-                // Skip empty findings
-                if (empty($findingData['task_question']) && empty($findingData['labour_hours'])) {
-                    continue;
-                }
-
-                \App\Models\PHARFinding::create([
-                    'inspection_id' => $inspection->id,
-                    'property_id' => $property->id,
-                    'task_question' => $findingData['task_question'],
-                    'category' => $findingData['category'],
-                    'priority' => $findingData['priority'],
-                    'included_yn' => $findingData['included_yn'],
-                    'labour_hours' => $findingData['labour_hours'],
-                    'material_cost' => 0, // Deprecated field, materials tracked separately now
-                    'notes' => $findingData['notes'] ?? null,
-                ]);
+        foreach ($mergedFindings as $findingData) {
+            if (empty($findingData['issue']) && empty($findingData['phar_labour_hours'])) {
+                continue;
             }
-        }
 
-        // ==== PROCESS MATERIALS ====
-        if (!empty($validated['materials'])) {
-            foreach ($validated['materials'] as $materialData) {
-                // Skip empty materials
-                if (empty($materialData['material_name']) && empty($materialData['quantity'])) {
+            \App\Models\PHARFinding::create([
+                'inspection_id' => $inspection->id,
+                'property_id'   => $property->id,
+                'task_question' => $findingData['task_question'] ?? ($findingData['issue'] ?? ''),
+                'category'      => $findingData['phar_category'] ?? 'General',
+                'priority'      => $findingData['priority'] ?? 3,
+                'included_yn'   => $findingData['phar_included_yn'] ?? true,
+                'labour_hours'  => $findingData['phar_labour_hours'] ?? 0,
+                'material_cost' => 0,
+                'notes'         => $findingData['phar_notes'] ?? null,
+            ]);
+
+            // Per-finding materials → InspectionMaterial records
+            foreach ($findingData['phar_materials'] ?? [] as $materialData) {
+                if (empty($materialData['material_name'])) {
                     continue;
                 }
-
                 \App\Models\InspectionMaterial::create([
                     'inspection_id' => $inspection->id,
-                    'property_id' => $property->id,
+                    'property_id'   => $property->id,
                     'material_name' => $materialData['material_name'],
-                    'description' => $materialData['notes'] ?? null,
-                    'quantity' => $materialData['quantity'],
-                    'unit' => $materialData['unit'],
-                    'unit_cost' => $materialData['unit_cost'],
-                    'line_total' => $materialData['line_total'],
-                    'notes' => $materialData['notes'] ?? null,
-                    'category' => $materialData['category'],
+                    'description'   => $materialData['notes'] ?? null,
+                    'quantity'      => $materialData['quantity'] ?? 1,
+                    'unit'          => $materialData['unit'] ?? 'ea',
+                    'unit_cost'     => $materialData['unit_cost'] ?? 0,
+                    'line_total'    => $materialData['line_total'] ?? 0,
+                    'notes'         => $materialData['notes'] ?? null,
+                    'category'      => $materialData['category'] ?? ($findingData['phar_category'] ?? 'General'),
                 ]);
             }
         }
 
         // ==== CALCULATE FINAL PRICING (BDC + FRLC + FMC + TIERS) ====
+        // Re-compute ASI now that tus_score is persisted
+        $inspection->refresh();
+        $this->computeASI($inspection);
+        $inspection->save();
+
         $bdcCalculator = new \App\Services\BDCCalculator();
         $calculator = new \App\Services\MergeBridgeCalculator($bdcCalculator);
         $results = $calculator->calculate($inspection);
@@ -940,7 +1095,7 @@ class InspectionController extends Controller
 
         // Mark inspection as completed
         $inspection->update([
-            'status' => 'completed',
+            'status'         => 'completed',
             'completed_date' => now(),
         ]);
 

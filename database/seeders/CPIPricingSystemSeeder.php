@@ -23,8 +23,8 @@ class CPIPricingSystemSeeder extends Seeder
             
             // Lookup tables
             SupplyLineMaterialsSeeder::class,
-            FmcMaterialSettingsSeeder::class,
-            FindingTemplateSettingsSeeder::class,
+            // FmcMaterialSettingsSeeder is called in DatabaseSeeder after InspectionSystemsSeeder
+            // FindingTemplateSettingsSeeder is called in DatabaseSeeder after InspectionSystemsSeeder
             AgeBracketsSeeder::class,
             ContainmentCategoriesSeeder::class,
             CrawlAccessCategoriesSeeder::class,

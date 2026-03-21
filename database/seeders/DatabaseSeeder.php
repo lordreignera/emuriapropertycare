@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\User;
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Database\Seeders\FindingTemplateSettingsSeeder;
 
 class DatabaseSeeder extends Seeder
 {
@@ -21,6 +22,8 @@ class DatabaseSeeder extends Seeder
             CPIPricingSystemSeeder::class,
             BDCSettingsSeeder::class,
             InspectionSystemsSeeder::class,
+            FmcMaterialSettingsSeeder::class,
+            FindingTemplateSettingsSeeder::class,
             // TierSeeder::class, // REMOVED: Tiers are now generated per client after inspection
         ]);
         

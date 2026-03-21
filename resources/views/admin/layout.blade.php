@@ -61,6 +61,9 @@
     <div class="container-scroller">
         {{-- Sidebar --}}
         @include('admin.partials.sidebar')
+
+        {{-- Sidebar backdrop overlay (mobile only) --}}
+        <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
         
         <div class="container-fluid page-body-wrapper">
             {{-- Navbar --}}
@@ -129,6 +132,77 @@
     </div>
 
     @include('admin.partials.scripts')
+
+    {{-- Mobile Sidebar Toggle --}}
+    <script>
+        (function () {
+            var MOBILE_BREAKPOINT = 992;
+
+            function isMobile() {
+                return window.innerWidth < MOBILE_BREAKPOINT;
+            }
+
+            function openSidebar() {
+                document.body.classList.add('sidebar-mobile-open');
+            }
+
+            function closeSidebar() {
+                document.body.classList.remove('sidebar-mobile-open');
+            }
+
+            document.addEventListener('DOMContentLoaded', function () {
+                var backdrop = document.getElementById('sidebarBackdrop');
+
+                // Mobile-only right toggler (data-toggle="offcanvas")
+                var mobileToggler = document.querySelector('.navbar-toggler[data-toggle="offcanvas"]');
+                if (mobileToggler) {
+                    mobileToggler.addEventListener('click', function (e) {
+                        e.preventDefault();
+                        e.stopImmediatePropagation();
+                        document.body.classList.toggle('sidebar-mobile-open');
+                    });
+                }
+
+                // Desktop minimize toggler: also handle on mobile if no offcanvas button present
+                var desktopToggler = document.querySelector('.navbar-toggler[data-toggle="minimize"]');
+                if (desktopToggler && !mobileToggler) {
+                    desktopToggler.addEventListener('click', function (e) {
+                        if (isMobile()) {
+                            e.preventDefault();
+                            e.stopImmediatePropagation();
+                            document.body.classList.toggle('sidebar-mobile-open');
+                        }
+                    });
+                }
+
+                if (backdrop) {
+                    backdrop.addEventListener('click', closeSidebar);
+                }
+
+                // Close sidebar on ESC key
+                document.addEventListener('keydown', function (e) {
+                    if (e.key === 'Escape' && isMobile()) {
+                        closeSidebar();
+                    }
+                });
+
+                // Close sidebar when navigating (sidebar link click on mobile)
+                var sidebar = document.getElementById('sidebar');
+                if (sidebar) {
+                    sidebar.querySelectorAll('a').forEach(function (link) {
+                        link.addEventListener('click', function () {
+                            if (isMobile()) { closeSidebar(); }
+                        });
+                    });
+                }
+
+                // Close when resizing to desktop
+                window.addEventListener('resize', function () {
+                    if (!isMobile()) { closeSidebar(); }
+                });
+            });
+        })();
+    </script>
 
     {{-- Light/Dark Mode Toggle Script --}}
     <script>

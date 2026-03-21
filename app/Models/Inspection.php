@@ -64,13 +64,23 @@ class Inspection extends Model
         'service_package_id',
         'recommendations',
         'risk_summary',
+        'overall_condition',
+        'inspector_notes',
+        // CPI / ASI scoring
+        'cpi_total_score',
+        'system_scores',
+        'cpi_rating',
+        'tus_score',
+        'asi_score',
+        'asi_rating',
     ];
 
     protected $casts = [
-        'scheduled_date' => 'datetime',
-        'completed_date' => 'datetime',
-        'findings' => 'array',
-        'photos' => 'array',
+        'scheduled_date'  => 'datetime',
+        'completed_date'  => 'datetime',
+        'findings'        => 'array',
+        'system_scores'   => 'array',
+        'photos'          => 'array',
         'approved_by_client' => 'boolean',
         'client_approved_at' => 'datetime',
         'inspection_fee_amount' => 'decimal:2',

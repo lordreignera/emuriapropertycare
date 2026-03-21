@@ -53,6 +53,43 @@ class BDCSettingsSeeder extends Seeder
                 'updated_at' => $now,
             ],
 
+            [
+                'setting_key'         => 'cpi_weight',
+                'setting_label'       => 'CPI Weight (for ASI)',
+                'setting_description' => 'Weighting factor (0–1) applied to CPI when computing the Asset Stability Index (ASI). Default 60%.',
+                'setting_value'       => 0.60,
+                'unit'                => 'coefficient',
+                'setting_type'        => 'percentage',
+                'is_active'           => true,
+                'sort_order'          => 4,
+                'created_at'          => $now,
+                'updated_at'          => $now,
+            ],
+            [
+                'setting_key'         => 'tus_weight',
+                'setting_label'       => 'TUS Weight (for ASI)',
+                'setting_description' => 'Weighting factor (0–1) applied to TUS when computing the Asset Stability Index (ASI). Default 40%.',
+                'setting_value'       => 0.40,
+                'unit'                => 'coefficient',
+                'setting_type'        => 'percentage',
+                'is_active'           => true,
+                'sort_order'          => 5,
+                'created_at'          => $now,
+                'updated_at'          => $now,
+            ],
+            [
+                'setting_key'         => 'tus_input_default',
+                'setting_label'       => 'TUS Default Input (0–100)',
+                'setting_description' => 'Default Tenant Underwriting Score when none is entered per inspection.',
+                'setting_value'       => 75.0,
+                'unit'                => 'score',
+                'setting_type'        => 'count',
+                'is_active'           => true,
+                'sort_order'          => 6,
+                'created_at'          => $now,
+                'updated_at'          => $now,
+            ],
+
             // Legacy defaults kept for reference/fallback only.
             // These are now set per inspection (PHAR form), not global settings.
             [

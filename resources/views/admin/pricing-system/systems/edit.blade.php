@@ -30,6 +30,13 @@
                     </div>
 
                     <div class="form-group">
+                        <label for="weight">CPI Weight <span class="text-danger">*</span></label>
+                        <input type="number" min="0" max="20" class="form-control @error('weight') is-invalid @enderror" id="weight" name="weight" value="{{ old('weight', $system->weight) }}" required>
+                        <small class="text-muted">Relative importance in the CPI formula (max 20 = Structural). Current total across all systems: <strong>197</strong>.</small>
+                        @error('weight')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+
+                    <div class="form-group">
                         <label for="description">Description</label>
                         <textarea class="form-control @error('description') is-invalid @enderror" id="description" name="description" rows="3">{{ old('description', $system->description) }}</textarea>
                         @error('description')<div class="invalid-feedback">{{ $message }}</div>@enderror

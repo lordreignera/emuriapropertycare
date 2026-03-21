@@ -1353,6 +1353,447 @@
         color: var(--primary-dark) !important;
         text-decoration: underline !important;
     }
+
+    /* ============================================
+       MOBILE RESPONSIVE - Full Breakpoint System
+       ============================================ */
+
+    /* ---- Sidebar backdrop overlay (mobile only) ---- */
+    .sidebar-backdrop {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        z-index: 1038;
+    }
+
+    body.sidebar-mobile-open .sidebar-backdrop {
+        display: block;
+    }
+
+    /* ---- < 992px (tablet + mobile) ---- */
+    @media (max-width: 991.98px) {
+
+        /* Sidebar: off-screen by default, slides in on toggle */
+        body.light-theme .sidebar,
+        .sidebar {
+            transform: translateX(-100%) !important;
+            transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            z-index: 1039 !important;
+            width: 280px !important;
+        }
+
+        body.sidebar-mobile-open .sidebar {
+            transform: translateX(0) !important;
+        }
+
+        /* Page body: full width when sidebar is hidden */
+        .container-scroller .page-body-wrapper {
+            margin-left: 0 !important;
+            width: 100% !important;
+        }
+
+        /* Navbar: full width, make hamburger prominent */
+        .navbar {
+            padding: 0.75rem 1rem !important;
+        }
+
+        .navbar .navbar-menu-wrapper {
+            padding-left: 0 !important;
+        }
+
+        /* Show the mobile hamburger button */
+        .navbar-toggler {
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            width: 40px;
+            height: 40px;
+            border-radius: 0.5rem;
+            background: var(--light-bg);
+            color: var(--text-primary) !important;
+            border: 1px solid var(--border-color) !important;
+            cursor: pointer;
+        }
+
+        .navbar-toggler .mdi {
+            font-size: 1.4rem;
+            color: var(--text-primary) !important;
+        }
+
+        /* Show brand logo on mobile */
+        .navbar .navbar-brand-wrapper {
+            display: flex !important;
+            min-width: 60px;
+            background: transparent !important;
+        }
+
+        /* Content padding reduction */
+        .content-wrapper {
+            padding: 1rem !important;
+        }
+
+        /* Cards */
+        .card-body {
+            padding: 1rem !important;
+        }
+
+        .card-header {
+            padding: 0.875rem 1rem !important;
+        }
+
+        /* Page header stacks on mobile */
+        .page-header {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 0.5rem;
+        }
+
+        /* Nav pills (filter tabs) wrap on mobile */
+        .nav.nav-pills {
+            flex-wrap: wrap !important;
+            gap: 0.375rem;
+        }
+
+        .nav.nav-pills .nav-item {
+            flex: 1 0 auto;
+        }
+
+        .nav.nav-pills .nav-link {
+            font-size: 0.8125rem !important;
+            padding: 0.5rem 0.75rem !important;
+            white-space: nowrap;
+        }
+
+        /* Button groups: allow wrapping */
+        .btn-group {
+            flex-wrap: wrap !important;
+        }
+
+        /* Smaller buttons on mobile */
+        .btn {
+            padding: 0.5rem 0.875rem !important;
+            font-size: 0.875rem !important;
+        }
+
+        .btn-sm {
+            padding: 0.375rem 0.625rem !important;
+            font-size: 0.8125rem !important;
+        }
+
+        /* Tables: ensure horizontal scroll */
+        .table-responsive,
+        .dataTables_wrapper {
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* Stack d-flex justify-content-between headers on mobile */
+        .d-flex.justify-content-between.align-items-center {
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+
+        /* Forms: search input group full width */
+        .input-group {
+            flex-wrap: nowrap;
+        }
+
+        /* Dashboard stat cards: 2 per row on tablet */
+        .grid-margin.stretch-card {
+            margin-bottom: 1rem !important;
+        }
+
+        /* Headings smaller on mobile */
+        h3.page-title {
+            font-size: 1.25rem !important;
+        }
+
+        /* Reduce card hover lift on mobile (avoids awkward feel on touch) */
+        .card:hover {
+            transform: none !important;
+        }
+
+        .table tbody tr:hover {
+            transform: none !important;
+        }
+
+        .btn:hover {
+            transform: none !important;
+        }
+    }
+
+    /* ---- < 768px (mobile portrait + small landscape) ---- */
+    @media (max-width: 767.98px) {
+
+        body {
+            font-size: 13px;
+        }
+
+        .content-wrapper {
+            padding: 0.75rem !important;
+        }
+
+        /* Stack action buttons vertically in table cells */
+        .table td .btn-group {
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: wrap !important;
+            gap: 0.25rem !important;
+        }
+
+        /* Make table cells more compact */
+        .table tbody td {
+            padding: 0.625rem 0.5rem !important;
+            font-size: 0.8125rem !important;
+        }
+
+        .table thead th {
+            padding: 0.625rem 0.5rem !important;
+            font-size: 0.75rem !important;
+        }
+
+        /* Cards: reduce outer margin */
+        .card {
+            margin-bottom: 1rem !important;
+        }
+
+        /* Full-width buttons for primary actions */
+        .card-body > .d-flex.justify-content-between > .btn-primary,
+        .card-body > .d-flex.justify-content-between > .btn-lg {
+            width: auto;
+        }
+
+        /* Nav pills scroll horizontally on very small screens */
+        .nav.nav-pills {
+            flex-wrap: nowrap !important;
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: 0.25rem;
+        }
+
+        .nav.nav-pills::-webkit-scrollbar {
+            height: 3px;
+        }
+
+        .nav.nav-pills::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 2px;
+        }
+
+        /* Form step progress banner */
+        .card.mb-3.border-0 .d-flex {
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        /* Search form adjustments */
+        .input-group .btn {
+            padding: 0.5rem 0.75rem !important;
+        }
+
+        /* PHAR / CPI form finding cards */
+        .finding-row .row.g-2 {
+            --bs-gutter-x: 0.5rem;
+        }
+
+        /* Hide some less critical table columns hint */
+        .d-none.d-md-table-cell {
+            display: none !important;
+        }
+
+        /* DataTables controls stack */
+        .dataTables_wrapper .dataTables_filter,
+        .dataTables_wrapper .dataTables_length {
+            text-align: left !important;
+            margin-bottom: 0.5rem;
+        }
+
+        .dataTables_wrapper .dataTables_filter input {
+            width: 100% !important;
+            max-width: 100%;
+        }
+    }
+
+    /* ---- < 576px (small phones) ---- */
+    @media (max-width: 575.98px) {
+
+        /* Two-col Bootstrap grid becomes full width */
+        .col-sm-6, .col-md-6 {
+            /* Bootstrap already handles this; extra safety */
+        }
+
+        /* Navbar: tighten up */
+        .navbar {
+            padding: 0.5rem 0.75rem !important;
+        }
+
+        /* Breadcrumb: compact */
+        .breadcrumb {
+            font-size: 0.8125rem;
+        }
+
+        /* Alert: smaller text */
+        .alert {
+            font-size: 0.875rem !important;
+            padding: 0.75rem 1rem !important;
+        }
+
+        /* Card title */
+        .card-title {
+            font-size: 1rem !important;
+        }
+
+        /* Reduce badge size */
+        .badge {
+            font-size: 0.75rem !important;
+            padding: 0.25rem 0.5rem !important;
+        }
+
+        /* Form labels */
+        .form-label {
+            font-size: 0.875rem !important;
+        }
+
+        /* Form controls */
+        .form-control, .form-select {
+            font-size: 0.875rem !important;
+            padding: 0.5rem 0.75rem !important;
+        }
+
+        /* Action buttons in top-right of cards */
+        .d-flex.justify-content-between {
+            gap: 0.5rem;
+        }
+
+        /* Severity legend wraps */
+        .d-flex.gap-2.flex-wrap {
+            gap: 0.375rem !important;
+        }
+
+        /* Calculation summary table */
+        .table-responsive .table td,
+        .table-responsive .table th {
+            min-width: 80px;
+        }
+    }
+
+    /* ============================================
+       DASHBOARD RESPONSIVE OVERRIDES
+       Stats cards, welcome banners, quick actions
+       ============================================ */
+
+    /* Stats cards: 4-across → 2-across → 1-across */
+    @media (max-width: 991.98px) {
+        /* col-md-3 stats cards → 2 per row on tablet */
+        .col-md-3.stretch-card.grid-margin {
+            flex: 0 0 50%;
+            max-width: 50%;
+        }
+
+        /* col-xl-3.col-md-6 client stats → 2 per row */
+        .col-xl-3.col-md-6 .card {
+            height: 100%;
+        }
+
+        /* Welcome banner: stack text + button vertically */
+        .card .card-body .d-flex.justify-content-between.align-items-center > div:last-child {
+            flex-shrink: 0;
+        }
+
+        /* Quick-action links: remove hover lift on touch */
+        .hover-shadow:hover {
+            transform: none !important;
+            box-shadow: none !important;
+        }
+    }
+
+    @media (max-width: 767.98px) {
+        /* Stats cards go full width on mobile */
+        .col-md-3.stretch-card.grid-margin {
+            flex: 0 0 100%;
+            max-width: 100%;
+        }
+
+        /* Welcome banner: stack vertically */
+        .card .card-body > .d-flex.justify-content-between.align-items-center {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 1rem;
+        }
+
+        /* Make welcome banner "Add Property" button full width */
+        .card .card-body > .d-flex.justify-content-between.align-items-center .btn {
+            width: 100%;
+            text-align: center;
+        }
+
+        /* Action-required alerts: stack vertically */
+        .alert .d-flex.align-items-center {
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+
+        .alert .d-flex.align-items-center .btn {
+            width: 100%;
+            text-align: center;
+            margin-top: 0.25rem;
+        }
+
+        /* Quick Actions list: tighten icon size */
+        .d-flex.align-items-center .rounded-3.p-3.me-3 {
+            padding: 0.75rem !important;
+        }
+
+        .d-flex.align-items-center .rounded-3.p-3.me-3 .mdi {
+            font-size: 1.25rem !important;
+        }
+
+        /* Dashboard stat card big numbers */
+        .card-body h2.fw-bold,
+        .card-body h2.mb-0 {
+            font-size: 1.75rem !important;
+        }
+
+        /* Large icon in stat cards */
+        .mdi.mdi-48px {
+            font-size: 2rem !important;
+        }
+
+        /* Inspection / completed table: hide some cols */
+        .completed-inspections-table th:nth-child(2),
+        .completed-inspections-table td:nth-child(2) {
+            display: none;
+        }
+    }
+
+    @media (max-width: 575.98px) {
+        /* Stats: tiny screen - adjust padding */
+        .col-md-3.stretch-card.grid-margin .card-body {
+            padding: 0.875rem !important;
+        }
+
+        /* Welcome card heading */
+        .card .card-body h2.fw-bold {
+            font-size: 1.375rem !important;
+        }
+
+        .card .card-body .fs-5 {
+            font-size: 0.9375rem !important;
+        }
+
+        /* Grid stats: 2 per row on very small by using d-grid-like approach */
+        .row.g-4 > .col-xl-3.col-md-6 {
+            flex: 0 0 100%;
+            max-width: 100%;
+        }
+
+        /* Quick actions: compact */
+        .d-flex.flex-column.gap-3 {
+            gap: 0.625rem !important;
+        }
+    }
+
 </style>
 
 {{-- Custom Page Styles --}}

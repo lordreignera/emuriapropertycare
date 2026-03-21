@@ -4,580 +4,570 @@
     <meta charset="utf-8">
     <title>Inspection Report - {{ $inspection->property?->property_code }}</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'DejaVu Sans', Arial, sans-serif;
-            font-size: 11px;
+            font-size: 10px;
             line-height: 1.4;
             color: #333;
         }
+        /* ── Header ── */
         .header {
             background: #2c3e50;
             color: white;
-            padding: 20px;
-            margin-bottom: 20px;
+            padding: 16px 20px;
+            margin-bottom: 14px;
         }
-        .header h1 {
-            font-size: 24px;
-            margin-bottom: 5px;
+        .header h1 { font-size: 20px; margin-bottom: 3px; }
+        .header p  { font-size: 10px; opacity: .85; }
+        .header-meta { font-size: 9px; opacity: .7; margin-top: 4px; }
+
+        /* ── Section wrapper ── */
+        .section {
+            border: 1px solid #dde;
+            margin-bottom: 12px;
+            page-break-inside: avoid;
         }
-        .header p {
+        .section-title {
             font-size: 12px;
-            opacity: 0.9;
-        }
-        .info-section {
-            margin-bottom: 15px;
-            border: 1px solid #ddd;
-            padding: 10px;
-        }
-        .info-section h3 {
-            font-size: 14px;
-            color: #2c3e50;
-            margin-bottom: 8px;
-            border-bottom: 2px solid #3498db;
-            padding-bottom: 5px;
-        }
-        .info-grid {
-            display: table;
-            width: 100%;
-        }
-        .info-row {
-            display: table-row;
-        }
-        .info-label {
-            display: table-cell;
-            width: 35%;
             font-weight: bold;
-            padding: 4px 8px;
-            background: #f8f9fa;
+            color: white;
+            padding: 7px 10px;
+            background: #34495e;
         }
-        .info-value {
-            display: table-cell;
-            padding: 4px 8px;
-        }
-        table {
+        .section-body { padding: 8px 10px; }
+
+        /* ── Info grid ── */
+        .info-grid { width: 100%; }
+        .info-grid td { padding: 3px 6px; font-size: 10px; width: 50%; vertical-align: top; }
+        .info-grid .lbl { font-weight: bold; color: #555; width: 40%; }
+
+        /* ── Generic table ── */
+        table.data {
             width: 100%;
             border-collapse: collapse;
-            margin: 10px 0;
+            font-size: 9.5px;
         }
-        th {
-            background: #34495e;
+        table.data th {
+            background: #2c3e50;
             color: white;
-            padding: 8px;
+            padding: 6px 7px;
             text-align: left;
-            font-size: 10px;
+            font-size: 9px;
+        }
+        table.data th.r, table.data td.r { text-align: right; }
+        table.data th.c, table.data td.c { text-align: center; }
+        table.data td { padding: 5px 7px; border-bottom: 1px solid #e5e5e5; vertical-align: top; }
+        table.data tfoot td { background: #ecf0f1; font-weight: bold; border-top: 2px solid #bbb; border-bottom: none; }
+
+        /* ── Severity group header row ── */
+        .sev-header td {
             font-weight: bold;
-        }
-        td {
-            padding: 6px 8px;
-            border-bottom: 1px solid #ddd;
+            color: white;
+            padding: 5px 8px;
             font-size: 10px;
         }
-        tr:nth-child(even) {
-            background: #f8f9fa;
+        .sev-dot {
+            display: inline-block;
+            width: 9px; height: 9px;
+            border-radius: 50%;
+            margin-right: 5px;
+            vertical-align: middle;
         }
-        .text-right {
-            text-align: right;
+        .sev-count {
+            display: inline-block;
+            background: rgba(255,255,255,0.3);
+            border-radius: 8px;
+            padding: 1px 6px;
+            font-size: 8px;
+            margin-left: 5px;
         }
-        .text-center {
-            text-align: center;
-        }
+
+        /* ── Issue cell detail ── */
+        .issue-system { font-size: 8.5px; color: #888; margin-top: 2px; }
+        .issue-location { font-size: 8.5px; color: #555; margin-top: 3px; }
+        .issue-recs { font-size: 8px; color: #444; margin-top: 3px; padding-left: 10px; }
+        .issue-recs li { margin-bottom: 1px; }
+
+        /* ── Summary badge ── */
         .badge {
             display: inline-block;
-            padding: 3px 8px;
+            padding: 2px 7px;
             border-radius: 3px;
-            font-size: 9px;
+            font-size: 8px;
             font-weight: bold;
-        }
-        .badge-danger {
-            background: #e74c3c;
             color: white;
         }
-        .badge-warning {
-            background: #f39c12;
-            color: white;
-        }
-        .badge-info {
-            background: #3498db;
-            color: white;
-        }
-        .badge-success {
-            background: #27ae60;
-            color: white;
-        }
+
+        /* ── Cost boxes ── */
+        .cost-boxes { width: 100%; }
+        .cost-boxes td { width: 33.33%; padding: 5px; vertical-align: top; }
         .cost-box {
-            background: #ecf0f1;
-            padding: 10px;
-            margin: 10px 0;
+            background: #f4f6f8;
             border-left: 4px solid #3498db;
+            padding: 7px 8px;
         }
-        .cost-box h4 {
-            font-size: 12px;
-            color: #2c3e50;
-            margin-bottom: 5px;
+        .cost-box h4 { font-size: 9px; color: #555; margin-bottom: 4px; }
+        .cost-box .amount { font-size: 15px; font-weight: bold; color: #2c3e50; }
+        .cost-box .note { font-size: 8px; color: #999; margin-top: 2px; }
+
+        /* ── TRC banner ── */
+        .trc-banner {
+            background: #2980b9;
+            color: white;
+            padding: 10px 14px;
+            margin: 6px 0;
         }
-        .cost-box .amount {
-            font-size: 18px;
-            font-weight: bold;
-            color: #2c3e50;
-        }
-        .cost-box .note {
-            font-size: 9px;
-            color: #7f8c8d;
-            margin-top: 3px;
-        }
-        .final-price {
+        .trc-banner .label { font-size: 10px; opacity: .85; }
+        .trc-banner .amount { font-size: 22px; font-weight: bold; }
+        .trc-banner .sub { font-size: 9px; opacity: .8; }
+
+        /* ── Final monthly ── */
+        .final-monthly {
             background: #27ae60;
             color: white;
-            padding: 15px;
-            margin: 15px 0;
-            text-align: center;
+            padding: 10px 14px;
         }
-        .final-price h3 {
-            font-size: 16px;
-            margin-bottom: 5px;
-        }
-        .final-price .amount {
-            font-size: 28px;
-            font-weight: bold;
-        }
-        .final-price .period {
-            font-size: 12px;
-            opacity: 0.9;
-        }
-        .breakdown-grid {
-            display: table;
-            width: 100%;
-            margin: 10px 0;
-        }
-        .breakdown-row {
-            display: table-row;
-        }
-        .breakdown-cell {
-            display: table-cell;
-            width: 33.33%;
-            padding: 5px;
-        }
-        .tier-box {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: center;
-            height: 100%;
-        }
-        .tier-box h5 {
-            font-size: 11px;
-            margin-bottom: 5px;
-            color: #7f8c8d;
-        }
-        .tier-box .tier-value {
-            font-size: 16px;
-            font-weight: bold;
-            color: #2c3e50;
-        }
+        .final-monthly .label { font-size: 10px; opacity: .85; }
+        .final-monthly .amount { font-size: 22px; font-weight: bold; }
+        .final-monthly .sub { font-size: 9px; opacity: .8; }
+
+        /* ── Assessment notes ── */
+        .notes-block { font-size: 9.5px; }
+        .notes-block h4 { font-size: 10px; color: #2c3e50; margin-bottom: 3px; margin-top: 6px; border-bottom: 1px solid #eee; padding-bottom: 2px; }
+        .notes-block ul { margin-left: 14px; }
+        .notes-block li { margin-bottom: 2px; }
+        .notes-block .risk { color: #c0392b; font-size: 9.5px; }
+
+        /* ── Footer ── */
         .footer {
-            margin-top: 20px;
-            padding-top: 10px;
-            border-top: 2px solid #ddd;
-            font-size: 9px;
-            color: #7f8c8d;
+            margin-top: 14px;
+            padding-top: 8px;
+            border-top: 1px solid #ccc;
+            font-size: 8px;
+            color: #999;
             text-align: center;
-        }
-        tfoot {
-            background: #34495e;
-            color: white;
-            font-weight: bold;
-        }
-        tfoot td {
-            border-bottom: none;
         }
     </style>
 </head>
 <body>
-    <!-- Header -->
-    <div class="header">
-        <h1>INSPECTION REPORT</h1>
-        <p>Property Care Pricing Breakdown & Assessment Report</p>
-    </div>
 
-    <!-- Property Information -->
-    <div class="info-section">
-        <h3>Property Information</h3>
-        <div class="info-grid">
-            <div class="info-row">
-                <div class="info-label">Property Name:</div>
-                <div class="info-value"><strong>{{ $inspection->property?->property_name ?? 'N/A' }}</strong></div>
-            </div>
-            <div class="info-row">
-                <div class="info-label">Property Code:</div>
-                <div class="info-value">{{ $inspection->property?->property_code ?? 'N/A' }}</div>
-            </div>
-            <div class="info-row">
-                <div class="info-label">Property Type:</div>
-                <div class="info-value">{{ $inspection->property?->type ? ucfirst(str_replace('_', ' ', $inspection->property->type)) : 'N/A' }}</div>
-            </div>
-            <div class="info-row">
-                <div class="info-label">Units:</div>
-                <div class="info-value">{{ $inspection->property?->residential_units ?? 'N/A' }}</div>
-            </div>
-            <div class="info-row">
-                <div class="info-label">Inspector:</div>
-                <div class="info-value">{{ $inspection->inspector?->name ?? 'Not Assigned' }}</div>
-            </div>
-            <div class="info-row">
-                <div class="info-label">Project Manager:</div>
-                <div class="info-value">
-                    {{ $inspection->property?->projectManager?->name ?? $inspection->project?->manager?->name ?? 'Not Assigned' }}
-                </div>
-            </div>
-            <div class="info-row">
-                <div class="info-label">Inspection Date:</div>
-                <div class="info-value">{{ $inspection->scheduled_date?->format('M d, Y') ?? 'Not Scheduled' }}</div>
-            </div>
-            <div class="info-row">
-                <div class="info-label">Completed Date:</div>
-                <div class="info-value">{{ $inspection->completed_date?->format('M d, Y h:i A') ?? '-' }}</div>
-            </div>
-            <div class="info-row">
-                <div class="info-label">Status:</div>
-                <div class="info-value"><span class="badge badge-success">{{ ucfirst($inspection->status) }}</span></div>
-            </div>
-        </div>
-    </div>
+@php
+    /* ── Build findings from inspection JSON (has embedded phar_materials) ── */
+    $inlineFindingsRaw = is_array($inspection->findings)
+        ? $inspection->findings
+        : (json_decode($inspection->getRawOriginal('findings') ?? '[]', true) ?? []);
 
-    <!-- Findings Summary -->
-    @if($findings->count() > 0)
-    <div class="info-section">
-        <h3>Findings Summary ({{ $findings->count() }} items)</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th style="width: 5%">#</th>
-                    <th style="width: 30%">Task / Issue</th>
-                    <th style="width: 15%">Category</th>
-                    <th style="width: 10%">Priority</th>
-                    <th style="width: 12%">Labour Hours</th>
-                    <th style="width: 14%">Material Cost</th>
-                    <th style="width: 14%">Total</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach($findings as $finding)
-                <tr>
-                    <td>{{ $loop->iteration }}</td>
-                    <td>{{ $finding->task_question ?? '-' }}</td>
-                    <td>{{ $finding->category ?? 'General' }}</td>
-                    <td class="text-center">
-                        @if($finding->priority == '1')
-                            <span class="badge badge-danger">High</span>
-                        @elseif($finding->priority == '2')
-                            <span class="badge badge-warning">Medium</span>
-                        @else
-                            <span class="badge badge-info">Low</span>
-                        @endif
-                    </td>
-                    <td class="text-right">{{ number_format($finding->labour_hours, 1) }} hrs</td>
-                    <td class="text-right">${{ number_format($finding->material_cost, 2) }}</td>
-                    <td class="text-right"><strong>${{ number_format($finding->labour_cost + $finding->material_cost, 2) }}</strong></td>
-                </tr>
-                @endforeach
-            </tbody>
-            <tfoot>
-                <tr>
-                    <td colspan="4" class="text-right"><strong>TOTALS:</strong></td>
-                    <td class="text-right"><strong>{{ number_format($findings->sum('labour_hours'), 1) }} hrs</strong></td>
-                    <td class="text-right"><strong>${{ number_format($findings->sum('material_cost'), 2) }}</strong></td>
-                    <td class="text-right"><strong>${{ number_format($findings->sum('labour_cost') + $findings->sum('material_cost'), 2) }}</strong></td>
-                </tr>
-            </tfoot>
+    $severityOrder = ['critical','high','noi_protection','medium','low'];
+    $severityMeta  = [
+        'critical'       => ['label' => 'Urgent — Safety Critical', 'color' => '#dc3545'],
+        'high'           => ['label' => 'Health & Safety Risk',      'color' => '#fd7e14'],
+        'noi_protection' => ['label' => 'NOI Protection',            'color' => '#6f42c1'],
+        'medium'         => ['label' => 'Value Depreciation',        'color' => '#d4a017'],
+        'low'            => ['label' => 'Non-Urgent',                'color' => '#198754'],
+    ];
+    $groupedFindings = collect($inlineFindingsRaw)->groupBy('severity');
+    $totalLabourHrs  = collect($inlineFindingsRaw)->sum('phar_labour_hours');
+    $totalMatCost    = collect($inlineFindingsRaw)->sum(fn($f) =>
+        collect($f['phar_materials'] ?? [])->sum(fn($m) => (float)($m['line_total'] ?? 0))
+    );
+
+    /* ── Recommendations from inspector assessment ── */
+    $recommendationItems = [];
+    $rawRec = $inspection->recommendations;
+    if (is_array($rawRec)) {
+        $recommendationItems = $rawRec;
+    } elseif (is_string($rawRec) && trim($rawRec) !== '') {
+        $dec = json_decode($rawRec, true);
+        $recommendationItems = (json_last_error() === JSON_ERROR_NONE && is_array($dec))
+            ? $dec
+            : (preg_split('/\r\n|\r|\n|\|/', $rawRec) ?: []);
+    }
+    $recommendationItems = collect($recommendationItems)->map(fn($i)=>trim((string)$i))->filter()->values();
+@endphp
+
+<!-- ════ HEADER ════ -->
+<div class="header">
+    <h1>INSPECTION REPORT</h1>
+    <p>Property Condition Assessment &amp; Pricing Breakdown</p>
+    <div class="header-meta">
+        Generated {{ date('F d, Y \a\t h:i A') }}
+        &nbsp;|&nbsp; Report Ref: {{ $inspection->property?->property_code }}-{{ date('Ymd') }}
+    </div>
+</div>
+
+<!-- ════ PROPERTY INFORMATION ════ -->
+<div class="section">
+    <div class="section-title">Property &amp; Inspection Information</div>
+    <div class="section-body">
+        <table class="info-grid">
+            <tr>
+                <td class="lbl">Property Name:</td>
+                <td><strong>{{ $inspection->property?->property_name ?? 'N/A' }}</strong></td>
+                <td class="lbl">Inspector:</td>
+                <td>{{ $inspection->inspector?->name ?? 'Not Assigned' }}</td>
+            </tr>
+            <tr>
+                <td class="lbl">Property Code:</td>
+                <td>{{ $inspection->property?->property_code ?? 'N/A' }}</td>
+                <td class="lbl">Project Manager:</td>
+                <td>{{ $inspection->property?->projectManager?->name ?? $inspection->project?->manager?->name ?? '—' }}</td>
+            </tr>
+            <tr>
+                <td class="lbl">Property Type:</td>
+                <td>{{ $inspection->property?->type ? ucfirst(str_replace('_',' ',$inspection->property->type)) : 'N/A' }}</td>
+                <td class="lbl">Inspection Date:</td>
+                <td>{{ $inspection->scheduled_date?->format('M d, Y') ?? 'Not scheduled' }}</td>
+            </tr>
+            <tr>
+                <td class="lbl">Units:</td>
+                <td>{{ $inspection->property?->residential_units ?? 'N/A' }}</td>
+                <td class="lbl">Completed:</td>
+                <td>{{ $inspection->completed_date?->format('M d, Y h:i A') ?? '—' }}</td>
+            </tr>
+            <tr>
+                <td class="lbl">Owner Name:</td>
+                <td><strong>{{ $inspection->owner_name ?? $inspection->property?->user?->name ?? 'N/A' }}</strong></td>
+                <td class="lbl">Owner Phone:</td>
+                <td>{{ $inspection->owner_phone ?? 'N/A' }}</td>
+            </tr>
+            <tr>
+                <td class="lbl">Owner Email:</td>
+                <td colspan="3">{{ $inspection->owner_email ?? 'N/A' }}</td>
+            </tr>
+            <tr>
+                <td class="lbl">Status:</td>
+                <td colspan="3">
+                    <span class="badge" style="background:
+                        @if($inspection->status==='completed') #27ae60
+                        @elseif($inspection->status==='in_progress') #e67e22
+                        @else #7f8c8d @endif;">
+                        {{ ucfirst(str_replace('_',' ',$inspection->status)) }}
+                    </span>
+                    &nbsp;
+                    <span style="font-size:9px;color:#666;">
+                        CPI: <strong>{{ number_format($inspection->cpi_total_score ?? 0, 1) }}</strong>/100
+                        &nbsp;|&nbsp;
+                        ASI: <strong>{{ number_format($inspection->asi_score ?? 0, 1) }}</strong>/100
+                        {{ $inspection->asi_rating ? '('.$inspection->asi_rating.')' : '' }}
+                        &nbsp;|&nbsp;
+                        TUS: <strong>{{ number_format($inspection->tus_score ?? 0, 1) }}</strong>/100
+                    </span>
+                </td>
+            </tr>
         </table>
     </div>
-    @endif
+</div>
 
-    <!-- CPI Domain Breakdown -->
-    @if(($domains ?? collect())->count() > 0)
-    <div class="info-section">
-        <h3>CPI Domain Breakdown</h3>
-        <table>
+<!-- ════ FINDINGS SUMMARY — grouped by severity ════ -->
+@if(count($inlineFindingsRaw) > 0)
+<div class="section">
+    <div class="section-title">Findings Summary ({{ count($inlineFindingsRaw) }} items)</div>
+    <div class="section-body" style="padding:0;">
+        <table class="data">
             <thead>
                 <tr>
-                    <th style="width: 12%">Domain #</th>
-                    <th>Domain</th>
-                    <th style="width: 18%" class="text-right">Score</th>
+                    <th style="width:3%">#</th>
+                    <th style="width:32%">Issue / Task</th>
+                    <th style="width:12%">Category</th>
+                    <th class="r" style="width:9%">Labour Hrs</th>
+                    <th style="width:16%">Material Used</th>
+                    <th class="c" style="width:10%">Qty &amp; Unit</th>
+                    <th class="r" style="width:9%">Unit Cost</th>
+                    <th class="r" style="width:9%">Mat. Cost</th>
                 </tr>
             </thead>
             <tbody>
-                @foreach($domains as $domain)
+            @php $rowNum = 0; @endphp
+            @foreach($severityOrder as $sev)
+                @if($groupedFindings->has($sev))
+                @php $meta = $severityMeta[$sev]; @endphp
+                <!-- severity group header -->
+                <tr class="sev-header">
+                    <td colspan="8" style="background:{{ $meta['color'] }};">
+                        <span class="sev-dot" style="background:rgba(255,255,255,0.5);"></span>
+                        {{ $meta['label'] }}
+                        <span class="sev-count">{{ $groupedFindings[$sev]->count() }}</span>
+                    </td>
+                </tr>
+                @foreach($groupedFindings[$sev] as $finding)
                 @php
-                    $field = 'domain_' . $domain->domain_number . '_score';
-                    $score = (int) ($inspection->{$field} ?? 0);
-                    $maxPoints = (int) ($domain->max_possible_points ?? 0);
+                    $rowNum++;
+                    $pharMaterials  = $finding['phar_materials'] ?? [];
+                    $firstMat       = $pharMaterials[0] ?? null;
+                    $extraMats      = array_slice($pharMaterials, 1);
+                    $findingMatCost = collect($pharMaterials)->sum(fn($m) => (float)($m['line_total'] ?? 0));
+                    $recs           = $finding['recommendations'] ?? [];
                 @endphp
-                <tr>
-                    <td>{{ $domain->domain_number }}</td>
-                    <td>{{ $domain->domain_name }}</td>
-                    <td class="text-right">
-                        <strong>{{ $score }}</strong>
-                        @if($maxPoints > 0)
-                            / {{ $maxPoints }}
+                <tr style="{{ $rowNum % 2 === 0 ? 'background:#fafafa;' : '' }}">
+                    <td style="color:#999;font-size:8.5px;">{{ $rowNum }}</td>
+                    <td>
+                        <strong>{{ $finding['issue'] ?? '—' }}</strong>
+                        @if(!empty($finding['system']))
+                            <div class="issue-system">
+                                {{ $finding['system'] }}{{ !empty($finding['subsystem']) ? ' › '.$finding['subsystem'] : '' }}
+                            </div>
+                        @endif
+                        @if(!empty($finding['location']) || !empty($finding['spot']))
+                            <div class="issue-location">
+                                &#9679; {{ implode(' — ', array_filter([$finding['location'] ?? null, $finding['spot'] ?? null])) }}
+                            </div>
+                        @endif
+                        @if(!empty($recs))
+                            <ul class="issue-recs">
+                                @foreach($recs as $rec)<li>{{ $rec }}</li>@endforeach
+                            </ul>
                         @endif
                     </td>
+                    <td>
+                        <span class="badge" style="background:#6c757d;">
+                            {{ $finding['phar_category'] ?? $finding['type'] ?? 'General' }}
+                        </span>
+                    </td>
+                    <td class="r">{{ number_format((float)($finding['phar_labour_hours'] ?? 0), 1) }} hrs</td>
+                    <td>{{ $firstMat['material_name'] ?? '—' }}</td>
+                    <td class="c">
+                        @if($firstMat){{ $firstMat['quantity'] ?? '1' }} {{ $firstMat['unit'] ?? '' }}
+                        @else —@endif
+                    </td>
+                    <td class="r">
+                        @if($firstMat && (float)($firstMat['unit_cost'] ?? 0) > 0)
+                            ${{ number_format((float)$firstMat['unit_cost'], 2) }}
+                        @else —@endif
+                    </td>
+                    <td class="r">
+                        @if($findingMatCost > 0)<strong>${{ number_format($findingMatCost, 2) }}</strong>
+                        @else —@endif
+                    </td>
+                </tr>
+                @foreach($extraMats as $em)
+                <tr style="background:#f7f7f7;">
+                    <td></td>
+                    <td colspan="2" style="font-size:8px;color:#888;padding-left:14px;">&#8627; additional material</td>
+                    <td></td>
+                    <td style="font-size:8.5px;">{{ $em['material_name'] ?? '—' }}</td>
+                    <td class="c" style="font-size:8.5px;">{{ $em['quantity'] ?? '1' }} {{ $em['unit'] ?? '' }}</td>
+                    <td class="r" style="font-size:8.5px;">
+                        @if((float)($em['unit_cost'] ?? 0) > 0)${{ number_format((float)$em['unit_cost'], 2) }}@else —@endif
+                    </td>
+                    <td class="r" style="font-size:8.5px;">${{ number_format((float)($em['line_total'] ?? 0), 2) }}</td>
                 </tr>
                 @endforeach
-            </tbody>
-        </table>
-    </div>
-    @endif
-
-    <!-- Materials Summary -->
-    @if(($materials ?? collect())->count() > 0)
-    <div class="info-section">
-        <h3>Materials Summary ({{ $materials->count() }} items)</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th style="width: 5%">#</th>
-                    <th>Material</th>
-                    <th style="width: 12%" class="text-right">Qty</th>
-                    <th style="width: 10%">Unit</th>
-                    <th style="width: 14%" class="text-right">Unit Cost</th>
-                    <th style="width: 14%" class="text-right">Line Total</th>
-                    <th style="width: 16%">Category</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach($materials as $material)
-                <tr>
-                    <td>{{ $loop->iteration }}</td>
-                    <td>{{ $material->material_name ?? '-' }}</td>
-                    <td class="text-right">{{ number_format((float) ($material->quantity ?? 0), 2) }}</td>
-                    <td>{{ $material->unit ?? '-' }}</td>
-                    <td class="text-right">${{ number_format((float) ($material->unit_cost ?? 0), 2) }}</td>
-                    <td class="text-right"><strong>${{ number_format((float) ($material->line_total ?? 0), 2) }}</strong></td>
-                    <td>{{ $material->category ?? 'General' }}</td>
-                </tr>
                 @endforeach
+                @endif
+            @endforeach
             </tbody>
             <tfoot>
                 <tr>
-                    <td colspan="5" class="text-right"><strong>TOTAL MATERIALS:</strong></td>
-                    <td class="text-right"><strong>${{ number_format((float) $materials->sum('line_total'), 2) }}</strong></td>
-                    <td></td>
+                    <td colspan="3" class="r">TOTALS:</td>
+                    <td class="r">{{ number_format($totalLabourHrs, 1) }} hrs</td>
+                    <td colspan="3"></td>
+                    <td class="r">${{ number_format($totalMatCost, 2) }}</td>
                 </tr>
             </tfoot>
         </table>
     </div>
-    @endif
+</div>
+@endif
 
-    <!-- Cost Components -->
-    <div class="info-section">
-        <h3>Cost Components (Annual)</h3>
-        <div class="breakdown-grid">
-            <div class="breakdown-row">
-                <div class="breakdown-cell">
-                    <div class="cost-box">
+<!-- ════ PRICING BREAKDOWN ════ -->
+<div class="section">
+    <div class="section-title">Pricing Calculation Breakdown</div>
+    <div class="section-body">
+
+        <!-- Cost Components -->
+        <div style="font-size:10px;font-weight:bold;color:#2c3e50;border-bottom:1px solid #ddd;padding-bottom:4px;margin-bottom:6px;">
+            Cost Components (Annual)
+        </div>
+        <table class="cost-boxes">
+            <tr>
+                <td>
+                    <div class="cost-box" style="border-left-color:#3498db;">
                         <h4>Base Deployment Cost (BDC)</h4>
                         <div class="amount">${{ number_format($inspection->bdc_annual ?? 0, 2) }}</div>
-                        <div class="note">Operational baseline</div>
+                        <div class="note">Operational baseline for property care</div>
                     </div>
-                </div>
-                <div class="breakdown-cell">
-                    <div class="cost-box">
+                </td>
+                <td>
+                    <div class="cost-box" style="border-left-color:#e67e22;">
                         <h4>Findings Remediation Labour (FRLC)</h4>
                         <div class="amount">${{ number_format($inspection->frlc_annual ?? 0, 2) }}</div>
-                        <div class="note">{{ number_format($findings->sum('labour_hours'), 1) }} hrs @ ${{ number_format($inspection->labour_hourly_rate ?? 165, 2) }}/hr</div>
+                        <div class="note">{{ number_format($totalLabourHrs, 1) }} hrs @ ${{ number_format($inspection->labour_hourly_rate ?? 165, 2) }}/hr</div>
                     </div>
-                </div>
-                <div class="breakdown-cell">
-                    <div class="cost-box">
+                </td>
+                <td>
+                    <div class="cost-box" style="border-left-color:#27ae60;">
                         <h4>Findings Material Cost (FMC)</h4>
                         <div class="amount">${{ number_format($inspection->fmc_annual ?? 0, 2) }}</div>
-                        <div class="note">Materials for remediation</div>
+                        <div class="note">Materials for remediation work</div>
                     </div>
-                </div>
+                </td>
+            </tr>
+        </table>
+
+        <!-- TRC -->
+        <div style="margin-top:8px;">
+            <div style="font-size:10px;font-weight:bold;color:#2c3e50;border-bottom:1px solid #ddd;padding-bottom:4px;margin-bottom:6px;">
+                Total Remediation Cost (TRC) = BDC + FRLC + FMC
+            </div>
+            <div class="trc-banner">
+                <div class="label">Annual: ${{ number_format($inspection->trc_annual ?? 0, 2) }}</div>
+                <div class="amount">${{ number_format($inspection->trc_monthly ?? 0, 2) }}</div>
+                <div class="sub">per month</div>
             </div>
         </div>
-    </div>
 
-    <!-- TRC Calculation -->
-    <div class="info-section">
-        <h3>Total Remediation Cost (TRC)</h3>
-        <div class="cost-box" style="border-left-color: #3498db;">
-            <h4>TRC = BDC + FRLC + FMC</h4>
-            <p style="font-size: 11px; margin: 5px 0;">Annual: ${{ number_format($inspection->trc_annual ?? 0, 2) }}</p>
-            <div class="amount" style="color: #3498db;">${{ number_format($inspection->trc_monthly ?? 0, 2) }} <span style="font-size: 12px;">per month</span></div>
+        <!-- ARP / Scores -->
+        <div style="margin-top:8px;">
+            <div style="font-size:10px;font-weight:bold;color:#2c3e50;border-bottom:1px solid #ddd;padding-bottom:4px;margin-bottom:6px;">
+                Annual Recurring Price (ARP) &amp; Condition
+            </div>
+            <table class="cost-boxes">
+                <tr>
+                    <td>
+                        <div class="cost-box" style="border-left-color:#3498db;">
+                            <h4>ARP Monthly</h4>
+                            <div class="amount">${{ number_format($inspection->arp_monthly ?? 0, 2) }}</div>
+                            <div class="note">= TRC / 12</div>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="cost-box" style="border-left-color:#9b59b6;">
+                            <h4>CPI Score</h4>
+                            <div class="amount">{{ number_format($inspection->cpi_total_score ?? 0, 1) }}<span style="font-size:11px;">/100</span></div>
+                            <div class="note">{{ $inspection->cpi_rating ?? '' }}</div>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="cost-box" style="border-left-color:#27ae60;">
+                            <h4>ASI Score &nbsp;<span style="font-weight:normal;">(CPI×60% + TUS×40%)</span></h4>
+                            <div class="amount">{{ number_format($inspection->asi_score ?? 0, 1) }}<span style="font-size:11px;">/100</span></div>
+                            <div class="note">{{ $inspection->asi_rating ?? '' }}</div>
+                        </div>
+                    </td>
+                </tr>
+            </table>
         </div>
-    </div>
 
-    <!-- ARP & Condition -->
-    <div class="info-section">
-        <h3>Annual Recurring Price (ARP) & Condition Assessment</h3>
-        <div class="breakdown-grid">
-            <div class="breakdown-row">
-                <div class="breakdown-cell">
-                    <div class="cost-box">
-                        <h4>ARP (Monthly TRC)</h4>
-                        <div class="amount" style="color: #3498db;">${{ number_format($inspection->arp_monthly ?? 0, 2) }}</div>
-                    </div>
-                </div>
-                <div class="breakdown-cell">
-                    <div class="cost-box">
-                        <h4>Condition Score (from CPI)</h4>
-                        <div class="amount" style="color: #3498db;">{{ $inspection->condition_score ?? 0 }}/100</div>
-                    </div>
-                </div>
+        <!-- Final Monthly -->
+        <div style="margin-top:8px;">
+            <div class="final-monthly">
+                <div class="label">Monthly Property Care Price</div>
+                <div class="amount">${{ number_format($inspection->scientific_final_monthly ?? $inspection->arp_monthly ?? 0, 2) }}</div>
+                <div class="sub">per month &nbsp;|&nbsp; Annual: ${{ number_format(($inspection->scientific_final_monthly ?? $inspection->arp_monthly ?? 0) * 12, 2) }}</div>
             </div>
         </div>
-    </div>
 
-    <!-- Dual-Gate Tier Assignment -->
-    <div class="info-section">
-        <h3>Dual-Gate Tier Assignment</h3>
-        <div class="breakdown-grid">
-            <div class="breakdown-row">
-                <div class="breakdown-cell">
-                    <div class="tier-box">
-                        <h5>Gate 1: Condition-Based</h5>
-                        <div class="tier-value">{{ $inspection->tier_score ?? 'N/A' }}</div>
-                    </div>
-                </div>
-                <div class="breakdown-cell">
-                    <div class="tier-box">
-                        <h5>Gate 2: ARP Cost Pressure</h5>
-                        <div class="tier-value">{{ $inspection->tier_arp ?? 'N/A' }}</div>
-                    </div>
-                </div>
-                <div class="breakdown-cell">
-                    <div class="tier-box" style="border-color: #27ae60; border-width: 2px;">
-                        <h5>Final Tier (Max)</h5>
-                        <div class="tier-value" style="color: #27ae60;">{{ $inspection->tier_final ?? 'N/A' }}</div>
-                    </div>
-                </div>
+        <!-- Per-Unit (multi-unit properties) -->
+        @if(($inspection->units_for_calculation ?? 1) > 1)
+        <div style="margin-top:8px;">
+            <div style="font-size:10px;font-weight:bold;color:#2c3e50;border-bottom:1px solid #ddd;padding-bottom:4px;margin-bottom:6px;">
+                Per-Unit Cost Breakdown ({{ $inspection->units_for_calculation }} Units)
             </div>
+            @php
+                $pdfArpMonthlyTotal = (float)($inspection->arp_monthly ?? $inspection->trc_monthly ?? 0);
+            @endphp
+            <table class="data">
+                <thead>
+                    <tr>
+                        <th>Cost Component</th>
+                        <th class="r">Annual Total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>BDC</td>
+                        <td class="r">${{ number_format($inspection->bdc_annual ?? 0, 2) }}</td>
+                    </tr>
+                    <tr>
+                        <td>FRLC</td>
+                        <td class="r">${{ number_format($inspection->frlc_annual ?? 0, 2) }}</td>
+                    </tr>
+                    <tr>
+                        <td>FMC</td>
+                        <td class="r">${{ number_format($inspection->fmc_annual ?? 0, 2) }}</td>
+                    </tr>
+                    <tr style="background:#ecf0f1;">
+                        <td><strong>TRC</strong> <span style="font-size:8px;color:#555;">(BDC+FRLC+FMC)</span></td>
+                        <td class="r"><strong>${{ number_format($inspection->trc_annual ?? 0, 2) }}</strong></td>
+                    </tr>
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td><strong>ARP</strong> <span style="font-size:8px;font-weight:normal;">(TRC &#247; 12)</span></td>
+                        <td class="r"><strong>${{ number_format($pdfArpMonthlyTotal, 2) }}/mo</strong></td>
+                    </tr>
+                </tfoot>
+            </table>
+            <p style="font-size:8px;color:#666;margin-top:4px;"><strong>ARP</strong> = Annual Recurring Price = TRC &#247; 12. This is the monthly amount the client pays.</p>
         </div>
-    </div>
+        @endif
 
-    <!-- Final Pricing -->
-    <div class="info-section">
-        <h3>Final Pricing with Multiplier</h3>
-        <div class="final-price">
-            <h3>ARP × Tier Multiplier ({{ number_format($inspection->multiplier_final ?? 1, 2) }})</h3>
-            <div class="amount">${{ number_format($inspection->arp_equivalent_final ?? 0, 2) }}</div>
-            <div class="period">per month</div>
-            <p style="font-size: 10px; margin-top: 8px; opacity: 0.9;">Floor Price: ${{ number_format($inspection->base_package_price_snapshot ?? 0, 2) }}/month</p>
-        </div>
     </div>
+</div>
 
-    <!-- Per-Unit Breakdown -->
-    @if($inspection->units_for_calculation > 1)
-    <div class="info-section">
-        <h3>Per-Unit Cost Breakdown ({{ $inspection->units_for_calculation }} Units)</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>Cost Component</th>
-                    <th class="text-right">Total Annual</th>
-                    <th class="text-right">Per Unit Annual</th>
-                    <th class="text-right">Per Unit Monthly</th>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <td><strong>BDC</strong></td>
-                    <td class="text-right">${{ number_format($inspection->bdc_annual ?? 0, 2) }}</td>
-                    <td class="text-right">${{ number_format($inspection->bdc_per_unit_annual ?? 0, 2) }}</td>
-                    <td class="text-right">${{ number_format(($inspection->bdc_per_unit_annual ?? 0) / 12, 2) }}</td>
-                </tr>
-                <tr>
-                    <td><strong>FRLC</strong></td>
-                    <td class="text-right">${{ number_format($inspection->frlc_annual ?? 0, 2) }}</td>
-                    <td class="text-right">${{ number_format($inspection->frlc_per_unit_annual ?? 0, 2) }}</td>
-                    <td class="text-right">${{ number_format(($inspection->frlc_per_unit_annual ?? 0) / 12, 2) }}</td>
-                </tr>
-                <tr>
-                    <td><strong>FMC</strong></td>
-                    <td class="text-right">${{ number_format($inspection->fmc_annual ?? 0, 2) }}</td>
-                    <td class="text-right">${{ number_format($inspection->fmc_per_unit_annual ?? 0, 2) }}</td>
-                    <td class="text-right">${{ number_format(($inspection->fmc_per_unit_annual ?? 0) / 12, 2) }}</td>
-                </tr>
-                <tr style="background: #ecf0f1;">
-                    <td><strong>TRC</strong></td>
-                    <td class="text-right"><strong>${{ number_format($inspection->trc_annual ?? 0, 2) }}</strong></td>
-                    <td class="text-right"><strong>${{ number_format($inspection->trc_per_unit_annual ?? 0, 2) }}</strong></td>
-                    <td class="text-right"><strong>${{ number_format(($inspection->trc_per_unit_annual ?? 0) / 12, 2) }}</strong></td>
-                </tr>
-            </tbody>
-            <tfoot>
-                <tr>
-                    <td><strong>Final Price (with multiplier)</strong></td>
-                    <td class="text-right"><strong>${{ number_format(($inspection->arp_equivalent_final ?? 0) * 12, 2) }}</strong></td>
-                    <td class="text-right"><strong>${{ number_format((($inspection->arp_equivalent_final ?? 0) * 12) / $inspection->units_for_calculation, 2) }}</strong></td>
-                    <td class="text-right"><strong>${{ number_format($inspection->final_monthly_per_unit ?? 0, 2) }}</strong></td>
-                </tr>
-            </tfoot>
+<!-- ════ INSPECTION PHOTOS ════ -->
+@php
+    $pdfPhotos = is_array($inspection->photos)
+        ? $inspection->photos
+        : (json_decode($inspection->getRawOriginal('photos') ?? '[]', true) ?? []);
+    $pdfStoragePath = storage_path('app/public/');
+@endphp
+@if(count($pdfPhotos) > 0)
+<div class="section">
+    <div class="section-title">Inspection Photos ({{ count($pdfPhotos) }})</div>
+    <div class="section-body">
+        <table style="width:100%;border-collapse:collapse;">
+            @php $pdfPhotoChunks = array_chunk($pdfPhotos, 4); @endphp
+            @foreach($pdfPhotoChunks as $pdfRow)
+            <tr>
+                @foreach($pdfRow as $pdfPhotoIdx => $pdfPhoto)
+                @php $pdfAbsPath = 'file:///' . str_replace('\\', '/', $pdfStoragePath . $pdfPhoto); @endphp
+                <td style="width:25%;padding:4px;vertical-align:top;text-align:center;">
+                    <img src="{{ $pdfAbsPath }}" style="max-width:100%;height:140px;object-fit:cover;border:1px solid #ddd;" alt="Photo">
+                    <div style="font-size:8px;color:#666;margin-top:2px;">Photo {{ ($loop->parent->index * 4) + $pdfPhotoIdx + 1 }}</div>
+                </td>
+                @endforeach
+                @for($pdfFill = count($pdfRow); $pdfFill < 4; $pdfFill++)
+                <td style="width:25%;"></td>
+                @endfor
+            </tr>
+            @endforeach
         </table>
     </div>
-    @endif
+</div>
+@endif
 
-    <!-- Assessment Notes -->
-    @php
-        $recommendationItems = [];
-        $rawRecommendations = $inspection->recommendations;
-
-        if (is_array($rawRecommendations)) {
-            $recommendationItems = $rawRecommendations;
-        } elseif (is_string($rawRecommendations) && trim($rawRecommendations) !== '') {
-            $decoded = json_decode($rawRecommendations, true);
-            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
-                $recommendationItems = $decoded;
-            } else {
-                $recommendationItems = preg_split('/\r\n|\r|\n|\|/', $rawRecommendations) ?: [];
-            }
-        }
-
-        $recommendationItems = collect($recommendationItems)
-            ->map(fn ($item) => trim((string) $item))
-            ->filter()
-            ->values();
-    @endphp
-    @if($inspection->summary || $inspection->recommendations || $inspection->risk_summary)
-    <div class="info-section">
-        <h3>Inspector Assessment</h3>
-        @if($inspection->summary)
-        <div style="margin-bottom: 10px;">
-            <h4 style="font-size: 11px; color: #2c3e50; margin-bottom: 5px;">Notes:</h4>
-            <p style="font-size: 10px;">{{ $inspection->summary }}</p>
+<!-- ════ INSPECTOR ASSESSMENT ════ -->
+@if($inspection->summary || $recommendationItems->isNotEmpty() || $inspection->risk_summary)
+<div class="section">
+    <div class="section-title">Inspector Assessment</div>
+    <div class="section-body">
+        <div class="notes-block">
+            @if($inspection->summary)
+                <h4>Notes</h4>
+                <p>{{ $inspection->summary }}</p>
+            @endif
+            @if($recommendationItems->isNotEmpty())
+                <h4>Recommendations</h4>
+                <ul>@foreach($recommendationItems as $item)<li>{{ $item }}</li>@endforeach</ul>
+            @endif
+            @if($inspection->risk_summary)
+                <h4 class="risk">Risk Summary</h4>
+                <p class="risk">{{ $inspection->risk_summary }}</p>
+            @endif
         </div>
-        @endif
-        
-        @if($recommendationItems->isNotEmpty())
-        <div style="margin-bottom: 10px;">
-            <h4 style="font-size: 11px; color: #2c3e50; margin-bottom: 5px;">Recommendations:</h4>
-            <ul style="font-size: 10px; margin: 0 0 0 15px; padding: 0;">
-                @foreach($recommendationItems as $item)
-                    <li style="margin-bottom: 2px;">{{ $item }}</li>
-                @endforeach
-            </ul>
-        </div>
-        @endif
-        
-        @if($inspection->risk_summary)
-        <div style="margin-bottom: 10px;">
-            <h4 style="font-size: 11px; color: #e74c3c; margin-bottom: 5px;">Risk Summary:</h4>
-            <p style="font-size: 10px;">{{ $inspection->risk_summary }}</p>
-        </div>
-        @endif
     </div>
-    @endif
+</div>
+@endif
 
-    <!-- Footer -->
-    <div class="footer">
-        <p><strong>EMURIA Regenerative Property Care</strong></p>
-        <p>Generated on {{ date('F d, Y \a\t h:i A') }} | Report #{{ $inspection->property?->property_code }}-{{ date('Ymd') }}</p>
-        <p>This document contains proprietary pricing calculations and should be kept confidential.</p>
-    </div>
+<!-- ════ FOOTER ════ -->
+<div class="footer">
+    <strong>EMURIA Regenerative Property Care</strong> &mdash;
+    Generated {{ date('F d, Y \a\t h:i A') }} &mdash;
+    Report #{{ $inspection->property?->property_code }}-{{ date('Ymd') }}<br>
+    This document contains proprietary pricing calculations and should be kept confidential.
+</div>
+
 </body>
 </html>

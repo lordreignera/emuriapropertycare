@@ -85,6 +85,9 @@
     <div class="container-scroller">
         {{-- Client Sidebar --}}
         @include('client.partials.sidebar')
+
+        {{-- Sidebar backdrop overlay (mobile only) --}}
+        <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
         
         <div class="container-fluid page-body-wrapper">
             {{-- Navbar --}}
@@ -150,6 +153,47 @@
     </div>
 
     @include('admin.partials.scripts')
+
+    {{-- Mobile Sidebar Toggle --}}
+    <script>
+        (function () {
+            var MOBILE_BREAKPOINT = 992;
+            function isMobile() { return window.innerWidth < MOBILE_BREAKPOINT; }
+            function closeSidebar() { document.body.classList.remove('sidebar-mobile-open'); }
+
+            document.addEventListener('DOMContentLoaded', function () {
+                var backdrop = document.getElementById('sidebarBackdrop');
+
+                var mobileToggler = document.querySelector('.navbar-toggler[data-toggle="offcanvas"]');
+                if (mobileToggler) {
+                    mobileToggler.addEventListener('click', function (e) {
+                        e.preventDefault();
+                        e.stopImmediatePropagation();
+                        document.body.classList.toggle('sidebar-mobile-open');
+                    });
+                }
+
+                if (backdrop) { backdrop.addEventListener('click', closeSidebar); }
+
+                document.addEventListener('keydown', function (e) {
+                    if (e.key === 'Escape' && isMobile()) { closeSidebar(); }
+                });
+
+                var sidebar = document.getElementById('sidebar');
+                if (sidebar) {
+                    sidebar.querySelectorAll('a').forEach(function (link) {
+                        link.addEventListener('click', function () {
+                            if (isMobile()) { closeSidebar(); }
+                        });
+                    });
+                }
+
+                window.addEventListener('resize', function () {
+                    if (!isMobile()) { closeSidebar(); }
+                });
+            });
+        })();
+    </script>
 
     {{-- Light/Dark Mode Toggle Script --}}
     <script>

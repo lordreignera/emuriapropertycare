@@ -7,14 +7,49 @@
             <div class="card-body">
                 <h4 class="card-title">Edit Finding Template</h4>
 
+                @php
+                    $systemsJson = ($systems ?? collect())->map(function ($system) {
+                        return [
+                            'id' => $system->id,
+                            'name' => $system->name,
+                            'subsystems' => $system->subsystems->map(function ($subsystem) {
+                                return [
+                                    'id' => $subsystem->id,
+                                    'name' => $subsystem->name,
+                                ];
+                            })->values()->all(),
+                        ];
+                    })->values()->all();
+                @endphp
+
                 <form action="{{ route('admin.finding-template-settings.update', $findingTemplateSetting) }}" method="POST" class="forms-sample">
                     @csrf
                     @method('PUT')
 
                     <div class="form-group">
-                        <label for="task_question">Task / Question <span class="text-danger">*</span></label>
+                        <label for="task_question">Issue / Finding <span class="text-danger">*</span></label>
                         <input type="text" class="form-control @error('task_question') is-invalid @enderror" id="task_question" name="task_question" value="{{ old('task_question', $findingTemplateSetting->task_question) }}" required>
                         @error('task_question')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 form-group">
+                            <label for="system_id">System</label>
+                            <select class="form-control @error('system_id') is-invalid @enderror" id="system_id" name="system_id">
+                                <option value="">-- Select System --</option>
+                                @foreach(($systems ?? collect()) as $system)
+                                    <option value="{{ $system->id }}" {{ (string) old('system_id', $findingTemplateSetting->system_id) === (string) $system->id ? 'selected' : '' }}>{{ $system->name }}</option>
+                                @endforeach
+                            </select>
+                            @error('system_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+                        <div class="col-md-6 form-group">
+                            <label for="subsystem_id">Subsystem</label>
+                            <select class="form-control @error('subsystem_id') is-invalid @enderror" id="subsystem_id" name="subsystem_id">
+                                <option value="">-- Select Subsystem --</option>
+                            </select>
+                            @error('subsystem_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
                     </div>
 
                     <div class="row">
@@ -24,28 +59,6 @@
                             @error('category')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
                         <div class="col-md-6 form-group">
-                            <label for="photo_reference">Photo Reference</label>
-                            <input type="text" class="form-control @error('photo_reference') is-invalid @enderror" id="photo_reference" name="photo_reference" value="{{ old('photo_reference', $findingTemplateSetting->photo_reference) }}" placeholder="e.g., R01">
-                            @error('photo_reference')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-                    </div>
-
-                    <div class="row">
-                        <div class="col-md-4 form-group">
-                            <label for="default_priority">Default Priority <span class="text-danger">*</span></label>
-                            <select class="form-control @error('default_priority') is-invalid @enderror" id="default_priority" name="default_priority" required>
-                                <option value="1" {{ old('default_priority', $findingTemplateSetting->default_priority) == '1' ? 'selected' : '' }}>1 - High</option>
-                                <option value="2" {{ old('default_priority', $findingTemplateSetting->default_priority) == '2' ? 'selected' : '' }}>2 - Medium</option>
-                                <option value="3" {{ old('default_priority', $findingTemplateSetting->default_priority) == '3' ? 'selected' : '' }}>3 - Low</option>
-                            </select>
-                            @error('default_priority')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-                        <div class="col-md-4 form-group">
-                            <label for="default_labour_hours">Default Labour Hours <span class="text-danger">*</span></label>
-                            <input type="number" step="0.1" min="0" class="form-control @error('default_labour_hours') is-invalid @enderror" id="default_labour_hours" name="default_labour_hours" value="{{ old('default_labour_hours', $findingTemplateSetting->default_labour_hours) }}" required>
-                            @error('default_labour_hours')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                        </div>
-                        <div class="col-md-4 form-group">
                             <label for="sort_order">Sort Order</label>
                             <input type="number" min="0" class="form-control @error('sort_order') is-invalid @enderror" id="sort_order" name="sort_order" value="{{ old('sort_order', $findingTemplateSetting->sort_order) }}">
                             @error('sort_order')<div class="invalid-feedback">{{ $message }}</div>@enderror
@@ -74,6 +87,40 @@
                         <a href="{{ route('admin.finding-template-settings.index') }}" class="btn btn-light">Cancel</a>
                     </div>
                 </form>
+
+                <script>
+                    (function () {
+                        const systems = @json($systemsJson);
+                        const systemSelect = document.getElementById('system_id');
+                        const subsystemSelect = document.getElementById('subsystem_id');
+                        const selectedSubsystemId = "{{ old('subsystem_id', $findingTemplateSetting->subsystem_id) }}";
+
+                        function renderSubsystems(systemId) {
+                            subsystemSelect.innerHTML = '<option value="">-- Select Subsystem --</option>';
+                            const selectedSystem = systems.find((system) => String(system.id) === String(systemId));
+
+                            if (!selectedSystem) {
+                                return;
+                            }
+
+                            selectedSystem.subsystems.forEach((subsystem) => {
+                                const option = document.createElement('option');
+                                option.value = subsystem.id;
+                                option.textContent = subsystem.name;
+                                if (String(subsystem.id) === String(selectedSubsystemId)) {
+                                    option.selected = true;
+                                }
+                                subsystemSelect.appendChild(option);
+                            });
+                        }
+
+                        systemSelect.addEventListener('change', function () {
+                            renderSubsystems(this.value);
+                        });
+
+                        renderSubsystems(systemSelect.value);
+                    })();
+                </script>
             </div>
         </div>
     </div>

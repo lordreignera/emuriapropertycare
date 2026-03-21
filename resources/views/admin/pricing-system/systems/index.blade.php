@@ -27,6 +27,7 @@
                                 <th>Name</th>
                                 <th>Slug</th>
                                 <th>Sort</th>
+                                <th title="CPI system weight used in scoring formula (max 20, total 197)">Weight <i class="mdi mdi-information-outline text-muted" style="font-size:.85rem;"></i></th>
                                 <th>Status</th>
                                 <th>Subsystems</th>
                                 <th>Actions</th>
@@ -39,6 +40,9 @@
                                     <td><strong>{{ $system->name }}</strong></td>
                                     <td><code>{{ $system->slug }}</code></td>
                                     <td>{{ $system->sort_order }}</td>
+                                    <td>
+                                        <span class="badge bg-primary" style="font-size:.85rem;min-width:2.2rem;">{{ $system->weight }}</span>
+                                    </td>
                                     <td>
                                         @if($system->is_active)
                                             <span class="badge badge-success">Active</span>
@@ -65,7 +69,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="7" class="text-center py-4 text-muted">No systems found.</td>
+                                    <td colspan="8" class="text-center py-4 text-muted">No systems found.</td>
                                 </tr>
                             @endforelse
                         </tbody>

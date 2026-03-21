@@ -31,6 +31,7 @@ class SystemController extends Controller
             'slug' => 'nullable|string|max:255|unique:systems,slug',
             'description' => 'nullable|string',
             'sort_order' => 'nullable|integer|min:0',
+            'weight' => 'required|integer|min:0|max:20',
             'is_active' => 'nullable|boolean',
         ]);
 
@@ -58,6 +59,7 @@ class SystemController extends Controller
             'slug' => 'nullable|string|max:255|unique:systems,slug,' . $system->id,
             'description' => 'nullable|string',
             'sort_order' => 'nullable|integer|min:0',
+            'weight' => 'required|integer|min:0|max:20',
             'is_active' => 'nullable|boolean',
         ]);
 

@@ -33,7 +33,6 @@
             <form action="{{ route('inspections.store') }}" method="POST" enctype="multipart/form-data" id="inspectionSystemsForm">
                 @csrf
                 <input type="hidden" name="property_id" value="{{ $property->id }}">
-                <input type="hidden" name="service_package_id" value="{{ old('service_package_id', $inspection->service_package_id ?? '') }}">
                 <input type="hidden" name="status" value="in_progress">
 
                 <div class="card mb-4">
@@ -136,17 +135,7 @@
                             @endif
                         </div>
 
-                        <hr class="my-4">
-                        <h6 class="text-primary">Service Package</h6>
-                        <div class="alert alert-light border mb-0">
-                            @if(!empty($inspection?->service_package_name))
-                                <strong>{{ $inspection->service_package_name }}</strong>
-                                <div class="small text-muted mt-1">Already assigned from completed inspection.</div>
-                            @else
-                                <strong>Pending auto-assignment</strong>
-                                <div class="small text-muted mt-1">Service package will be auto-generated after this inspection report is completed.</div>
-                            @endif
-                        </div>
+
                     </div>
                 </div>
 
@@ -157,7 +146,7 @@
                         </h5>
                     </div>
                     <div class="card-body">
-                        <p class="text-muted mb-3">Add issues per system and subsystem (Issue, Location, Spot, Notes, Recommendations).</p>
+                        <p class="text-muted mb-3">Add findings per system — each finding is a card showing all fields at a glance.</p>
 
                         @if($systems->isEmpty())
                             <div class="alert alert-warning mb-0">
@@ -166,36 +155,19 @@
                         @else
                             @foreach($systems as $system)
                                 <div class="card mb-3 border">
-                                    <div class="card-header d-flex justify-content-between align-items-center">
+                                    <div class="card-header d-flex justify-content-between align-items-center" style="background:#f8f9fc;">
                                         <div>
                                             <strong>{{ $system->name }}</strong>
                                             @if($system->description)
-                                                <span class="text-muted ms-2">{{ $system->description }}</span>
+                                                <span class="text-muted ms-2 small">{{ $system->description }}</span>
                                             @endif
                                         </div>
                                         <button type="button" class="btn btn-sm btn-outline-primary" onclick="addSystemFindingRow({{ $system->id }})">
-                                            <i class="mdi mdi-plus"></i> Add Row
+                                            <i class="mdi mdi-plus"></i> Add Finding
                                         </button>
                                     </div>
-                                    <div class="card-body p-0">
-                                        <div class="table-responsive">
-                                            <table class="table table-striped table-bordered mb-0">
-                                                <thead class="table-light">
-                                                    <tr>
-                                                        <th style="min-width: 180px;">Subsystem</th>
-                                                        <th style="min-width: 180px;">Issue</th>
-                                                        <th style="min-width: 160px;">Location</th>
-                                                        <th style="min-width: 160px;">Spot</th>
-                                                        <th style="min-width: 140px;">Severity</th>
-                                                        <th style="min-width: 220px;">Notes</th>
-                                                        <th style="min-width: 220px;">Recommendations</th>
-                                                        <th style="width: 90px;">Action</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody id="system-rows-{{ $system->id }}">
-                                                </tbody>
-                                            </table>
-                                        </div>
+                                    <div class="card-body p-2" id="system-rows-{{ $system->id }}">
+                                        <p class="text-muted small mb-0 px-1" id="system-empty-{{ $system->id }}">No findings added yet. Click <strong>Add Finding</strong> to record an issue.</p>
                                     </div>
                                 </div>
                             @endforeach
@@ -278,16 +250,34 @@
 </div>
 
 @php
-    $systemsConfig = $systems->map(function ($system) {
+    $findingTemplatesRaw = \App\Models\FindingTemplateSetting::query()
+        ->where('is_active', true)
+        ->orderBy('sort_order')
+        ->get(['task_question', 'system_id', 'subsystem_id']);
+
+    $systemsConfig = $systems->map(function ($system) use ($findingTemplatesRaw) {
+        $systemLevelFindings = $findingTemplatesRaw
+            ->where('system_id', $system->id)
+            ->whereNull('subsystem_id')
+            ->pluck('task_question')
+            ->values()
+            ->all();
+
         return [
             'id' => $system->id,
             'name' => $system->name,
             'recommended_actions' => collect($system->recommended_actions ?? [])->values()->all(),
-            'subsystems' => $system->subsystems->map(function ($subsystem) {
+            'findings' => $systemLevelFindings,
+            'subsystems' => $system->subsystems->map(function ($subsystem) use ($findingTemplatesRaw) {
                 return [
                     'id' => $subsystem->id,
                     'name' => $subsystem->name,
                     'recommended_actions' => collect($subsystem->recommended_actions ?? [])->values()->all(),
+                    'findings' => $findingTemplatesRaw
+                        ->where('subsystem_id', $subsystem->id)
+                        ->pluck('task_question')
+                        ->values()
+                        ->all(),
                 ];
             })->values()->all(),
         ];
@@ -360,6 +350,39 @@ function collectRecommendationOptions(systemId, subsystemId = '') {
     return Array.from(unique);
 }
 
+function isKnownFinding(systemId, subsystemId, issue) {
+    if (!issue) return true;
+    const system = getSystemConfig(systemId);
+    if (subsystemId) {
+        const sub = getSubsystemConfig(systemId, subsystemId);
+        if (Array.isArray(sub?.findings) && sub.findings.includes(issue)) return true;
+    }
+    return Array.isArray(system?.findings) && system.findings.includes(issue);
+}
+
+function buildFindingOptions(systemId, subsystemId, selectedValue) {
+    selectedValue = selectedValue || '';
+    const system = getSystemConfig(systemId);
+    let findings = [];
+    if (subsystemId) {
+        const sub = getSubsystemConfig(systemId, subsystemId);
+        findings = Array.isArray(sub?.findings) ? sub.findings : [];
+    }
+    if (findings.length === 0 && system) {
+        findings = Array.isArray(system.findings) ? system.findings : [];
+    }
+
+    let options = '<option value="">-- Select Issue / Finding --</option>';
+    findings.forEach(function (finding) {
+        const esc = escapeHtml(finding);
+        const sel = finding === selectedValue ? 'selected' : '';
+        options += `<option value="${esc}" ${sel}>${esc}</option>`;
+    });
+    const isCustomSelected = selectedValue !== '' && !findings.includes(selectedValue);
+    options += `<option value="__custom__" ${isCustomSelected ? 'selected' : ''}>Custom / Other...</option>`;
+    return options;
+}
+
 function normalizeRecommendationItems(value) {
     if (Array.isArray(value)) {
         return value.map(item => String(item || '').trim()).filter(item => item.length > 0);
@@ -377,64 +400,168 @@ function addSystemFindingRow(systemId, prefill = {}) {
         return;
     }
 
+    // Hide the empty-state placeholder
+    const emptyMsg = document.getElementById(`system-empty-${systemId}`);
+    if (emptyMsg) emptyMsg.style.display = 'none';
+
     const currentIndex = findingIndex++;
+    const findingNumber = body.querySelectorAll('.finding-card').length + 1;
     const subsystemOptions = buildSubsystemOptions(systemId, prefill.subsystem_id || '');
     const severityAliasMap = {
-        urgent: 'critical',
+        urgent:                    'critical',
         health_safety_threatening: 'high',
-        value_depreciation: 'medium',
-        non_urgent: 'low'
+        value_depreciation:        'medium',
+        non_urgent:                'low'
     };
     const severity = severityAliasMap[prefill.severity] || prefill.severity || 'low';
     const recommendationItems = normalizeRecommendationItems(prefill.recommendations);
 
-    const row = document.createElement('tr');
-    row.innerHTML = `
-        <td>
-            <input type="hidden" name="system_findings[${currentIndex}][system_id]" value="${systemId}">
-            <select name="system_findings[${currentIndex}][subsystem_id]" class="form-control form-control-sm">
-                ${subsystemOptions}
-            </select>
-        </td>
-        <td><input type="text" name="system_findings[${currentIndex}][issue]" class="form-control form-control-sm" value="${escapeHtml(prefill.issue || '')}" placeholder="Issue"></td>
-        <td><input type="text" name="system_findings[${currentIndex}][location]" class="form-control form-control-sm" value="${escapeHtml(prefill.location || '')}" placeholder="Location"></td>
-        <td><input type="text" name="system_findings[${currentIndex}][spot]" class="form-control form-control-sm" value="${escapeHtml(prefill.spot || '')}" placeholder="Spot"></td>
-        <td>
-            <select name="system_findings[${currentIndex}][severity]" class="form-control form-control-sm">
-                <option value="critical" ${severity === 'critical' ? 'selected' : ''}>Urgent</option>
-                <option value="high" ${severity === 'high' ? 'selected' : ''}>Health &amp; Safety Threatening</option>
-                <option value="medium" ${severity === 'medium' ? 'selected' : ''}>Value Depreciation Risk</option>
-                <option value="low" ${severity === 'low' ? 'selected' : ''}>Non-Urgent</option>
-            </select>
-        </td>
-        <td><textarea name="system_findings[${currentIndex}][notes]" class="form-control form-control-sm" rows="2" placeholder="Notes">${escapeHtml(prefill.notes || '')}</textarea></td>
-        <td>
-            <div class="recommendation-builder" data-index="${currentIndex}">
-                <label class="small text-muted mb-1 d-block">Suggested for this system/subsystem</label>
-                <div class="input-group input-group-sm mb-2">
-                    <select class="form-control form-control-sm recommendation-select">
-                        <option value="">Select recommendation</option>
-                    </select>
-                    <button type="button" class="btn btn-outline-primary recommendation-add-selected">Add</button>
-                </div>
-                <div class="input-group input-group-sm mb-2">
-                    <input type="text" class="form-control recommendation-input" placeholder="Add custom recommendation">
-                    <button type="button" class="btn btn-outline-primary recommendation-add">Add</button>
-                </div>
-                <div class="recommendation-list small mb-1"></div>
-                <div class="recommendation-hidden-inputs"></div>
-            </div>
-        </td>
-        <td class="text-center">
-            <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeSystemFindingRow(this)">
-                <i class="mdi mdi-delete"></i>
+    const severityColors = {
+        critical:        '#dc3545',
+        high:            '#fd7e14',
+        noi_protection:  '#7c3aed',
+        medium:          '#ffc107',
+        low:             '#198754'
+    };
+    const severityLabels = {
+        critical:        'Safety & Health',
+        high:            'Urgent',
+        noi_protection:  'NOI Protection',
+        medium:          'Value Depreciation',
+        low:             'Non-Urgent'
+    };
+
+    const card = document.createElement('div');
+    card.className = 'finding-card border rounded mb-2 bg-white';
+    card.style.cssText = 'border-left: 4px solid ' + (severityColors[severity] || '#6c757d') + ' !important;';
+    card.innerHTML = `
+        <input type="hidden" name="system_findings[${currentIndex}][system_id]" value="${systemId}">
+        <!-- Card header -->
+        <div class="d-flex justify-content-between align-items-center px-3 py-2" style="background:#f8f9fc; border-bottom:1px solid #e9ecef; border-radius:0.25rem 0.25rem 0 0;">
+            <span class="fw-semibold small text-secondary">Finding #${findingNumber}</span>
+            <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" onclick="removeSystemFindingRow(this)" title="Remove finding">
+                <i class="mdi mdi-delete-outline"></i> Remove
             </button>
-        </td>
+        </div>
+        <!-- Row 1: Subsystem | Issue | Severity -->
+        <div class="row g-2 px-3 pt-2">
+            <div class="col-md-4">
+                <label class="form-label small fw-semibold text-muted mb-1">Subsystem</label>
+                <select name="system_findings[${currentIndex}][subsystem_id]" class="form-select form-select-sm">
+                    ${subsystemOptions}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small fw-semibold text-muted mb-1">Issue / Finding</label>
+                <select class="form-select form-select-sm issue-preset-select">
+                    ${buildFindingOptions(systemId, prefill.subsystem_id || '', prefill.issue || '')}
+                </select>
+                <input type="text" class="form-control form-control-sm mt-1 issue-custom-text" placeholder="Describe the issue" style="display:none;">
+                <input type="hidden" name="system_findings[${currentIndex}][issue]" class="issue-hidden-value" value="${escapeHtml(prefill.issue || '')}">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small fw-semibold text-muted mb-1">Severity</label>
+                <select name="system_findings[${currentIndex}][severity]" class="form-select form-select-sm severity-select">
+                    <option value="critical"       ${severity === 'critical'       ? 'selected' : ''}>&#x1F534; Safety &amp; Health (100)</option>
+                    <option value="high"           ${severity === 'high'           ? 'selected' : ''}>&#x1F7E0; Urgent (80)</option>
+                    <option value="noi_protection" ${severity === 'noi_protection' ? 'selected' : ''}>&#x1F7E3; NOI Protection (60)</option>
+                    <option value="medium"         ${severity === 'medium'         ? 'selected' : ''}>&#x1F7E1; Value Depreciation (40)</option>
+                    <option value="low"            ${severity === 'low'            ? 'selected' : ''}>&#x1F7E2; Non-Urgent (0)</option>
+                </select>
+            </div>
+        </div>
+        <!-- Row 2: Location | Spot -->
+        <div class="row g-2 px-3 pt-2">
+            <div class="col-md-6">
+                <label class="form-label small fw-semibold text-muted mb-1">Location</label>
+                <input type="text" name="system_findings[${currentIndex}][location]" class="form-control form-control-sm" value="${escapeHtml(prefill.location || '')}" placeholder="e.g. North wall, Basement">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-semibold text-muted mb-1">Spot</label>
+                <input type="text" name="system_findings[${currentIndex}][spot]" class="form-control form-control-sm" value="${escapeHtml(prefill.spot || '')}" placeholder="e.g. Top-left corner">
+            </div>
+        </div>
+        <!-- Row 3: Notes | Recommendations -->
+        <div class="row g-2 px-3 pt-2 pb-3">
+            <div class="col-md-6">
+                <label class="form-label small fw-semibold text-muted mb-1">Notes</label>
+                <textarea name="system_findings[${currentIndex}][notes]" class="form-control form-control-sm" rows="3" placeholder="Detailed observations...">${escapeHtml(prefill.notes || '')}</textarea>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-semibold text-muted mb-1">Recommendations</label>
+                <div class="recommendation-builder" data-index="${currentIndex}">
+                    <div class="input-group input-group-sm mb-1">
+                        <select class="form-select form-select-sm recommendation-select">
+                            <option value="">Select suggested recommendation</option>
+                        </select>
+                        <button type="button" class="btn btn-outline-primary btn-sm recommendation-add-selected">Add</button>
+                    </div>
+                    <div class="input-group input-group-sm mb-1">
+                        <input type="text" class="form-control recommendation-input" placeholder="Or type a custom recommendation">
+                        <button type="button" class="btn btn-outline-secondary btn-sm recommendation-add">Add</button>
+                    </div>
+                    <div class="recommendation-list small mt-1"></div>
+                    <div class="recommendation-hidden-inputs"></div>
+                </div>
+            </div>
+        </div>
     `;
 
-    body.appendChild(row);
+    body.appendChild(card);
 
-    initRecommendationBuilder(row, currentIndex, recommendationItems, systemId, prefill.subsystem_id || '');
+    // Wire issue preset select → hidden value
+    const issuePresetSelect = card.querySelector('.issue-preset-select');
+    const issueCustomText = card.querySelector('.issue-custom-text');
+    const issueHiddenValue = card.querySelector('.issue-hidden-value');
+
+    if (issuePresetSelect) {
+        // If prefill issue is a custom (not in preset list), show the text input
+        if (prefill.issue && issuePresetSelect.value === '__custom__') {
+            issueCustomText.style.display = '';
+            issueCustomText.value = prefill.issue;
+        }
+
+        issuePresetSelect.addEventListener('change', function () {
+            if (this.value === '__custom__') {
+                issueCustomText.style.display = '';
+                issueCustomText.value = '';
+                issueHiddenValue.value = '';
+                issueCustomText.focus();
+            } else {
+                issueCustomText.style.display = 'none';
+                issueCustomText.value = '';
+                issueHiddenValue.value = this.value;
+            }
+        });
+
+        issueCustomText.addEventListener('input', function () {
+            issueHiddenValue.value = this.value;
+        });
+
+        // Refresh issue options when subsystem changes
+        const subsystemSelForIssue = card.querySelector(`select[name="system_findings[${currentIndex}][subsystem_id]"]`);
+        if (subsystemSelForIssue) {
+            subsystemSelForIssue.addEventListener('change', function () {
+                const currentIssue = issueHiddenValue.value;
+                issuePresetSelect.innerHTML = buildFindingOptions(systemId, this.value, currentIssue);
+                if (issuePresetSelect.value === '__custom__') {
+                    issueCustomText.style.display = '';
+                    issueCustomText.value = currentIssue;
+                } else {
+                    issueCustomText.style.display = 'none';
+                    issueHiddenValue.value = issuePresetSelect.value;
+                }
+            });
+        }
+    }
+
+    // Update border colour when severity changes
+    const severitySelect = card.querySelector('.severity-select');
+    severitySelect.addEventListener('change', function () {
+        card.style.cssText = 'border-left: 4px solid ' + (severityColors[this.value] || '#6c757d') + ' !important;';
+    });
+
+    initRecommendationBuilder(card, currentIndex, recommendationItems, systemId, prefill.subsystem_id || '');
 }
 
 function initRecommendationBuilder(row, rowIndex, initialItems = [], systemId = '', initialSubsystemId = '') {
@@ -550,15 +677,30 @@ function initRecommendationBuilder(row, rowIndex, initialItems = [], systemId = 
 }
 
 function removeSystemFindingRow(button) {
-    const row = button.closest('tr');
-    if (row) {
-        row.remove();
+    const card = button.closest('.finding-card');
+    if (!card) return;
+    const container = card.parentElement;
+    card.remove();
+    // If no findings left, restore the empty-state message
+    if (container && container.querySelectorAll('.finding-card').length === 0) {
+        const emptyMsg = container.querySelector('[id^="system-empty-"]');
+        if (emptyMsg) emptyMsg.style.display = '';
     }
 }
 
+// Severity order: critical (urgent) first, then high (H&S), then medium (value dep.), then low (non-urgent)
+const severityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
+
 document.addEventListener('DOMContentLoaded', function () {
     if (Array.isArray(initialFindings) && initialFindings.length > 0) {
-        initialFindings.forEach(finding => {
+        // Sort by severity priority before rendering so most critical findings appear first
+        const sorted = [...initialFindings].sort((a, b) => {
+            const aOrder = severityOrder[a.severity] ?? 99;
+            const bOrder = severityOrder[b.severity] ?? 99;
+            return aOrder - bOrder;
+        });
+
+        sorted.forEach(finding => {
             if (!finding || !finding.system_id) {
                 return;
             }

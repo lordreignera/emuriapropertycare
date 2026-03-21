@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use App\Support\PharCatalog;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class FmcMaterialSetting extends Model
 {
@@ -13,13 +15,27 @@ class FmcMaterialSetting extends Model
         'description',
         'is_active',
         'sort_order',
+        'system_id',
+        'subsystem_id',
     ];
 
     protected $casts = [
         'default_unit_cost' => 'decimal:2',
         'is_active' => 'boolean',
         'sort_order' => 'integer',
+        'system_id' => 'integer',
+        'subsystem_id' => 'integer',
     ];
+
+    public function system(): BelongsTo
+    {
+        return $this->belongsTo(InspectionSystem::class, 'system_id');
+    }
+
+    public function subsystem(): BelongsTo
+    {
+        return $this->belongsTo(InspectionSubsystem::class, 'subsystem_id');
+    }
 
     public function scopeActive($query)
     {
@@ -28,11 +44,6 @@ class FmcMaterialSetting extends Model
 
     public static function defaults(): array
     {
-        return [
-            ['material_name' => 'Bathroom sealant', 'default_unit' => 'tube', 'default_unit_cost' => 12.50, 'sort_order' => 1],
-            ['material_name' => 'GFCI outlet', 'default_unit' => 'ea', 'default_unit_cost' => 28.00, 'sort_order' => 2],
-            ['material_name' => 'Paint (touch-up)', 'default_unit' => 'gal', 'default_unit_cost' => 48.00, 'sort_order' => 3],
-            ['material_name' => 'Roller/brush', 'default_unit' => 'lot', 'default_unit_cost' => 18.00, 'sort_order' => 4],
-        ];
+        return PharCatalog::materials();
     }
 }

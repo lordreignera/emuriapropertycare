@@ -1,4 +1,4 @@
-@extends('admin.layout')
+﻿@extends('admin.layout')
 
 @section('content')
 <div class="row">
@@ -7,6 +7,21 @@
             <div class="card-body">
                 <h4 class="card-title">Create FMC Material Setting</h4>
 
+                @php
+                    $systemsJson = ($systems ?? collect())->map(function ($system) {
+                        return [
+                            'id' => $system->id,
+                            'name' => $system->name,
+                            'subsystems' => $system->subsystems->map(function ($subsystem) {
+                                return [
+                                    'id' => $subsystem->id,
+                                    'name' => $subsystem->name,
+                                ];
+                            })->values()->all(),
+                        ];
+                    })->values()->all();
+                @endphp
+
                 <form action="{{ route('admin.fmc-material-settings.store') }}" method="POST" class="forms-sample">
                     @csrf
 
@@ -14,6 +29,26 @@
                         <label for="material_name">Material / Part <span class="text-danger">*</span></label>
                         <input type="text" class="form-control @error('material_name') is-invalid @enderror" id="material_name" name="material_name" value="{{ old('material_name') }}" required>
                         @error('material_name')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6 form-group">
+                            <label for="system_id">System</label>
+                            <select class="form-control @error('system_id') is-invalid @enderror" id="system_id" name="system_id">
+                                <option value="">-- Select System --</option>
+                                @foreach(($systems ?? collect()) as $system)
+                                    <option value="{{ $system->id }}" {{ (string) old('system_id') === (string) $system->id ? 'selected' : '' }}>{{ $system->name }}</option>
+                                @endforeach
+                            </select>
+                            @error('system_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+                        <div class="col-md-6 form-group">
+                            <label for="subsystem_id">Subsystem</label>
+                            <select class="form-control @error('subsystem_id') is-invalid @enderror" id="subsystem_id" name="subsystem_id">
+                                <option value="">-- Select Subsystem --</option>
+                            </select>
+                            @error('subsystem_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
                     </div>
 
                     <div class="row">
@@ -53,6 +88,40 @@
                         <a href="{{ route('admin.fmc-material-settings.index') }}" class="btn btn-light">Cancel</a>
                     </div>
                 </form>
+
+                <script>
+                    (function () {
+                        const systems = @json($systemsJson);
+                        const systemSelect = document.getElementById('system_id');
+                        const subsystemSelect = document.getElementById('subsystem_id');
+                        const selectedSubsystemId = "{{ old('subsystem_id') }}";
+
+                        function renderSubsystems(systemId) {
+                            subsystemSelect.innerHTML = '<option value="">-- Select Subsystem --</option>';
+                            const selectedSystem = systems.find((system) => String(system.id) === String(systemId));
+
+                            if (!selectedSystem) {
+                                return;
+                            }
+
+                            selectedSystem.subsystems.forEach((subsystem) => {
+                                const option = document.createElement('option');
+                                option.value = subsystem.id;
+                                option.textContent = subsystem.name;
+                                if (String(subsystem.id) === String(selectedSubsystemId)) {
+                                    option.selected = true;
+                                }
+                                subsystemSelect.appendChild(option);
+                            });
+                        }
+
+                        systemSelect.addEventListener('change', function () {
+                            renderSubsystems(this.value);
+                        });
+
+                        renderSubsystems(systemSelect.value);
+                    })();
+                </script>
             </div>
         </div>
     </div>

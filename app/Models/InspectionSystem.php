@@ -15,16 +15,28 @@ class InspectionSystem extends Model
         'description',
         'recommended_actions',
         'sort_order',
+        'weight',
         'is_active',
     ];
 
     protected $casts = [
         'recommended_actions' => 'array',
-        'is_active' => 'boolean',
+        'is_active'           => 'boolean',
+        'weight'              => 'integer',
     ];
 
     public function subsystems(): HasMany
     {
         return $this->hasMany(InspectionSubsystem::class, 'system_id');
+    }
+
+    public function findingTemplateSettings(): HasMany
+    {
+        return $this->hasMany(FindingTemplateSetting::class, 'system_id');
+    }
+
+    public function fmcMaterialSettings(): HasMany
+    {
+        return $this->hasMany(FmcMaterialSetting::class, 'system_id');
     }
 }
