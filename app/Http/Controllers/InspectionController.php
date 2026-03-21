@@ -741,15 +741,27 @@ class InspectionController extends Controller
                 ->with('error', 'Property not found for this inspection.');
         }
         
+        // Resolve photo URLs for DomPDF (signed S3 URLs or local file:// paths)
+        $disk   = config('filesystems.default', 'public');
+        $driver = config("filesystems.disks.{$disk}.driver");
+        $rawPhotos = is_array($inspection->photos) ? $inspection->photos : [];
+        $photoUrls = collect($rawPhotos)->map(function ($path) use ($disk, $driver) {
+            if ($driver === 'local') {
+                return 'file:///' . str_replace('\\', '/', storage_path('app/public/' . $path));
+            }
+            return \Illuminate\Support\Facades\Storage::disk($disk)->temporaryUrl($path, now()->addMinutes(30));
+        })->all();
+
         // Generate PDF
-        $pdf = Pdf::loadView('admin.inspections.invoice-pdf', compact('inspection', 'findings', 'materials', 'domains'))
+        $isRemote = ($driver !== 'local');
+        $pdf = Pdf::loadView('admin.inspections.invoice-pdf', compact('inspection', 'findings', 'materials', 'domains', 'photoUrls'))
             ->setPaper('a4', 'landscape')
             ->setOption('margin-top', 10)
             ->setOption('margin-right', 10)
             ->setOption('margin-bottom', 10)
             ->setOption('margin-left', 10)
             ->setOption('isHtml5ParserEnabled', true)
-            ->setOption('isRemoteEnabled', false);
+            ->setOption('isRemoteEnabled', $isRemote);
         
         $clientName = Str::slug((string) ($inspection->property?->user?->name ?? 'client'));
         $propertyName = Str::slug((string) ($inspection->property?->property_name ?? $inspection->property?->property_code ?? 'property'));

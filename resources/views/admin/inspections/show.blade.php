@@ -468,8 +468,8 @@
                     <div class="row g-3">
                         @foreach($inspectionPhotos as $photo)
                         <div class="col-6 col-md-3">
-                            <a href="{{ Storage::url($photo) }}" target="_blank">
-                                <img src="{{ Storage::url($photo) }}"
+                            <a href="{{ $inspection->getStorageUrl($photo) }}" target="_blank">
+                                <img src="{{ $inspection->getStorageUrl($photo) }}"
                                      alt="Inspection photo"
                                      class="img-fluid rounded border"
                                      style="width:100%;height:180px;object-fit:cover;">

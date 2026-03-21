@@ -508,23 +508,19 @@
 
 <!-- ════ INSPECTION PHOTOS ════ -->
 @php
-    $pdfPhotos = is_array($inspection->photos)
-        ? $inspection->photos
-        : (json_decode($inspection->getRawOriginal('photos') ?? '[]', true) ?? []);
-    $pdfStoragePath = storage_path('app/public/');
+    $pdfResolvedUrls = $photoUrls ?? [];
 @endphp
-@if(count($pdfPhotos) > 0)
+@if(count($pdfResolvedUrls) > 0)
 <div class="section">
-    <div class="section-title">Inspection Photos ({{ count($pdfPhotos) }})</div>
+    <div class="section-title">Inspection Photos ({{ count($pdfResolvedUrls) }})</div>
     <div class="section-body">
         <table style="width:100%;border-collapse:collapse;">
-            @php $pdfPhotoChunks = array_chunk($pdfPhotos, 4); @endphp
+            @php $pdfPhotoChunks = array_chunk($pdfResolvedUrls, 4); @endphp
             @foreach($pdfPhotoChunks as $pdfRow)
             <tr>
-                @foreach($pdfRow as $pdfPhotoIdx => $pdfPhoto)
-                @php $pdfAbsPath = 'file:///' . str_replace('\\', '/', $pdfStoragePath . $pdfPhoto); @endphp
+                @foreach($pdfRow as $pdfPhotoIdx => $pdfUrl)
                 <td style="width:25%;padding:4px;vertical-align:top;text-align:center;">
-                    <img src="{{ $pdfAbsPath }}" style="max-width:100%;height:140px;object-fit:cover;border:1px solid #ddd;" alt="Photo">
+                    <img src="{{ $pdfUrl }}" style="max-width:100%;height:140px;object-fit:cover;border:1px solid #ddd;" alt="Photo">
                     <div style="font-size:8px;color:#666;margin-top:2px;">Photo {{ ($loop->parent->index * 4) + $pdfPhotoIdx + 1 }}</div>
                 </td>
                 @endforeach

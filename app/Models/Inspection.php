@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Storage;
 
 class Inspection extends Model
 {
@@ -154,5 +155,22 @@ class Inspection extends Model
     public function scopeByInspector($query, $inspectorId)
     {
         return $query->where('inspector_id', $inspectorId);
+    }
+
+    /**
+     * Generate a URL for a stored file — uses signed temporary URL on S3 (private bucket),
+     * falls back to plain URL on local/public disk. Mirrors Property::getStorageUrl().
+     */
+    public function getStorageUrl(string $path): string
+    {
+        $disk = config('filesystems.default', 'public');
+        $storage = Storage::disk($disk);
+        $driver = config("filesystems.disks.{$disk}.driver");
+
+        if ($driver !== 'local' && method_exists($storage, 'temporaryUrl')) {
+            return $storage->temporaryUrl($path, now()->addMinutes(30));
+        }
+
+        return $storage->url($path);
     }
 }
