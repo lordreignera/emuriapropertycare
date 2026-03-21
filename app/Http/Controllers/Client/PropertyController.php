@@ -109,6 +109,13 @@ class PropertyController extends Controller
         $validated['has_pets'] = (bool) ($validated['has_pets'] ?? false);
         $validated['has_kids'] = (bool) ($validated['has_kids'] ?? false);
 
+        // Square footage columns are NOT NULL in the DB with default(0).
+        // Validation allows null (optional fields), but we must store 0 instead of null.
+        $validated['square_footage_interior'] = (float) ($validated['square_footage_interior'] ?? 0);
+        $validated['square_footage_green']    = (float) ($validated['square_footage_green']    ?? 0);
+        $validated['square_footage_paved']    = (float) ($validated['square_footage_paved']    ?? 0);
+        $validated['square_footage_extra']    = (float) ($validated['square_footage_extra']    ?? 0);
+
         // Generate property code
         $validated['property_code'] = Property::generatePropertyCode($validated['property_brand'] ?? null);
         
@@ -119,11 +126,11 @@ class PropertyController extends Controller
         $validated['status'] = 'pending_approval';
         
         // Calculate total square footage
-        $validated['total_square_footage'] = 
-            ($validated['square_footage_interior'] ?? 0) + 
-            ($validated['square_footage_green'] ?? 0) + 
-            ($validated['square_footage_paved'] ?? 0) + 
-            ($validated['square_footage_extra'] ?? 0);
+        $validated['total_square_footage'] =
+            $validated['square_footage_interior'] +
+            $validated['square_footage_green']    +
+            $validated['square_footage_paved']    +
+            $validated['square_footage_extra'];
         
         // Generate tenant password if has_tenants is true
         if ($validated['has_tenants'] ?? false) {
@@ -281,12 +288,18 @@ class PropertyController extends Controller
         $validated['has_pets'] = (bool) ($validated['has_pets'] ?? false);
         $validated['has_kids'] = (bool) ($validated['has_kids'] ?? false);
 
+        // Square footage columns are NOT NULL in the DB — ensure 0 instead of null.
+        $validated['square_footage_interior'] = (float) ($validated['square_footage_interior'] ?? 0);
+        $validated['square_footage_green']    = (float) ($validated['square_footage_green']    ?? 0);
+        $validated['square_footage_paved']    = (float) ($validated['square_footage_paved']    ?? 0);
+        $validated['square_footage_extra']    = (float) ($validated['square_footage_extra']    ?? 0);
+
         // Calculate total square footage
-        $validated['total_square_footage'] = 
-            ($validated['square_footage_interior'] ?? 0) + 
-            ($validated['square_footage_green'] ?? 0) + 
-            ($validated['square_footage_paved'] ?? 0) + 
-            ($validated['square_footage_extra'] ?? 0);
+        $validated['total_square_footage'] =
+            $validated['square_footage_interior'] +
+            $validated['square_footage_green']    +
+            $validated['square_footage_paved']    +
+            $validated['square_footage_extra'];
         
         $knownProblemsList = $this->normalizeListInput($request->input('known_problems'));
         $validated['known_problems'] = !empty($knownProblemsList) ? implode(', ', $knownProblemsList) : null;

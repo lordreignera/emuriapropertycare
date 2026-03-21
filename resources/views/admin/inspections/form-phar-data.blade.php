@@ -241,291 +241,162 @@
                             </div>
                         </div>
 
-                        <!-- SECTION 2: Findings Remediation – auto-populated from Step 1 issues -->
-                        <div class="card mb-4 border-warning">
-                            <div class="card-header" style="background:#ff9800;color:white;">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <h5 class="mb-0"><i class="mdi mdi-alert-circle-outline me-2"></i>Findings Remediation (Labour)</h5>
-                                    <span class="badge bg-light text-dark">{{ count($sortedFindings) }} issue(s) from Step 1</span>
-                                </div>
+                        <!-- SECTION 2: Findings Summary – read-only preview from Step 1 -->
+                        @php
+                            $sevColors2 = ['critical'=>'#dc3545','high'=>'#fd7e14','noi_protection'=>'#7c3aed','medium'=>'#ffc107','low'=>'#198754'];
+                            $sevLabels2 = ['critical'=>'Safety & Health','high'=>'Urgent','noi_protection'=>'NOI Protection','medium'=>'Value Depreciation','low'=>'Non-Urgent'];
+                            $prioMap2   = ['critical'=>1,'high'=>1,'noi_protection'=>2,'medium'=>2,'low'=>3];
+                            $loadedRate = (float)($bdcSettings['loaded_hourly_rate'] ?? 165);
+                            $totalLabourHrs2 = 0; $totalFRLC2 = 0; $totalMatCost2 = 0; $totalMatItems2 = 0;
+                            $sevCount2 = ['critical'=>0,'high'=>0,'noi_protection'=>0,'medium'=>0,'low'=>0];
+                            foreach ($sortedFindings as $sf2) {
+                                $sv2 = $sf2['severity'] ?? 'low';
+                                if (isset($sevCount2[$sv2])) $sevCount2[$sv2]++; else $sevCount2['low']++;
+                                $hrs2 = (float)($sf2['phar_labour_hours'] ?? 0);
+                                $totalLabourHrs2 += $hrs2;
+                                $totalFRLC2 += $hrs2 * $loadedRate;
+                                foreach (($sf2['phar_materials'] ?? []) as $m2) {
+                                    $totalMatItems2++;
+                                    $totalMatCost2 += (float)($m2['line_total'] ?? 0);
+                                }
+                            }
+                        @endphp
+                        <div class="card mb-4" style="border:1px solid #dee2e6;box-shadow:0 2px 8px rgba(0,0,0,.06);">
+                            <div class="card-header d-flex justify-content-between align-items-center" style="background:#2d3a5e;color:white;">
+                                <h5 class="mb-0"><i class="mdi mdi-clipboard-list-outline me-2"></i>Findings Summary <small class="opacity-75 fw-normal">(from Step 1)</small></h5>
+                                <span class="badge bg-light text-dark">{{ count($sortedFindings) }} finding(s)</span>
                             </div>
-                            <div class="card-body">
-
+                            <div class="card-body p-0">
                                 @if(count($sortedFindings) === 0)
-                                    <div class="alert alert-warning">
+                                    <div class="alert alert-warning m-3">
                                         <i class="mdi mdi-information me-2"></i>
-                                        No issues were recorded in Step 1. <a href="{{ route('inspections.create', ['property_id' => $property->id]) }}">Go back and add issues</a> to systems before completing PHAR data.
+                                        No findings recorded in Step 1. <a href="{{ route('inspections.create', ['property_id' => $property->id]) }}">Go back and add findings</a>.
                                     </div>
                                 @else
-                                    <div class="alert alert-info mb-3">
-                                        <i class="mdi mdi-information me-2"></i>
-                                        Issues are listed below in priority order (most critical first). Enter <strong>estimated labour hours</strong> for each, select a category, and mark whether it is included in the service tier. The labour cost is calculated automatically.
-                                    </div>
-
-                                    {{-- Severity legend --}}
-                                    <div class="d-flex gap-2 mb-3 flex-wrap">
-                                        <span class="badge px-2 py-1" style="background:#dc3545;">&#x1F534; Urgent (critical)</span>
-                                        <span class="badge px-2 py-1" style="background:#fd7e14;">&#x1F7E0; Health &amp; Safety Threatening (high)</span>
-                                        <span class="badge px-2 py-1" style="background:#ffc107;color:#212529;">&#x1F7E1; Value Depreciation (medium)</span>
-                                        <span class="badge px-2 py-1" style="background:#198754;">&#x1F7E2; Non-Urgent (low)</span>
-                                    </div>
-
-                                    @php
-                        $severityColors = [
-                            'critical'       => '#dc3545',
-                            'high'           => '#fd7e14',
-                            'noi_protection' => '#7c3aed',
-                            'medium'         => '#ffc107',
-                            'low'            => '#198754',
-                        ];
-                        $severityLabels = [
-                            'critical'       => 'Safety & Health',
-                            'high'           => 'Urgent',
-                            'noi_protection' => 'NOI Protection',
-                            'medium'         => 'Value Depreciation',
-                            'low'            => 'Non-Urgent',
-                        ];
-                        $priorityMap = [
-                            'critical'       => 1,
-                            'high'           => 1,
-                            'noi_protection' => 2,
-                            'medium'         => 2,
-                            'low'            => 3,
-                        ];
-                        @endphp
-
-                                    <div id="findingsContainer">
                                     @foreach($sortedFindings as $fi => $finding)
                                         @php
-                                            $sev   = $finding['severity'] ?? 'low';
-                                            $color = $severityColors[$sev] ?? '#6c757d';
-                                            $label = $severityLabels[$sev] ?? ucfirst($sev);
-                                            $prio  = $finding['priority'] ?? ($priorityMap[$sev] ?? 3);
+                                            $sev2   = $finding['severity'] ?? 'low';
+                                            $color2 = $sevColors2[$sev2] ?? '#6c757d';
+                                            $label2 = $sevLabels2[$sev2] ?? ucfirst($sev2);
+                                            $prio2  = $finding['priority'] ?? ($prioMap2[$sev2] ?? 3);
+                                            $hrs2f  = (float)($finding['phar_labour_hours'] ?? 0);
+                                            $lc2    = $hrs2f * $loadedRate;
+                                            $mats2  = $finding['phar_materials'] ?? [];
+                                            $matTotal2 = array_sum(array_column($mats2, 'line_total'));
+                                            $sysWt2 = $systemWeightsMap[$finding['system'] ?? ''] ?? null;
                                         @endphp
-                                        <div class="finding-row mb-3 p-3 rounded border" style="border-left:4px solid {{ $color }} !important;" data-subsystem-id="{{ $finding['subsystem_id'] ?? '' }}">
-                                            <div class="finding-header-bar d-flex justify-content-between align-items-center">
+                                        {{-- Hidden carry-over fields so storePharData still runs correctly --}}
+                                        <input type="hidden" name="findings[{{ $fi }}][task_question]" value="{{ $finding['issue'] ?? '' }}">
+                                        <input type="hidden" name="findings[{{ $fi }}][property_id]" value="{{ $property->id }}">
+                                        <input type="hidden" name="findings[{{ $fi }}][priority]" value="{{ $prio2 }}">
+
+                                        <div class="px-3 py-3 border-bottom" style="border-left:4px solid {{ $color2 }} !important;">
+                                            {{-- Header --}}
+                                            <div class="d-flex justify-content-between align-items-center mb-2">
                                                 <div class="d-flex align-items-center gap-2 flex-wrap">
-                                                    <span class="badge" style="background:{{ $color }};{{ $sev==='medium' ? 'color:#212529;' : '' }}">{{ $label }}</span>
+                                                    <span class="badge" style="background:{{ $color2 }};{{ $sev2==='medium' ? 'color:#212529;' : '' }}">{{ $label2 }}</span>
                                                     <strong>{{ $finding['system'] ?? 'System' }}</strong>
                                                     @if(!empty($finding['subsystem']))
-                                                        <span class="text-muted"> &rsaquo; {{ $finding['subsystem'] }}</span>
+                                                        <span class="text-muted">&rsaquo; {{ $finding['subsystem'] }}</span>
                                                     @endif
-                                                    @php $sysWeight = $systemWeightsMap[$finding['system'] ?? ''] ?? null; @endphp
-                                                    @if($sysWeight)
-                                                        <span class="badge bg-secondary" title="System Weight">W{{ $sysWeight }}</span>
+                                                    @if($sysWt2)
+                                                        <span class="badge bg-secondary" title="System Weight">W{{ $sysWt2 }}</span>
                                                     @endif
                                                 </div>
                                                 <span class="text-muted small fw-semibold">Finding #{{ $fi + 1 }}</span>
                                             </div>
 
-                                            {{-- Issue description (read-only from phase 1) --}}
-                                            <div class="issue-info">
-                                                <div class="issue-meta">
-                                                    <span><strong>Issue:</strong> {{ $finding['issue'] ?? '—' }}</span>
-                                                    <span><strong>Location:</strong> {{ $finding['location'] ?? '—' }}</span>
-                                                    <span><strong>Spot:</strong> {{ $finding['spot'] ?? '—' }}</span>
+                                            {{-- Issue details --}}
+                                            <div class="d-flex flex-wrap gap-3 mb-3 small">
+                                                <span><strong>Issue:</strong> {{ $finding['issue'] ?? '—' }}</span>
+                                                <span><strong>Location:</strong> {{ $finding['location'] ?? '—' }}</span>
+                                                <span><strong>Spot:</strong> {{ $finding['spot'] ?? '—' }}</span>
+                                            </div>
+
+                                            {{-- Labour stats --}}
+                                            <div class="d-flex flex-wrap gap-2 mb-3">
+                                                <div class="px-3 py-2 rounded text-center" style="background:#f0f4ff;border:1px solid #c7d3f7;min-width:130px;">
+                                                    <div class="text-muted" style="font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;">Est. Labour Hours</div>
+                                                    <div class="fw-bold" style="font-size:1.25rem;">{{ $hrs2f > 0 ? number_format($hrs2f, 1) : '—' }}</div>
                                                 </div>
-                                                @if(!empty($finding['notes']))
-                                                    <div class="mt-1"><strong>Notes:</strong> {{ $finding['notes'] }}</div>
+                                                <div class="px-3 py-2 rounded text-center" style="background:#f0fff4;border:1px solid #a3e4bc;min-width:140px;">
+                                                    <div class="text-muted" style="font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;">Labour Cost</div>
+                                                    <div class="fw-bold text-success" style="font-size:1.25rem;">${{ $lc2 > 0 ? number_format($lc2, 2) : '0.00' }}</div>
+                                                </div>
+                                                @if(!empty($finding['phar_category']))
+                                                <div class="px-3 py-2 rounded text-center" style="background:#fff8f0;border:1px solid #fdd;min-width:130px;">
+                                                    <div class="text-muted" style="font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;">Category</div>
+                                                    <div class="fw-semibold" style="font-size:.9rem;">{{ $finding['phar_category'] }}</div>
+                                                </div>
                                                 @endif
-                                                @if(!empty($finding['recommendations']))
-                                                    <div class="mt-1"><strong>Recommendations:</strong> {{ implode(', ', (array)$finding['recommendations']) }}</div>
-                                                @endif
                                             </div>
 
-                                            {{-- Hidden carry-over fields --}}
-                                            <input type="hidden" name="findings[{{ $fi }}][task_question]" value="{{ $finding['issue'] ?? '' }}">
-                                            <input type="hidden" name="findings[{{ $fi }}][property_id]" value="{{ $property->id }}">
-                                            <input type="hidden" name="findings[{{ $fi }}][priority]" value="{{ $prio }}">
-
-                                            {{-- Editable PHAR fields (pre-filled from saved draft) --}}
-                                            <div class="row g-2 mt-1 phar-fields">
-                                                <div class="col-md-2">
-                                                    <label class="form-label">Est. Labour Hours</label>
-                                                    <input type="number" name="findings[{{ $fi }}][labour_hours]" class="form-control form-control-sm finding-labour-hours"
-                                                           placeholder="0.0" step="0.1" min="0"
-                                                           value="{{ old("findings.$fi.labour_hours", $finding['phar_labour_hours'] ?? 0) }}">
-                                                </div>
-                                                <div class="col-md-2">
-                                                    <label class="form-label">Labour Cost</label>
-                                                    <input type="text" class="form-control form-control-sm finding-labour-cost" placeholder="$0.00" readonly>
-                                                    <div class="text-muted" style="font-size:.75rem;">Auto-calculated</div>
-                                                </div>
-                                                <div class="col-md-3">
-                                                    <label class="form-label">Category</label>
-                                                    <select name="findings[{{ $fi }}][category]" class="form-select form-select-sm">
-                                                        <option value="">-- Select --</option>
-                                                        @foreach(($pharCategories ?? []) as $cat)
-                                                            <option value="{{ $cat }}"
-                                                                {{ old("findings.$fi.category", $finding['phar_category'] ?? '') === $cat ? 'selected' : '' }}>
-                                                                {{ $cat }}
-                                                            </option>
+                                            {{-- Materials table --}}
+                                            @if(!empty($mats2))
+                                                <div class="fw-semibold text-success small mb-1"><i class="mdi mdi-package-variant me-1"></i>Materials</div>
+                                                <table class="table table-sm table-bordered mb-0" style="font-size:.8rem;">
+                                                    <thead class="table-light">
+                                                        <tr>
+                                                            <th>Description</th>
+                                                            <th class="text-center" style="width:70px;">Qty</th>
+                                                            <th class="text-center" style="width:80px;">Unit</th>
+                                                            <th class="text-end" style="width:100px;">Unit Cost</th>
+                                                            <th class="text-end" style="width:110px;">Line Total</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        @foreach($mats2 as $mat2)
+                                                        <tr>
+                                                            <td>{{ $mat2['material_name'] ?? '—' }}</td>
+                                                            <td class="text-center">{{ $mat2['quantity'] ?? 1 }}</td>
+                                                            <td class="text-center">{{ ucwords($mat2['unit'] ?? 'ea') }}</td>
+                                                            <td class="text-end">${{ number_format((float)($mat2['unit_cost'] ?? 0), 2) }}</td>
+                                                            <td class="text-end fw-semibold">${{ number_format((float)($mat2['line_total'] ?? 0), 2) }}</td>
+                                                        </tr>
                                                         @endforeach
-                                                    </select>
-                                                </div>
-                                                <div class="col-md-2">
-                                                    <label class="form-label">Included in tier?</label>
-                                                    @php $includedVal = old("findings.$fi.included_yn", $finding['phar_included_yn'] ?? true); @endphp
-                                                    <select name="findings[{{ $fi }}][included_yn]" class="form-select form-select-sm">
-                                                        <option value="1" {{ $includedVal ? 'selected' : '' }}>Yes</option>
-                                                        <option value="0" {{ !$includedVal ? 'selected' : '' }}>No</option>
-                                                    </select>
-                                                </div>
-                                                <div class="col-md-3">
-                                                    <label class="form-label">Additional Notes</label>
-                                                    <input type="text" name="findings[{{ $fi }}][notes]" class="form-control form-control-sm"
-                                                           placeholder="Optional"
-                                                           value="{{ old("findings.$fi.notes", $finding['phar_notes'] ?? '') }}">
-                                                </div>
-                                            </div>
-
-                                            {{-- Per-finding materials --}}
-                                            <div class="mt-3">
-                                                <div class="materials-header d-flex justify-content-between align-items-center">
-                                                    <span class="fw-bold text-success" style="font-size:.85rem;"><i class="mdi mdi-package-variant me-1"></i>Materials for this finding</span>
-                                                    <button type="button" class="btn btn-sm btn-success add-finding-material py-1 px-3" data-fi="{{ $fi }}">
-                                                        <i class="mdi mdi-plus me-1"></i>Add Material
-                                                    </button>
-                                                </div>
-                                                <div class="finding-materials-container" id="materials-fi-{{ $fi }}" data-fi="{{ $fi }}">
-                                                    @php $preMats = $finding['phar_materials'] ?? []; @endphp
-                                                    @if(empty($preMats))
-                                                        <p class="text-muted small mb-1 no-materials-msg">No materials yet. Click "Add Material" to attach parts/supplies to this finding.</p>
-                                                    @else
-                                                        @foreach($preMats as $mi => $mat)
-                                                        <div class="material-row border rounded p-2 mb-1 bg-white">
-                                                            <div class="d-flex justify-content-end mb-1">
-                                                                <button type="button" class="btn btn-sm btn-outline-danger remove-finding-material py-0 px-1">
-                                                                    <i class="mdi mdi-delete-outline"></i> Remove
-                                                                </button>
-                                                            </div>
-                                                            <div class="row g-2">
-                                                                <div class="col-md-1">
-                                                                    <label class="mat-label">Preset</label>
-                                                                    <select class="form-select form-select-sm material-template">
-                                                                        <option value="">Custom</option>
-                                                                        @foreach(($fmcMaterialSettings ?? []) as $ms)
-                                                                            <option value="{{ $ms->material_name }}"
-                                                                                    data-unit="{{ $ms->default_unit }}"
-                                                                                    data-cost="{{ number_format((float)$ms->default_unit_cost,2,'.','')}}"
-                                                                                    {{ $mat['material_name'] === $ms->material_name ? 'selected' : '' }}>
-                                                                                {{ $ms->material_name }}
-                                                                            </option>
-                                                                        @endforeach
-                                                                    </select>
-                                                                </div>
-                                                                <div class="col-md-3">
-                                                                    <label class="mat-label">Description <span class="text-danger">*</span></label>
-                                                                    <input type="text" name="findings[{{ $fi }}][materials][{{ $mi }}][material_name]"
-                                                                           class="form-control form-control-sm"
-                                                                           value="{{ $mat['material_name'] ?? '' }}" required>
-                                                                </div>
-                                                                <div class="col-md-1">
-                                                                    <label class="mat-label">Qty</label>
-                                                                    <input type="number" name="findings[{{ $fi }}][materials][{{ $mi }}][quantity]"
-                                                                           class="form-control form-control-sm material-quantity"
-                                                                           min="0" step="0.01" value="{{ $mat['quantity'] ?? 1 }}" required>
-                                                                </div>
-                                                                <div class="col-md-2">
-                                                                    <label class="mat-label">Unit</label>
-                                                                    <select name="findings[{{ $fi }}][materials][{{ $mi }}][unit]" class="form-select form-select-sm" required>
-                                                                        @foreach(($materialUnits ?? []) as $u)
-                                                                            <option value="{{ $u }}" {{ ($mat['unit'] ?? '') === $u ? 'selected' : '' }}>{{ ucwords($u) }}</option>
-                                                                        @endforeach
-                                                                    </select>
-                                                                </div>
-                                                                <div class="col-md-2">
-                                                                    <label class="mat-label">Unit Cost ($)</label>
-                                                                    <input type="number" name="findings[{{ $fi }}][materials][{{ $mi }}][unit_cost]"
-                                                                           class="form-control form-control-sm material-unit-cost"
-                                                                           min="0" step="0.01" value="{{ $mat['unit_cost'] ?? 0 }}" required>
-                                                                </div>
-                                                                <div class="col-md-2">
-                                                                    <label class="mat-label">Line Total</label>
-                                                                    <input type="text" class="form-control form-control-sm material-line-total" readonly
-                                                                           value="${{ number_format(($mat['line_total'] ?? 0), 2) }}">
-                                                                    <input type="hidden" name="findings[{{ $fi }}][materials][{{ $mi }}][line_total]"
-                                                                           class="material-line-total-hidden" value="{{ $mat['line_total'] ?? 0 }}">
-                                                                </div>
-                                                                <div class="col-md-1">
-                                                                    <label class="mat-label">Notes</label>
-                                                                    <input type="text" name="findings[{{ $fi }}][materials][{{ $mi }}][notes]"
-                                                                           class="form-control form-control-sm" value="{{ $mat['notes'] ?? '' }}">
-                                                                </div>
-                                                            </div>
-                                                            <input type="hidden" name="findings[{{ $fi }}][materials][{{ $mi }}][property_id]" value="{{ $property->id }}">
-                                                        </div>
-                                                        @endforeach
-                                                    @endif
-                                                </div>
-                                            </div>
+                                                    </tbody>
+                                                    <tfoot>
+                                                        <tr class="table-light">
+                                                            <td colspan="4" class="text-end fw-semibold">Materials Total:</td>
+                                                            <td class="text-end fw-bold text-success">${{ number_format($matTotal2, 2) }}</td>
+                                                        </tr>
+                                                    </tfoot>
+                                                </table>
+                                            @else
+                                                <p class="text-muted small fst-italic mb-0">No materials attached to this finding.</p>
+                                            @endif
                                         </div>
                                     @endforeach
-                                    </div>
 
                                     {{-- Summary bar --}}
-                                    @php
-                                        $sevCount = ['critical'=>0,'high'=>0,'noi_protection'=>0,'medium'=>0,'low'=>0];
-                                        foreach($sortedFindings as $sf) {
-                                            $sv = $sf['severity'] ?? 'low';
-                                            if (isset($sevCount[$sv])) $sevCount[$sv]++;
-                                            else $sevCount['low']++;
-                                        }
-                                    @endphp
-                                    <div id="pharSummaryBar" class="mt-3">
-                                        {{-- Severity breakdown row --}}
+                                    <div class="p-3" style="background:#1e2a45;color:#fff;">
                                         <div class="row text-center mb-2 pb-2" style="border-bottom:1px solid rgba(255,255,255,.15);">
-                                            <div class="col text-center">
-                                                <div class="small fw-semibold mb-1" style="color:#fc8181;">&#x1F534; Safety &amp; Health</div>
-                                                <div class="fw-bold fs-5" style="color:#fc8181;">{{ $sevCount['critical'] }}</div>
-                                            </div>
-                                            <div class="col text-center">
-                                                <div class="small fw-semibold mb-1" style="color:#fbd38d;">&#x1F7E0; Urgency</div>
-                                                <div class="fw-bold fs-5" style="color:#fbd38d;">{{ $sevCount['high'] }}</div>
-                                            </div>
-                                            <div class="col text-center">
-                                                <div class="small fw-semibold mb-1" style="color:#d6bcfa;">&#x1F7E3; NOI Protection</div>
-                                                <div class="fw-bold fs-5" style="color:#d6bcfa;">{{ $sevCount['noi_protection'] }}</div>
-                                            </div>
-                                            <div class="col text-center">
-                                                <div class="small fw-semibold mb-1" style="color:#fef08a;">&#x1F7E1; Value Depreciation</div>
-                                                <div class="fw-bold fs-5" style="color:#fef08a;">{{ $sevCount['medium'] }}</div>
-                                            </div>
-                                            <div class="col text-center">
-                                                <div class="small fw-semibold mb-1" style="color:#86efac;">&#x1F7E2; Non-Urgent</div>
-                                                <div class="fw-bold fs-5" style="color:#86efac;">{{ $sevCount['low'] }}</div>
-                                            </div>
+                                            <div class="col"><div class="small fw-semibold mb-1" style="color:#fc8181;">&#x1F534; Safety &amp; Health</div><div class="fw-bold fs-5" style="color:#fc8181;">{{ $sevCount2['critical'] }}</div></div>
+                                            <div class="col"><div class="small fw-semibold mb-1" style="color:#fbd38d;">&#x1F7E0; Urgency</div><div class="fw-bold fs-5" style="color:#fbd38d;">{{ $sevCount2['high'] }}</div></div>
+                                            <div class="col"><div class="small fw-semibold mb-1" style="color:#d6bcfa;">&#x1F7E3; NOI Protection</div><div class="fw-bold fs-5" style="color:#d6bcfa;">{{ $sevCount2['noi_protection'] }}</div></div>
+                                            <div class="col"><div class="small fw-semibold mb-1" style="color:#fef08a;">&#x1F7E1; Value Depreciation</div><div class="fw-bold fs-5" style="color:#fef08a;">{{ $sevCount2['medium'] }}</div></div>
+                                            <div class="col"><div class="small fw-semibold mb-1" style="color:#86efac;">&#x1F7E2; Non-Urgent</div><div class="fw-bold fs-5" style="color:#86efac;">{{ $sevCount2['low'] }}</div></div>
                                         </div>
-                                        {{-- Totals row --}}
                                         <div class="row text-center">
-                                            <div class="col-md-4">
-                                                <strong>Total Findings</strong>
-                                                <div class="sum-val" style="color:#93c5fd;">{{ count($sortedFindings) }}</div>
-                                            </div>
-                                            <div class="col-md-4">
-                                                <strong>Total Labour Hours</strong>
-                                                <div class="sum-val" style="color:#67e8f9;" id="totalLabourHours">0.0</div>
-                                            </div>
-                                            <div class="col-md-4">
-                                                <strong>Total FR Labour Cost (FRLC)</strong>
-                                                <div class="sum-val" style="color:#fcd34d;" id="totalFRLC">$0.00</div>
-                                            </div>
+                                            <div class="col-md-4"><strong>Total Findings</strong><div class="fw-bold fs-4" style="color:#93c5fd;">{{ count($sortedFindings) }}</div></div>
+                                            <div class="col-md-4"><strong>Total Labour Hours</strong><div class="fw-bold fs-4" style="color:#67e8f9;">{{ number_format($totalLabourHrs2, 1) }}</div></div>
+                                            <div class="col-md-4"><strong>Total FR Labour Cost (FRLC)</strong><div class="fw-bold fs-4" style="color:#fcd34d;">${{ number_format($totalFRLC2, 2) }}</div></div>
                                         </div>
                                     </div>
                                 @endif
                             </div>
                         </div>
 
-                        <!-- Materials FMC Summary (aggregated from per-finding materials above) -->
+                        <!-- Materials FMC Summary -->
                         <div class="alert alert-secondary mb-4">
                             <div class="row text-center">
                                 <div class="col-md-6">
                                     <strong>Total Material Items:</strong>
-                                    <div class="fs-4 text-info" id="totalItemsQty">0</div>
+                                    <div class="fs-4 text-info">{{ $totalMatItems2 }}</div>
                                 </div>
                                 <div class="col-md-6">
                                     <strong>Total Material Cost (FMC):</strong>
-                                    <div class="fs-4 text-success" id="totalFMC">$0.00</div>
+                                    <div class="fs-4 text-success">${{ number_format($totalMatCost2, 2) }}</div>
                                 </div>
                             </div>
                         </div>
@@ -718,27 +589,20 @@
                                     </div>
                                 </div>
 
-                                {{-- ARP + floor + preview final row --}}
+                                {{-- ARP preview row --}}
                                 <div class="row g-3 mb-3">
-                                    <div class="col-md-4">
+                                    <div class="col-md-6">
                                         <div class="p-3 rounded text-center" style="background:#fff8e1;border:2px solid #ffc107;">
                                             <div class="text-muted small fw-semibold">ARP Monthly</div>
                                             <div id="arpMonthly" class="fw-bold" style="font-size:1.8rem;color:#856404;">$0.00/month</div>
                                             <div class="text-muted" style="font-size:.75rem;">= TRC / 12</div>
                                         </div>
                                     </div>
-                                    <div class="col-md-4">
-                                        <div class="p-3 rounded text-center" style="background:#e8f0fe;border:3px solid #3d4ba8;">
-                                            <div class="text-muted small fw-semibold">Preview ARP Monthly</div>
-                                            <div id="previewFinalMonthly" class="fw-bold" style="font-size:1.8rem;color:#3d4ba8;">$0.00</div>
-                                            <div class="text-muted" style="font-size:.75rem;">= TRC / 12 — before tier multiplier</div>
-                                        </div>
-                                    </div>
                                 </div>
 
                                 <div class="alert alert-info mb-0">
                                     <i class="mdi mdi-information me-2"></i>
-                                    <strong>Preview only.</strong> Final pricing applies CPI/ASI tier multipliers computed during system processing. Click <strong>Save &amp; Calculate Final Pricing</strong> below to see the full result.
+                                    <strong>Preview only.</strong> Click <strong>Save &amp; Preview Pricing</strong> to run the PHAR engine and lock in the ARP, then <strong>Complete Assessment</strong> when ready.
                                 </div>
                             </div>
                         </div>
@@ -746,14 +610,7 @@
                         {{-- ── Panel C: Final Calculated PHAR Dashboard (post-submission) ─ --}}
                         @if(($inspection->bdc_annual ?? 0) > 0)
                         @php
-                            $scipFinal  = (float)($inspection->arp_equivalent_final ?? 0);
-                            $tierFinal  = $inspection->tier_final ?? '—';
-                            $tierColor  = '#6c757d';
-                            if ($tierFinal === 'Essentials')         $tierColor = '#198754';
-                            elseif ($tierFinal === 'Premium')        $tierColor = '#ffc107';
-                            elseif ($tierFinal === 'White-Glove')    $tierColor = '#fd7e14';
-                            elseif ($tierFinal === 'Critical Care')  $tierColor = '#dc3545';
-                            $calcUnits  = (int)($inspection->units_for_calculation ?? 1);
+                            $calcUnits = (int)($inspection->units_for_calculation ?? 1);
                         @endphp
 
                         <div class="card mb-4" style="border:3px solid #198754;">
@@ -796,54 +653,13 @@
                                     </div>
                                 </div>
 
-                                {{-- Row 2: Tier assessment --}}
-                                <h6 class="text-muted fw-bold text-uppercase mb-2 border-bottom pb-1" style="font-size:.75rem;letter-spacing:.08em;">Tier Assessment (Dual-Gate)</h6>
-                                <div class="row g-3 mb-4">
-                                    <div class="col-md-3">
-                                        <div class="p-3 rounded text-center" style="background:#fff8e1;border:2px solid #ffc107;">
-                                            <div class="text-muted small fw-semibold">ARP Monthly</div>
-                                            <div class="fw-bold" style="font-size:1.6rem;color:#856404;">${{ number_format($inspection->arp_monthly ?? 0, 2) }}</div>
-                                            <div class="text-muted" style="font-size:.75rem;">= TRC / 12</div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-3">
-                                        <div class="p-3 rounded text-center border">
-                                            <div class="text-muted small">Gate 1 — CPI Tier Score</div>
-                                            <div class="fw-bold fs-4 text-secondary">{{ $inspection->tier_score ?? '—' }}</div>
-                                            <div class="text-muted" style="font-size:.75rem;">CPI = {{ number_format($inspection->cpi_total_score ?? 0, 1) }}</div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-3">
-                                        <div class="p-3 rounded text-center border">
-                                            <div class="text-muted small">Gate 2 — ARP Tier</div>
-                                            <div class="fw-bold fs-4 text-secondary">{{ $inspection->tier_arp ?? '—' }}</div>
-                                            <div class="text-muted" style="font-size:.75rem;">ARP = ${{ number_format($inspection->arp_monthly ?? 0, 0) }}/mo</div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-3">
-                                        <div class="p-3 rounded text-center text-white" style="background:{{ $tierColor }};border:2px solid {{ $tierColor }};">
-                                            <div class="fw-semibold small opacity-75">Final Tier (max of gates)</div>
-                                            <div class="fw-bold" style="font-size:1rem;line-height:1.3;">{{ $tierFinal }}</div>
-                                            <div class="fw-bold mt-1" style="font-size:1.8rem;line-height:1;">× {{ $inspection->multiplier_final ?? '1.00' }}</div>
-                                            <div class="opacity-75" style="font-size:.72rem;">multiplier applied to ARP</div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {{-- Row 3: Final pricing --}}
-                                <h6 class="text-muted fw-bold text-uppercase mb-2 border-bottom pb-1" style="font-size:.75rem;letter-spacing:.08em;">Final Pricing</h6>
+                                {{-- ARP Monthly --}}
+                                <h6 class="text-muted fw-bold text-uppercase mb-2 border-bottom pb-1" style="font-size:.75rem;letter-spacing:.08em;">ARP Monthly</h6>
                                 <div class="row g-3 mb-3">
-                                    <div class="col-md-4">
-                                        <div class="p-3 rounded text-center" style="background:#f8f9fa;border:1px solid #0d6efd;">
-                                            <div class="text-muted small">ARP × Multiplier (ARP Equivalent)</div>
-                                            <div class="fw-bold fs-4 text-primary">${{ number_format($inspection->arp_equivalent_final ?? 0, 2) }}</div>
-                                            <div class="text-muted" style="font-size:.75rem;">per month</div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-8">
-                                        <div class="p-4 rounded text-center text-white h-100 d-flex flex-column justify-content-center" style="background:linear-gradient(135deg,#198754,#146c43);border:3px solid #0f5132;">
-                                            <div class="fw-semibold opacity-75 small text-uppercase" style="letter-spacing:.05em;">Scientific Final Monthly</div>
-                                            <div class="fw-bold" style="font-size:2.4rem;line-height:1.1;">${{ number_format($scipFinal, 2) }}</div>
+                                    <div class="col-12">
+                                        <div class="p-4 rounded text-center text-white d-flex flex-column justify-content-center" style="background:linear-gradient(135deg,#198754,#146c43);border:3px solid #0f5132;">
+                                            <div class="fw-semibold opacity-75 small text-uppercase" style="letter-spacing:.05em;">ARP Monthly</div>
+                                            <div class="fw-bold" style="font-size:2.4rem;line-height:1.1;">${{ number_format($inspection->arp_monthly ?? 0, 2) }}</div>
                                             <div class="opacity-75" style="font-size:.75rem;">= TRC / 12</div>
                                         </div>
                                     </div>
@@ -897,24 +713,9 @@
                                             <div class="fw-bold">${{ number_format($inspection->trc_monthly ?? 0, 0) }}/mo</div>
                                         </div>
                                         <div class="text-center px-2 text-white opacity-50">÷12=</div>
-                                        <div class="text-center px-3 border-end border-secondary">
-                                            <div style="color:#fde68a;">ARP</div>
-                                            <div class="fw-bold">${{ number_format($inspection->arp_monthly ?? 0, 0) }}/mo</div>
-                                        </div>
-                                        <div class="text-center px-2 text-white opacity-50">×</div>
-                                        <div class="text-center px-3 border-end border-secondary">
-                                            <div style="color:#a78bfa;">Multiplier</div>
-                                            <div class="fw-bold">{{ $inspection->multiplier_final ?? '1.00' }}</div>
-                                        </div>
-                                        <div class="text-center px-2 text-white opacity-50">=</div>
-                                        <div class="text-center px-3 border-end border-secondary">
-                                            <div style="color:#6ee7b7;">ARP Equiv.</div>
-                                            <div class="fw-bold">${{ number_format($inspection->arp_equivalent_final ?? 0, 0) }}/mo</div>
-                                        </div>
-                                        <div class="text-center px-2 text-white opacity-50">→ max →</div>
                                         <div class="text-center px-3">
-                                            <div style="color:#fbbf24;font-weight:900;">FINAL</div>
-                                            <div class="fw-bold" style="color:#fbbf24;font-size:1.1rem;">${{ number_format($scipFinal, 0) }}/mo</div>
+                                            <div style="color:#fbbf24;font-weight:900;">ARP</div>
+                                            <div class="fw-bold" style="color:#fbbf24;font-size:1.1rem;">${{ number_format($inspection->arp_monthly ?? 0, 0) }}/mo</div>
                                         </div>
                                     </div>
                                 </div>
@@ -925,7 +726,7 @@
                         @else
                         <div class="alert alert-warning mb-4">
                             <i class="mdi mdi-calculator-variant me-2"></i>
-                            <strong>Pricing not yet calculated.</strong> Enter labour hours and materials above, then click <strong>Save &amp; Calculate Final Pricing</strong> to run the PHAR engine and see tier-adjusted pricing here.
+                            <strong>Pricing not yet calculated.</strong> Enter PHAR parameters above, then click <strong>Save &amp; Preview Pricing</strong> to run the PHAR engine and see tier-adjusted pricing here.
                         </div>
                         @endif
 
@@ -934,19 +735,39 @@
                             <div class="card-body">
                                 <p class="text-muted small mb-3">
                                     <i class="mdi mdi-information-outline me-1"></i>
-                                    <strong>Save Draft &amp; Back</strong> saves your labour hours and materials, then returns you to Step 1 so you can review or amend the findings list. Come back to Step 2 any time — your data will be pre-filled.
+                                    <strong>Save Draft &amp; Back</strong> returns you to Step 1 to review findings.
+                                    <strong>Save &amp; Preview</strong> calculates pricing so you can review it — the assessment stays <em>in progress</em>.
+                                    Once you are satisfied, click <strong>Complete Assessment</strong> to lock it in.
                                 </p>
-                                <div class="d-flex justify-content-between">
+                                <div class="d-flex justify-content-between align-items-center gap-2">
                                     <button type="submit" name="action" value="save_draft_back" class="btn btn-secondary">
                                         <i class="mdi mdi-content-save me-1"></i>Save Draft &amp; Back to Step 1
                                     </button>
-                                    <button type="submit" name="action" value="save_final" class="btn btn-primary btn-lg">
-                                        <i class="mdi mdi-check-circle me-1"></i>Save &amp; Calculate Final Pricing
+                                    <button type="submit" name="action" value="save_preview" class="btn btn-primary btn-lg">
+                                        <i class="mdi mdi-calculator me-1"></i>Save &amp; Preview Pricing
                                     </button>
                                 </div>
                             </div>
                         </div>
                     </form>
+
+                    {{-- Complete Assessment — separate POST, only shown once pricing has been calculated --}}
+                    @if(($inspection->bdc_annual ?? 0) > 0 && $inspection->status !== 'completed')
+                    <div class="card border-success mb-4">
+                        <div class="card-body d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong class="text-success"><i class="mdi mdi-check-decagram me-1"></i>Ready to Complete?</strong>
+                                <p class="text-muted small mb-0">Pricing has been calculated. Click the button to mark this assessment as complete.</p>
+                            </div>
+                            <form method="POST" action="{{ route('inspections.complete-assessment', $inspection->id) }}">
+                                @csrf
+                                <button type="submit" class="btn btn-success btn-lg">
+                                    <i class="mdi mdi-flag-checkered me-1"></i>Complete Assessment
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    @endif
                 </div>
             </div>
         </div>
@@ -997,33 +818,6 @@ document.addEventListener('DOMContentLoaded', function() {
         return html;
     }
 
-    function buildMaterialPresetOptions(subsystemId = null) {
-        let html = '<option value="">Custom / Manual</option>';
-        FMC_MATERIAL_SETTINGS.forEach((setting) => {
-            // Filter by subsystem if specified
-            if (subsystemId !== null && setting.subsystem_id !== null && setting.subsystem_id !== subsystemId) {
-                return; // Skip this material
-            }
-            const safeName = String(setting.material_name ?? '');
-            const safeUnit = String(setting.default_unit ?? 'ea');
-            const safeCost = Number(setting.default_unit_cost ?? 0).toFixed(2);
-            html += `<option value="${safeName}" data-unit="${safeUnit}" data-cost="${safeCost}">${safeName}</option>`;
-        });
-        return html;
-    }
-
-    function buildFindingPresetOptions() {
-        let html = '<option value="">Custom / Manual</option>';
-        FINDING_TEMPLATE_SETTINGS.forEach((setting) => {
-            const question = String(setting.task_question ?? '');
-            const category = String(setting.category ?? '');
-            const included = setting.default_included ? '1' : '0';
-            const notes = String(setting.default_notes ?? '');
-            html += `<option value="${question}" data-category="${category}" data-included="${included}" data-notes="${notes}">${question}</option>`;
-        });
-        return html;
-    }
-
     // ===== CONFIGURATION =====
     const labourRateInput = document.querySelector('input[name="labour_hourly_rate"]');
     const visitsPerYearInput = document.getElementById('bdcVisitsPerYear');
@@ -1031,38 +825,16 @@ document.addEventListener('DOMContentLoaded', function() {
     const infrastructurePercentage = {{ (float)($bdcSettings['infrastructure_percentage'] ?? 0.30) }};
     const administrationPercentage = {{ (float)($bdcSettings['administration_percentage'] ?? 0.12) }};
 
+    // Server-side pre-computed totals from Step 1 findings
+    const SERVER_FRLC = {{ $totalFRLC2 }};
+    const SERVER_FMC  = {{ $totalMatCost2 }};
+
     function getLabourRate() {
         return parseFloat(labourRateInput?.value) || 165;
     }
 
-    function updateFindingRowLabourCosts() {
-        document.querySelectorAll('.finding-row').forEach(row => {
-            const hours = parseFloat(row.querySelector('.finding-labour-hours')?.value) || 0;
-            const cost = hours * getLabourRate();
-            const labourCostField = row.querySelector('.finding-labour-cost');
-            if (labourCostField) {
-                labourCostField.value = '$' + cost.toFixed(2);
-            }
-        });
-    }
-    
-    // ===== FINDINGS MANAGEMENT =====
-    // Findings are pre-populated from Phase 1 issues — no add/remove needed.
-
-    // Update finding labour cost in real-time
-    document.getElementById('findingsContainer')?.addEventListener('input', function(e) {
-        if (e.target.classList.contains('finding-labour-hours')) {
-            const row = e.target.closest('.finding-row');
-            const hours = parseFloat(e.target.value) || 0;
-            const cost = hours * getLabourRate();
-            row.querySelector('.finding-labour-cost').value = '$' + cost.toFixed(2);
-            updateFindingSummary();
-        }
-    });
-
     labourRateInput?.addEventListener('input', function() {
-        updateFindingRowLabourCosts();
-        updateFindingSummary();
+        updateCalculationSummary();
     });
 
     visitsPerYearInput?.addEventListener('input', function() {
@@ -1073,168 +845,12 @@ document.addEventListener('DOMContentLoaded', function() {
         updateCalculationSummary();
     });
 
-    function updateFindingSummary() {
-        const rows = document.querySelectorAll('.finding-row');
-        let totalLabour = 0;
-        rows.forEach(row => {
-            const hours = parseFloat(row.querySelector('.finding-labour-hours')?.value) || 0;
-            totalLabour += hours;
-        });
-        const totalFRLC = totalLabour * getLabourRate();
-        const labourEl  = document.getElementById('totalLabourHours');
-        const frlcEl    = document.getElementById('totalFRLC');
-        if (labourEl) labourEl.textContent = totalLabour.toFixed(1);
-        if (frlcEl)   frlcEl.textContent   = '$' + totalFRLC.toFixed(2);
-        updateCalculationSummary();
-    }
-    
-    // ===== PER-FINDING MATERIALS MANAGEMENT =====
-    const PROPERTY_ID = {{ $property->id }};
 
-    // Counter: how many material rows have been added per finding (so new rows get unique names)
-    // Initialize from any pre-populated rows
-    const materialCounters = {};
-    document.querySelectorAll('.finding-materials-container').forEach(container => {
-        const fi = container.dataset.fi;
-        materialCounters[fi] = container.querySelectorAll('.material-row').length;
-    });
-
-    // Delegated click: Add / Remove material per finding
-    document.getElementById('findingsContainer')?.addEventListener('click', function(e) {
-        // Add
-        const addBtn = e.target.closest('.add-finding-material');
-        if (addBtn) {
-            const fi = addBtn.dataset.fi;
-            const findingRow = addBtn.closest('.finding-row');
-            const subsystemId = findingRow ? parseInt(findingRow.dataset.subsystemId, 10) || null : null;
-            if (materialCounters[fi] === undefined) materialCounters[fi] = 0;
-            const mi = materialCounters[fi]++;
-            const container = document.getElementById(`materials-fi-${fi}`);
-            container.querySelector('.no-materials-msg')?.remove();
-            container.insertAdjacentHTML('beforeend', createFindingMaterialRow(fi, mi, subsystemId));
-            updateMaterialsSummary();
-            return;
-        }
-        // Remove
-        const removeBtn = e.target.closest('.remove-finding-material');
-        if (removeBtn) {
-            const matRow = removeBtn.closest('.material-row');
-            const container = matRow.closest('.finding-materials-container');
-            matRow.remove();
-            if (!container.querySelector('.material-row')) {
-                container.insertAdjacentHTML('beforeend',
-                    '<p class="text-muted small mb-1 no-materials-msg">No materials yet. Click "Add Material" to attach parts/supplies to this finding.</p>');
-            }
-            updateMaterialsSummary();
-        }
-    });
-
-    // Delegated input: recalculate line total
-    document.getElementById('findingsContainer')?.addEventListener('input', function(e) {
-        if (e.target.matches('.material-quantity, .material-unit-cost')) {
-            const row = e.target.closest('.material-row');
-            const qty  = parseFloat(row.querySelector('.material-quantity').value) || 0;
-            const cost = parseFloat(row.querySelector('.material-unit-cost').value) || 0;
-            const total = qty * cost;
-            row.querySelector('.material-line-total').value = '$' + total.toFixed(2);
-            row.querySelector('.material-line-total-hidden').value = total.toFixed(2);
-            updateMaterialsSummary();
-        }
-    });
-
-    // Delegated change: material preset auto-fill
-    document.getElementById('findingsContainer')?.addEventListener('change', function(e) {
-        if (e.target.classList.contains('material-template')) {
-            const select = e.target;
-            const row = select.closest('.material-row');
-            const opt  = select.options[select.selectedIndex];
-            if (opt && opt.value) {
-                const nameInput = row.querySelector('input[name$="[material_name]"]');
-                const unitSelect = row.querySelector('select[name$="[unit]"]');
-                const costInput  = row.querySelector('input[name$="[unit_cost]"]');
-                if (nameInput) nameInput.value = opt.value;
-                if (unitSelect) {
-                    const selectedUnit = opt.dataset.unit || 'ea';
-                    if (![...unitSelect.options].some(o => o.value === selectedUnit)) {
-                        unitSelect.insertAdjacentHTML('beforeend', `<option value="${selectedUnit}">${selectedUnit}</option>`);
-                    }
-                    unitSelect.value = selectedUnit;
-                }
-                if (costInput) {
-                    costInput.value = parseFloat(opt.dataset.cost || '0').toFixed(2);
-                    costInput.dispatchEvent(new Event('input', { bubbles: true }));
-                }
-            }
-        }
-    });
-
-    function createFindingMaterialRow(fi, mi, subsystemId = null) {
-        return `<div class="material-row border rounded p-2 mb-1 bg-white">
-            <div class="d-flex justify-content-end mb-1">
-                <button type="button" class="btn btn-sm btn-outline-danger remove-finding-material py-0 px-1">
-                    <i class="mdi mdi-delete-outline"></i> Remove
-                </button>
-            </div>
-            <div class="row g-2">
-                <div class="col-md-1">
-                    <label class="mat-label">Preset</label>
-                    <select class="form-select form-select-sm material-template">
-                        ${buildMaterialPresetOptions(subsystemId)}
-                    </select>
-                </div>
-                <div class="col-md-3">
-                    <label class="mat-label">Description <span class="text-danger">*</span></label>
-                    <input type="text" name="findings[${fi}][materials][${mi}][material_name]" class="form-control form-control-sm" required>
-                </div>
-                <div class="col-md-1">
-                    <label class="mat-label">Qty</label>
-                    <input type="number" name="findings[${fi}][materials][${mi}][quantity]" class="form-control form-control-sm material-quantity" min="0" step="0.01" value="1" required>
-                </div>
-                <div class="col-md-2">
-                    <label class="mat-label">Unit</label>
-                    <select name="findings[${fi}][materials][${mi}][unit]" class="form-select form-select-sm" required>
-                        ${buildOptions(MATERIAL_UNITS)}
-                    </select>
-                </div>
-                <div class="col-md-2">
-                    <label class="mat-label">Unit Cost ($)</label>
-                    <input type="number" name="findings[${fi}][materials][${mi}][unit_cost]" class="form-control form-control-sm material-unit-cost" min="0" step="0.01" value="0" required>
-                </div>
-                <div class="col-md-2">
-                    <label class="mat-label">Line Total</label>
-                    <input type="text" class="form-control form-control-sm material-line-total" readonly value="$0.00">
-                    <input type="hidden" name="findings[${fi}][materials][${mi}][line_total]" class="material-line-total-hidden" value="0">
-                </div>
-                <div class="col-md-1">
-                    <label class="mat-label">Notes</label>
-                    <input type="text" name="findings[${fi}][materials][${mi}][notes]" class="form-control form-control-sm">
-                </div>
-            </div>
-            <input type="hidden" name="findings[${fi}][materials][${mi}][property_id]" value="${PROPERTY_ID}">
-        </div>`;
-    }
-
-    function updateMaterialsSummary() {
-        let totalQty  = 0;
-        let totalCost = 0;
-        document.querySelectorAll('.material-row').forEach(row => {
-            totalQty  += parseFloat(row.querySelector('.material-quantity')?.value) || 0;
-            totalCost += parseFloat(row.querySelector('.material-line-total-hidden')?.value) || 0;
-        });
-        const itemsEl = document.getElementById('totalItemsQty');
-        const fmcEl   = document.getElementById('totalFMC');
-        if (itemsEl) itemsEl.textContent = totalQty.toFixed(0);
-        if (fmcEl)   fmcEl.textContent   = '$' + totalCost.toFixed(2);
-        updateCalculationSummary();
-    }
-    
     // ===== CALCULATION SUMMARY =====
     function updateCalculationSummary() {
-        // Get FRLC from findings
-        const frlc = parseFloat(document.getElementById('totalFRLC').textContent.replace(/[$,]/g, '')) || 0;
-        
-        // Get FMC from materials
-        const fmc = parseFloat(document.getElementById('totalFMC').textContent.replace(/[$,]/g, '')) || 0;
+        // Use server-computed totals from Step 1
+        const frlc = SERVER_FRLC;
+        const fmc  = SERVER_FMC;
         
         const visitsPerYear = parseFloat(visitsPerYearInput?.value) || 0;
         const hoursPerVisit = parseFloat(hoursPerVisitInput?.value) || 0;
@@ -1262,9 +878,6 @@ document.addEventListener('DOMContentLoaded', function() {
         // ARP = TRC Monthly
         const arpMonthly = trcMonthly;
 
-        // Selected package floor (from CPI-selected package)
-        const previewFinalMonthly = arpMonthly;
-        
         // Update display
         document.getElementById('bdcAnnual').textContent = '$' + bdcAnnual.toFixed(2);
         document.getElementById('bdcMonthly').textContent = '$' + bdcMonthly.toFixed(2);
@@ -1275,13 +888,9 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('trcAnnual').textContent = '$' + trcAnnual.toFixed(2);
         document.getElementById('trcMonthly').textContent = '$' + trcMonthly.toFixed(2);
         document.getElementById('arpMonthly').textContent = '$' + arpMonthly.toFixed(2) + '/month';
-        document.getElementById('previewFinalMonthly').textContent = '$' + previewFinalMonthly.toFixed(2);
     }
     
     // ===== INITIALIZATION =====
-    updateFindingRowLabourCosts();
-    updateFindingSummary();
-    updateMaterialsSummary();
     updateCalculationSummary();
 });
 </script>

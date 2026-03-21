@@ -134,16 +134,54 @@ class PharCatalog
     public static function findingTemplates(): array
     {
         return array_map(function (array $entry): array {
+            $recommendation = self::recommendationForEntry($entry);
             return [
-                'task_question' => $entry['finding'],
-                'system_name' => $entry['system'],
-                'subsystem_name' => $entry['subsystem'],
-                'category' => $entry['trade_required'],
-                'default_included' => true,
-                'default_notes' => self::buildDefaultNotes($entry),
-                'sort_order' => $entry['sort_order'],
+                'task_question'           => $entry['finding'],
+                'system_name'             => $entry['system'],
+                'subsystem_name'          => $entry['subsystem'],
+                'category'                => $entry['trade_required'],
+                'default_included'        => true,
+                'default_notes'           => self::buildDefaultNotes($entry),
+                'default_recommendations' => $recommendation !== '' ? [$recommendation] : [],
+                'sort_order'              => $entry['sort_order'],
             ];
         }, self::entries());
+    }
+
+    /**
+     * Returns a lookup map of all catalog findings keyed by "system|subsystem|finding"
+     * (all lower-case, trimmed). Each value contains the full PHAR parameters needed
+     * to auto-populate the inspection form (labour hours, material, category, recommendations).
+     */
+    public static function findingCatalog(): array
+    {
+        $catalog = [];
+
+        foreach (self::entries() as $entry) {
+            $key = strtolower(trim($entry['system']))
+                 . '|' . strtolower(trim($entry['subsystem']))
+                 . '|' . strtolower(trim($entry['finding']));
+
+            $catalog[$key] = [
+                'finding_id'          => $entry['finding_id'],
+                'system'              => $entry['system'],
+                'subsystem'           => $entry['subsystem'],
+                'finding'             => $entry['finding'],
+                'category'            => $entry['trade_required'],
+                'phar_included_yn'    => true,
+                'phar_labour_hours'   => $entry['labour_hours'],
+                'phar_notes'          => $entry['finding_detail'],
+                'material_name'       => $entry['material_name'],
+                'material_quantity'   => $entry['material_quantity'],
+                'unit'                => $entry['unit'],
+                'unit_cost'           => $entry['unit_cost'],
+                'line_total'          => $entry['material_cost'],
+                'scope_type'          => $entry['scope_type'],
+                'recommendation'      => self::recommendationForEntry($entry),
+            ];
+        }
+
+        return $catalog;
     }
 
     public static function categories(): array
@@ -278,10 +316,11 @@ class PharCatalog
 
     private static function recommendationForEntry(array $entry): string
     {
+        $system = strtolower(trim($entry['system'] ?? ''));
         return match (strtolower($entry['scope_type'])) {
-            'replace' => 'Replace ' . $entry['finding'],
+            'replace'          => 'Replace ' . $entry['finding'],
             'specialist review' => 'Arrange specialist review for ' . $entry['finding'],
-            default => 'Repair ' . $entry['finding'],
+            default            => ($system === 'gutters' ? 'Clean' : 'Repair') . ' ' . $entry['finding'],
         };
     }
 

@@ -17,6 +17,7 @@ class FindingTemplateSetting extends Model
         'category',
         'default_included',
         'default_notes',
+        'default_recommendations',
         'is_active',
         'sort_order',
     ];
@@ -25,6 +26,7 @@ class FindingTemplateSetting extends Model
         'system_id' => 'integer',
         'subsystem_id' => 'integer',
         'default_included' => 'boolean',
+        'default_recommendations' => 'array',
         'is_active' => 'boolean',
         'sort_order' => 'integer',
     ];

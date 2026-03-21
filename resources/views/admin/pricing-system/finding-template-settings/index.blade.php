@@ -93,6 +93,7 @@
                                 <th>Subsystem</th>
                                 <th>Issue / Finding</th>
                                 <th>Category</th>
+                                <th>Recommendations</th>
                                 <th>Included</th>
                                 <th>Status</th>
                                 <th>Actions</th>
@@ -106,6 +107,21 @@
                                     <td>{{ $finding->subsystem?->name ?: '—' }}</td>
                                     <td><strong>{{ $finding->task_question }}</strong></td>
                                     <td>{{ $finding->category ?: '—' }}</td>
+                                    <td>
+                                        @php $recs = $finding->default_recommendations ?? []; @endphp
+                                        @if(count($recs) > 0)
+                                            <span class="badge badge-info" title="{{ implode('\n', $recs) }}" style="cursor:help;">
+                                                {{ count($recs) }} recommendation{{ count($recs) !== 1 ? 's' : '' }}
+                                            </span>
+                                            <div class="mt-1">
+                                                @foreach($recs as $rec)
+                                                    <div class="small text-muted" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;" title="{{ $rec }}">• {{ $rec }}</div>
+                                                @endforeach
+                                            </div>
+                                        @else
+                                            <span class="text-muted">—</span>
+                                        @endif
+                                    </td>
                                     <td>
                                         @if($finding->default_included)
                                             <span class="badge badge-success">Yes</span>
@@ -135,7 +151,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="8" class="text-center py-4 text-muted">No finding templates found.</td>
+                                    <td colspan="9" class="text-center py-4 text-muted">No finding templates found.</td>
                                 </tr>
                             @endforelse
                         </tbody>

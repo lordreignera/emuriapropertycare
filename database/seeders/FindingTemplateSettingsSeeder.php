@@ -32,13 +32,14 @@ class FindingTemplateSettingsSeeder extends Seeder
             FindingTemplateSetting::updateOrCreate(
                 ['task_question' => $row['task_question']],
                 [
-                    'system_id' => $systemId,
-                    'subsystem_id' => $subsystemId,
-                    'category' => $row['category'],
-                    'default_included' => $row['default_included'],
-                    'default_notes' => $row['default_notes'],
-                    'is_active' => true,
-                    'sort_order' => $row['sort_order'],
+                    'system_id'               => $systemId,
+                    'subsystem_id'            => $subsystemId,
+                    'category'                => $row['category'],
+                    'default_included'        => $row['default_included'],
+                    'default_notes'           => $row['default_notes'],
+                    'default_recommendations' => $row['default_recommendations'] ?? [],
+                    'is_active'               => true,
+                    'sort_order'              => $row['sort_order'],
                 ]
             );
         }

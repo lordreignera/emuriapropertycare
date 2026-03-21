@@ -290,7 +290,7 @@
                         <span class="sev-count">{{ $groupedFindings[$sev]->count() }}</span>
                     </td>
                 </tr>
-                @foreach($groupedFindings[$sev] as $finding)
+                @foreach($groupedFindings[$sev] as $fi => $finding)
                 @php
                     $rowNum++;
                     $pharMaterials  = $finding['phar_materials'] ?? [];
@@ -298,6 +298,7 @@
                     $extraMats      = array_slice($pharMaterials, 1);
                     $findingMatCost = collect($pharMaterials)->sum(fn($m) => (float)($m['line_total'] ?? 0));
                     $recs           = $finding['recommendations'] ?? [];
+                    $fpUrls         = $findingPhotoUrls[$fi] ?? [];
                 @endphp
                 <tr style="{{ $rowNum % 2 === 0 ? 'background:#fafafa;' : '' }}">
                     <td style="color:#999;font-size:8.5px;">{{ $rowNum }}</td>
@@ -317,6 +318,13 @@
                             <ul class="issue-recs">
                                 @foreach($recs as $rec)<li>{{ $rec }}</li>@endforeach
                             </ul>
+                        @endif
+                        @if(!empty($fpUrls))
+                            <div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:4px;">
+                                @foreach($fpUrls as $fpUrl)
+                                    <img src="{{ $fpUrl }}" style="height:40px;width:40px;object-fit:cover;border-radius:3px;border:1px solid #dee2e6;" alt="">
+                                @endforeach
+                            </div>
                         @endif
                     </td>
                     <td>

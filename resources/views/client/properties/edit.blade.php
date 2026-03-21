@@ -19,7 +19,21 @@
                     @csrf
                     @method('PUT')
 
-                    <div class="row">
+                    {{-- ===== VALIDATION ERROR SUMMARY ===== --}}
+                    @if($errors->any())
+                    <div class="alert alert-danger border-danger mb-4" role="alert"
+                         style="border-left:4px solid #dc3545 !important; position:sticky; top:70px; z-index:100;">
+                        <div class="d-flex align-items-center mb-2">
+                            <i class="mdi mdi-alert-circle fs-5 me-2"></i>
+                            <strong>Please fix the following errors before submitting:</strong>
+                        </div>
+                        <ul class="mb-0 ps-3">
+                            @foreach($errors->all() as $error)
+                                <li>{{ $error }}</li>
+                            @endforeach
+                        </ul>
+                    </div>
+                    @endif
                         <div class="col-md-6 mb-3">
                             <label class="form-label">Property Name</label>
                             <input type="text" name="property_name" class="form-control @error('property_name') is-invalid @enderror"

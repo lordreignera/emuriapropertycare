@@ -191,10 +191,22 @@
                                             </button>
                                             @endif
                                             @if($inspection->status !== 'completed')
-                                            <a href="{{ route('inspections.create', ['property_id' => $inspection->property_id]) }}" 
-                                               class="btn btn-success fw-bold px-3" 
-                                               title="Start Inspection">
-                                                <i class="mdi mdi-clipboard-check me-1"></i> Start Inspection
+                                            @php
+                                                $isInProgress = $inspection->status === 'in_progress';
+                                                // Determine where they left off:
+                                                // - bdc_annual calculated → step 2 (phar-data)
+                                                // - otherwise → step 1 (create/form-cpi)
+                                                if ($isInProgress && ($inspection->bdc_annual ?? 0) > 0) {
+                                                    $continueUrl = route('inspections.phar-data', $inspection->id);
+                                                } else {
+                                                    $continueUrl = route('inspections.create', ['property_id' => $inspection->property_id]);
+                                                }
+                                            @endphp
+                                            <a href="{{ $continueUrl }}"
+                                               class="btn {{ $isInProgress ? 'btn-warning' : 'btn-success' }} fw-bold px-3"
+                                               title="{{ $isInProgress ? 'Continue Inspection' : 'Start Inspection' }}">
+                                                <i class="mdi {{ $isInProgress ? 'mdi-play-circle-outline' : 'mdi-clipboard-check' }} me-1"></i>
+                                                {{ $isInProgress ? 'Continue Inspection' : 'Start Inspection' }}
                                             </a>
                                             @endif
                                         </div>

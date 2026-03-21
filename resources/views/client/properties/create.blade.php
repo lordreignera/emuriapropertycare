@@ -12,8 +12,22 @@
 @section('content')
 <form action="{{ route('client.properties.store') }}" method="POST" enctype="multipart/form-data" id="propertyForm">
     @csrf
-    
-    <div class="row">
+
+    {{-- ===== VALIDATION ERROR SUMMARY ===== --}}
+    @if($errors->any())
+    <div class="alert alert-danger border-danger mb-4" role="alert"
+         style="border-left:4px solid #dc3545 !important; position:sticky; top:70px; z-index:100;">
+        <div class="d-flex align-items-center mb-2">
+            <i class="mdi mdi-alert-circle fs-5 me-2"></i>
+            <strong>Please fix the following errors before submitting:</strong>
+        </div>
+        <ul class="mb-0 ps-3">
+            @foreach($errors->all() as $error)
+                <li>{{ $error }}</li>
+            @endforeach
+        </ul>
+    </div>
+    @endif
         <div class="col-12">
             {{-- Property Information --}}
             <div class="card mb-4">

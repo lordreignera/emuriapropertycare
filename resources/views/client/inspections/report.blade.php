@@ -192,6 +192,15 @@
                                                     @endforeach
                                                 </ul>
                                             @endif
+                                            @if(!empty($finding['finding_photos']))
+                                                <div class="d-flex flex-wrap gap-1 mt-2">
+                                                    @foreach($finding['finding_photos'] as $fp)
+                                                        <a href="{{ $inspection->getStorageUrl($fp) }}" target="_blank" title="View photo">
+                                                            <img src="{{ $inspection->getStorageUrl($fp) }}" style="height:52px;width:52px;object-fit:cover;border-radius:4px;border:1px solid #dee2e6;" alt="Finding photo">
+                                                        </a>
+                                                    @endforeach
+                                                </div>
+                                            @endif
                                         </td>
                                         <td class="align-top">
                                             <span class="badge bg-secondary">{{ $finding['phar_category'] ?? $finding['type'] ?? 'General' }}</span>

@@ -172,11 +172,31 @@ class InspectionController extends Controller
             ->orderBy('id')
             ->first();
 
+        $materialUnits = array_values(array_unique(array_merge(
+            config('phar.material_units', []),
+            PharCatalog::materialUnits()
+        )));
+        $dbMaterialSettings = \App\Models\FmcMaterialSetting::active()->get([
+            'material_name', 'default_unit', 'default_unit_cost', 'system_id', 'subsystem_id',
+        ]);
+        $catalogMaterialSettings = collect(PharCatalog::materials())->map(
+            static fn(array $row) => (object) $row
+        );
+        $fmcMaterialSettings = $dbMaterialSettings->concat($catalogMaterialSettings)->values();
+
+        $pharCategories = array_values(array_unique(array_merge(
+            config('phar.categories', []),
+            PharCatalog::categories()
+        )));
+
         return view('admin.inspections.form-cpi', compact(
             'property',
             'inspection',
             'systems',
-            'defaultServicePackage'
+            'defaultServicePackage',
+            'materialUnits',
+            'fmcMaterialSettings',
+            'pharCategories'
         ));
     }
 
@@ -205,8 +225,13 @@ class InspectionController extends Controller
             'recommendations' => 'nullable|string',
             'risk_summary' => 'nullable|string',
             
-            // Photos
+            // Photos (overall inspection)
             'photos.*' => 'nullable|image|max:10240',
+
+            // Per-finding photos (indexed by system_findings input index)
+            'finding_photos'     => 'nullable|array',
+            'finding_photos.*'   => 'nullable|array',
+            'finding_photos.*.*' => 'nullable|image|max:10240',
             
             // Findings Array
             'findings' => 'nullable|array',
@@ -228,6 +253,17 @@ class InspectionController extends Controller
             'system_findings.*.notes' => 'nullable|string',
             'system_findings.*.recommendations' => 'nullable',
             'system_findings.*.recommendations.*' => 'nullable|string|max:500',
+            'system_findings.*.phar_labour_hours'              => 'nullable|numeric|min:0',
+            'system_findings.*.materials'                      => 'nullable|array',
+            'system_findings.*.materials.*.material_name'      => 'nullable|string|max:255',
+            'system_findings.*.materials.*.quantity'           => 'nullable|numeric|min:0',
+            'system_findings.*.materials.*.unit'               => 'nullable|string|max:50',
+            'system_findings.*.materials.*.unit_cost'          => 'nullable|numeric|min:0',
+            'system_findings.*.materials.*.line_total'         => 'nullable|numeric|min:0',
+            'system_findings.*.materials.*.notes'              => 'nullable|string|max:500',
+            'system_findings.*.phar_category'                  => 'nullable|string|max:255',
+            'system_findings.*.phar_included_yn'               => 'nullable|boolean',
+            'system_findings.*.phar_notes'                     => 'nullable|string',
 
             // CPI hidden scores from phase 1 UI
             'cpi_total_score' => 'nullable|integer|min:0',
@@ -375,8 +411,29 @@ class InspectionController extends Controller
             'low'            => 10,  // Non-Urgent
         ];
 
+        $disk = config('filesystems.default', 's3');
+
+        // Preserve existing per-finding photos so they survive a re-save without re-upload
+        $existingFindings = $inspection->fresh()->findings ?? [];
+
+        // Upload per-finding photos before normalizing findings (keyed by system_findings input index)
+        $findingPhotoPaths = [];
+        if ($request->hasFile('finding_photos')) {
+            foreach ((array) $request->file('finding_photos') as $idx => $photos) {
+                $paths = [];
+                foreach ((array) $photos as $photo) {
+                    if ($photo && $photo->isValid()) {
+                        $paths[] = $photo->store('inspections/finding-photos', $disk);
+                    }
+                }
+                if (!empty($paths)) {
+                    $findingPhotoPaths[$idx] = $paths;
+                }
+            }
+        }
+
         $normalizedFindings = $systemFindings
-            ->map(function ($finding) use ($systemNameMap, $systemSlugMap, $subsystemNameMap, $severityAliases, $allowedSeverities) {
+            ->map(function ($finding, $idx) use ($systemNameMap, $systemSlugMap, $subsystemNameMap, $severityAliases, $allowedSeverities, $findingPhotoPaths) {
                 $systemId = $finding['system_id'] ?? null;
                 $subsystemId = $finding['subsystem_id'] ?? null;
                 $rawSeverity = (string) ($finding['severity'] ?? 'low');
@@ -400,7 +457,29 @@ class InspectionController extends Controller
                         ->filter()
                         ->values()
                         ->all(),
-                    'type' => $systemSlugMap[$systemId] ?? null,
+                    'type'           => $systemSlugMap[$systemId] ?? null,
+                    // Merge: keep previously stored photos + any newly uploaded ones for this index
+                    'finding_photos' => array_values(array_unique(array_merge(
+                        is_array($existingFindings[$idx]['finding_photos'] ?? null) ? $existingFindings[$idx]['finding_photos'] : [],
+                        $findingPhotoPaths[$idx] ?? []
+                    ))),
+                    'phar_labour_hours' => (float) ($finding['phar_labour_hours'] ?? 0),
+                    'phar_category'     => trim((string) ($finding['phar_category'] ?? '')),
+                    'phar_included_yn'  => isset($finding['phar_included_yn']) ? (bool) $finding['phar_included_yn'] : true,
+                    'phar_notes'        => trim((string) ($finding['phar_notes'] ?? '')),
+                    'phar_materials'    => collect($finding['materials'] ?? [])
+                        ->filter(fn($m) => !empty($m['material_name']))
+                        ->map(fn($m) => [
+                            'material_name' => trim((string) ($m['material_name'] ?? '')),
+                            'quantity'      => (float) ($m['quantity'] ?? 1),
+                            'unit'          => (string) ($m['unit'] ?? 'ea'),
+                            'unit_cost'     => (float) ($m['unit_cost'] ?? 0),
+                            'line_total'    => (float) ($m['line_total'] ?? 0),
+                            'notes'         => trim((string) ($m['notes'] ?? '')),
+                            'property_id'   => (int) ($m['property_id'] ?? 0),
+                        ])
+                        ->values()
+                        ->all(),
                 ];
             })
             ->filter(function ($finding) {
@@ -423,8 +502,6 @@ class InspectionController extends Controller
         // ==== COMPUTE WEIGHTED CPI FROM FINDINGS × SYSTEM WEIGHTS ====
         $this->computeWeightedCPI($inspection, $normalizedFindings, $priorityScores);
         $this->computeASI($inspection);
-
-        $disk = config('filesystems.default', 's3');
 
         // Handle photos upload
         if ($request->hasFile('photos')) {
@@ -752,9 +829,22 @@ class InspectionController extends Controller
             return \Illuminate\Support\Facades\Storage::disk($disk)->temporaryUrl($path, now()->addMinutes(30));
         })->all();
 
+        // Pre-resolve per-finding photo URLs for DomPDF
+        $rawFindings = is_array($inspection->findings) ? $inspection->findings : [];
+        $findingPhotoUrls = [];
+        foreach ($rawFindings as $fi => $finding) {
+            $fps = is_array($finding['finding_photos'] ?? null) ? $finding['finding_photos'] : [];
+            $findingPhotoUrls[$fi] = array_map(function ($path) use ($disk, $driver) {
+                if ($driver === 'local') {
+                    return 'file:///' . str_replace('\\', '/', storage_path('app/public/' . $path));
+                }
+                return \Illuminate\Support\Facades\Storage::disk($disk)->temporaryUrl($path, now()->addMinutes(30));
+            }, $fps);
+        }
+
         // Generate PDF
         $isRemote = ($driver !== 'local');
-        $pdf = Pdf::loadView('admin.inspections.invoice-pdf', compact('inspection', 'findings', 'materials', 'domains', 'photoUrls'))
+        $pdf = Pdf::loadView('admin.inspections.invoice-pdf', compact('inspection', 'findings', 'materials', 'domains', 'photoUrls', 'findingPhotoUrls'))
             ->setPaper('a4', 'landscape')
             ->setOption('margin-top', 10)
             ->setOption('margin-right', 10)
@@ -1053,7 +1143,19 @@ class InspectionController extends Controller
                 ->with('success', 'Step 2 progress saved. You can review or add more findings in Step 1 and return here at any time.');
         }
 
-        // ==== FINAL SAVE: process into relational tables ====
+        // ==== SAVE & PREVIEW: run calculations but keep inspection in_progress ====
+        $this->runPharCalculations($inspection, $mergedFindings, $property);
+
+        return redirect()->route('inspections.phar-data', $inspection->id)
+            ->with('success', 'Pricing calculated successfully. Review the results below, then click Complete Assessment when ready.');
+    }
+
+    /**
+     * Run PHAR calculations and persist relational finding/material records.
+     * Does NOT change inspection status — called from both storePharData (preview) and completeAssessment.
+     */
+    private function runPharCalculations(Inspection $inspection, array $mergedFindings, $property): void
+    {
         $inspection->pharFindings()->delete();
         $inspection->materials()->delete();
 
@@ -1074,11 +1176,8 @@ class InspectionController extends Controller
                 'notes'         => $findingData['phar_notes'] ?? null,
             ]);
 
-            // Per-finding materials → InspectionMaterial records
             foreach ($findingData['phar_materials'] ?? [] as $materialData) {
-                if (empty($materialData['material_name'])) {
-                    continue;
-                }
+                if (empty($materialData['material_name'])) continue;
                 \App\Models\InspectionMaterial::create([
                     'inspection_id' => $inspection->id,
                     'property_id'   => $property->id,
@@ -1094,18 +1193,23 @@ class InspectionController extends Controller
             }
         }
 
-        // ==== CALCULATE FINAL PRICING (BDC + FRLC + FMC + TIERS) ====
-        // Re-compute ASI now that tus_score is persisted
         $inspection->refresh();
         $this->computeASI($inspection);
         $inspection->save();
 
         $bdcCalculator = new \App\Services\BDCCalculator();
-        $calculator = new \App\Services\MergeBridgeCalculator($bdcCalculator);
-        $results = $calculator->calculate($inspection);
+        $calculator    = new \App\Services\MergeBridgeCalculator($bdcCalculator);
+        $results       = $calculator->calculate($inspection);
         $calculator->saveToInspection($inspection, $results);
+    }
 
-        // Mark inspection as completed
+    /**
+     * Mark the assessment as complete once the user is satisfied with the preview.
+     */
+    public function completeAssessment(string $id)
+    {
+        $inspection = Inspection::findOrFail($id);
+
         $inspection->update([
             'status'         => 'completed',
             'completed_date' => now(),
@@ -1114,7 +1218,7 @@ class InspectionController extends Controller
         $this->ensureClientInvoiceFromInspection($inspection->fresh(['property', 'project']));
 
         return redirect()->route('inspections.show', $inspection->id)
-            ->with('success', 'PHAR data saved successfully! Final pricing calculated.');
+            ->with('success', 'Assessment completed! Final pricing is locked in.');
     }
 
     protected function ensureClientInvoiceFromInspection(Inspection $inspection): void

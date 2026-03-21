@@ -49,6 +49,7 @@ Route::middleware([
     Route::post('/inspections/{inspection}/work-payment', [App\Http\Controllers\InspectionController::class, 'processWorkPayment'])->name('inspections.process-work-payment');
     Route::get('/inspections/{inspection}/phar-data', [App\Http\Controllers\InspectionController::class, 'pharData'])->name('inspections.phar-data');
     Route::post('/inspections/{inspection}/store-phar-data', [App\Http\Controllers\InspectionController::class, 'storePharData'])->name('inspections.store-phar-data');
+    Route::post('/inspections/{inspection}/complete-assessment', [App\Http\Controllers\InspectionController::class, 'completeAssessment'])->name('inspections.complete-assessment');
     Route::resource('projects', App\Http\Controllers\ProjectController::class);
     Route::resource('invoices', App\Http\Controllers\InvoiceController::class);
     Route::resource('work-logs', App\Http\Controllers\WorkLogController::class);

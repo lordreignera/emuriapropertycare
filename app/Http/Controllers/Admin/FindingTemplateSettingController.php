@@ -79,20 +79,24 @@ class FindingTemplateSettingController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'task_question' => 'required|string|max:255',
-            'system_id' => 'nullable|exists:systems,id',
-            'subsystem_id' => 'nullable|exists:subsystems,id',
-            'category' => 'nullable|string|max:120',
-            'default_included' => 'nullable|boolean',
-            'default_notes' => 'nullable|string',
-            'sort_order' => 'nullable|integer|min:0',
-            'is_active' => 'nullable|boolean',
+            'task_question'           => 'required|string|max:255',
+            'system_id'               => 'nullable|exists:systems,id',
+            'subsystem_id'            => 'nullable|exists:subsystems,id',
+            'category'                => 'nullable|string|max:120',
+            'default_included'        => 'nullable|boolean',
+            'default_notes'           => 'nullable|string',
+            'default_recommendations'   => 'nullable|array',
+            'default_recommendations.*' => 'nullable|string|max:500',
+            'sort_order'              => 'nullable|integer|min:0',
+            'is_active'               => 'nullable|boolean',
         ]);
 
-        $validated['default_included'] = $request->boolean('default_included', true);
-        $validated['is_active'] = $request->boolean('is_active', true);
-        $validated['sort_order'] = $validated['sort_order'] ?? 0;
-        $validated['subsystem_id'] = $validated['subsystem_id'] ?? null;
+        $validated['default_included']      = $request->boolean('default_included', true);
+        $validated['is_active']             = $request->boolean('is_active', true);
+        $validated['sort_order']            = $validated['sort_order'] ?? 0;
+        $validated['subsystem_id']          = $validated['subsystem_id'] ?? null;
+        $validated['default_recommendations'] = collect($request->input('default_recommendations', []))
+            ->map(fn($r) => trim((string) $r))->filter()->values()->all();
 
         if (!empty($validated['subsystem_id'])) {
             $subsystem = InspectionSubsystem::query()->find($validated['subsystem_id']);
@@ -124,20 +128,24 @@ class FindingTemplateSettingController extends Controller
     public function update(Request $request, FindingTemplateSetting $findingTemplateSetting)
     {
         $validated = $request->validate([
-            'task_question' => 'required|string|max:255',
-            'system_id' => 'nullable|exists:systems,id',
-            'subsystem_id' => 'nullable|exists:subsystems,id',
-            'category' => 'nullable|string|max:120',
-            'default_included' => 'nullable|boolean',
-            'default_notes' => 'nullable|string',
-            'sort_order' => 'nullable|integer|min:0',
-            'is_active' => 'nullable|boolean',
+            'task_question'             => 'required|string|max:255',
+            'system_id'                 => 'nullable|exists:systems,id',
+            'subsystem_id'              => 'nullable|exists:subsystems,id',
+            'category'                  => 'nullable|string|max:120',
+            'default_included'          => 'nullable|boolean',
+            'default_notes'             => 'nullable|string',
+            'default_recommendations'   => 'nullable|array',
+            'default_recommendations.*' => 'nullable|string|max:500',
+            'sort_order'                => 'nullable|integer|min:0',
+            'is_active'                 => 'nullable|boolean',
         ]);
 
-        $validated['default_included'] = $request->boolean('default_included');
-        $validated['is_active'] = $request->boolean('is_active');
-        $validated['sort_order'] = $validated['sort_order'] ?? 0;
-        $validated['subsystem_id'] = $validated['subsystem_id'] ?? null;
+        $validated['default_included']      = $request->boolean('default_included');
+        $validated['is_active']             = $request->boolean('is_active');
+        $validated['sort_order']            = $validated['sort_order'] ?? 0;
+        $validated['subsystem_id']          = $validated['subsystem_id'] ?? null;
+        $validated['default_recommendations'] = collect($request->input('default_recommendations', []))
+            ->map(fn($r) => trim((string) $r))->filter()->values()->all();
 
         if (!empty($validated['subsystem_id'])) {
             $subsystem = InspectionSubsystem::query()->find($validated['subsystem_id']);
@@ -182,13 +190,14 @@ class FindingTemplateSettingController extends Controller
             FindingTemplateSetting::updateOrCreate(
                 ['task_question' => $row['task_question']],
                 [
-                    'system_id' => $systemId,
-                    'subsystem_id' => $subsystemId,
-                    'category' => $row['category'],
-                    'default_included' => $row['default_included'],
-                    'default_notes' => $row['default_notes'],
-                    'sort_order' => $row['sort_order'],
-                    'is_active' => true,
+                    'system_id'               => $systemId,
+                    'subsystem_id'            => $subsystemId,
+                    'category'                => $row['category'],
+                    'default_included'        => $row['default_included'],
+                    'default_notes'           => $row['default_notes'],
+                    'default_recommendations' => $row['default_recommendations'] ?? [],
+                    'sort_order'              => $row['sort_order'],
+                    'is_active'               => true,
                 ]
             );
         }

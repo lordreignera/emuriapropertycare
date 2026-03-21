@@ -157,14 +157,14 @@
                 <summary class="admin-client-link {{ $inspectionsOpen ? 'is-active' : '' }}">
                     <span class="admin-client-summary-left">
                         <i class="mdi mdi-clipboard-check"></i>
-                        <span>Inspection Workflow</span>
+                        <span>PHAR Assessment Workflow</span>
                     </span>
                     <span class="admin-client-arrow">▾</span>
                 </summary>
                 <div class="admin-client-submenu">
                     @if($user->hasRole(['Super Admin', 'Administrator']))
                         <a class="admin-client-sublink {{ request()->get('status') == 'scheduled' ? 'is-active' : '' }}" href="{{ route('inspections.index') }}?status=scheduled">
-                            <span class="admin-client-sublabel">Awaiting Inspection</span>
+                            <span class="admin-client-sublabel">Awaiting assessment</span>
                             @if($scheduledInspectionsCount > 0)
                                 <span class="admin-client-badge">{{ $scheduledInspectionsCount }}</span>
                             @endif
@@ -274,13 +274,6 @@
             </details>
         @endcan
 
-        @can('view-communications')
-            <a class="admin-client-link {{ request()->routeIs('communications.*') ? 'is-active' : '' }}" href="{{ route('communications.index') }}">
-                <i class="mdi mdi-message-text"></i>
-                <span>Communications</span>
-            </a>
-        @endcan
-
         @can('view-reports')
             <details class="admin-client-group" {{ $reportsOpen ? 'open' : '' }}>
                 <summary class="admin-client-link {{ $reportsOpen ? 'is-active' : '' }}">
@@ -322,7 +315,7 @@
                 <summary class="admin-client-link {{ $cpiOpen ? 'is-active' : '' }}">
                     <span class="admin-client-summary-left">
                         <i class="mdi mdi-calculator"></i>
-                        <span>CPI Pricing System</span>
+                        <span>System settings</span>
                     </span>
                     <span class="admin-client-arrow">▾</span>
                 </summary>
@@ -334,7 +327,7 @@
                     <a class="admin-client-sublink {{ request()->routeIs('admin.finding-template-settings.*') ? 'is-active' : '' }}" href="{{ route('admin.finding-template-settings.index') }}"><span class="admin-client-sublabel">Findings Template Settings</span></a>
                     <a class="admin-client-sublink {{ request()->routeIs('admin.pricing-packages.*') ? 'is-active' : '' }}" href="{{ route('admin.pricing-packages.index') }}"><span class="admin-client-sublabel">Pricing Packages</span></a>
                     <a class="admin-client-sublink {{ request()->routeIs('admin.property-types.*') ? 'is-active' : '' }}" href="{{ route('admin.property-types.index') }}"><span class="admin-client-sublabel">Property Types</span></a>
-                    <a class="admin-client-sublink {{ request()->routeIs('admin.cpi-bands.*') ? 'is-active' : '' }}" href="{{ route('admin.cpi-bands.index') }}"><span class="admin-client-sublabel">CPI Band Ranges</span></a>
+                   <!-- <a class="admin-client-sublink {{ request()->routeIs('admin.cpi-bands.*') ? 'is-active' : '' }}" href="{{ route('admin.cpi-bands.index') }}"><span class="admin-client-sublabel">CPI Band Ranges</span></a>
                     <a class="admin-client-sublink {{ request()->routeIs('admin.cpi-multipliers.*') ? 'is-active' : '' }}" href="{{ route('admin.cpi-multipliers.index') }}"><span class="admin-client-sublabel">CPI Multipliers</span></a>
                     <a class="admin-client-sublink {{ request()->routeIs('admin.cpi-domains.*') ? 'is-active' : '' }}" href="{{ route('admin.cpi-domains.index') }}"><span class="admin-client-sublabel">CPI Domains</span></a>
                     <a class="admin-client-sublink {{ request()->routeIs('admin.supply-materials.*') ? 'is-active' : '' }}" href="{{ route('admin.supply-materials.index') }}"><span class="admin-client-sublabel">Supply Materials</span></a>
@@ -350,14 +343,11 @@
                     <a class="admin-client-sublink {{ request()->routeIs('admin.pricing-config.*') ? 'is-active' : '' }}" href="{{ route('admin.pricing-config.index') }}"><span class="admin-client-sublabel">System Configuration</span></a>
                     <a class="admin-client-sublink {{ request()->routeIs('admin.parameters.*') ? 'is-active' : '' }}" href="{{ route('admin.parameters.index') }}"><span class="admin-client-sublabel">Parameters</span></a>
                     <a class="admin-client-sublink {{ request()->routeIs('admin.reactive-costs.*') ? 'is-active' : '' }}" href="{{ route('admin.reactive-costs.index') }}"><span class="admin-client-sublabel">Reactive Cost Assumptions</span></a>
-                    <a class="admin-client-sublink {{ request()->routeIs('admin.stewardship-loss.*') ? 'is-active' : '' }}" href="{{ route('admin.stewardship-loss.index') }}"><span class="admin-client-sublabel">Stewardship Loss Reduction</span></a>
+                    <a class="admin-client-sublink {{ request()->routeIs('admin.stewardship-loss.*') ? 'is-active' : '' }}" href="{{ route('admin.stewardship-loss.index') }}"><span class="admin-client-sublabel">Stewardship Loss Reduction</span></a> -->
                 </div>
             </details>
 
-            <a class="admin-client-link {{ request()->routeIs('admin.reports.*') ? 'is-active' : '' }}" href="{{ route('admin.reports.index') }}">
-                <i class="mdi mdi-chart-bar"></i>
-                <span>Reports</span>
-            </a>
+           
         @endrole
     </div>
 </nav>

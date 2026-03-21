@@ -1,6 +1,6 @@
 @extends('admin.layout')
 
-@section('title', 'Complete Regenerative Home Inspection Report')
+@section('title', 'PHAR FORM')
 
 @section('content')
 <div class="content-wrapper">
@@ -11,7 +11,7 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <h3 class="mb-2 fw-bold">
-                                <i class="mdi mdi-home-city-outline me-2"></i>Complete Regenerative Home Inspection Report
+                                <i class="mdi mdi-home-city-outline me-2"></i>Property Health Assessment Form
                             </h3>
                             <p class="mb-1 opacity-75">
                                 <span class="badge bg-light text-dark me-2">{{ $property->property_code }}</span>
@@ -212,21 +212,6 @@
                     </div>
                 </div>
 
-                <div class="card mb-4">
-                    <div class="card-header bg-light">
-                        <h5 class="mb-0">
-                            <i class="mdi mdi-camera me-2 text-primary"></i>Photos
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="form-group mb-0">
-                            <label>Upload Photos</label>
-                            <input type="file" name="photos[]" class="form-control" multiple accept="image/*" id="photoUpload">
-                            <small class="text-muted">Max 10MB per photo.</small>
-                        </div>
-                    </div>
-                </div>
-
                 <div class="card">
                     <div class="card-body">
                         <div class="d-flex justify-content-between">
@@ -238,7 +223,7 @@
                                     <i class="mdi mdi-content-save me-1"></i>Save as Draft
                                 </button>
                                 <button type="submit" name="next_stage" value="phar" class="btn btn-success">
-                                    <i class="mdi mdi-arrow-right-bold-circle me-1"></i>Save & Next: PHAR Assessment/Pricing
+                                    <i class="mdi mdi-arrow-right-bold-circle me-1"></i>Save Form & review costs
                                 </button>
                             </div>
                         </div>
@@ -254,6 +239,9 @@
         ->where('is_active', true)
         ->orderBy('sort_order')
         ->get(['task_question', 'system_id', 'subsystem_id']);
+
+    // Full PHAR catalog keyed by "system|subsystem|finding" for JS auto-fill
+    $pharFindingCatalog = \App\Support\PharCatalog::findingCatalog();
 
     $systemsConfig = $systems->map(function ($system) use ($findingTemplatesRaw) {
         $systemLevelFindings = $findingTemplatesRaw
@@ -282,10 +270,30 @@
             })->values()->all(),
         ];
     })->values()->all();
+
+    // Pre-generate per-finding photo URLs server-side so they work for both
+    // local/public storage and private S3 buckets (which require signed temp URLs).
+    $findingPhotoUrls = [];
+    foreach (($inspection->findings ?? []) as $fi => $finding) {
+        $paths = is_array($finding['finding_photos'] ?? null) ? $finding['finding_photos'] : [];
+        if (!empty($paths)) {
+            $findingPhotoUrls[$fi] = array_map(
+                fn($p) => $inspection->getStorageUrl($p),
+                $paths
+            );
+        }
+    }
 @endphp
 
 <script>
 const systemsConfig = @json($systemsConfig);
+const CPI_PROPERTY_ID = {{ $property->id }};
+const MATERIAL_UNITS = @json($materialUnits ?? []);
+const FMC_MATERIAL_SETTINGS = @json($fmcMaterialSettings ?? []);
+const PHAR_CATEGORIES = @json($pharCategories ?? []);
+const PHAR_FINDING_CATALOG = @json($pharFindingCatalog ?? []);
+// Photo URLs pre-resolved server-side (works for local disk and private S3 signed URLs)
+const FINDING_PHOTO_URLS = @json($findingPhotoUrls ?? []);
 
 const initialFindings = @json(old('system_findings', $inspection->findings ?? []));
 let findingIndex = 0;
@@ -383,6 +391,92 @@ function buildFindingOptions(systemId, subsystemId, selectedValue) {
     return options;
 }
 
+/**
+ * Look up a PHAR catalog entry for a given system name, subsystem name, and finding text.
+ * Returns the matching catalog object or null.
+ */
+function lookupPharCatalog(systemName, subsystemName, findingText) {
+    if (!findingText || !systemName) return null;
+    const key = (systemName || '').toLowerCase().trim()
+              + '|' + (subsystemName || '').toLowerCase().trim()
+              + '|' + findingText.toLowerCase().trim();
+    return PHAR_FINDING_CATALOG[key] || null;
+}
+
+/**
+ * Auto-fill PHAR fields (labour hours, category, notes, material) on a card
+ * when a catalog-known finding is selected via the issue dropdown.
+ */
+function applyPharCatalogToCard(card, systemName, subsystemName, findingText, currentIndex) {
+    const entry = lookupPharCatalog(systemName, subsystemName, findingText);
+    if (!entry) return;
+
+    // Labour hours
+    const labourInput = card.querySelector(`[name="system_findings[${currentIndex}][phar_labour_hours]"]`);
+    if (labourInput && (!labourInput.value || parseFloat(labourInput.value) === 0)) {
+        labourInput.value = entry.phar_labour_hours;
+    }
+
+    // Category
+    const catSelect = card.querySelector(`[name="system_findings[${currentIndex}][phar_category]"]`);
+    if (catSelect && !catSelect.value) {
+        catSelect.value = entry.category;
+    }
+
+    // Additional notes (phar_notes)
+    const notesEl = card.querySelector(`[name="system_findings[${currentIndex}][phar_notes]"]`);
+    if (notesEl && !notesEl.value.trim()) {
+        notesEl.value = entry.phar_notes;
+    }
+
+    // Auto-add material row if none exists and a material is defined
+    const matContainer = card.querySelector('.cpi-materials-container');
+    if (matContainer && matContainer.children.length === 0 && entry.material_name) {
+        // Trigger an event on the add-material button to get the correct subsystem context
+        const addBtn = card.querySelector('.add-cpi-material');
+        if (addBtn) {
+            addBtn.click();
+            // Then fill that first row
+            const firstRow = matContainer.querySelector('.cpi-material-row');
+            if (firstRow) {
+                const nameEl = firstRow.querySelector(`[name*="[material_name]"]`);
+                const qtyEl  = firstRow.querySelector('.cpi-mat-qty');
+                const unitEl = firstRow.querySelector(`select[name*="[unit]"]`);
+                const costEl = firstRow.querySelector('.cpi-mat-cost');
+                if (nameEl) nameEl.value = entry.material_name;
+                if (qtyEl)  qtyEl.value  = entry.material_quantity;
+                if (unitEl && entry.unit) unitEl.value = entry.unit;
+                if (costEl) costEl.value  = entry.unit_cost;
+                // Trigger line total recalc
+                costEl?.dispatchEvent(new Event('input'));
+            }
+        }
+    }
+
+    // Add recommendation if none has been added yet
+    const recList = card.querySelector('.recommendation-tags-container, .recommendation-list, .recommendation-items');
+    const recInput = card.querySelector('.recommendation-select');
+    if (recInput && entry.recommendation) {
+        // Only auto-add if the builder is empty
+        const existingTags = card.querySelectorAll('.recommendation-tag, .recommendation-item');
+        if (existingTags.length === 0) {
+            // Try to find matching option in recommendation select and trigger "add"
+            const opts = recInput.querySelectorAll('option');
+            let matched = false;
+            opts.forEach(opt => {
+                if (opt.value === entry.recommendation || opt.textContent.trim() === entry.recommendation) {
+                    recInput.value = opt.value;
+                    matched = true;
+                }
+            });
+            if (matched) {
+                const addBtn = card.querySelector('.recommendation-add-selected');
+                if (addBtn) addBtn.click();
+            }
+        }
+    }
+}
+
 function normalizeRecommendationItems(value) {
     if (Array.isArray(value)) {
         return value.map(item => String(item || '').trim()).filter(item => item.length > 0);
@@ -392,6 +486,68 @@ function normalizeRecommendationItems(value) {
         .split(/\r\n|\r|\n|\|/)
         .map(item => item.trim())
         .filter(item => item.length > 0);
+}
+
+function buildMaterialUnitsOptions() {
+    return MATERIAL_UNITS.map((unit, idx) =>
+        `<option value="${unit}" ${idx === 0 ? 'selected' : ''}>${unit.replace(/\b\w/g, c => c.toUpperCase())}</option>`
+    ).join('');
+}
+
+function buildCpiMaterialPresetOptions(subsystemId = null) {
+    let html = '<option value="">Custom / Manual</option>';
+    FMC_MATERIAL_SETTINGS.forEach((setting) => {
+        if (subsystemId !== null && setting.subsystem_id !== null && setting.subsystem_id !== subsystemId) return;
+        const safeName = String(setting.material_name ?? '');
+        const safeUnit = String(setting.default_unit ?? 'ea');
+        const safeCost = Number(setting.default_unit_cost ?? 0).toFixed(2);
+        html += `<option value="${safeName}" data-unit="${safeUnit}" data-cost="${safeCost}">${safeName}</option>`;
+    });
+    return html;
+}
+
+function createCpiMaterialRow(fi, mi, subsystemId = null) {
+    return `<div class="cpi-material-row border rounded p-2 mb-1 bg-white">
+        <div class="d-flex justify-content-end mb-1">
+            <button type="button" class="btn btn-sm btn-outline-danger remove-cpi-material py-0 px-1">
+                <i class="mdi mdi-delete-outline"></i> Remove
+            </button>
+        </div>
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label" style="font-size:.72rem;font-weight:600;color:#6c757d;">Preset</label>
+                <select class="form-select form-select-sm cpi-material-template">${buildCpiMaterialPresetOptions(subsystemId)}</select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" style="font-size:.72rem;font-weight:600;color:#6c757d;">Description</label>
+                <input type="text" name="system_findings[${fi}][materials][${mi}][material_name]"
+                    class="form-control form-control-sm" placeholder="Material description">
+            </div>
+            <div class="col-md-1">
+                <label class="form-label" style="font-size:.72rem;font-weight:600;color:#6c757d;">Qty</label>
+                <input type="number" name="system_findings[${fi}][materials][${mi}][quantity]"
+                    class="form-control form-control-sm cpi-mat-qty" min="0" step="0.01" value="1">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label" style="font-size:.72rem;font-weight:600;color:#6c757d;">Unit</label>
+                <select name="system_findings[${fi}][materials][${mi}][unit]" class="form-select form-select-sm">
+                    ${buildMaterialUnitsOptions()}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label" style="font-size:.72rem;font-weight:600;color:#6c757d;">Unit Cost ($)</label>
+                <input type="number" name="system_findings[${fi}][materials][${mi}][unit_cost]"
+                    class="form-control form-control-sm cpi-mat-cost" min="0" step="0.01" value="0">
+            </div>
+            <div class="col-md-1">
+                <label class="form-label" style="font-size:.72rem;font-weight:600;color:#6c757d;">Line Total</label>
+                <input type="text" class="form-control form-control-sm cpi-mat-total" readonly value="$0.00">
+                <input type="hidden" name="system_findings[${fi}][materials][${mi}][line_total]"
+                    class="cpi-mat-total-hidden" value="0">
+            </div>
+        </div>
+        <input type="hidden" name="system_findings[${fi}][materials][${mi}][property_id]" value="${CPI_PROPERTY_ID}">
+    </div>`;
 }
 
 function addSystemFindingRow(systemId, prefill = {}) {
@@ -481,12 +637,8 @@ function addSystemFindingRow(systemId, prefill = {}) {
                 <input type="text" name="system_findings[${currentIndex}][spot]" class="form-control form-control-sm" value="${escapeHtml(prefill.spot || '')}" placeholder="e.g. Top-left corner">
             </div>
         </div>
-        <!-- Row 3: Notes | Recommendations -->
+        <!-- Row 3: Recommendations | Notes -->
         <div class="row g-2 px-3 pt-2 pb-3">
-            <div class="col-md-6">
-                <label class="form-label small fw-semibold text-muted mb-1">Notes</label>
-                <textarea name="system_findings[${currentIndex}][notes]" class="form-control form-control-sm" rows="3" placeholder="Detailed observations...">${escapeHtml(prefill.notes || '')}</textarea>
-            </div>
             <div class="col-md-6">
                 <label class="form-label small fw-semibold text-muted mb-1">Recommendations</label>
                 <div class="recommendation-builder" data-index="${currentIndex}">
@@ -502,6 +654,101 @@ function addSystemFindingRow(systemId, prefill = {}) {
                     </div>
                     <div class="recommendation-list small mt-1"></div>
                     <div class="recommendation-hidden-inputs"></div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small fw-semibold text-muted mb-1">Notes</label>
+                <textarea name="system_findings[${currentIndex}][notes]" class="form-control form-control-sm" rows="3" placeholder="Detailed observations...">${escapeHtml(prefill.notes || '')}</textarea>
+            </div>
+        </div>
+        <!-- Row 4: Finding Photos -->
+        <div class="row g-2 px-3 pt-2 pb-3" style="background:#fafbff;border-top:1px solid #e9ecef;">
+            <div class="col-12">
+                <label class="form-label small fw-semibold text-muted mb-1">
+                    <i class="mdi mdi-camera-outline me-1"></i>Finding Photos
+                    <span class="fw-normal text-muted">(optional)</span>
+                </label>
+                ${(() => {
+                    // Use server-pre-signed URLs keyed by the finding index (works for local + private S3)
+                    const savedUrls = FINDING_PHOTO_URLS[currentIndex] || [];
+                    if (savedUrls.length > 0) {
+                        const thumbs = savedUrls.map(url =>
+                            `<a href="${url}" target="_blank"><img src="${url}" style="height:60px;width:60px;object-fit:cover;border-radius:4px;border:2px solid #198754;" title="Saved photo"></a>`
+                        ).join('');
+                        return `<div class="mb-2">
+                            <div class="small text-success fw-semibold mb-1"><i class="mdi mdi-check-circle-outline"></i> ${savedUrls.length} photo(s) already saved for this finding:</div>
+                            <div class="d-flex flex-wrap gap-2">${thumbs}</div>
+                            <div class="small text-muted mt-1">Upload new files below to <strong>add more</strong> photos (existing ones are kept).</div>
+                        </div>`;
+                    }
+                    return '';
+                })()}
+                <input type="file"
+                    name="finding_photos[${currentIndex}][]"
+                    class="form-control form-control-sm"
+                    multiple accept="image/*">
+                <div class="form-text">Attach one or more photos of this specific finding (max 10 MB each)</div>
+            </div>
+        </div>
+        <!-- Row 5: Labour Hours + Materials -->
+        <div class="px-3 pt-2 pb-3" style="background:#eef3ff;border-top:1px solid #c9d8ff;">
+            <div class="row g-2 mb-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small fw-semibold mb-1" style="color:#3d5a99;">
+                        <i class="mdi mdi-clock-outline me-1"></i>Est. Labour Hours
+                    </label>
+                    <div class="input-group input-group-sm">
+                        <input type="number"
+                            name="system_findings[${currentIndex}][phar_labour_hours]"
+                            class="form-control form-control-sm"
+                            min="0" step="0.1" value="${escapeHtml(String(prefill.phar_labour_hours ?? '0'))}"
+                            placeholder="0.0">
+                        <span class="input-group-text">hrs</span>
+                    </div>
+                </div>
+                <div class="col-md-9 d-flex justify-content-end align-items-end">
+                    <button type="button" class="btn btn-sm btn-outline-primary add-cpi-material"
+                        data-index="${currentIndex}">
+                        <i class="mdi mdi-plus"></i> Add Material
+                    </button>
+                </div>
+            </div>
+            <label class="form-label small fw-semibold mb-1" style="color:#3d5a99;">
+                <i class="mdi mdi-package-variant me-1"></i>Materials
+                <span class="fw-normal text-muted">(optional)</span>
+            </label>
+            <div class="cpi-materials-container"></div>
+
+            <!-- Row 5b: Category / Included in Tier / Additional Notes -->
+            <div class="row g-2 mt-2">
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold mb-1" style="color:#3d5a99;">
+                        <i class="mdi mdi-tag-outline me-1"></i>Category
+                    </label>
+                    <select name="system_findings[${currentIndex}][phar_category]"
+                            class="form-select form-select-sm">
+                        <option value="">— Select Category —</option>
+                        ${PHAR_CATEGORIES.map(cat => `<option value="${escapeHtml(cat)}" ${escapeHtml(String(prefill.phar_category ?? '')) === escapeHtml(cat) ? 'selected' : ''}>${escapeHtml(cat)}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-semibold mb-1" style="color:#3d5a99;">
+                        <i class="mdi mdi-check-circle-outline me-1"></i>Included in Tier?
+                    </label>
+                    <select name="system_findings[${currentIndex}][phar_included_yn]"
+                            class="form-select form-select-sm">
+                        <option value="1" ${(prefill.phar_included_yn === false || prefill.phar_included_yn == 0) ? '' : 'selected'}>Yes</option>
+                        <option value="0" ${(prefill.phar_included_yn === false || prefill.phar_included_yn == 0) ? 'selected' : ''}>No</option>
+                    </select>
+                </div>
+                <div class="col-md-5">
+                    <label class="form-label small fw-semibold mb-1" style="color:#3d5a99;">
+                        <i class="mdi mdi-note-text-outline me-1"></i>Additional Notes
+                    </label>
+                    <textarea name="system_findings[${currentIndex}][phar_notes]"
+                              class="form-control form-control-sm"
+                              rows="2"
+                              placeholder="PHAR additional notes…">${escapeHtml(String(prefill.phar_notes ?? ''))}</textarea>
                 </div>
             </div>
         </div>
@@ -531,6 +778,15 @@ function addSystemFindingRow(systemId, prefill = {}) {
                 issueCustomText.style.display = 'none';
                 issueCustomText.value = '';
                 issueHiddenValue.value = this.value;
+
+                // Auto-fill PHAR fields from catalog when a known finding is selected
+                if (this.value) {
+                    const sysName = getSystemConfig(systemId)?.name || '';
+                    const subSel  = card.querySelector(`select[name="system_findings[${currentIndex}][subsystem_id]"]`);
+                    const subId   = subSel ? subSel.value : '';
+                    const subName = subId ? (getSubsystemConfig(systemId, subId)?.name || '') : '';
+                    applyPharCatalogToCard(card, sysName, subName, this.value, currentIndex);
+                }
             }
         });
 
@@ -562,6 +818,78 @@ function addSystemFindingRow(systemId, prefill = {}) {
     });
 
     initRecommendationBuilder(card, currentIndex, recommendationItems, systemId, prefill.subsystem_id || '');
+
+    // ── Labour & Materials wiring ──────────────────────────────────────────────
+    let cpiMatIdx = 0;
+    const addMatBtn   = card.querySelector('.add-cpi-material');
+    const matContainer = card.querySelector('.cpi-materials-container');
+    const subsystemSelForMat = card.querySelector(`select[name="system_findings[${currentIndex}][subsystem_id]"]`);
+
+    function updateCpiLineTotal(row) {
+        const qty  = parseFloat(row.querySelector('.cpi-mat-qty')?.value  || 0);
+        const cost = parseFloat(row.querySelector('.cpi-mat-cost')?.value || 0);
+        const total = qty * cost;
+        const display = row.querySelector('.cpi-mat-total');
+        const hidden  = row.querySelector('.cpi-mat-total-hidden');
+        if (display) display.value = '$' + total.toFixed(2);
+        if (hidden)  hidden.value  = total.toFixed(2);
+    }
+
+    function wireCpiMaterialRow(row) {
+        // Preset select auto-fills name / unit / cost
+        const presetSel = row.querySelector('.cpi-material-template');
+        if (presetSel) {
+            presetSel.addEventListener('change', function () {
+                if (!this.value) return;
+                const nameEl = row.querySelector(`[name*="[material_name]"]`);
+                const unitEl = row.querySelector(`select[name*="[unit]"]`);
+                const costEl = row.querySelector('.cpi-mat-cost');
+                if (nameEl) nameEl.value = this.value;
+                if (unitEl && this.options[this.selectedIndex].dataset.unit)
+                    unitEl.value = this.options[this.selectedIndex].dataset.unit;
+                if (costEl && this.options[this.selectedIndex].dataset.cost) {
+                    costEl.value = this.options[this.selectedIndex].dataset.cost;
+                    updateCpiLineTotal(row);
+                }
+            });
+        }
+        row.querySelector('.cpi-mat-qty')?.addEventListener('input',  () => updateCpiLineTotal(row));
+        row.querySelector('.cpi-mat-cost')?.addEventListener('input', () => updateCpiLineTotal(row));
+        row.querySelector('.remove-cpi-material')?.addEventListener('click', () => row.remove());
+    }
+
+    if (addMatBtn && matContainer) {
+        // Pre-fill materials from edit/reload
+        if (Array.isArray(prefill.phar_materials) && prefill.phar_materials.length) {
+            prefill.phar_materials.forEach((mat) => {
+                const mi = cpiMatIdx++;
+                const wrapper = document.createElement('div');
+                wrapper.innerHTML = createCpiMaterialRow(currentIndex, mi,
+                    parseInt(prefill.subsystem_id) || null);
+                const row = wrapper.firstElementChild;
+                const nameEl = row.querySelector(`[name*="[material_name]"]`);
+                const qtyEl  = row.querySelector('.cpi-mat-qty');
+                const unitEl = row.querySelector(`select[name*="[unit]"]`);
+                const costEl = row.querySelector('.cpi-mat-cost');
+                if (nameEl) nameEl.value = mat.material_name ?? '';
+                if (qtyEl)  qtyEl.value  = mat.quantity ?? 1;
+                if (unitEl && mat.unit) unitEl.value = mat.unit;
+                if (costEl) costEl.value = mat.unit_cost ?? 0;
+                updateCpiLineTotal(row);
+                wireCpiMaterialRow(row);
+                matContainer.appendChild(row);
+            });
+        }
+
+        addMatBtn.addEventListener('click', () => {
+            const subId = subsystemSelForMat ? (parseInt(subsystemSelForMat.value) || null) : null;
+            const wrapper = document.createElement('div');
+            wrapper.innerHTML = createCpiMaterialRow(currentIndex, cpiMatIdx++, subId);
+            const row = wrapper.firstElementChild;
+            wireCpiMaterialRow(row);
+            matContainer.appendChild(row);
+        });
+    }
 }
 
 function initRecommendationBuilder(row, rowIndex, initialItems = [], systemId = '', initialSubsystemId = '') {

@@ -5,7 +5,12 @@
     <div class="col-lg-8 mx-auto grid-margin stretch-card">
         <div class="card">
             <div class="card-body">
-                <h4 class="card-title">Edit Finding Template</h4>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h4 class="card-title mb-0">Edit Finding Template</h4>
+                    <a href="{{ route('admin.finding-template-settings.index') }}" class="btn btn-outline-secondary btn-sm">
+                        <i class="mdi mdi-arrow-left"></i> Back to List
+                    </a>
+                </div>
 
                 @php
                     $systemsJson = ($systems ?? collect())->map(function ($system) {
@@ -71,7 +76,25 @@
                         @error('default_notes')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
 
-                    <div class="form-check">
+                    {{-- Recommendations tag editor --}}
+                    <div class="form-group mb-3">
+                        <label class="fw-semibold">Recommendations</label>
+                        <div id="rec-tags" class="border rounded p-2 mb-2" style="min-height:44px;display:flex;flex-wrap:wrap;gap:6px;align-items:flex-start;">
+                            @php $existingRecs = old('default_recommendations', $findingTemplateSetting->default_recommendations ?? []); @endphp
+                            @foreach($existingRecs as $rec)
+                                <span class="badge bg-primary d-flex align-items-center gap-1 rec-tag" style="font-size:.82rem;font-weight:500;padding:.35em .65em;">
+                                    {{ $rec }}
+                                    <input type="hidden" name="default_recommendations[]" value="{{ $rec }}">
+                                    <button type="button" class="btn-close btn-close-white remove-rec" style="font-size:.65rem;" aria-label="Remove"></button>
+                                </span>
+                            @endforeach
+                        </div>
+                        <div class="input-group input-group-sm">
+                            <input type="text" id="rec-input" class="form-control" placeholder="Type a recommendation and press Enter or click Add…" maxlength="500">
+                            <button type="button" id="rec-add-btn" class="btn btn-outline-primary"><i class="mdi mdi-plus"></i> Add</button>
+                        </div>
+                        <small class="text-muted">Add one recommendation per line. These will be available in the inspection form recommendation builder.</small>
+                    </div>
                         <label class="form-check-label me-3">
                             <input type="checkbox" class="form-check-input" name="default_included" value="1" {{ old('default_included', $findingTemplateSetting->default_included) ? 'checked' : '' }}>
                             Included by default
@@ -119,6 +142,34 @@
                         });
 
                         renderSubsystems(systemSelect.value);
+                    })();
+
+                    // Recommendation tag editor
+                    (function () {
+                        const tagsContainer = document.getElementById('rec-tags');
+                        const input = document.getElementById('rec-input');
+                        const addBtn = document.getElementById('rec-add-btn');
+
+                        function addTag(text) {
+                            text = text.trim();
+                            if (!text) return;
+                            // Prevent duplicates
+                            const existing = Array.from(tagsContainer.querySelectorAll('input[name="default_recommendations[]"]')).map(i => i.value);
+                            if (existing.includes(text)) { input.value = ''; return; }
+                            const span = document.createElement('span');
+                            span.className = 'badge bg-primary d-flex align-items-center gap-1 rec-tag';
+                            span.style.cssText = 'font-size:.82rem;font-weight:500;padding:.35em .65em;';
+                            span.innerHTML = `${text.replace(/</g,'&lt;')}<input type="hidden" name="default_recommendations[]" value="${text.replace(/"/g,'&quot;')}"><button type="button" class="btn-close btn-close-white remove-rec" style="font-size:.65rem;" aria-label="Remove"></button>`;
+                            span.querySelector('.remove-rec').addEventListener('click', function() { span.remove(); });
+                            tagsContainer.appendChild(span);
+                            input.value = '';
+                        }
+
+                        tagsContainer.addEventListener('click', function(e) {
+                            if (e.target.classList.contains('remove-rec')) e.target.closest('.rec-tag').remove();
+                        });
+                        addBtn.addEventListener('click', () => addTag(input.value));
+                        input.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); addTag(this.value); } });
                     })();
                 </script>
             </div>
