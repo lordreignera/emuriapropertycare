@@ -108,6 +108,26 @@
     <div class="row">
         <div class="col-12">
 
+            @php
+                $sevColors2 = ['critical'=>'#dc3545','high'=>'#fd7e14','noi_protection'=>'#7c3aed','medium'=>'#ffc107','low'=>'#198754'];
+                $sevLabels2 = ['critical'=>'Safety & Health','high'=>'Urgency','noi_protection'=>'NOI Protection','medium'=>'Value Depreciation','low'=>'Non-Urgent'];
+                $prioMap2   = ['critical'=>1,'high'=>1,'noi_protection'=>2,'medium'=>2,'low'=>3];
+                $loadedRate = (float)($bdcSettings['loaded_hourly_rate'] ?? 165);
+                $totalLabourHrs2 = 0; $totalFRLC2 = 0; $totalMatCost2 = 0; $totalMatItems2 = 0;
+                $sevCount2 = ['critical'=>0,'high'=>0,'noi_protection'=>0,'medium'=>0,'low'=>0];
+                foreach ($sortedFindings as $sf2) {
+                    $sv2 = $sf2['severity'] ?? 'low';
+                    if (isset($sevCount2[$sv2])) $sevCount2[$sv2]++; else $sevCount2['low']++;
+                    $hrs2 = (float)($sf2['phar_labour_hours'] ?? 0);
+                    $totalLabourHrs2 += $hrs2;
+                    $totalFRLC2 += $hrs2 * $loadedRate;
+                    foreach (($sf2['phar_materials'] ?? []) as $m2) {
+                        $totalMatItems2++;
+                        $totalMatCost2 += (float)($m2['line_total'] ?? 0);
+                    }
+                }
+            @endphp
+
             {{-- Progress / stage banner --}}
             <div class="card mb-3 border-0" style="background:linear-gradient(135deg,#5b67ca 0%,#4854b8 100%);">
                 <div class="card-body text-white py-3">
@@ -129,6 +149,56 @@
                                 <i class="mdi mdi-arrow-left me-1"></i>Back to Step 1
                             </a>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- ── Findings Stats Panel ──────────────────────────────────── --}}
+            <div class="mb-3 rounded" style="background:#1e293b;color:#fff;padding:1rem 1.5rem;">
+                <div class="row text-center mb-3 pb-3" style="border-bottom:1px solid rgba(255,255,255,.15);">
+                    <div class="col">
+                        <div class="small fw-semibold mb-1" style="color:#fc8181;">&#x1F534; Safety &amp; Health</div>
+                        <div class="fw-bold" style="font-size:1.75rem;color:#fc8181;line-height:1.1;">{{ $sevCount2['critical'] }}</div>
+                    </div>
+                    <div class="col">
+                        <div class="small fw-semibold mb-1" style="color:#fbd38d;">&#x1F7E0; Urgency</div>
+                        <div class="fw-bold" style="font-size:1.75rem;color:#fbd38d;line-height:1.1;">{{ $sevCount2['high'] }}</div>
+                    </div>
+                    <div class="col">
+                        <div class="small fw-semibold mb-1" style="color:#d6bcfa;">&#x1F7E3; NOI Protection</div>
+                        <div class="fw-bold" style="font-size:1.75rem;color:#d6bcfa;line-height:1.1;">{{ $sevCount2['noi_protection'] }}</div>
+                    </div>
+                    <div class="col">
+                        <div class="small fw-semibold mb-1" style="color:#fef08a;">&#x1F7E1; Value Depreciation</div>
+                        <div class="fw-bold" style="font-size:1.75rem;color:#fef08a;line-height:1.1;">{{ $sevCount2['medium'] }}</div>
+                    </div>
+                    <div class="col">
+                        <div class="small fw-semibold mb-1" style="color:#86efac;">&#x1F7E2; Non-Urgent</div>
+                        <div class="fw-bold" style="font-size:1.75rem;color:#86efac;line-height:1.1;">{{ $sevCount2['low'] }}</div>
+                    </div>
+                </div>
+                <div class="row text-center mb-2 pb-2" style="border-bottom:1px solid rgba(255,255,255,.12);">
+                    <div class="col-md-4">
+                        <div class="small fw-semibold mb-1" style="color:#cbd5e1;">TOTAL FINDINGS</div>
+                        <div class="fw-bold" style="font-size:1.75rem;color:#93c5fd;line-height:1.1;">{{ count($sortedFindings) }}</div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="small fw-semibold mb-1" style="color:#cbd5e1;">TOTAL LABOUR HOURS</div>
+                        <div class="fw-bold" style="font-size:1.75rem;color:#67e8f9;line-height:1.1;">{{ number_format($totalLabourHrs2, 1) }}</div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="small fw-semibold mb-1" style="color:#cbd5e1;">TOTAL FR LABOUR COST (FRLC)</div>
+                        <div class="fw-bold" style="font-size:1.75rem;color:#fcd34d;line-height:1.1;">${{ number_format($totalFRLC2, 2) }}</div>
+                    </div>
+                </div>
+                <div class="row text-center pt-1">
+                    <div class="col-md-6">
+                        <div class="small fw-semibold mb-1" style="color:#cbd5e1;">TOTAL MATERIAL ITEMS</div>
+                        <div class="fw-bold" style="font-size:1.75rem;color:#67e8f9;line-height:1.1;">{{ $totalMatItems2 }}</div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="small fw-semibold mb-1" style="color:#cbd5e1;">TOTAL MATERIAL COST (FMC)</div>
+                        <div class="fw-bold" style="font-size:1.75rem;color:#4ade80;line-height:1.1;">${{ number_format($totalMatCost2, 2) }}</div>
                     </div>
                 </div>
             </div>
@@ -176,7 +246,7 @@
                                         <div class="form-group">
                                             <label>Visits per Year (Property-specific) <span class="text-danger">*</span></label>
                                             <input type="number" name="bdc_visits_per_year" id="bdcVisitsPerYear" class="form-control"
-                                                   value="{{ old('bdc_visits_per_year', $inspection->bdc_visits_per_year ?? ($bdcSettings['visits_per_year'] ?? 8)) }}"
+                                                   value="{{ old('bdc_visits_per_year', $inspection->bdc_visits_per_year ?? '') }}"
                                                    placeholder="e.g., 8" step="0.1" min="0" required />
                                             <small class="text-muted">This can change per property inspection</small>
                                         </div>
@@ -241,26 +311,7 @@
                             </div>
                         </div>
 
-                        <!-- SECTION 2: Findings Summary – read-only preview from Step 1 -->
-                        @php
-                            $sevColors2 = ['critical'=>'#dc3545','high'=>'#fd7e14','noi_protection'=>'#7c3aed','medium'=>'#ffc107','low'=>'#198754'];
-                            $sevLabels2 = ['critical'=>'Safety & Health','high'=>'Urgent','noi_protection'=>'NOI Protection','medium'=>'Value Depreciation','low'=>'Non-Urgent'];
-                            $prioMap2   = ['critical'=>1,'high'=>1,'noi_protection'=>2,'medium'=>2,'low'=>3];
-                            $loadedRate = (float)($bdcSettings['loaded_hourly_rate'] ?? 165);
-                            $totalLabourHrs2 = 0; $totalFRLC2 = 0; $totalMatCost2 = 0; $totalMatItems2 = 0;
-                            $sevCount2 = ['critical'=>0,'high'=>0,'noi_protection'=>0,'medium'=>0,'low'=>0];
-                            foreach ($sortedFindings as $sf2) {
-                                $sv2 = $sf2['severity'] ?? 'low';
-                                if (isset($sevCount2[$sv2])) $sevCount2[$sv2]++; else $sevCount2['low']++;
-                                $hrs2 = (float)($sf2['phar_labour_hours'] ?? 0);
-                                $totalLabourHrs2 += $hrs2;
-                                $totalFRLC2 += $hrs2 * $loadedRate;
-                                foreach (($sf2['phar_materials'] ?? []) as $m2) {
-                                    $totalMatItems2++;
-                                    $totalMatCost2 += (float)($m2['line_total'] ?? 0);
-                                }
-                            }
-                        @endphp
+                        <!-- SECTION 2: Findings Table – read-only preview from Step 1 -->
                         <div class="card mb-4" style="border:1px solid #dee2e6;box-shadow:0 2px 8px rgba(0,0,0,.06);">
                             <div class="card-header d-flex justify-content-between align-items-center" style="background:#2d3a5e;color:white;">
                                 <h5 class="mb-0"><i class="mdi mdi-clipboard-list-outline me-2"></i>Findings Summary <small class="opacity-75 fw-normal">(from Step 1)</small></h5>
@@ -273,131 +324,109 @@
                                         No findings recorded in Step 1. <a href="{{ route('inspections.create', ['property_id' => $property->id]) }}">Go back and add findings</a>.
                                     </div>
                                 @else
+                                    {{-- Hidden carry-over fields so storePharData still runs correctly --}}
                                     @foreach($sortedFindings as $fi => $finding)
-                                        @php
-                                            $sev2   = $finding['severity'] ?? 'low';
-                                            $color2 = $sevColors2[$sev2] ?? '#6c757d';
-                                            $label2 = $sevLabels2[$sev2] ?? ucfirst($sev2);
-                                            $prio2  = $finding['priority'] ?? ($prioMap2[$sev2] ?? 3);
-                                            $hrs2f  = (float)($finding['phar_labour_hours'] ?? 0);
-                                            $lc2    = $hrs2f * $loadedRate;
-                                            $mats2  = $finding['phar_materials'] ?? [];
-                                            $matTotal2 = array_sum(array_column($mats2, 'line_total'));
-                                            $sysWt2 = $systemWeightsMap[$finding['system'] ?? ''] ?? null;
-                                        @endphp
-                                        {{-- Hidden carry-over fields so storePharData still runs correctly --}}
+                                        @php $prio2 = $finding['priority'] ?? ($prioMap2[$finding['severity'] ?? 'low'] ?? 3); @endphp
                                         <input type="hidden" name="findings[{{ $fi }}][task_question]" value="{{ $finding['issue'] ?? '' }}">
                                         <input type="hidden" name="findings[{{ $fi }}][property_id]" value="{{ $property->id }}">
                                         <input type="hidden" name="findings[{{ $fi }}][priority]" value="{{ $prio2 }}">
-
-                                        <div class="px-3 py-3 border-bottom" style="border-left:4px solid {{ $color2 }} !important;">
-                                            {{-- Header --}}
-                                            <div class="d-flex justify-content-between align-items-center mb-2">
-                                                <div class="d-flex align-items-center gap-2 flex-wrap">
-                                                    <span class="badge" style="background:{{ $color2 }};{{ $sev2==='medium' ? 'color:#212529;' : '' }}">{{ $label2 }}</span>
-                                                    <strong>{{ $finding['system'] ?? 'System' }}</strong>
-                                                    @if(!empty($finding['subsystem']))
-                                                        <span class="text-muted">&rsaquo; {{ $finding['subsystem'] }}</span>
-                                                    @endif
-                                                    @if($sysWt2)
-                                                        <span class="badge bg-secondary" title="System Weight">W{{ $sysWt2 }}</span>
-                                                    @endif
-                                                </div>
-                                                <span class="text-muted small fw-semibold">Finding #{{ $fi + 1 }}</span>
-                                            </div>
-
-                                            {{-- Issue details --}}
-                                            <div class="d-flex flex-wrap gap-3 mb-3 small">
-                                                <span><strong>Issue:</strong> {{ $finding['issue'] ?? '—' }}</span>
-                                                <span><strong>Location:</strong> {{ $finding['location'] ?? '—' }}</span>
-                                                <span><strong>Spot:</strong> {{ $finding['spot'] ?? '—' }}</span>
-                                            </div>
-
-                                            {{-- Labour stats --}}
-                                            <div class="d-flex flex-wrap gap-2 mb-3">
-                                                <div class="px-3 py-2 rounded text-center" style="background:#f0f4ff;border:1px solid #c7d3f7;min-width:130px;">
-                                                    <div class="text-muted" style="font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;">Est. Labour Hours</div>
-                                                    <div class="fw-bold" style="font-size:1.25rem;">{{ $hrs2f > 0 ? number_format($hrs2f, 1) : '—' }}</div>
-                                                </div>
-                                                <div class="px-3 py-2 rounded text-center" style="background:#f0fff4;border:1px solid #a3e4bc;min-width:140px;">
-                                                    <div class="text-muted" style="font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;">Labour Cost</div>
-                                                    <div class="fw-bold text-success" style="font-size:1.25rem;">${{ $lc2 > 0 ? number_format($lc2, 2) : '0.00' }}</div>
-                                                </div>
-                                                @if(!empty($finding['phar_category']))
-                                                <div class="px-3 py-2 rounded text-center" style="background:#fff8f0;border:1px solid #fdd;min-width:130px;">
-                                                    <div class="text-muted" style="font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;">Category</div>
-                                                    <div class="fw-semibold" style="font-size:.9rem;">{{ $finding['phar_category'] }}</div>
-                                                </div>
-                                                @endif
-                                            </div>
-
-                                            {{-- Materials table --}}
-                                            @if(!empty($mats2))
-                                                <div class="fw-semibold text-success small mb-1"><i class="mdi mdi-package-variant me-1"></i>Materials</div>
-                                                <table class="table table-sm table-bordered mb-0" style="font-size:.8rem;">
-                                                    <thead class="table-light">
-                                                        <tr>
-                                                            <th>Description</th>
-                                                            <th class="text-center" style="width:70px;">Qty</th>
-                                                            <th class="text-center" style="width:80px;">Unit</th>
-                                                            <th class="text-end" style="width:100px;">Unit Cost</th>
-                                                            <th class="text-end" style="width:110px;">Line Total</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        @foreach($mats2 as $mat2)
-                                                        <tr>
-                                                            <td>{{ $mat2['material_name'] ?? '—' }}</td>
-                                                            <td class="text-center">{{ $mat2['quantity'] ?? 1 }}</td>
-                                                            <td class="text-center">{{ ucwords($mat2['unit'] ?? 'ea') }}</td>
-                                                            <td class="text-end">${{ number_format((float)($mat2['unit_cost'] ?? 0), 2) }}</td>
-                                                            <td class="text-end fw-semibold">${{ number_format((float)($mat2['line_total'] ?? 0), 2) }}</td>
-                                                        </tr>
-                                                        @endforeach
-                                                    </tbody>
-                                                    <tfoot>
-                                                        <tr class="table-light">
-                                                            <td colspan="4" class="text-end fw-semibold">Materials Total:</td>
-                                                            <td class="text-end fw-bold text-success">${{ number_format($matTotal2, 2) }}</td>
-                                                        </tr>
-                                                    </tfoot>
-                                                </table>
-                                            @else
-                                                <p class="text-muted small fst-italic mb-0">No materials attached to this finding.</p>
-                                            @endif
-                                        </div>
                                     @endforeach
 
-                                    {{-- Summary bar --}}
-                                    <div class="p-3" style="background:#1e2a45;color:#fff;">
-                                        <div class="row text-center mb-2 pb-2" style="border-bottom:1px solid rgba(255,255,255,.15);">
-                                            <div class="col"><div class="small fw-semibold mb-1" style="color:#fc8181;">&#x1F534; Safety &amp; Health</div><div class="fw-bold fs-5" style="color:#fc8181;">{{ $sevCount2['critical'] }}</div></div>
-                                            <div class="col"><div class="small fw-semibold mb-1" style="color:#fbd38d;">&#x1F7E0; Urgency</div><div class="fw-bold fs-5" style="color:#fbd38d;">{{ $sevCount2['high'] }}</div></div>
-                                            <div class="col"><div class="small fw-semibold mb-1" style="color:#d6bcfa;">&#x1F7E3; NOI Protection</div><div class="fw-bold fs-5" style="color:#d6bcfa;">{{ $sevCount2['noi_protection'] }}</div></div>
-                                            <div class="col"><div class="small fw-semibold mb-1" style="color:#fef08a;">&#x1F7E1; Value Depreciation</div><div class="fw-bold fs-5" style="color:#fef08a;">{{ $sevCount2['medium'] }}</div></div>
-                                            <div class="col"><div class="small fw-semibold mb-1" style="color:#86efac;">&#x1F7E2; Non-Urgent</div><div class="fw-bold fs-5" style="color:#86efac;">{{ $sevCount2['low'] }}</div></div>
-                                        </div>
-                                        <div class="row text-center">
-                                            <div class="col-md-4"><strong>Total Findings</strong><div class="fw-bold fs-4" style="color:#93c5fd;">{{ count($sortedFindings) }}</div></div>
-                                            <div class="col-md-4"><strong>Total Labour Hours</strong><div class="fw-bold fs-4" style="color:#67e8f9;">{{ number_format($totalLabourHrs2, 1) }}</div></div>
-                                            <div class="col-md-4"><strong>Total FR Labour Cost (FRLC)</strong><div class="fw-bold fs-4" style="color:#fcd34d;">${{ number_format($totalFRLC2, 2) }}</div></div>
-                                        </div>
+                                    <div class="table-responsive">
+                                        <table class="table table-bordered table-hover mb-0 align-middle" style="font-size:.875rem;">
+                                            <thead style="background:#f1f5f9;">
+                                                <tr>
+                                                    <th class="text-center" style="width:40px;">#</th>
+                                                    <th style="width:90px;">Severity</th>
+                                                    <th>System</th>
+                                                    <th>Subsystem</th>
+                                                    <th>Issue / Finding</th>
+                                                    <th>Risk / Impact</th>
+                                                    <th>Recommendations &amp; Notes</th>
+                                                    <th class="text-end" style="width:130px;">Est. Labour Cost</th>
+                                                    <th>Materials &amp; Cost</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach($sortedFindings as $fi => $finding)
+                                                    @php
+                                                        $sev2      = $finding['severity'] ?? 'low';
+                                                        $color2    = $sevColors2[$sev2] ?? '#6c757d';
+                                                        $label2    = $sevLabels2[$sev2] ?? ucfirst($sev2);
+                                                        $hrs2f     = (float)($finding['phar_labour_hours'] ?? 0);
+                                                        $lc2       = $hrs2f * $loadedRate;
+                                                        $mats2     = $finding['phar_materials'] ?? [];
+                                                        $matTotal2 = array_sum(array_column($mats2, 'line_total'));
+                                                        $recs2     = is_array($finding['recommendations'] ?? null)
+                                                                        ? $finding['recommendations']
+                                                                        : array_filter(array_map('trim', explode('|', (string)($finding['recommendations'] ?? ''))));
+                                                    @endphp
+                                                    <tr style="border-left:4px solid {{ $color2 }};">
+                                                        <td class="text-center text-muted fw-semibold">{{ $fi + 1 }}</td>
+                                                        <td>
+                                                            <span class="badge" style="background:{{ $color2 }};{{ $sev2==='medium'?'color:#212529;':'' }}font-size:.72rem;">{{ $label2 }}</span>
+                                                        </td>
+                                                        <td class="fw-semibold">{{ $finding['system'] ?? '—' }}</td>
+                                                        <td class="text-muted">{{ $finding['subsystem'] ?? '—' }}</td>
+                                                        <td>
+                                                            <div class="fw-semibold">{{ $finding['issue'] ?? '—' }}</div>
+                                                            @if(!empty($finding['location']) || !empty($finding['spot']))
+                                                                <div class="text-muted" style="font-size:.78rem;">
+                                                                    {{ $finding['location'] ?? '' }}{{ !empty($finding['location']) && !empty($finding['spot']) ? ' · ' : '' }}{{ $finding['spot'] ?? '' }}
+                                                                </div>
+                                                            @endif
+                                                        </td>
+                                                        <td class="text-muted" style="font-size:.82rem;">{{ $finding['risk_impact'] ?? '—' }}</td>
+                                                        <td style="font-size:.82rem;">
+                                                            @if(!empty($recs2))
+                                                                <ul class="mb-0 ps-3">
+                                                                    @foreach($recs2 as $rec2)
+                                                                        <li>{{ $rec2 }}</li>
+                                                                    @endforeach
+                                                                </ul>
+                                                            @endif
+                                                            @if(!empty($finding['phar_notes']))
+                                                                <div class="text-muted mt-1" style="font-size:.8rem;border-top:{{ !empty($recs2) ? '1px dashed #dee2e6;padding-top:.25rem;' : '' }}">
+                                                                    <span class="fw-semibold text-secondary" style="font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;">Note:</span> {{ $finding['phar_notes'] }}
+                                                                </div>
+                                                            @endif
+                                                            @if(empty($recs2) && empty($finding['phar_notes']))
+                                                                <span class="text-muted fst-italic">—</span>
+                                                            @endif
+                                                        </td>
+                                                        <td class="text-end fw-semibold {{ $lc2 > 0 ? 'text-success' : 'text-muted' }}">
+                                                            ${{ number_format($lc2, 2) }}
+                                                            @if($hrs2f > 0)
+                                                                <div class="text-muted fw-normal" style="font-size:.73rem;">{{ number_format($hrs2f, 1) }} hrs</div>
+                                                            @endif
+                                                        </td>
+                                                        <td style="font-size:.8rem;">
+                                                            @if(!empty($mats2))
+                                                                <ul class="mb-0 ps-3">
+                                                                    @foreach($mats2 as $mat2)
+                                                                        <li>{{ $mat2['material_name'] ?? '—' }} &times;{{ $mat2['quantity'] ?? 1 }} {{ $mat2['unit'] ?? '' }}</li>
+                                                                    @endforeach
+                                                                </ul>
+                                                                <div class="fw-semibold text-success mt-1" style="font-size:.8rem;border-top:1px dashed #dee2e6;padding-top:.25rem;">
+                                                                    Total: ${{ number_format($matTotal2, 2) }}
+                                                                </div>
+                                                            @else
+                                                                <span class="text-muted fst-italic">None</span>
+                                                            @endif
+                                                        </td>
+                                                    </tr>
+                                                @endforeach
+                                            </tbody>
+                                            <tfoot style="background:#f8fafc;">
+                                                <tr>
+                                                    <td colspan="6" class="text-end fw-bold" style="font-size:.9rem;">Totals</td>
+                                                    <td class="text-end fw-bold text-success" style="font-size:.95rem;">${{ number_format($totalFRLC2, 2) }}</td>
+                                                    <td class="fw-bold text-success" style="font-size:.9rem;">{{ $totalMatItems2 }} item(s) &mdash; ${{ number_format($totalMatCost2, 2) }}</td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
                                     </div>
                                 @endif
-                            </div>
-                        </div>
-
-                        <!-- Materials FMC Summary -->
-                        <div class="alert alert-secondary mb-4">
-                            <div class="row text-center">
-                                <div class="col-md-6">
-                                    <strong>Total Material Items:</strong>
-                                    <div class="fs-4 text-info">{{ $totalMatItems2 }}</div>
-                                </div>
-                                <div class="col-md-6">
-                                    <strong>Total Material Cost (FMC):</strong>
-                                    <div class="fs-4 text-success">${{ number_format($totalMatCost2, 2) }}</div>
-                                </div>
                             </div>
                         </div>
 
@@ -438,57 +467,60 @@
                         @endphp
 
                         <div class="card mb-4" style="border:2px solid #5b67ca;">
-                            <div class="card-header text-white d-flex justify-content-between align-items-center" style="background:linear-gradient(135deg,#5b67ca,#3d4ba8);">
+                            <div class="card-header text-white d-flex justify-content-between align-items-center" style="background:linear-gradient(135deg,#5b67ca,#3d4ba8);cursor:pointer;" onclick="var el=document.getElementById('conditionIndicesBody');var vis=el.style.display!=='none';el.style.display=vis?'none':'';this.querySelector('.ci-chevron').className='ci-chevron mdi '+(vis?'mdi-chevron-right':'mdi-chevron-down')+' me-1';">
                                 <h5 class="mb-0"><i class="mdi mdi-chart-donut me-2"></i>Condition Indices</h5>
-                                <small class="opacity-75">Calculated from Step 1 inspection findings</small>
+                                <div class="d-flex align-items-center gap-3">
+                                    <small class="opacity-75">Calculated from Step 1 inspection findings</small>
+                                    <i class="ci-chevron mdi mdi-chevron-right me-1" style="font-size:1.25rem;"></i>
+                                </div>
                             </div>
-                            <div class="card-body">
+                            <div id="conditionIndicesBody" class="card-body" style="display:none;">
 
                                 {{-- Three index cards --}}
-                                <div class="row g-3 mb-3">
+                                <div class="row g-2 mb-3">
                                     {{-- CPI --}}
                                     <div class="col-md-4">
-                                        <div class="p-3 rounded text-center h-100" style="background:#f0f4ff;border:2px solid {{ $cpiColor }};">
-                                            <div class="text-muted small fw-semibold mb-1 text-uppercase" style="letter-spacing:.05em;">CPI — Composite Property Index</div>
+                                        <div class="px-3 py-2 rounded text-center h-100" style="background:#f0f4ff;border:1px solid {{ $cpiColor }};">
+                                            <div class="text-muted fw-semibold text-uppercase mb-1" style="font-size:.68rem;letter-spacing:.05em;">CPI — Composite Property Index</div>
                                             @if($cpi !== null)
-                                                <div class="fw-bold" style="font-size:2.8rem;color:{{ $cpiColor }};line-height:1;">{{ number_format($cpi, 1) }}</div>
-                                                <span class="badge mt-2 px-3 py-2" style="background:{{ $cpiColor }};font-size:.85rem;">{{ $cpiRat }}</span>
+                                                <div class="fw-bold" style="font-size:1.75rem;color:{{ $cpiColor }};line-height:1.1;">{{ number_format($cpi, 1) }}</div>
+                                                <span class="badge mt-1 px-2 py-1" style="background:{{ $cpiColor }};font-size:.75rem;">{{ $cpiRat }}</span>
                                             @else
-                                                <div class="text-muted my-2" style="font-size:2rem;">—</div>
+                                                <div class="text-muted my-1" style="font-size:1.5rem;">—</div>
                                                 <small class="text-muted">Complete Step 1 to compute</small>
                                             @endif
-                                            <div class="text-muted mt-2" style="font-size:.72rem;">Σ(SystemScore × Weight) / 197</div>
+                                            <div class="text-muted mt-1" style="font-size:.68rem;">Σ(SystemScore × Weight) / 197</div>
                                         </div>
                                     </div>
 
                                     {{-- TUS --}}
                                     <div class="col-md-4">
-                                        <div class="p-3 rounded text-center h-100" style="background:#f0fff4;border:2px solid {{ $tusColor }};">
-                                            <div class="text-muted small fw-semibold mb-1 text-uppercase" style="letter-spacing:.05em;">TUS — Tenant Underwriting Score</div>
-                                            <div class="fw-bold" style="font-size:2.8rem;color:{{ $tusColor }};line-height:1;">{{ number_format($tus, 1) }}</div>
-                                            <span class="badge mt-2 px-3 py-2" style="background:{{ $tusColor }};font-size:.85rem;">
+                                        <div class="px-3 py-2 rounded text-center h-100" style="background:#f0fff4;border:1px solid {{ $tusColor }};">
+                                            <div class="text-muted fw-semibold text-uppercase mb-1" style="font-size:.68rem;letter-spacing:.05em;">TUS — Tenant Underwriting Score</div>
+                                            <div class="fw-bold" style="font-size:1.75rem;color:{{ $tusColor }};line-height:1.1;">{{ number_format($tus, 1) }}</div>
+                                            <span class="badge mt-1 px-2 py-1" style="background:{{ $tusColor }};font-size:.75rem;">
                                                 @if($tus >= 80) Low Risk
                                                 @elseif($tus >= 60) Moderate Risk
                                                 @elseif($tus >= 40) Elevated Risk
                                                 @else High Risk
                                                 @endif
                                             </span>
-                                            <div class="text-muted mt-2" style="font-size:.72rem;">Input by inspector (0–100 scale)</div>
+                                            <div class="text-muted mt-1" style="font-size:.68rem;">Input by inspector (0–100 scale)</div>
                                         </div>
                                     </div>
 
                                     {{-- ASI --}}
                                     <div class="col-md-4">
-                                        <div class="p-3 rounded text-center h-100" style="background:#fff8f0;border:2px solid {{ $asiColor }};">
-                                            <div class="text-muted small fw-semibold mb-1 text-uppercase" style="letter-spacing:.05em;">ASI — Asset Stability Index</div>
+                                        <div class="px-3 py-2 rounded text-center h-100" style="background:#fff8f0;border:1px solid {{ $asiColor }};">
+                                            <div class="text-muted fw-semibold text-uppercase mb-1" style="font-size:.68rem;letter-spacing:.05em;">ASI — Asset Stability Index</div>
                                             @if($asi !== null)
-                                                <div class="fw-bold" style="font-size:2.8rem;color:{{ $asiColor }};line-height:1;">{{ number_format($asi, 1) }}</div>
-                                                <span class="badge mt-2 px-3 py-2" style="background:{{ $asiColor }};font-size:.85rem;">{{ $asiRat }}</span>
+                                                <div class="fw-bold" style="font-size:1.75rem;color:{{ $asiColor }};line-height:1.1;">{{ number_format($asi, 1) }}</div>
+                                                <span class="badge mt-1 px-2 py-1" style="background:{{ $asiColor }};font-size:.75rem;">{{ $asiRat }}</span>
                                             @else
-                                                <div class="text-muted my-2" style="font-size:2rem;">—</div>
+                                                <div class="text-muted my-1" style="font-size:1.5rem;">—</div>
                                                 <small class="text-muted">Computed after Step 1</small>
                                             @endif
-                                            <div class="text-muted mt-2" style="font-size:.72rem;">CPI × 60% + TUS × 40%</div>
+                                            <div class="text-muted mt-1" style="font-size:.68rem;">CPI × 60% + TUS × 40%</div>
                                         </div>
                                     </div>
                                 </div>
@@ -498,9 +530,9 @@
                                 <div>
                                     <button type="button" class="btn btn-sm btn-outline-secondary mb-2" id="sysBreakdownToggle"
                                             onclick="var el=document.getElementById('sysBreakdownTable');var vis=el.style.display!=='none';el.style.display=vis?'none':'';this.innerHTML=vis?'<i class=\'mdi mdi-chevron-right me-1\'></i>Show System Score Breakdown':'<i class=\'mdi mdi-chevron-down me-1\'></i>Hide System Score Breakdown';">
-                                        <i class="mdi mdi-chevron-down me-1"></i>Hide System Score Breakdown
+                                        <i class="mdi mdi-chevron-right me-1"></i>Show System Score Breakdown
                                     </button>
-                                    <div id="sysBreakdownTable">
+                                    <div id="sysBreakdownTable" style="display:none;">
                                         <div class="table-responsive">
                                             <table class="table table-sm table-bordered mb-0">
                                                 <thead class="table-dark">
@@ -724,10 +756,6 @@
                         </div>
 
                         @else
-                        <div class="alert alert-warning mb-4">
-                            <i class="mdi mdi-calculator-variant me-2"></i>
-                            <strong>Pricing not yet calculated.</strong> Enter PHAR parameters above, then click <strong>Save &amp; Preview Pricing</strong> to run the PHAR engine and see tier-adjusted pricing here.
-                        </div>
                         @endif
 
                         <!-- Form Actions -->

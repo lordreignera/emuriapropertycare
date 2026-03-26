@@ -261,6 +261,7 @@ class InspectionController extends Controller
             'system_findings.*.materials.*.unit_cost'          => 'nullable|numeric|min:0',
             'system_findings.*.materials.*.line_total'         => 'nullable|numeric|min:0',
             'system_findings.*.materials.*.notes'              => 'nullable|string|max:500',
+            'system_findings.*.risk_impact'                     => 'nullable|string|max:1000',
             'system_findings.*.phar_category'                  => 'nullable|string|max:255',
             'system_findings.*.phar_included_yn'               => 'nullable|boolean',
             'system_findings.*.phar_notes'                     => 'nullable|string',
@@ -413,9 +414,6 @@ class InspectionController extends Controller
 
         $disk = config('filesystems.default', 's3');
 
-        // Preserve existing per-finding photos so they survive a re-save without re-upload
-        $existingFindings = $inspection->fresh()->findings ?? [];
-
         // Upload per-finding photos before normalizing findings (keyed by system_findings input index)
         $findingPhotoPaths = [];
         if ($request->hasFile('finding_photos')) {
@@ -458,11 +456,8 @@ class InspectionController extends Controller
                         ->values()
                         ->all(),
                     'type'           => $systemSlugMap[$systemId] ?? null,
-                    // Merge: keep previously stored photos + any newly uploaded ones for this index
-                    'finding_photos' => array_values(array_unique(array_merge(
-                        is_array($existingFindings[$idx]['finding_photos'] ?? null) ? $existingFindings[$idx]['finding_photos'] : [],
-                        $findingPhotoPaths[$idx] ?? []
-                    ))),
+                    'finding_photos' => $findingPhotoPaths[$idx] ?? [],
+                    'risk_impact'       => trim((string) ($finding['risk_impact'] ?? '')),
                     'phar_labour_hours' => (float) ($finding['phar_labour_hours'] ?? 0),
                     'phar_category'     => trim((string) ($finding['phar_category'] ?? '')),
                     'phar_included_yn'  => isset($finding['phar_included_yn']) ? (bool) $finding['phar_included_yn'] : true,
@@ -1143,19 +1138,7 @@ class InspectionController extends Controller
                 ->with('success', 'Step 2 progress saved. You can review or add more findings in Step 1 and return here at any time.');
         }
 
-        // ==== SAVE & PREVIEW: run calculations but keep inspection in_progress ====
-        $this->runPharCalculations($inspection, $mergedFindings, $property);
-
-        return redirect()->route('inspections.phar-data', $inspection->id)
-            ->with('success', 'Pricing calculated successfully. Review the results below, then click Complete Assessment when ready.');
-    }
-
-    /**
-     * Run PHAR calculations and persist relational finding/material records.
-     * Does NOT change inspection status — called from both storePharData (preview) and completeAssessment.
-     */
-    private function runPharCalculations(Inspection $inspection, array $mergedFindings, $property): void
-    {
+        // ==== FINAL SAVE: process into relational tables ====
         $inspection->pharFindings()->delete();
         $inspection->materials()->delete();
 
@@ -1176,8 +1159,11 @@ class InspectionController extends Controller
                 'notes'         => $findingData['phar_notes'] ?? null,
             ]);
 
+            // Per-finding materials → InspectionMaterial records
             foreach ($findingData['phar_materials'] ?? [] as $materialData) {
-                if (empty($materialData['material_name'])) continue;
+                if (empty($materialData['material_name'])) {
+                    continue;
+                }
                 \App\Models\InspectionMaterial::create([
                     'inspection_id' => $inspection->id,
                     'property_id'   => $property->id,
@@ -1193,23 +1179,18 @@ class InspectionController extends Controller
             }
         }
 
+        // ==== CALCULATE FINAL PRICING (BDC + FRLC + FMC + TIERS) ====
+        // Re-compute ASI now that tus_score is persisted
         $inspection->refresh();
         $this->computeASI($inspection);
         $inspection->save();
 
         $bdcCalculator = new \App\Services\BDCCalculator();
-        $calculator    = new \App\Services\MergeBridgeCalculator($bdcCalculator);
-        $results       = $calculator->calculate($inspection);
+        $calculator = new \App\Services\MergeBridgeCalculator($bdcCalculator);
+        $results = $calculator->calculate($inspection);
         $calculator->saveToInspection($inspection, $results);
-    }
 
-    /**
-     * Mark the assessment as complete once the user is satisfied with the preview.
-     */
-    public function completeAssessment(string $id)
-    {
-        $inspection = Inspection::findOrFail($id);
-
+        // Mark inspection as completed
         $inspection->update([
             'status'         => 'completed',
             'completed_date' => now(),
@@ -1218,7 +1199,7 @@ class InspectionController extends Controller
         $this->ensureClientInvoiceFromInspection($inspection->fresh(['property', 'project']));
 
         return redirect()->route('inspections.show', $inspection->id)
-            ->with('success', 'Assessment completed! Final pricing is locked in.');
+            ->with('success', 'PHAR data saved successfully! Final pricing calculated.');
     }
 
     protected function ensureClientInvoiceFromInspection(Inspection $inspection): void

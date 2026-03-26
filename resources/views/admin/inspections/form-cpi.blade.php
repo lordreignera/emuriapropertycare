@@ -626,6 +626,13 @@ function addSystemFindingRow(systemId, prefill = {}) {
                 </select>
             </div>
         </div>
+        <!-- Row 1b: Risk / Impact -->
+        <div class="row g-2 px-3 pt-2">
+            <div class="col-12">
+                <label class="form-label small fw-semibold text-muted mb-1">Risk / Impact</label>
+                <textarea name="system_findings[${currentIndex}][risk_impact]" class="form-control form-control-sm" rows="2" placeholder="Describe the risk or impact of this finding...">${escapeHtml(prefill.risk_impact || '')}</textarea>
+            </div>
+        </div>
         <!-- Row 2: Location | Spot -->
         <div class="row g-2 px-3 pt-2">
             <div class="col-md-6">
