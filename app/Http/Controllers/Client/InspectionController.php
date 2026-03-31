@@ -91,7 +91,9 @@ class InspectionController extends Controller
         $monthlyBase = (float) max(
             (float) ($inspection->scientific_final_monthly ?? 0),
             (float) ($inspection->arp_equivalent_final ?? 0),
-            (float) ($inspection->base_package_price_snapshot ?? 0)
+            (float) ($inspection->base_package_price_snapshot ?? 0),
+            (float) ($inspection->arp_monthly ?? 0),
+            (float) ($inspection->trc_monthly ?? 0),
         );
 
         if ($monthlyBase <= 0) {

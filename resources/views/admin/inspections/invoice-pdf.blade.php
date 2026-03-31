@@ -457,12 +457,20 @@
             </table>
         </div>
 
-        <!-- Final Monthly -->
+        <!-- Final Charge -->
+        @php
+            $pdfPaymentMode = $inspection->work_payment_cadence === 'monthly' ? 'monthly' : 'lump_sum';
+            $pdfFinalCharge = (float)($inspection->final_charge ?? ($pdfPaymentMode === 'monthly' ? ($inspection->arp_monthly ?? 0) : ($inspection->trc_annual ?? 0)));
+        @endphp
         <div style="margin-top:8px;">
             <div class="final-monthly">
-                <div class="label">Monthly Property Care Price</div>
-                <div class="amount">${{ number_format($inspection->scientific_final_monthly ?? $inspection->arp_monthly ?? 0, 2) }}</div>
-                <div class="sub">per month &nbsp;|&nbsp; Annual: ${{ number_format(($inspection->scientific_final_monthly ?? $inspection->arp_monthly ?? 0) * 12, 2) }}</div>
+                <div class="label">{{ $pdfPaymentMode === 'monthly' ? 'Monthly Property Care Price' : 'Lump Sum Payment (Full TRC)' }}</div>
+                <div class="amount">${{ number_format($pdfFinalCharge, 2) }}</div>
+                @if($pdfPaymentMode === 'monthly')
+                <div class="sub">per month &nbsp;|&nbsp; Annual: ${{ number_format($pdfFinalCharge * 12, 2) }}</div>
+                @else
+                <div class="sub">one-time annual charge</div>
+                @endif
             </div>
         </div>
 

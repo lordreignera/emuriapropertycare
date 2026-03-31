@@ -212,6 +212,8 @@
                     </div>
                 </div>
 
+                </div>
+
                 <div class="card">
                     <div class="card-body">
                         <div class="d-flex justify-content-between">
@@ -494,14 +496,16 @@ function buildMaterialUnitsOptions() {
     ).join('');
 }
 
-function buildCpiMaterialPresetOptions(subsystemId = null) {
+function buildCpiMaterialPresetOptions() {
     let html = '<option value="">Custom / Manual</option>';
     FMC_MATERIAL_SETTINGS.forEach((setting) => {
-        if (subsystemId !== null && setting.subsystem_id !== null && setting.subsystem_id !== subsystemId) return;
-        const safeName = String(setting.material_name ?? '');
-        const safeUnit = String(setting.default_unit ?? 'ea');
-        const safeCost = Number(setting.default_unit_cost ?? 0).toFixed(2);
-        html += `<option value="${safeName}" data-unit="${safeUnit}" data-cost="${safeCost}">${safeName}</option>`;
+        const safeName  = String(setting.material_name ?? '');
+        const safeUnit  = String(setting.default_unit ?? 'ea');
+        const rawCost   = Number(setting.default_unit_cost ?? 0);
+        const hst       = Number(setting.hst_rate ?? 5);
+        const pst       = Number(setting.pst_rate ?? 7);
+        const taxedCost = (rawCost * (1 + hst / 100) * (1 + pst / 100)).toFixed(2);
+        html += `<option value="${safeName}" data-unit="${safeUnit}" data-cost="${taxedCost}" data-hst="${hst.toFixed(2)}" data-pst="${pst.toFixed(2)}" data-raw="${rawCost.toFixed(2)}">${safeName}</option>`;
     });
     return html;
 }
@@ -516,7 +520,7 @@ function createCpiMaterialRow(fi, mi, subsystemId = null) {
         <div class="row g-2 align-items-end">
             <div class="col-md-3">
                 <label class="form-label" style="font-size:.72rem;font-weight:600;color:#6c757d;">Preset</label>
-                <select class="form-select form-select-sm cpi-material-template">${buildCpiMaterialPresetOptions(subsystemId)}</select>
+                <select class="form-select form-select-sm cpi-material-template">${buildCpiMaterialPresetOptions()}</select>
             </div>
             <div class="col-md-3">
                 <label class="form-label" style="font-size:.72rem;font-weight:600;color:#6c757d;">Description</label>
@@ -535,15 +539,20 @@ function createCpiMaterialRow(fi, mi, subsystemId = null) {
                 </select>
             </div>
             <div class="col-md-2">
-                <label class="form-label" style="font-size:.72rem;font-weight:600;color:#6c757d;">Unit Cost ($)</label>
+                <label class="form-label" style="font-size:.72rem;font-weight:600;color:#6c757d;">Taxed Unit Cost ($)</label>
                 <input type="number" name="system_findings[${fi}][materials][${mi}][unit_cost]"
-                    class="form-control form-control-sm cpi-mat-cost" min="0" step="0.01" value="0">
+                    class="form-control form-control-sm cpi-mat-cost" min="0" step="0.01" value="0" readonly style="background:#f8f9fa;cursor:default;">
             </div>
             <div class="col-md-1">
                 <label class="form-label" style="font-size:.72rem;font-weight:600;color:#6c757d;">Line Total</label>
                 <input type="text" class="form-control form-control-sm cpi-mat-total" readonly value="$0.00">
                 <input type="hidden" name="system_findings[${fi}][materials][${mi}][line_total]"
                     class="cpi-mat-total-hidden" value="0">
+            </div>
+        </div>
+        <div class="row g-1 mt-1">
+            <div class="col-12">
+                <small class="text-muted cpi-mat-tax-breakdown" style="font-size:.72rem;"></small>
             </div>
         </div>
         <input type="hidden" name="system_findings[${fi}][materials][${mi}][property_id]" value="${CPI_PROPERTY_ID}">
@@ -833,31 +842,48 @@ function addSystemFindingRow(systemId, prefill = {}) {
     const subsystemSelForMat = card.querySelector(`select[name="system_findings[${currentIndex}][subsystem_id]"]`);
 
     function updateCpiLineTotal(row) {
-        const qty  = parseFloat(row.querySelector('.cpi-mat-qty')?.value  || 0);
-        const cost = parseFloat(row.querySelector('.cpi-mat-cost')?.value || 0);
+        const qty   = parseFloat(row.querySelector('.cpi-mat-qty')?.value  || 0);
+        const cost  = parseFloat(row.querySelector('.cpi-mat-cost')?.value || 0); // already taxed
         const total = qty * cost;
-        const display = row.querySelector('.cpi-mat-total');
-        const hidden  = row.querySelector('.cpi-mat-total-hidden');
+        const display   = row.querySelector('.cpi-mat-total');
+        const hidden    = row.querySelector('.cpi-mat-total-hidden');
+        const breakdown = row.querySelector('.cpi-mat-tax-breakdown');
         if (display) display.value = '$' + total.toFixed(2);
         if (hidden)  hidden.value  = total.toFixed(2);
+        if (breakdown && cost > 0) {
+            const hst = row.dataset.hst ? parseFloat(row.dataset.hst) : null;
+            const pst = row.dataset.pst ? parseFloat(row.dataset.pst) : null;
+            const raw = row.dataset.raw ? parseFloat(row.dataset.raw) : null;
+            if (hst !== null && pst !== null && raw !== null) {
+                breakdown.textContent = `Base: $${raw.toFixed(2)}  ×(1+${hst}%)×(1+${pst}%) = $${cost.toFixed(2)} taxed unit cost`;
+            } else {
+                breakdown.textContent = '';
+            }
+        } else if (breakdown) {
+            breakdown.textContent = '';
+        }
     }
 
     function wireCpiMaterialRow(row) {
-        // Preset select auto-fills name / unit / cost
+        // Preset select auto-fills name / unit / taxed cost
         const presetSel = row.querySelector('.cpi-material-template');
         if (presetSel) {
             presetSel.addEventListener('change', function () {
                 if (!this.value) return;
+                const opt    = this.options[this.selectedIndex];
                 const nameEl = row.querySelector(`[name*="[material_name]"]`);
                 const unitEl = row.querySelector(`select[name*="[unit]"]`);
                 const costEl = row.querySelector('.cpi-mat-cost');
                 if (nameEl) nameEl.value = this.value;
-                if (unitEl && this.options[this.selectedIndex].dataset.unit)
-                    unitEl.value = this.options[this.selectedIndex].dataset.unit;
-                if (costEl && this.options[this.selectedIndex].dataset.cost) {
-                    costEl.value = this.options[this.selectedIndex].dataset.cost;
-                    updateCpiLineTotal(row);
+                if (unitEl && opt.dataset.unit)
+                    unitEl.value = opt.dataset.unit;
+                if (costEl && opt.dataset.cost) {
+                    costEl.value = opt.dataset.cost; // taxed unit cost
                 }
+                row.dataset.hst = opt.dataset.hst ?? 5;
+                row.dataset.pst = opt.dataset.pst ?? 7;
+                row.dataset.raw = opt.dataset.raw ?? opt.dataset.cost;
+                updateCpiLineTotal(row);
             });
         }
         row.querySelector('.cpi-mat-qty')?.addEventListener('input',  () => updateCpiLineTotal(row));
@@ -881,7 +907,24 @@ function addSystemFindingRow(systemId, prefill = {}) {
                 if (nameEl) nameEl.value = mat.material_name ?? '';
                 if (qtyEl)  qtyEl.value  = mat.quantity ?? 1;
                 if (unitEl && mat.unit) unitEl.value = mat.unit;
-                if (costEl) costEl.value = mat.unit_cost ?? 0;
+                // Try to look up current taxed cost from FMC settings; fall back to stored value
+                const fmcMatch = FMC_MATERIAL_SETTINGS.find(s =>
+                    s.material_name.toLowerCase() === (mat.material_name ?? '').toLowerCase()
+                );
+                if (costEl) {
+                    if (fmcMatch) {
+                        const raw   = Number(fmcMatch.default_unit_cost ?? 0);
+                        const hst   = Number(fmcMatch.hst_rate ?? 5);
+                        const pst   = Number(fmcMatch.pst_rate ?? 7);
+                        const taxed = (raw * (1 + hst / 100) * (1 + pst / 100)).toFixed(2);
+                        costEl.value    = taxed;
+                        row.dataset.hst = hst.toFixed(2);
+                        row.dataset.pst = pst.toFixed(2);
+                        row.dataset.raw = raw.toFixed(2);
+                    } else {
+                        costEl.value = mat.unit_cost ?? 0; // custom material — honour stored value
+                    }
+                }
                 updateCpiLineTotal(row);
                 wireCpiMaterialRow(row);
                 matContainer.appendChild(row);
@@ -1044,5 +1087,6 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 });
+
 </script>
 @endsection

@@ -36,6 +36,12 @@ class Inspection extends Model
         'estimated_task_hours',
         'minimum_required_hours',
         'bdc_visits_per_year',
+        // Travel BDC inputs
+        'bdc_distance_km',
+        'bdc_time_minutes',
+        'bdc_rate_per_km',
+        'bdc_rate_per_minute',
+        'bdc_per_visit',
         // Calculation fields from phar_findings migration
         'bdc_annual',
         'bdc_monthly',

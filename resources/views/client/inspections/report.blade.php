@@ -440,14 +440,18 @@
                                         </tr>
                                     </tbody>
                                     <tfoot>
+                                        @php
+                                            $rptPaymentMode = $inspection->work_payment_cadence === 'monthly' ? 'monthly' : 'lump_sum';
+                                            $rptFinalCharge = (float)($inspection->final_charge ?? ($rptPaymentMode === 'monthly' ? $arpMonthlyTotal : ($inspection->trc_annual ?? 0)));
+                                        @endphp
                                         <tr style="background:#198754;color:white;">
-                                            <td><strong>ARP <small style="font-weight:normal;opacity:.85;">(TRC ÷ 12)</small></strong></td>
-                                            <td class="text-end"><strong>${{ number_format($arpMonthlyTotal, 2) }}/mo</strong></td>
+                                            <td><strong>Final Charge <small style="font-weight:normal;opacity:.85;">({{ $rptPaymentMode === 'monthly' ? 'Monthly' : 'Lump Sum' }})</small></strong></td>
+                                            <td class="text-end"><strong>${{ number_format($rptFinalCharge, 2) }}{{ $rptPaymentMode === 'monthly' ? '/mo' : ' total' }}</strong></td>
                                         </tr>
                                     </tfoot>
                                 </table>
                             </div>
-                            <p class="text-muted small mt-1"><strong>ARP</strong> = Annual Recurring Price = TRC ÷ 12. This is the monthly amount the client pays.</p>
+                            <p class="text-muted small mt-1"><strong>Final Charge</strong> = {{ $rptPaymentMode === 'monthly' ? 'TRC ÷ 12 (client pays monthly)' : 'Full TRC paid at once (lump sum)' }}.</p>
                         </div>
                         @endif
 

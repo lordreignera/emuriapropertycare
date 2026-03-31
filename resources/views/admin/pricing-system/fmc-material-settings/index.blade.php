@@ -84,7 +84,8 @@
                                 <th>Subsystem</th>
                                 <th>Material / Part</th>
                                 <th>Default Unit</th>
-                                <th>Unit Cost ($)</th>
+                                <th>Taxed Unit Cost ($)</th>
+                                <th>HST / PST</th>
                                 <th>Status</th>
                                 <th>Actions</th>
                             </tr>
@@ -97,7 +98,10 @@
                                     <td>{{ $material->subsystem?->name ?: '--' }}</td>
                                     <td><strong>{{ $material->material_name }}</strong></td>
                                     <td>{{ $material->default_unit }}</td>
-                                    <td>${{ number_format((float) $material->default_unit_cost, 2) }}</td>
+                                    <td>${{ number_format((float)$material->default_unit_cost * (1 + (float)($material->hst_rate ?? 5)/100) * (1 + (float)($material->pst_rate ?? 7)/100), 2) }}
+                                        <small class="text-muted d-block" style="font-size:.75rem;">base ${{ number_format((float)$material->default_unit_cost,2) }}</small>
+                                    </td>
+                                    <td><small>HST {{ number_format((float)($material->hst_rate ?? 5), 2) }}% / PST {{ number_format((float)($material->pst_rate ?? 7), 2) }}%</small></td>
                                     <td>
                                         @if($material->is_active)
                                             <span class="badge badge-success">Active</span>
@@ -120,7 +124,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="8" class="text-center py-4 text-muted">No FMC material settings found.</td>
+                                    <td colspan="9" class="text-center py-4 text-muted">No FMC material settings found.</td>
                                 </tr>
                             @endforelse
                         </tbody>

@@ -83,16 +83,12 @@
                                                name="settings[{{ $index }}][setting_value]" 
                                                class="form-control bdc-input" 
                                                value="{{ $setting->setting_value }}" 
-                                               step="{{ $setting->setting_type === 'percentage' ? '0.01' : '0.5' }}"
+                                               step="0.01"
                                                min="0"
                                                data-key="{{ $setting->setting_key }}"
                                                required>
                                         
-                                        @if($setting->unit === '%')
-                                        <span class="input-group-text">
-                                            ({{ number_format($setting->setting_value * 100, 0) }}%)
-                                        </span>
-                                        @elseif($setting->unit && $setting->unit !== '$/hr' && $setting->unit !== '$')
+                                        @if($setting->unit && !in_array($setting->unit, ['$/hr', '$']))
                                         <span class="input-group-text">{{ $setting->unit }}</span>
                                         @endif
                                     </div>
@@ -119,7 +115,7 @@
                                 to service a property before any remediation findings are added.
                             </p>
                             <p class="mb-0 small">
-                                BDC includes: Direct labour + Infrastructure overhead + Administrative overhead
+                                BDC = Labour cost (visits × hours × hourly rate) for the default calculation, or travel-based (km rate + time rate) per inspection.
                             </p>
                             <p class="mb-0 mt-2 small text-muted">
                                 Visits per Year and Hours per Visit are now set per inspection on the PHAR form.
@@ -137,102 +133,105 @@
                             </h5>
                         </div>
                         <div class="card-body" id="calculationPreview">
-                            <div class="mb-4">
-                                <h6 class="text-muted mb-3">Calculation Steps</h6>
-                                
-                                <div class="calculation-step mb-3">
-                                    <div class="d-flex justify-content-between mb-1">
-                                        <span class="text-muted">Labour Hours per Year</span>
-                                        <span class="fw-bold" id="labour_hours_per_year">{{ $calculation['labour_hours_per_year'] }}</span>
-                                    </div>
-                                    <small class="text-muted">
-                                        = Visits per Year × Hours per Visit
-                                    </small>
+
+                            <!-- Travel-Based BDC (Primary) -->
+                            <h6 class="fw-bold mb-1">Travel-Based BDC <span class="badge bg-success ms-1">Primary</span></h6>
+                            <p class="text-muted small mb-3">Formula: (km × Rate/km + min × Rate/min) × visits/year</p>
+
+                            <div class="row g-2 mb-3">
+                                <div class="col-4">
+                                    <label class="form-label small mb-1">Example Distance (km)</label>
+                                    <input type="number" id="ex_km" class="form-control form-control-sm" value="50" min="0" step="1">
                                 </div>
-
-                                <div class="calculation-step mb-3">
-                                    <div class="d-flex justify-content-between mb-1">
-                                        <span class="text-muted">Labour Cost per Year</span>
-                                        <span class="fw-bold" id="labour_cost_per_year">${{ number_format($calculation['labour_cost_per_year'], 2) }}</span>
-                                    </div>
-                                    <small class="text-muted">
-                                        = Labour Hours × Loaded Hourly Rate
-                                    </small>
+                                <div class="col-4">
+                                    <label class="form-label small mb-1">Example Time (min)</label>
+                                    <input type="number" id="ex_min" class="form-control form-control-sm" value="45" min="0" step="1">
                                 </div>
-
-                                <div class="calculation-step mb-3">
-                                    <div class="d-flex justify-content-between mb-1">
-                                        <span class="text-muted">Infrastructure Cost</span>
-                                        <span class="fw-bold" id="infrastructure_cost">${{ number_format($calculation['infrastructure_cost'], 2) }}</span>
-                                    </div>
-                                    <small class="text-muted">
-                                        = Labour Cost × Infrastructure %
-                                    </small>
-                                </div>
-
-                                <div class="calculation-step mb-3">
-                                    <div class="d-flex justify-content-between mb-1">
-                                        <span class="text-muted">Administration Cost</span>
-                                        <span class="fw-bold" id="administration_cost">${{ number_format($calculation['administration_cost'], 2) }}</span>
-                                    </div>
-                                    <small class="text-muted">
-                                        = Labour Cost × Administration %
-                                    </small>
-                                </div>
-
-                                <hr class="my-4">
-
-                                <div class="calculation-result">
-                                    <div class="alert alert-success mb-2">
-                                        <div class="d-flex justify-content-between align-items-center">
-                                            <span class="h6 mb-0">Base Deployment Cost (Annual)</span>
-                                            <span class="h4 mb-0" id="bdc_annual">${{ number_format($calculation['bdc_annual'], 2) }}</span>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="alert alert-info mb-0">
-                                        <div class="d-flex justify-content-between align-items-center">
-                                            <span class="h6 mb-0">BDC (Monthly)</span>
-                                            <span class="h4 mb-0" id="bdc_monthly">${{ number_format($calculation['bdc_monthly'], 2) }}</span>
-                                        </div>
-                                    </div>
+                                <div class="col-4">
+                                    <label class="form-label small mb-1">Visits / Year</label>
+                                    <input type="number" id="ex_visits" class="form-control form-control-sm" value="12" min="1" step="1">
                                 </div>
                             </div>
 
+                            <div class="calculation-step mb-2">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span class="text-muted small">Distance cost / visit</span>
+                                    <span class="fw-bold" id="travel_dist_cost">—</span>
+                                </div>
+                                <small class="text-muted">km × Rate/km</small>
+                            </div>
+                            <div class="calculation-step mb-2">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span class="text-muted small">Time cost / visit</span>
+                                    <span class="fw-bold" id="travel_time_cost">—</span>
+                                </div>
+                                <small class="text-muted">min × Rate/min</small>
+                            </div>
+                            <div class="calculation-step mb-3">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span class="text-muted small">BDC per visit</span>
+                                    <span class="fw-bold" id="bdc_per_visit">—</span>
+                                </div>
+                                <small class="text-muted">Distance cost + Time cost</small>
+                            </div>
+
+                            <hr class="my-3">
+
+                            <div class="alert alert-success mb-2 py-2">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span class="fw-bold">BDC Annual</span>
+                                    <span class="h5 mb-0" id="bdc_annual">—</span>
+                                </div>
+                                <small class="opacity-75">BDC/visit × visits/year</small>
+                            </div>
+                            <div class="alert alert-info mb-3 py-2">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <span class="fw-bold">BDC Monthly</span>
+                                    <span class="h5 mb-0" id="bdc_monthly">—</span>
+                                </div>
+                                <small class="opacity-75">BDC Annual ÷ 12</small>
+                            </div>
+
                             <!-- Breakdown Table -->
-                            <div class="table-responsive">
+                            <div class="table-responsive mb-4">
                                 <table class="table table-sm table-bordered">
                                     <thead class="table-light">
                                         <tr>
                                             <th>Component</th>
+                                            <th class="text-end">Per Visit ($)</th>
                                             <th class="text-end">Annual ($)</th>
-                                            <th class="text-end">Monthly ($)</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         <tr>
-                                            <td>Labour</td>
-                                            <td class="text-end" id="table_labour_annual">{{ number_format($calculation['labour_cost_per_year'], 2) }}</td>
-                                            <td class="text-end" id="table_labour_monthly">{{ number_format($calculation['labour_cost_per_year'] / 12, 2) }}</td>
+                                            <td>Distance (<span id="tbl_km">50</span> km × <span id="tbl_rate_km">{{ number_format($calculation['rate_per_km'] ?? 1.50, 2) }}</span>)</td>
+                                            <td class="text-end" id="tbl_dist_visit">—</td>
+                                            <td class="text-end" id="tbl_dist_annual">—</td>
                                         </tr>
                                         <tr>
-                                            <td>Infrastructure</td>
-                                            <td class="text-end" id="table_infra_annual">{{ number_format($calculation['infrastructure_cost'], 2) }}</td>
-                                            <td class="text-end" id="table_infra_monthly">{{ number_format($calculation['infrastructure_cost'] / 12, 2) }}</td>
-                                        </tr>
-                                        <tr>
-                                            <td>Administration</td>
-                                            <td class="text-end" id="table_admin_annual">{{ number_format($calculation['administration_cost'], 2) }}</td>
-                                            <td class="text-end" id="table_admin_monthly">{{ number_format($calculation['administration_cost'] / 12, 2) }}</td>
+                                            <td>Time (<span id="tbl_min">45</span> min × <span id="tbl_rate_min">{{ number_format($calculation['rate_per_minute'] ?? 1.65, 2) }}</span>)</td>
+                                            <td class="text-end" id="tbl_time_visit">—</td>
+                                            <td class="text-end" id="tbl_time_annual">—</td>
                                         </tr>
                                         <tr class="table-success fw-bold">
-                                            <td>TOTAL BDC</td>
-                                            <td class="text-end" id="table_total_annual">{{ number_format($calculation['bdc_annual'], 2) }}</td>
-                                            <td class="text-end" id="table_total_monthly">{{ number_format($calculation['bdc_monthly'], 2) }}</td>
+                                            <td>TOTAL BDC (<span id="tbl_visits">12</span> visits)</td>
+                                            <td class="text-end" id="tbl_total_visit">—</td>
+                                            <td class="text-end" id="tbl_total_annual">—</td>
                                         </tr>
                                     </tbody>
                                 </table>
                             </div>
+
+                            <!-- Labour Fallback Reference -->
+                            <div class="card bg-light border-0">
+                                <div class="card-body py-2 px-3">
+                                    <h6 class="text-secondary small mb-1"><i class="mdi mdi-information-outline me-1"></i>Labour Fallback (no travel data)</h6>
+                                    <p class="small mb-1 text-muted">Used automatically when distance &amp; time are not entered on the PHAR form.</p>
+                                    <p class="small mb-0">Formula: Loaded Hourly Rate × Hours/Visit × Visits/Year</p>
+                                    <p class="small mb-0">= $<span id="fallback_rate">{{ number_format($calculation['loaded_hourly_rate'] ?? 165, 2) }}</span>/hr × <span id="fallback_bdc">—</span> labour hours/yr</p>
+                                </div>
+                            </div>
+
                         </div>
                     </div>
                 </div>
@@ -263,79 +262,95 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const fixedVisitsPerYear = {{ (float)($calculation['visits_per_year'] ?? 8) }};
     const fixedHoursPerVisit = {{ (float)($calculation['hours_per_visit'] ?? 4.5) }};
 
-    // Real-time calculation preview
-    const inputs = document.querySelectorAll('.bdc-input');
-    
-    inputs.forEach(input => {
-        input.addEventListener('input', debounce(calculatePreview, 500));
+    // Rate inputs (from the settings form)
+    const settingsInputs = document.querySelectorAll('.bdc-input');
+    // Example inputs in the preview panel
+    const exKm     = document.getElementById('ex_km');
+    const exMin    = document.getElementById('ex_min');
+    const exVisits = document.getElementById('ex_visits');
+
+    settingsInputs.forEach(input => {
+        input.addEventListener('input', debounce(calculatePreview, 400));
+    });
+    [exKm, exMin, exVisits].forEach(el => {
+        el.addEventListener('input', calculatePreview);
     });
 
-    function calculatePreview() {
+    function getRates() {
         const data = {};
-        inputs.forEach(input => {
-            const key = input.dataset.key;
-            data[key] = parseFloat(input.value) || 0;
+        settingsInputs.forEach(input => {
+            data[input.dataset.key] = parseFloat(input.value) || 0;
         });
-
-        // Calculate locally (same logic as backend)
-        const labourHours = fixedVisitsPerYear * fixedHoursPerVisit;
-        const labourCost = labourHours * data.loaded_hourly_rate;
-        const infraCost = labourCost * data.infrastructure_percentage;
-        const adminCost = labourCost * data.administration_percentage;
-        const bdcAnnual = labourCost + infraCost + adminCost;
-        const bdcMonthly = bdcAnnual / 12;
-
-        // Update display
-        updateDisplay({
-            labour_hours_per_year: labourHours.toFixed(2),
-            labour_cost_per_year: labourCost.toFixed(2),
-            infrastructure_cost: infraCost.toFixed(2),
-            administration_cost: adminCost.toFixed(2),
-            bdc_annual: bdcAnnual.toFixed(2),
-            bdc_monthly: bdcMonthly.toFixed(2)
-        });
+        return data;
     }
 
-    function updateDisplay(calc) {
-        document.getElementById('labour_hours_per_year').textContent = calc.labour_hours_per_year;
-        document.getElementById('labour_cost_per_year').textContent = '$' + numberFormat(calc.labour_cost_per_year);
-        document.getElementById('infrastructure_cost').textContent = '$' + numberFormat(calc.infrastructure_cost);
-        document.getElementById('administration_cost').textContent = '$' + numberFormat(calc.administration_cost);
-        document.getElementById('bdc_annual').textContent = '$' + numberFormat(calc.bdc_annual);
-        document.getElementById('bdc_monthly').textContent = '$' + numberFormat(calc.bdc_monthly);
+    function calculatePreview() {
+        const rates   = getRates();
+        const rateKm  = rates.rate_per_km  || 1.50;
+        const rateMin = rates.rate_per_minute || 1.65;
+        const hourlyRate = rates.loaded_hourly_rate || 165;
 
-        // Update table
-        document.getElementById('table_labour_annual').textContent = numberFormat(calc.labour_cost_per_year);
-        document.getElementById('table_labour_monthly').textContent = numberFormat((calc.labour_cost_per_year / 12).toFixed(2));
-        document.getElementById('table_infra_annual').textContent = numberFormat(calc.infrastructure_cost);
-        document.getElementById('table_infra_monthly').textContent = numberFormat((calc.infrastructure_cost / 12).toFixed(2));
-        document.getElementById('table_admin_annual').textContent = numberFormat(calc.administration_cost);
-        document.getElementById('table_admin_monthly').textContent = numberFormat((calc.administration_cost / 12).toFixed(2));
-        document.getElementById('table_total_annual').textContent = numberFormat(calc.bdc_annual);
-        document.getElementById('table_total_monthly').textContent = numberFormat(calc.bdc_monthly);
+        const km     = parseFloat(exKm.value)     || 0;
+        const min    = parseFloat(exMin.value)    || 0;
+        const visits = parseFloat(exVisits.value) || 1;
+
+        // Travel-based BDC
+        const distCostPerVisit = km  * rateKm;
+        const timeCostPerVisit = min * rateMin;
+        const bdcPerVisit      = distCostPerVisit + timeCostPerVisit;
+        const bdcAnnual        = bdcPerVisit * visits;
+        const bdcMonthly       = bdcAnnual / 12;
+
+        // Labour fallback reference (uses hours from settings)
+        const labourHoursPerYear = visits * fixedHoursPerVisit;
+
+        // Update preview cards
+        document.getElementById('travel_dist_cost').textContent = '$' + fmt(distCostPerVisit);
+        document.getElementById('travel_time_cost').textContent = '$' + fmt(timeCostPerVisit);
+        document.getElementById('bdc_per_visit').textContent    = '$' + fmt(bdcPerVisit);
+        document.getElementById('bdc_annual').textContent       = '$' + fmt(bdcAnnual);
+        document.getElementById('bdc_monthly').textContent      = '$' + fmt(bdcMonthly);
+
+        // Update table header spans
+        document.getElementById('tbl_km').textContent      = km;
+        document.getElementById('tbl_min').textContent     = min;
+        document.getElementById('tbl_visits').textContent  = visits;
+        document.getElementById('tbl_rate_km').textContent  = fmt(rateKm);
+        document.getElementById('tbl_rate_min').textContent = fmt(rateMin);
+
+        // Update table values
+        document.getElementById('tbl_dist_visit').textContent  = fmt(distCostPerVisit);
+        document.getElementById('tbl_dist_annual').textContent = fmt(distCostPerVisit * visits);
+        document.getElementById('tbl_time_visit').textContent  = fmt(timeCostPerVisit);
+        document.getElementById('tbl_time_annual').textContent = fmt(timeCostPerVisit * visits);
+        document.getElementById('tbl_total_visit').textContent = fmt(bdcPerVisit);
+        document.getElementById('tbl_total_annual').textContent= fmt(bdcAnnual);
+
+        // Update labour fallback
+        document.getElementById('fallback_rate').textContent = fmt(hourlyRate);
+        document.getElementById('fallback_bdc').textContent  = fmt(labourHoursPerYear, 1);
     }
 
-    function numberFormat(num) {
+    function fmt(num, decimals = 2) {
         return parseFloat(num).toLocaleString('en-US', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
+            minimumFractionDigits: decimals,
+            maximumFractionDigits: decimals
         });
     }
 
     function debounce(func, wait) {
         let timeout;
         return function executedFunction(...args) {
-            const later = () => {
-                clearTimeout(timeout);
-                func(...args);
-            };
+            const later = () => { clearTimeout(timeout); func(...args); };
             clearTimeout(timeout);
             timeout = setTimeout(later, wait);
         };
     }
+
+    // Initial render
+    calculatePreview();
 });
 </script>
 @endsection

@@ -6,7 +6,6 @@ use App\Models\Inspection;
 use App\Models\Property;
 use App\Models\PHARFinding;
 use App\Models\BDCSetting;
-use App\Services\BaseServicePricingService;
 
 class MergeBridgeCalculator
 {
@@ -33,102 +32,88 @@ class MergeBridgeCalculator
         }
         
         // Step 1: Get BDC (Base Deployment Cost)
+        // Use travel-based BDC when travel inputs are present; fall back to labour-based.
         $bdcParams = [];
-        if ($inspection->bdc_visits_per_year !== null) {
-            $bdcParams['visits_per_year'] = (float) $inspection->bdc_visits_per_year;
-        }
-        if ($inspection->estimated_task_hours !== null) {
-            $bdcParams['hours_per_visit'] = (float) $inspection->estimated_task_hours;
+        if ($inspection->bdc_distance_km !== null && $inspection->bdc_time_minutes !== null) {
+            $bdcParams['travel_distance_km']  = (float) $inspection->bdc_distance_km;
+            $bdcParams['travel_time_minutes'] = (float) $inspection->bdc_time_minutes;
+            if ($inspection->bdc_visits_per_year  !== null) $bdcParams['visits_per_year']  = (float) $inspection->bdc_visits_per_year;
+            if ($inspection->bdc_rate_per_km      !== null) $bdcParams['rate_per_km']      = (float) $inspection->bdc_rate_per_km;
+            if ($inspection->bdc_rate_per_minute  !== null) $bdcParams['rate_per_minute']  = (float) $inspection->bdc_rate_per_minute;
+        } else {
+            if ($inspection->bdc_visits_per_year  !== null) $bdcParams['visits_per_year']  = (float) $inspection->bdc_visits_per_year;
+            if ($inspection->estimated_task_hours !== null) $bdcParams['hours_per_visit']  = (float) $inspection->estimated_task_hours;
         }
 
         $bdcResult = empty($bdcParams)
             ? $this->bdcCalculator->calculate($property)
             : $this->bdcCalculator->calculateWithParams($bdcParams);
-        $bdcAnnual = $bdcResult['bdc_annual'];
-        $bdcMonthly = $bdcResult['bdc_monthly'];
-        $labourHourlyRate = $inspection->labour_hourly_rate ?? $bdcResult['loaded_hourly_rate'];
-        
-        // Step 2: Calculate FRLC & FMC from findings and materials
-        $findings = PHARFinding::where('inspection_id', $inspection->id)->get();
-        $frlcCalculation = $this->calculateFRLC($findings, $labourHourlyRate);
-        $fmcCalculation = $this->calculateFMC($inspection);
-        
-        // Step 3: Calculate TRC (Total Remediation Cost)
-        $trcAnnual = $bdcAnnual + $frlcCalculation['annual'] + $fmcCalculation['annual'];
-        $trcMonthly = $trcAnnual / 12;
-        
-        // Step 4: Calculate ARP (Annual Recurring Price - monthly)
-        $arpMonthly = $trcMonthly;
-        
-        // Step 5: CPI is now a 0–100 weighted score; use it directly as the condition score
-        $conditionScore = $this->mapCPItoConditionScore((float) ($inspection->cpi_total_score ?? 100.0));
-        
-        // Step 6: Dual-Gate Tier Assignment
-        $tierScore = $this->getTierFromConditionScore($conditionScore);
-        $tierARP = $this->getTierFromARP($arpMonthly, $inspection);
-        $tierFinal = $this->selectFinalTier($tierScore, $tierARP);
-        
-        // Step 7: Tier multiplier recorded for reference only — not applied to pricing
-        $multiplierFinal = 1.0;
+        $bdcAnnual        = $bdcResult['bdc_annual'];
+        $bdcMonthly       = $bdcResult['bdc_monthly'];
+        $labourHourlyRate = $inspection->labour_hourly_rate ?? ($bdcResult['loaded_hourly_rate'] ?? 0);
 
-        // Step 8: Final price = TRC / 12 (ARP Monthly)
-        $arpEquivalentFinal = $arpMonthly;
-        $scientificFinalMonthly = $arpMonthly;
-        $scientificFinalAnnual = $scientificFinalMonthly * 12;
-        $basePackagePrice = 0.0;
-        
-        // Step 11: Per-Unit Breakdown (if multi-unit property)
+        // Step 2: FRLC & FMC from findings and materials
+        $findings        = PHARFinding::where('inspection_id', $inspection->id)->get();
+        $frlcCalculation = $this->calculateFRLC($findings, $labourHourlyRate);
+        $fmcCalculation  = $this->calculateFMC($inspection);
+
+        // Step 3: TRC (Total Remediation Cost)
+        $trcAnnual  = $bdcAnnual + $frlcCalculation['annual'] + $fmcCalculation['annual'];
+        $trcMonthly = $trcAnnual / 12;
+
+        // Step 4: Final charge depends on customer payment choice.
+        // 'monthly'  → client pays TRC / 12 each month.
+        // 'lump_sum' → client pays full TRC at once.
+        $paymentMode = ($inspection->work_payment_cadence === 'monthly') ? 'monthly' : 'lump_sum';
+        $finalCharge = ($paymentMode === 'monthly') ? $trcMonthly : $trcAnnual;
+
+        // Step 5: Per-Unit Breakdown (multi-unit properties)
         $perUnitBreakdown = $this->calculatePerUnitBreakdown(
             $property,
             $bdcAnnual,
             $frlcCalculation['annual'],
             $fmcCalculation['annual'],
             $trcAnnual,
-            $scientificFinalMonthly
+            $trcMonthly
         );
-        
+
+        $bdcPerVisit = $bdcResult['bdc_per_visit'] ?? ($bdcResult['visits_per_year'] > 0
+            ? round($bdcAnnual / $bdcResult['visits_per_year'], 2)
+            : 0);
+
         return [
             // BDC
-            'bdc_annual' => round($bdcAnnual, 2),
-            'bdc_monthly' => round($bdcMonthly, 2),
-            'labour_hourly_rate' => round($labourHourlyRate, 2),
-            
+            'bdc_per_visit'       => round($bdcPerVisit, 2),
+            'bdc_annual'          => round($bdcAnnual, 2),
+            'bdc_monthly'         => round($bdcMonthly, 2),  // derived; not persisted
+            'labour_hourly_rate'  => round($labourHourlyRate, 2),
+
             // FRLC
-            'frlc_annual' => round($frlcCalculation['annual'], 2),
-            'frlc_monthly' => round($frlcCalculation['monthly'], 2),
+            'frlc_annual'      => round($frlcCalculation['annual'], 2),
+            'frlc_monthly'     => round($frlcCalculation['monthly'], 2),
             'frlc_total_hours' => round($frlcCalculation['total_hours'], 2),
-            
+
             // FMC
-            'fmc_annual' => round($fmcCalculation['annual'], 2),
+            'fmc_annual'  => round($fmcCalculation['annual'], 2),
             'fmc_monthly' => round($fmcCalculation['monthly'], 2),
-            
-            // TRC
-            'trc_annual' => round($trcAnnual, 2),
+
+            // TRC (always computed; both views available)
+            'trc_annual'  => round($trcAnnual, 2),
             'trc_monthly' => round($trcMonthly, 2),
-            
-            // ARP
-            'arp_monthly' => round($arpMonthly, 2),
-            
-            // Condition & Tiers
-            'condition_score' => $conditionScore,
-            'tier_score' => $tierScore,
-            'tier_arp' => $tierARP,
-            'tier_final' => $tierFinal,
-            
-            // Multiplier & Final
-            'multiplier_final' => round($multiplierFinal, 2),
-            'arp_equivalent_final' => round($arpEquivalentFinal, 2),
-            'base_package_price' => round($basePackagePrice, 2),
-            'scientific_final_monthly' => round($scientificFinalMonthly, 2),
-            'scientific_final_annual' => round($scientificFinalAnnual, 2),
-            
+
+            // Payment mode & final charge
+            'payment_mode'  => $paymentMode,
+            'final_charge'  => round($finalCharge, 2),   // what the client actually owes
+            'arp_monthly'   => round($trcMonthly, 2),    // kept for backward compat
+            'arp_annual'    => round($trcAnnual, 2),
+
             // Per-Unit Breakdown
-            'units_for_calculation' => $perUnitBreakdown['units'],
-            'bdc_per_unit_annual' => round($perUnitBreakdown['bdc_per_unit'], 2),
-            'frlc_per_unit_annual' => round($perUnitBreakdown['frlc_per_unit'], 2),
-            'fmc_per_unit_annual' => round($perUnitBreakdown['fmc_per_unit'], 2),
-            'trc_per_unit_annual' => round($perUnitBreakdown['trc_per_unit'], 2),
-            'final_monthly_per_unit' => round($perUnitBreakdown['final_monthly_per_unit'], 2),
+            'units_for_calculation'   => $perUnitBreakdown['units'],
+            'bdc_per_unit_annual'     => round($perUnitBreakdown['bdc_per_unit'], 2),
+            'frlc_per_unit_annual'    => round($perUnitBreakdown['frlc_per_unit'], 2),
+            'fmc_per_unit_annual'     => round($perUnitBreakdown['fmc_per_unit'], 2),
+            'trc_per_unit_annual'     => round($perUnitBreakdown['trc_per_unit'], 2),
+            'final_monthly_per_unit'  => round($perUnitBreakdown['final_monthly_per_unit'], 2),
         ];
     }
 
@@ -162,167 +147,6 @@ class MergeBridgeCalculator
             'annual' => $totalMaterialCost,
             'monthly' => $totalMaterialCost / 12,
         ];
-    }
-
-    /**
-     * CPI is now a weighted 0–100 score computed from findings × system weights.
-     * It already represents the property condition directly, so return it as-is.
-     */
-    protected function mapCPItoConditionScore(float $cpiScore): float
-    {
-        return max(0.0, min(100.0, (float) $cpiScore));
-    }
-
-    /**
-     * Determine tier from condition score (Gate 1)
-     */
-    protected function getTierFromConditionScore(float $conditionScore): string
-    {
-        if ($conditionScore >= 90) return 'Essentials';
-        if ($conditionScore >= 75) return 'Essentials';
-        if ($conditionScore >= 60) return 'White-Glove';
-        if ($conditionScore >= 40) return 'White-Glove';
-        return 'Critical Care';
-    }
-
-    /**
-     * Determine tier from ARP (Gate 2 - cost pressure)
-     */
-    protected function getTierFromARP(float $arpMonthly, Inspection $inspection): string
-    {
-        $propertyTypeCode = $this->resolveInspectionPropertyTypeCode($inspection) ?? 'residential';
-        $selectedPackageName = null;
-        $pricingService = new BaseServicePricingService();
-
-        if (!empty($inspection->service_package_name)) {
-            $selectedPackageName = $inspection->service_package_name;
-        }
-
-        $prices = \App\Models\PricingPackage::query()
-            ->where('is_active', true)
-            ->orderBy('sort_order')
-            ->get()
-            ->mapWithKeys(function ($package) use (&$selectedPackageName, $inspection, $propertyTypeCode, $pricingService) {
-                $price = $pricingService->getPackageBasePrice($package->package_name, (string) $propertyTypeCode);
-
-                if ((int) $package->id === (int) $inspection->service_package_id) {
-                    $selectedPackageName = $package->package_name;
-                }
-
-                return [$package->package_name => (float) ($price ?? 0)];
-            })
-            ->toArray();
-
-        if (empty($prices)) {
-            return 'Essentials';
-        }
-
-        asort($prices);
-        $tier = array_key_first($prices) ?: 'Essentials';
-        foreach ($prices as $packageName => $price) {
-            if ($arpMonthly >= $price) {
-                $tier = $packageName;
-            }
-        }
-
-        if ($selectedPackageName) {
-            $selectedPackageThreshold = $prices[$selectedPackageName] ?? (float) ($inspection->base_price_snapshot ?? 0);
-            if ($arpMonthly < $selectedPackageThreshold) {
-                return $selectedPackageName;
-            }
-        }
-
-        return $tier;
-    }
-
-    /**
-     * Select final tier (max of both gates)
-     */
-    protected function selectFinalTier(string $tierScore, string $tierARP): string
-    {
-        $tierRanking = [
-            'Essentials' => 1,
-            'Premium' => 2,
-            'White-Glove' => 3,
-            'Critical Care' => 4,
-        ];
-        
-        $scoreRank = $tierRanking[$tierScore] ?? 1;
-        $arpRank = $tierRanking[$tierARP] ?? 1;
-        
-        $finalRank = max($scoreRank, $arpRank);
-        
-        // Return tier name from rank
-        return array_search($finalRank, $tierRanking);
-    }
-
-    /**
-     * Get multiplier for tier
-     */
-    protected function getMultiplierForTier(string $tier): float
-    {
-        $multipliers = [
-            'Essentials' => 1.00,
-            'Premium' => 1.15,
-            'White-Glove' => 1.35,
-            'Critical Care' => 1.55,
-        ];
-        
-        return $multipliers[$tier] ?? 1.00;
-    }
-
-    /**
-     * Get base package price for tier
-     */
-    protected function getBasePackagePrice($inspection): float
-    {
-        if ($inspection->base_price_snapshot !== null) {
-            return (float) $inspection->base_price_snapshot;
-        }
-
-        if (!$inspection->service_package_id) {
-            return 0.0;
-        }
-
-        $package = \App\Models\PricingPackage::with('packagePricing')->find($inspection->service_package_id);
-        if (!$package) {
-            return 0.0;
-        }
-
-        $pricingService = new BaseServicePricingService();
-        $propertyTypeCode = $this->resolveInspectionPropertyTypeCode($inspection) ?? 'residential';
-        $price = $pricingService->getPackageBasePrice($package->package_name, (string) $propertyTypeCode);
-
-        if ($price !== null) {
-            return (float) $price;
-        }
-
-        return (float) (optional($package->packagePricing->where('is_active', true)->first())->base_monthly_price ?? 0.0);
-    }
-
-    protected function resolvePropertyTypeId(?string $propertyType): ?int
-    {
-        $normalized = strtolower((string) $propertyType);
-
-        $typeCode = 'residential';
-        if (str_contains($normalized, 'mixed')) {
-            $typeCode = 'mixed_use';
-        } elseif (str_contains($normalized, 'commercial')) {
-            $typeCode = 'commercial';
-        }
-
-        return \Illuminate\Support\Facades\DB::table('property_types')
-            ->where('type_code', $typeCode)
-            ->value('id');
-    }
-
-    protected function resolveInspectionPropertyTypeCode(Inspection $inspection): ?string
-    {
-        if (!empty($inspection->property_type_snapshot)) {
-            return (string) $inspection->property_type_snapshot;
-        }
-
-        return $inspection->property?->type;
     }
 
     /**
@@ -362,28 +186,22 @@ class MergeBridgeCalculator
     public function saveToInspection(Inspection $inspection, array $calculation): void
     {
         $inspection->update([
-            'bdc_annual' => $calculation['bdc_annual'],
-            'bdc_monthly' => $calculation['bdc_monthly'],
-            'labour_hourly_rate' => $calculation['labour_hourly_rate'],
-            'frlc_annual' => $calculation['frlc_annual'],
-            'frlc_monthly' => $calculation['frlc_monthly'],
-            'fmc_annual' => $calculation['fmc_annual'],
-            'fmc_monthly' => $calculation['fmc_monthly'],
-            'trc_annual' => $calculation['trc_annual'],
-            'trc_monthly' => $calculation['trc_monthly'],
-            'arp_monthly' => $calculation['arp_monthly'],
-            'condition_score' => $calculation['condition_score'],
-            'tier_score' => $calculation['tier_score'],
-            'tier_arp' => $calculation['tier_arp'],
-            'tier_final' => $calculation['tier_final'],
-            'multiplier_final' => $calculation['multiplier_final'],
-            'arp_equivalent_final' => $calculation['arp_equivalent_final'],
-            'base_package_price_snapshot' => $calculation['base_package_price'],
-            'units_for_calculation' => $calculation['units_for_calculation'],
-            'bdc_per_unit_annual' => $calculation['bdc_per_unit_annual'],
-            'frlc_per_unit_annual' => $calculation['frlc_per_unit_annual'],
-            'fmc_per_unit_annual' => $calculation['fmc_per_unit_annual'],
-            'trc_per_unit_annual' => $calculation['trc_per_unit_annual'],
+            'bdc_per_visit'          => $calculation['bdc_per_visit'],
+            'bdc_annual'             => $calculation['bdc_annual'],
+            // bdc_monthly is always bdc_annual / 12 — not persisted, computed at display time
+            'labour_hourly_rate'     => $calculation['labour_hourly_rate'],
+            'frlc_annual'            => $calculation['frlc_annual'],
+            'frlc_monthly'           => $calculation['frlc_monthly'],
+            'fmc_annual'             => $calculation['fmc_annual'],
+            'fmc_monthly'            => $calculation['fmc_monthly'],
+            'trc_annual'             => $calculation['trc_annual'],
+            'trc_monthly'            => $calculation['trc_monthly'],
+            'arp_monthly'            => $calculation['arp_monthly'],
+            'units_for_calculation'  => $calculation['units_for_calculation'],
+            'bdc_per_unit_annual'    => $calculation['bdc_per_unit_annual'],
+            'frlc_per_unit_annual'   => $calculation['frlc_per_unit_annual'],
+            'fmc_per_unit_annual'    => $calculation['fmc_per_unit_annual'],
+            'trc_per_unit_annual'    => $calculation['trc_per_unit_annual'],
             'final_monthly_per_unit' => $calculation['final_monthly_per_unit'],
         ]);
     }

@@ -10,8 +10,9 @@ class BDCCalculator
     protected $loadedHourlyRate;
     protected $visitsPerYear;
     protected $hoursPerVisit;
-    protected $infrastructurePercentage;
-    protected $administrationPercentage;
+    // Travel-based rates (defaults kept to match current business rules)
+    protected $ratePerKm;
+    protected $ratePerMinute;
 
     public function __construct()
     {
@@ -26,8 +27,8 @@ class BDCCalculator
         $this->loadedHourlyRate = BDCSetting::getValue('loaded_hourly_rate', 165);
         $this->visitsPerYear = BDCSetting::getValue('visits_per_year', 8);
         $this->hoursPerVisit = BDCSetting::getValue('hours_per_visit', 4.5);
-        $this->infrastructurePercentage = BDCSetting::getValue('infrastructure_percentage', 0.30);
-        $this->administrationPercentage = BDCSetting::getValue('administration_percentage', 0.12);
+        $this->ratePerKm = BDCSetting::getValue('rate_per_km', 1.50);
+        $this->ratePerMinute = BDCSetting::getValue('rate_per_minute', 1.65);
     }
 
     /**
@@ -44,12 +45,8 @@ class BDCCalculator
         // Calculate labour cost per year
         $labourCostPerYear = $labourHoursPerYear * $this->loadedHourlyRate;
         
-        // Calculate overhead costs
-        $infrastructureCost = $labourCostPerYear * $this->infrastructurePercentage;
-        $administrationCost = $labourCostPerYear * $this->administrationPercentage;
-        
-        // Calculate total Base Deployment Cost (annual)
-        $bdcAnnual = $labourCostPerYear + $infrastructureCost + $administrationCost;
+        // Total BDC (labour-only model)
+        $bdcAnnual = $labourCostPerYear;
         
         // Calculate monthly BDC
         $bdcMonthly = $bdcAnnual / 12;
@@ -59,14 +56,11 @@ class BDCCalculator
             'loaded_hourly_rate' => round($this->loadedHourlyRate, 2),
             'visits_per_year' => round($this->visitsPerYear, 2),
             'hours_per_visit' => round($this->hoursPerVisit, 2),
-            'infrastructure_percentage' => round($this->infrastructurePercentage, 4),
-            'administration_percentage' => round($this->administrationPercentage, 4),
+            'mode' => 'labour',
             
             // Calculated values
             'labour_hours_per_year' => round($labourHoursPerYear, 2),
             'labour_cost_per_year' => round($labourCostPerYear, 2),
-            'infrastructure_cost' => round($infrastructureCost, 2),
-            'administration_cost' => round($administrationCost, 2),
             
             // Final BDC
             'bdc_annual' => round($bdcAnnual, 2),
@@ -82,29 +76,54 @@ class BDCCalculator
      */
     public function calculateWithParams(array $customParams): array
     {
+        // Allow for travel-based calculation when travel params are provided
         $loadedHourlyRate = $customParams['loaded_hourly_rate'] ?? $this->loadedHourlyRate;
         $visitsPerYear = $customParams['visits_per_year'] ?? $this->visitsPerYear;
         $hoursPerVisit = $customParams['hours_per_visit'] ?? $this->hoursPerVisit;
-        $infrastructurePercentage = $customParams['infrastructure_percentage'] ?? $this->infrastructurePercentage;
-        $administrationPercentage = $customParams['administration_percentage'] ?? $this->administrationPercentage;
+        // legacy infra/admin removed — labour fallback uses labour cost only
 
+        // Travel params (if both provided, use travel-based BDC)
+        $travelDistanceKm = array_key_exists('travel_distance_km', $customParams) ? $customParams['travel_distance_km'] : null;
+        $travelTimeMinutes = array_key_exists('travel_time_minutes', $customParams) ? $customParams['travel_time_minutes'] : null;
+        $ratePerKm = $customParams['rate_per_km'] ?? $this->ratePerKm;
+        $ratePerMinute = $customParams['rate_per_minute'] ?? $this->ratePerMinute;
+
+        if ($travelDistanceKm !== null && $travelTimeMinutes !== null) {
+            // Travel-based per-visit calculation
+            $travelCost = $travelDistanceKm * $ratePerKm;
+            $timeCost = $travelTimeMinutes * $ratePerMinute;
+            $bdcPerVisit = $travelCost + $timeCost;
+            $bdcAnnual = $bdcPerVisit * $visitsPerYear;
+            $bdcMonthly = $bdcAnnual / 12;
+
+            return [
+                'mode' => 'travel',
+                'rate_per_km' => round($ratePerKm, 2),
+                'rate_per_minute' => round($ratePerMinute, 2),
+                'travel_distance_km' => round((float)$travelDistanceKm, 2),
+                'travel_time_minutes' => round((float)$travelTimeMinutes, 2),
+                'travel_cost' => round($travelCost, 2),
+                'time_cost' => round($timeCost, 2),
+                'bdc_per_visit' => round($bdcPerVisit, 2),
+                'bdc_annual' => round($bdcAnnual, 2),
+                'bdc_monthly' => round($bdcMonthly, 2),
+                'visits_per_year' => round($visitsPerYear, 2),
+            ];
+        }
+
+        // Fallback: labour-only calculation
         $labourHoursPerYear = $visitsPerYear * $hoursPerVisit;
         $labourCostPerYear = $labourHoursPerYear * $loadedHourlyRate;
-        $infrastructureCost = $labourCostPerYear * $infrastructurePercentage;
-        $administrationCost = $labourCostPerYear * $administrationPercentage;
-        $bdcAnnual = $labourCostPerYear + $infrastructureCost + $administrationCost;
+        $bdcAnnual = $labourCostPerYear;
         $bdcMonthly = $bdcAnnual / 12;
 
         return [
+            'mode' => 'labour',
             'loaded_hourly_rate' => round($loadedHourlyRate, 2),
             'visits_per_year' => round($visitsPerYear, 2),
             'hours_per_visit' => round($hoursPerVisit, 2),
-            'infrastructure_percentage' => round($infrastructurePercentage, 4),
-            'administration_percentage' => round($administrationPercentage, 4),
             'labour_hours_per_year' => round($labourHoursPerYear, 2),
             'labour_cost_per_year' => round($labourCostPerYear, 2),
-            'infrastructure_cost' => round($infrastructureCost, 2),
-            'administration_cost' => round($administrationCost, 2),
             'bdc_annual' => round($bdcAnnual, 2),
             'bdc_monthly' => round($bdcMonthly, 2),
         ];
@@ -119,8 +138,8 @@ class BDCCalculator
             'loaded_hourly_rate' => $this->loadedHourlyRate,
             'visits_per_year' => $this->visitsPerYear,
             'hours_per_visit' => $this->hoursPerVisit,
-            'infrastructure_percentage' => $this->infrastructurePercentage,
-            'administration_percentage' => $this->administrationPercentage,
+            'rate_per_km' => $this->ratePerKm,
+            'rate_per_minute' => $this->ratePerMinute,
         ];
     }
 
@@ -136,13 +155,10 @@ class BDCCalculator
                "Loaded Hourly Rate: \${$calc['loaded_hourly_rate']}/hr\n" .
                "Visits per Year: {$calc['visits_per_year']}\n" .
                "Hours per Visit: {$calc['hours_per_visit']}\n" .
-               "Infrastructure %: " . ($calc['infrastructure_percentage'] * 100) . "%\n" .
-               "Administration %: " . ($calc['administration_percentage'] * 100) . "%\n" .
+             "Mode: " . ($calc['mode'] ?? 'labour') . "\n" .
                "──────────────────────────────────────\n" .
                "Labour Hours/Year: {$calc['labour_hours_per_year']}\n" .
-               "Labour Cost/Year: \${$calc['labour_cost_per_year']}\n" .
-               "Infrastructure Cost: \${$calc['infrastructure_cost']}\n" .
-               "Administration Cost: \${$calc['administration_cost']}\n" .
+             "Labour Cost/Year: \\${$calc['labour_cost_per_year']}\n" .
                "══════════════════════════════════════\n" .
                "BDC (Annual): \${$calc['bdc_annual']}\n" .
                "BDC (Monthly): \${$calc['bdc_monthly']}\n";

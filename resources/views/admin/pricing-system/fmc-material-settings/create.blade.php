@@ -64,6 +64,23 @@
                         </div>
                     </div>
 
+                    <div class="row">
+                        <div class="col-md-6 form-group">
+                            <label for="hst_rate">HST Rate (%)</label>
+                            <input type="number" step="0.01" min="0" max="100" class="form-control tax-rate-input @error('hst_rate') is-invalid @enderror" id="hst_rate" name="hst_rate" value="{{ old('hst_rate', 5.00) }}">
+                            @error('hst_rate')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+                        <div class="col-md-6 form-group">
+                            <label for="pst_rate">PST Rate (%)</label>
+                            <input type="number" step="0.01" min="0" max="100" class="form-control tax-rate-input @error('pst_rate') is-invalid @enderror" id="pst_rate" name="pst_rate" value="{{ old('pst_rate', 7.00) }}">
+                            @error('pst_rate')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+                    </div>
+
+                    <div class="alert alert-info py-2 px-3 mb-3" id="tax-preview" style="font-size:0.9rem;">
+                        Taxed unit cost preview will appear here once a unit cost is entered.
+                    </div>
+
                     <div class="form-group">
                         <label for="sort_order">Sort Order</label>
                         <input type="number" min="0" class="form-control @error('sort_order') is-invalid @enderror" id="sort_order" name="sort_order" value="{{ old('sort_order', 0) }}">
@@ -91,6 +108,30 @@
 
                 <script>
                     (function () {
+                        // Tax preview
+                        const costInput = document.getElementById('default_unit_cost');
+                        const taxPreview = document.getElementById('tax-preview');
+
+                        function updateTaxPreview() {
+                            const cost = parseFloat(costInput.value) || 0;
+                            const hst  = parseFloat(document.getElementById('hst_rate').value) || 0;
+                            const pst  = parseFloat(document.getElementById('pst_rate').value) || 0;
+                            if (cost <= 0) {
+                                taxPreview.textContent = 'Taxed unit cost preview will appear here once a unit cost is entered.';
+                                return;
+                            }
+                            const afterHst  = cost * (1 + hst / 100);
+                            const taxedCost = afterHst * (1 + pst / 100);
+                            taxPreview.innerHTML =
+                                `$${cost.toFixed(2)} &times; (1 + ${hst}%) &times; (1 + ${pst}%) = ` +
+                                `Taxed Unit Cost: <strong>$${taxedCost.toFixed(2)}</strong>`;
+                        }
+
+                        costInput.addEventListener('input', updateTaxPreview);
+                        document.querySelectorAll('.tax-rate-input').forEach(el => el.addEventListener('input', updateTaxPreview));
+                        updateTaxPreview();
+
+                        // System/subsystem cascading
                         const systems = @json($systemsJson);
                         const systemSelect = document.getElementById('system_id');
                         const subsystemSelect = document.getElementById('subsystem_id');

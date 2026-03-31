@@ -256,11 +256,11 @@
                                 <div class="row">
                                     <div class="col-md-6">
                                         <div class="form-group">
-                                            <label>Hours per Visit (Property-specific) <span class="text-danger">*</span></label>
+                                            <label>Hours per Visit <small class="text-muted fw-normal">(labour fallback only)</small></label>
                                             <input type="number" name="estimated_task_hours" id="hoursPerVisit" class="form-control" 
                                                    value="{{ old('estimated_task_hours', $inspection->estimated_task_hours ?? '') }}" 
-                                                   placeholder="e.g., 4.5" step="0.1" min="0" required />
-                                            <small class="text-muted">This can change per property inspection</small>
+                                                   placeholder="e.g., 4.5" step="0.1" min="0" />
+                                            <small class="text-muted">Used only when no travel distance/time is entered above</small>
                                         </div>
                                     </div>
                                     <div class="col-md-6">
@@ -300,13 +300,46 @@
                                         <div class="alert alert-secondary">
                                             <strong>PHAR Condition Score:</strong> 
                                             <span class="fs-4 text-primary" id="pharConditionScore">
-                                                {{ $inspection->condition_score ?? $inspection->cpi_total_score ?? (($inspection->domain_1_score ?? 0) + ($inspection->domain_2_score ?? 0) + ($inspection->domain_3_score ?? 0) + ($inspection->domain_4_score ?? 0) + ($inspection->domain_5_score ?? 0) + ($inspection->domain_6_score ?? 0)) }}
+                                                {{ $inspection->cpi_total_score ?? (($inspection->domain_1_score ?? 0) + ($inspection->domain_2_score ?? 0) + ($inspection->domain_3_score ?? 0) + ($inspection->domain_4_score ?? 0) + ($inspection->domain_5_score ?? 0) + ($inspection->domain_6_score ?? 0)) }}
                                             </span>
                                             <small class="text-muted ms-2">(From CPI scoring)</small>
                                         </div>
                                     </div>
                                 </div>
 
+                                <hr class="my-3">
+
+                                {{-- BDC Travel Calibration --}}
+                                <h6 class="fw-bold text-primary mb-3"><i class="mdi mdi-map-marker-distance me-2"></i>BDC Travel Calibration</h6>
+                                <p class="text-muted small">Instant travel-based BDC estimate (per visit &amp; annual). <strong>Visits / year</strong> is taken from the field above. Values are saved with the assessment.</p>
+                                <div class="row g-2">
+                                    <div class="col-md-6">
+                                        <label>Distance (km) <span class="text-danger">*</span></label>
+                                        <input type="number" id="bdc-distance-km" name="bdc_distance_km" class="form-control" step="0.01" value="{{ old('bdc_distance_km', $inspection->bdc_distance_km ?? '') }}">
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label>Travel time (minutes) <span class="text-danger">*</span></label>
+                                        <input type="number" id="bdc-time-min" name="bdc_time_min" class="form-control" step="1" value="{{ old('bdc_time_min', $inspection->bdc_time_minutes ?? '') }}">
+                                    </div>
+                                </div>
+                                <div class="row mt-3">
+                                    <div class="col-md-3">
+                                        <div class="small text-muted">Travel cost</div>
+                                        <div id="bdc-travel-cost" class="h5">$0.00</div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="small text-muted">Time cost</div>
+                                        <div id="bdc-time-cost" class="h5">$0.00</div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="small text-muted">BDC / visit</div>
+                                        <div id="bdc-per-visit-display" class="h5">$0.00</div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="small text-muted">BDC / year</div>
+                                        <div id="bdc-annual-display" class="h5">$0.00</div>
+                                    </div>
+                                </div>
 
                             </div>
                         </div>
@@ -592,7 +625,7 @@
                                             <div class="text-muted small fw-semibold">Base Deployment Cost</div>
                                             <div id="bdcAnnual" class="fw-bold fs-5 text-primary">$0.00</div>
                                             <div id="bdcMonthly" class="text-muted" style="font-size:.8rem;">$0.00/mo</div>
-                                            <div class="text-muted" style="font-size:.7rem;">visits × hrs × rate × 1.42</div>
+                                            <div class="text-muted" style="font-size:.7rem;">travel: (km×rate + min×rate)×visits | or labour fallback</div>
                                         </div>
                                     </div>
                                     <div class="col-md-3">
@@ -659,7 +692,7 @@
                                         <div class="p-3 rounded text-center" style="background:#e8f4fd;border:1px solid #0d6efd;">
                                             <div class="text-muted small">Base Deployment Cost (BDC)</div>
                                             <div class="fw-bold fs-5 text-primary">${{ number_format($inspection->bdc_annual ?? 0, 2) }}/yr</div>
-                                            <div class="text-muted small">${{ number_format($inspection->bdc_monthly ?? 0, 2) }}/mo</div>
+                                            <div class="text-muted small">${{ number_format(($inspection->bdc_annual ?? 0) / 12, 2) }}/mo</div>
                                         </div>
                                     </div>
                                     <div class="col-md-3">
@@ -727,7 +760,7 @@
                                     <div class="d-flex flex-nowrap align-items-center gap-0">
                                         <div class="text-center px-3 border-end border-secondary">
                                             <div style="color:#93c5fd;">BDC</div>
-                                            <div class="fw-bold">${{ number_format($inspection->bdc_monthly ?? 0, 0) }}/mo</div>
+                                            <div class="fw-bold">${{ number_format(($inspection->bdc_annual ?? 0) / 12, 0) }}/mo</div>
                                         </div>
                                         <div class="text-center px-2 text-white opacity-50">+</div>
                                         <div class="text-center px-3 border-end border-secondary">
@@ -744,7 +777,7 @@
                                             <div style="color:#c4b5fd;">TRC</div>
                                             <div class="fw-bold">${{ number_format($inspection->trc_monthly ?? 0, 0) }}/mo</div>
                                         </div>
-                                        <div class="text-center px-2 text-white opacity-50">÷12=</div>
+                                        <div class="text-center px-2 text-white opacity-50">=</div>
                                         <div class="text-center px-3">
                                             <div style="color:#fbbf24;font-weight:900;">ARP</div>
                                             <div class="fw-bold" style="color:#fbbf24;font-size:1.1rem;">${{ number_format($inspection->arp_monthly ?? 0, 0) }}/mo</div>
@@ -817,6 +850,8 @@
             'material_name'    => $item->material_name,
             'default_unit'     => $item->default_unit,
             'default_unit_cost'=> (float) $item->default_unit_cost,
+            'hst_rate'         => (float) ($item->hst_rate ?? 5.00),
+            'pst_rate'         => (float) ($item->pst_rate ?? 7.00),
             'subsystem_id'     => $item->subsystem_id,
         ];
     })->values()->all();
@@ -846,12 +881,40 @@ document.addEventListener('DOMContentLoaded', function() {
         return html;
     }
 
+    // ===== BDC TRAVEL CALIBRATION =====
+    function formatMoney(v) { return '$' + Number(v || 0).toFixed(2); }
+
+    function calculateBDCFromTravel() {
+        const distance = parseFloat(document.getElementById('bdc-distance-km')?.value) || 0;
+        const minutes  = parseFloat(document.getElementById('bdc-time-min')?.value)    || 0;
+        const visits   = parseFloat(document.getElementById('bdcVisitsPerYear')?.value) || 1;
+        const rateKm   = {{ (float)(\App\Models\BDCSetting::getValue('rate_per_km', 1.50) ?? 1.50) }};
+        const rateMin  = {{ (float)(\App\Models\BDCSetting::getValue('rate_per_minute', 1.65) ?? 1.65) }};
+
+        const travelCost  = distance * rateKm;
+        const timeCost    = minutes  * rateMin;
+        const bdcPerVisit = travelCost + timeCost;
+        const bdcAnnual   = bdcPerVisit * visits;
+
+        const tc = document.getElementById('bdc-travel-cost');   if(tc) tc.textContent = formatMoney(travelCost);
+        const mc = document.getElementById('bdc-time-cost');     if(mc) mc.textContent = formatMoney(timeCost);
+        const pv = document.getElementById('bdc-per-visit-display'); if(pv) pv.textContent = formatMoney(bdcPerVisit);
+        const ay = document.getElementById('bdc-annual-display'); if(ay) ay.textContent = formatMoney(bdcAnnual);
+
+        return { bdcAnnual, bdcMonthly: bdcAnnual / 12 };
+    }
+
+    ['bdc-distance-km','bdc-time-min'].forEach(id => {
+        document.getElementById(id)?.addEventListener('input', () => {
+            calculateBDCFromTravel();
+            updateCalculationSummary();
+        });
+    });
+
     // ===== CONFIGURATION =====
     const labourRateInput = document.querySelector('input[name="labour_hourly_rate"]');
     const visitsPerYearInput = document.getElementById('bdcVisitsPerYear');
     const hoursPerVisitInput = document.getElementById('hoursPerVisit');
-    const infrastructurePercentage = {{ (float)($bdcSettings['infrastructure_percentage'] ?? 0.30) }};
-    const administrationPercentage = {{ (float)($bdcSettings['administration_percentage'] ?? 0.12) }};
 
     // Server-side pre-computed totals from Step 1 findings
     const SERVER_FRLC = {{ $totalFRLC2 }};
@@ -876,20 +939,25 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // ===== CALCULATION SUMMARY =====
     function updateCalculationSummary() {
-        // Use server-computed totals from Step 1
         const frlc = SERVER_FRLC;
         const fmc  = SERVER_FMC;
-        
-        const visitsPerYear = parseFloat(visitsPerYearInput?.value) || 0;
-        const hoursPerVisit = parseFloat(hoursPerVisitInput?.value) || 0;
-        const labourRate = getLabourRate();
 
-        const labourHoursPerYear = visitsPerYear * hoursPerVisit;
-        const labourCostPerYear = labourHoursPerYear * labourRate;
-        const infrastructureCost = labourCostPerYear * infrastructurePercentage;
-        const administrationCost = labourCostPerYear * administrationPercentage;
-        const bdcAnnual = labourCostPerYear + infrastructureCost + administrationCost;
-        const bdcMonthly = bdcAnnual / 12;
+        // BDC: use travel-based if inputs are filled, otherwise fall back to labour estimate
+        const travelBDC = calculateBDCFromTravel();
+        const distance = parseFloat(document.getElementById('bdc-distance-km')?.value) || 0;
+        const minutes  = parseFloat(document.getElementById('bdc-time-min')?.value)    || 0;
+        let bdcAnnual, bdcMonthly;
+        if (distance > 0 && minutes > 0) {
+            bdcAnnual  = travelBDC.bdcAnnual;
+            bdcMonthly = travelBDC.bdcMonthly;
+        } else {
+            // Labour fallback
+            const visitsPerYear = parseFloat(document.getElementById('bdcVisitsPerYear')?.value) || 0;
+            const hoursPerVisit = parseFloat(document.getElementById('hoursPerVisit')?.value)    || 0;
+            const labourRate    = parseFloat(labourRateInput?.value) || 165;
+            bdcAnnual  = visitsPerYear * hoursPerVisit * labourRate;
+            bdcMonthly = bdcAnnual / 12;
+        }
         
         // Calculate annualized FRLC (assume one-time cost, divide by 12 for monthly)
         const frlcAnnual = frlc;
@@ -919,6 +987,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     // ===== INITIALIZATION =====
+    calculateBDCFromTravel();
     updateCalculationSummary();
 });
 </script>

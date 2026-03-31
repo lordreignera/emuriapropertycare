@@ -72,6 +72,8 @@ class FmcMaterialSettingController extends Controller
             'material_name'    => 'required|string|max:150',
             'default_unit'     => 'required|string|max:30',
             'default_unit_cost' => 'required|numeric|min:0',
+            'hst_rate'         => 'nullable|numeric|min:0|max:100',
+            'pst_rate'         => 'nullable|numeric|min:0|max:100',
             'description'      => 'nullable|string',
             'sort_order'       => 'nullable|integer|min:0',
             'is_active'        => 'nullable|boolean',
@@ -82,6 +84,8 @@ class FmcMaterialSettingController extends Controller
         $validated['is_active']    = $request->boolean('is_active', true);
         $validated['sort_order']   = $validated['sort_order'] ?? 0;
         $validated['subsystem_id'] = $validated['subsystem_id'] ?? null;
+        $validated['hst_rate']     = $validated['hst_rate'] ?? 5.00;
+        $validated['pst_rate']     = $validated['pst_rate'] ?? 7.00;
 
         if (!empty($validated['subsystem_id'])) {
             $subsystem = InspectionSubsystem::query()->find($validated['subsystem_id']);
@@ -116,6 +120,8 @@ class FmcMaterialSettingController extends Controller
             'material_name'    => 'required|string|max:150',
             'default_unit'     => 'required|string|max:30',
             'default_unit_cost' => 'required|numeric|min:0',
+            'hst_rate'         => 'nullable|numeric|min:0|max:100',
+            'pst_rate'         => 'nullable|numeric|min:0|max:100',
             'description'      => 'nullable|string',
             'sort_order'       => 'nullable|integer|min:0',
             'is_active'        => 'nullable|boolean',
@@ -126,6 +132,8 @@ class FmcMaterialSettingController extends Controller
         $validated['is_active']    = $request->boolean('is_active');
         $validated['sort_order']   = $validated['sort_order'] ?? 0;
         $validated['subsystem_id'] = $validated['subsystem_id'] ?? null;
+        $validated['hst_rate']     = $validated['hst_rate'] ?? 5.00;
+        $validated['pst_rate']     = $validated['pst_rate'] ?? 7.00;
 
         if (!empty($validated['subsystem_id'])) {
             $subsystem = InspectionSubsystem::query()->find($validated['subsystem_id']);

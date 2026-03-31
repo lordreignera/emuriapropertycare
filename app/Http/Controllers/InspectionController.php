@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Barryvdh\DomPDF\Facade\Pdf;
 use App\Services\BaseServicePricingService;
+use App\Services\BDCCalculator;
 use App\Models\InspectionSystem;
 use App\Models\PricingPackage;
 use App\Support\PharCatalog;
@@ -172,17 +173,30 @@ class InspectionController extends Controller
             ->orderBy('id')
             ->first();
 
+        $dbMaterialSettings = \App\Models\FmcMaterialSetting::active()->get([
+            'material_name', 'default_unit', 'default_unit_cost', 'hst_rate', 'pst_rate', 'system_id', 'subsystem_id',
+        ]);
         $materialUnits = array_values(array_unique(array_merge(
             config('phar.material_units', []),
-            PharCatalog::materialUnits()
+            PharCatalog::materialUnits(),
+            $dbMaterialSettings->pluck('default_unit')->filter()->unique()->toArray()
         )));
-        $dbMaterialSettings = \App\Models\FmcMaterialSetting::active()->get([
-            'material_name', 'default_unit', 'default_unit_cost', 'system_id', 'subsystem_id',
-        ]);
         $catalogMaterialSettings = collect(PharCatalog::materials())->map(
-            static fn(array $row) => (object) $row
+            static fn(array $row) => (object) [
+                'material_name'     => $row['material_name'],
+                'default_unit'      => $row['default_unit'],
+                'default_unit_cost' => $row['default_unit_cost'],
+                'hst_rate'          => $row['hst_rate']  ?? 5.00,
+                'pst_rate'          => $row['pst_rate']  ?? 7.00,
+                'system_id'         => null,
+                'subsystem_id'      => null,
+            ]
         );
-        $fmcMaterialSettings = $dbMaterialSettings->concat($catalogMaterialSettings)->values();
+        // DB records take precedence — exclude catalog entries whose name is already in the DB list
+        $dbNames = $dbMaterialSettings->pluck('material_name')->map('strtolower')->flip();
+        $fmcMaterialSettings = $dbMaterialSettings
+            ->concat($catalogMaterialSettings->reject(fn($c) => $dbNames->has(strtolower($c->material_name))))
+            ->values();
 
         $pharCategories = array_values(array_unique(array_merge(
             config('phar.categories', []),
@@ -265,6 +279,13 @@ class InspectionController extends Controller
             'system_findings.*.phar_category'                  => 'nullable|string|max:255',
             'system_findings.*.phar_included_yn'               => 'nullable|boolean',
             'system_findings.*.phar_notes'                     => 'nullable|string',
+
+            // Travel BDC calibration
+            'bdc_distance_km'   => 'nullable|numeric|min:0',
+            'bdc_time_min'      => 'nullable|numeric|min:0',
+            'bdc_visits_year'   => 'nullable|numeric|min:0',
+            'bdc_rate_km'       => 'nullable|numeric|min:0',
+            'bdc_rate_min'      => 'nullable|numeric|min:0',
 
             // CPI hidden scores from phase 1 UI
             'cpi_total_score' => 'nullable|integer|min:0',
@@ -991,26 +1012,33 @@ class InspectionController extends Controller
             config('phar.categories', []),
             PharCatalog::categories()
         )));
-        $materialUnits = array_values(array_unique(array_merge(
-            config('phar.material_units', []),
-            PharCatalog::materialUnits()
-        )));
         $dbMaterialSettings = \App\Models\FmcMaterialSetting::active()->get([
             'material_name',
             'default_unit',
             'default_unit_cost',
+            'hst_rate',
+            'pst_rate',
             'system_id',
             'subsystem_id',
         ]);
+        $materialUnits = array_values(array_unique(array_merge(
+            config('phar.material_units', []),
+            PharCatalog::materialUnits(),
+            $dbMaterialSettings->pluck('default_unit')->filter()->unique()->toArray()
+        )));
         $catalogMaterialSettings = collect(PharCatalog::materials())->map(static fn(array $row) => (object) [
-            'material_name' => $row['material_name'],
-            'default_unit' => $row['default_unit'],
+            'material_name'     => $row['material_name'],
+            'default_unit'      => $row['default_unit'],
             'default_unit_cost' => $row['default_unit_cost'],
-            'system_id' => null,
-            'subsystem_id' => null,
+            'hst_rate'          => $row['hst_rate'] ?? 5.00,
+            'pst_rate'          => $row['pst_rate'] ?? 7.00,
+            'system_id'         => null,
+            'subsystem_id'      => null,
         ]);
+        // DB records take precedence — exclude catalog entries whose name is already in the DB list
+        $dbNames = $dbMaterialSettings->pluck('material_name')->map('strtolower')->flip();
         $fmcMaterialSettings = $dbMaterialSettings
-            ->concat($catalogMaterialSettings)
+            ->concat($catalogMaterialSettings->reject(fn($c) => $dbNames->has(strtolower($c->material_name))))
             ->values();
 
         $dbFindingTemplateSettings = \App\Models\FindingTemplateSetting::active()->get([
@@ -1067,10 +1095,14 @@ class InspectionController extends Controller
         $validated = $request->validate([
             // PHAR Inputs
             'property_size_psf'       => 'nullable|numeric|min:0',
-            'bdc_visits_per_year'     => 'nullable|numeric|min:0',
+            'bdc_visits_per_year'     => 'nullable|numeric|min:0|max:365',
             'estimated_task_hours'    => 'nullable|numeric|min:0',
             'minimum_required_hours'  => 'nullable|numeric|min:0',
             'tus_score'               => 'nullable|numeric|min:0|max:100',
+
+            // Travel-based BDC calibration
+            'bdc_distance_km'    => 'nullable|numeric|min:0',
+            'bdc_time_min'       => 'nullable|numeric|min:0',
 
             // Findings array — all nullable so draft can be partial
             'findings'                          => 'nullable|array',
@@ -1109,8 +1141,31 @@ class InspectionController extends Controller
             $inspection->update($pharParams);
         }
 
+        // ==== TRAVEL-BASED BDC CALIBRATION ====
+        $travelDistanceKm  = isset($validated['bdc_distance_km'])  ? (float) $validated['bdc_distance_km']  : null;
+        $travelTimeMinutes = isset($validated['bdc_time_min'])      ? (float) $validated['bdc_time_min']      : null;
+        // Always read rates from BDC Settings — not user-editable on this form
+        $ratePerKm     = (float) (\App\Models\BDCSetting::getValue('rate_per_km', 1.50) ?? 1.50);
+        $ratePerMinute = (float) (\App\Models\BDCSetting::getValue('rate_per_minute', 1.65) ?? 1.65);
+        // Visits/year already saved via bdc_visits_per_year in $pharParams above
+        $visitsPerYear = $inspection->fresh()->bdc_visits_per_year;
+
+        $travelUpdate = array_filter([
+            'bdc_distance_km'     => $travelDistanceKm,
+            'bdc_time_minutes'    => $travelTimeMinutes,
+            'bdc_rate_per_km'     => $ratePerKm,
+            'bdc_rate_per_minute' => $ratePerMinute,
+        ], fn($v) => $v !== null);
+
+        if (!empty($travelUpdate)) {
+            $inspection->update($travelUpdate);
+        }
+
         // ==== MERGE PHAR DATA BACK INTO inspection->findings JSON ====
-        $currentFindings = collect($inspection->fresh()->findings ?? []);
+        // Apply catalog defaults first so phar_labour_hours and phar_materials are populated
+        // even when the findings table is display-only and no labour_hours inputs are submitted.
+        $rawFindings      = $inspection->fresh()->findings ?? [];
+        $currentFindings  = collect(PharCatalog::applyDefaultsToFindings($rawFindings));
         $submittedFindings = collect($validated['findings'] ?? []);
 
         $mergedFindings = $currentFindings->map(function ($finding, $index) use ($submittedFindings) {

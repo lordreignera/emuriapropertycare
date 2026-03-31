@@ -25,7 +25,10 @@ class BDCSettingsController extends Controller
         $settings = BDCSetting::getAllWithDetails()->reject(function ($setting) {
             return in_array($setting->setting_key, ['visits_per_year', 'hours_per_visit'], true);
         })->values();
-        $calculation = $this->bdcCalculator->calculate();
+        $calculation = array_merge(
+            $this->bdcCalculator->calculate(),
+            $this->bdcCalculator->getSettings()
+        );
         
         return view('admin.settings.bdc-settings', [
             'settings' => $settings,
@@ -78,8 +81,8 @@ class BDCSettingsController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'loaded_hourly_rate' => 'required|numeric|min:0',
-            'infrastructure_percentage' => 'required|numeric|min:0|max:1',
-            'administration_percentage' => 'required|numeric|min:0|max:1',
+            'rate_per_km' => 'required|numeric|min:0',
+            'rate_per_minute' => 'required|numeric|min:0',
         ]);
 
         if ($validator->fails()) {
@@ -92,8 +95,8 @@ class BDCSettingsController extends Controller
         try {
             $calculation = $this->bdcCalculator->calculateWithParams([
                 'loaded_hourly_rate' => $request->input('loaded_hourly_rate'),
-                'infrastructure_percentage' => $request->input('infrastructure_percentage'),
-                'administration_percentage' => $request->input('administration_percentage'),
+                'rate_per_km' => $request->input('rate_per_km'),
+                'rate_per_minute' => $request->input('rate_per_minute'),
             ]);
             
             return response()->json([
@@ -117,8 +120,8 @@ class BDCSettingsController extends Controller
             // Reset to default values from seeder
             $defaults = [
                 'loaded_hourly_rate' => 165.00,
-                'infrastructure_percentage' => 0.30,
-                'administration_percentage' => 0.12,
+                'rate_per_km' => 1.50,
+                'rate_per_minute' => 1.65,
             ];
 
             foreach ($defaults as $key => $value) {

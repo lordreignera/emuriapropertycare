@@ -57,14 +57,11 @@
                                         @endif
                                     </td>
                                         @php
-                                            $displayMonthly = max(
-                                                (float) ($inspection->scientific_final_monthly ?? 0),
-                                                (float) ($inspection->arp_equivalent_final ?? 0),
-                                                (float) ($inspection->base_package_price_snapshot ?? 0),
-                                                (float) ($inspection->trc_monthly ?? 0)
-                                            );
+                                            $displayPrice = ($inspection->work_payment_cadence === 'monthly')
+                                                ? (float) ($inspection->arp_monthly ?? $inspection->trc_monthly ?? 0)
+                                                : (float) ($inspection->trc_annual ?? 0);
                                         @endphp
-                                        <td>${{ number_format($displayMonthly, 2) }}</td>
+                                        <td>${{ number_format($displayPrice, 2) }}</td>
                                     <td>
                                         @if(($inspection->status ?? null) !== 'completed')
                                             <span class="badge bg-secondary">N/A</span>
