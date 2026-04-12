@@ -11,37 +11,18 @@ class CPIPricingSystemSeeder extends Seeder
      */
     public function run(): void
     {
-        // Independent tables first
         $this->call([
             PropertyTypesSeeder::class,
-            PricingPackagesSeeder::class,
             ParametersSeeder::class,
-            MixedUseCalculationSettingsSeeder::class,
-            CpiBandRangesSeeder::class,
-            CpiMultipliersSeeder::class,
-            CpiDomainsSeeder::class,
-            
-            // Lookup tables
-            SupplyLineMaterialsSeeder::class,
-            // FmcMaterialSettingsSeeder is called in DatabaseSeeder after InspectionSystemsSeeder
-            // FindingTemplateSettingsSeeder is called in DatabaseSeeder after InspectionSystemsSeeder
-            AgeBracketsSeeder::class,
-            ContainmentCategoriesSeeder::class,
-            CrawlAccessCategoriesSeeder::class,
-            RoofAccessCategoriesSeeder::class,
             EquipmentRequirementsSeeder::class,
             ComplexityCategoriesSeeder::class,
-            
+
             // Size factor tables
             ResidentialSizeTiersSeeder::class,
             CommercialSizeSettingsSeeder::class,
-            
+
             // System config
             PricingSystemConfigSeeder::class,
-            ReactiveCostAssumptionsSeeder::class,
-            StewardshipLossReductionsSeeder::class,
-            
-            // CPI Scoring Factors are seeded inside CpiDomainsSeeder
         ]);
 
         $this->command->info('✅ All CPI Pricing System tables seeded successfully!');

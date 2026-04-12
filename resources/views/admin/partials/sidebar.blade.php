@@ -17,30 +17,18 @@
     $billingOpen = request()->routeIs('invoices.*') || request()->routeIs('budgets.*');
     $reportsOpen = request()->routeIs('reports.*') || request()->routeIs('savings.*');
     $accessControlOpen = request()->routeIs('admin.users.*') || request()->routeIs('admin.roles.*') || request()->routeIs('admin.permissions.*');
-    $cpiOpen = request()->routeIs('admin.pricing-packages.*')
-        || request()->routeIs('admin.property-types.*')
-        || request()->routeIs('admin.cpi-bands.*')
-        || request()->routeIs('admin.cpi-multipliers.*')
-        || request()->routeIs('admin.cpi-domains.*')
-        || request()->routeIs('admin.supply-materials.*')
-        || request()->routeIs('admin.age-brackets.*')
-        || request()->routeIs('admin.containment-categories.*')
-        || request()->routeIs('admin.crawl-access.*')
-        || request()->routeIs('admin.roof-access.*')
+    $cpiOpen = request()->routeIs('admin.property-types.*')
         || request()->routeIs('admin.equipment-requirements.*')
         || request()->routeIs('admin.complexity-categories.*')
         || request()->routeIs('admin.residential-tiers.*')
         || request()->routeIs('admin.commercial-settings.*')
-        || request()->routeIs('admin.mixed-use-settings.*')
         || request()->routeIs('admin.pricing-config.*')
         || request()->routeIs('admin.parameters.*')
         || request()->routeIs('admin.fmc-material-settings.*')
         || request()->routeIs('admin.finding-template-settings.*')
         || request()->routeIs('admin.systems.*')
         || request()->routeIs('admin.subsystems.*')
-        || request()->routeIs('admin.settings.bdc*')
-        || request()->routeIs('admin.reactive-costs.*')
-        || request()->routeIs('admin.stewardship-loss.*');
+        || request()->routeIs('admin.settings.bdc*');
 
     $scheduledPaidCount = 0;
     $unscheduledCount = 0;
@@ -325,7 +313,6 @@
                     <a class="admin-client-sublink {{ request()->routeIs('admin.settings.bdc*') ? 'is-active' : '' }}" href="{{ route('admin.settings.bdc') }}"><span class="admin-client-sublabel">BDC Calibration Engine</span></a>
                     <a class="admin-client-sublink {{ request()->routeIs('admin.fmc-material-settings.*') ? 'is-active' : '' }}" href="{{ route('admin.fmc-material-settings.index') }}"><span class="admin-client-sublabel">FMC Material Settings</span></a>
                     <a class="admin-client-sublink {{ request()->routeIs('admin.finding-template-settings.*') ? 'is-active' : '' }}" href="{{ route('admin.finding-template-settings.index') }}"><span class="admin-client-sublabel">Findings Template Settings</span></a>
-                    <a class="admin-client-sublink {{ request()->routeIs('admin.pricing-packages.*') ? 'is-active' : '' }}" href="{{ route('admin.pricing-packages.index') }}"><span class="admin-client-sublabel">Pricing Packages</span></a>
                     <a class="admin-client-sublink {{ request()->routeIs('admin.property-types.*') ? 'is-active' : '' }}" href="{{ route('admin.property-types.index') }}"><span class="admin-client-sublabel">Property Types</span></a>
                    <!-- <a class="admin-client-sublink {{ request()->routeIs('admin.cpi-bands.*') ? 'is-active' : '' }}" href="{{ route('admin.cpi-bands.index') }}"><span class="admin-client-sublabel">CPI Band Ranges</span></a>
                     <a class="admin-client-sublink {{ request()->routeIs('admin.cpi-multipliers.*') ? 'is-active' : '' }}" href="{{ route('admin.cpi-multipliers.index') }}"><span class="admin-client-sublabel">CPI Multipliers</span></a>
@@ -342,8 +329,7 @@
                     <a class="admin-client-sublink {{ request()->routeIs('admin.mixed-use-settings.*') ? 'is-active' : '' }}" href="{{ route('admin.mixed-use-settings.index') }}"><span class="admin-client-sublabel">Mixed-Use Settings</span></a>
                     <a class="admin-client-sublink {{ request()->routeIs('admin.pricing-config.*') ? 'is-active' : '' }}" href="{{ route('admin.pricing-config.index') }}"><span class="admin-client-sublabel">System Configuration</span></a>
                     <a class="admin-client-sublink {{ request()->routeIs('admin.parameters.*') ? 'is-active' : '' }}" href="{{ route('admin.parameters.index') }}"><span class="admin-client-sublabel">Parameters</span></a>
-                    <a class="admin-client-sublink {{ request()->routeIs('admin.reactive-costs.*') ? 'is-active' : '' }}" href="{{ route('admin.reactive-costs.index') }}"><span class="admin-client-sublabel">Reactive Cost Assumptions</span></a>
-                    <a class="admin-client-sublink {{ request()->routeIs('admin.stewardship-loss.*') ? 'is-active' : '' }}" href="{{ route('admin.stewardship-loss.index') }}"><span class="admin-client-sublabel">Stewardship Loss Reduction</span></a> -->
+                    -->
                 </div>
             </details>
 

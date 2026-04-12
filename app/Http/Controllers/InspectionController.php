@@ -12,10 +12,8 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Barryvdh\DomPDF\Facade\Pdf;
-use App\Services\BaseServicePricingService;
 use App\Services\BDCCalculator;
 use App\Models\InspectionSystem;
-use App\Models\PricingPackage;
 use App\Support\PharCatalog;
 
 class InspectionController extends Controller
@@ -165,14 +163,6 @@ class InspectionController extends Controller
                 ->get();
         }
 
-        $defaultServicePackage = PricingPackage::with(['packagePricing' => function ($query) {
-            $query->where('is_active', true);
-        }])
-            ->where('is_active', true)
-            ->orderBy('sort_order')
-            ->orderBy('id')
-            ->first();
-
         $dbMaterialSettings = \App\Models\FmcMaterialSetting::active()->get([
             'material_name', 'default_unit', 'default_unit_cost', 'hst_rate', 'pst_rate', 'system_id', 'subsystem_id',
         ]);
@@ -207,7 +197,6 @@ class InspectionController extends Controller
             'property',
             'inspection',
             'systems',
-            'defaultServicePackage',
             'materialUnits',
             'fmcMaterialSettings',
             'pharCategories'
@@ -226,12 +215,6 @@ class InspectionController extends Controller
             'inspector_id' => 'nullable|exists:users,id',
             'weather_conditions' => 'nullable|string|max:120',
             'summary' => 'nullable|string',
-            
-            // CPI Domain Scores
-            'cpi_domain_*' => 'nullable|integer',
-            
-            // Service Package
-            'service_package_id' => 'nullable|exists:pricing_packages,id',
             
             // Overall Assessment
             'overall_condition' => 'nullable|in:excellent,good,fair,poor,critical',
@@ -286,21 +269,9 @@ class InspectionController extends Controller
             'bdc_visits_year'   => 'nullable|numeric|min:0',
             'bdc_rate_km'       => 'nullable|numeric|min:0',
             'bdc_rate_min'      => 'nullable|numeric|min:0',
-
-            // CPI hidden scores from phase 1 UI
-            'cpi_total_score' => 'nullable|integer|min:0',
-            'domain_1_score' => 'nullable|integer|min:0',
-            'domain_2_score' => 'nullable|integer|min:0',
-            'domain_3_score' => 'nullable|integer|min:0',
-            'domain_4_score' => 'nullable|integer|min:0',
-            'domain_5_score' => 'nullable|integer|min:0',
-            'domain_6_score' => 'nullable|integer|min:0',
         ]);
 
         $property = Property::findOrFail($validated['property_id']);
-
-        // Calculate CPI scores from submitted dynamic factors (fallback)
-        $cpiSnapshot = $this->calculateCpiSnapshot($request);
 
         // Create or find project for this property
         $project = \App\Models\Project::firstOrCreate(
@@ -360,49 +331,9 @@ class InspectionController extends Controller
         $inspection->commercial_sqft_snapshot = $property->square_footage_interior;
         $inspection->mixed_use_weight_snapshot = $property->mixed_use_commercial_weight;
 
-        // base_price_snapshot / service_package_name set later when package is selected.
-
-        // CPI snapshot fields (Page 1)
+        // Persist only general page-1 inspection snapshot fields.
         $inspection->property_year_built = $request->input('property_year_built');
-        $inspection->domain_1_score = (int) ($validated['domain_1_score'] ?? ($cpiSnapshot['domain_scores'][1] ?? 0));
-        $inspection->domain_2_score = (int) ($validated['domain_2_score'] ?? ($cpiSnapshot['domain_scores'][2] ?? 0));
-        $inspection->domain_3_score = (int) ($validated['domain_3_score'] ?? ($cpiSnapshot['domain_scores'][3] ?? 0));
-        $inspection->domain_4_score = (int) ($validated['domain_4_score'] ?? ($cpiSnapshot['domain_scores'][4] ?? 0));
-        $inspection->domain_5_score = (int) ($validated['domain_5_score'] ?? ($cpiSnapshot['domain_scores'][5] ?? 0));
-        $inspection->domain_6_score = (int) ($validated['domain_6_score'] ?? ($cpiSnapshot['domain_scores'][6] ?? 0));
-        $inspection->cpi_total_score = (int) ($validated['cpi_total_score'] ?? ($inspection->domain_1_score + $inspection->domain_2_score + $inspection->domain_3_score + $inspection->domain_4_score + $inspection->domain_5_score + $inspection->domain_6_score));
-        $inspection->domain_1_notes = $request->input('domain_1_notes');
-        $inspection->domain_2_notes = $request->input('domain_2_notes');
-        $inspection->domain_3_notes = $request->input('domain_3_notes');
-        $inspection->domain_4_notes = $request->input('domain_4_notes');
-        $inspection->domain_5_notes = $request->input('domain_5_notes');
-        $inspection->domain_6_notes = $request->input('domain_6_notes');
 
-        // Persist CPI band + multiplier snapshot from current score (Phase 1)
-        $cpiBandRange = \App\Models\CpiBandRange::with('multiplier')
-            ->where('is_active', true)
-            ->where('min_score', '<=', $inspection->cpi_total_score)
-            ->where(function ($query) use ($inspection) {
-                $query->whereNull('max_score')
-                    ->orWhere('max_score', '>=', $inspection->cpi_total_score);
-            })
-            ->orderBy('sort_order')
-            ->first();
-
-        if (!$cpiBandRange) {
-            $cpiBandRange = \App\Models\CpiBandRange::with('multiplier')
-                ->where('is_active', true)
-                ->orderBy('sort_order')
-                ->first();
-        }
-
-        $inspection->cpi_band = $cpiBandRange?->band_code;
-        $inspection->cpi_multiplier = (float) ($cpiBandRange?->multiplier?->multiplier ?? 1.00);
-        $inspection->cpi_band_name_snapshot = $cpiBandRange?->band_name;
-        $inspection->cpi_band_range_snapshot = $cpiBandRange
-            ? ((string) $cpiBandRange->min_score) . '-' . (($cpiBandRange->max_score === null) ? '+' : (string) $cpiBandRange->max_score)
-            : null;
-        
         $systemFindings = collect($request->input('system_findings', []));
         $systemNameMap = collect();
         $systemSlugMap = collect();
@@ -555,91 +486,6 @@ class InspectionController extends Controller
     }
 
     /**
-     * Calculate CPI snapshot (domain scores + total) from dynamic factor inputs.
-     */
-    protected function calculateCpiSnapshot(Request $request): array
-    {
-        $domainScores = [];
-        $allowedLookupTables = [
-            'supply_line_materials',
-            'age_brackets',
-            'containment_categories',
-            'crawl_access_categories',
-            'roof_access_categories',
-            'equipment_requirements',
-            'complexity_categories',
-        ];
-
-        $domains = \App\Models\CpiDomain::with(['activeFactors' => function ($q) {
-            $q->orderBy('sort_order');
-        }])->where('is_active', true)->orderBy('domain_number')->get();
-
-        foreach ($domains as $domain) {
-            $factorScores = [];
-
-            foreach ($domain->activeFactors as $factor) {
-                $inputName = 'factor_' . $factor->id;
-                $inputValue = $request->input($inputName);
-                $score = 0;
-
-                if ($inputValue === null || $inputValue === '') {
-                    $factorScores[] = 0;
-                    continue;
-                }
-
-                $rule = $factor->calculation_rule ?? [];
-
-                if ($factor->field_type === 'yes_no') {
-                    $score = (int) ($rule[$inputValue] ?? 0);
-                } elseif ($factor->field_type === 'lookup' && $factor->lookup_table && in_array($factor->lookup_table, $allowedLookupTables, true)) {
-                    $score = (int) (DB::table($factor->lookup_table)
-                        ->where('id', $inputValue)
-                        ->value('score_points') ?? 0);
-                } elseif ($factor->field_type === 'numeric') {
-                    $numericValue = (float) $inputValue;
-
-                    if (!empty($rule['lookup_by_age'])) {
-                        $score = (int) (DB::table('age_brackets')
-                            ->where('is_active', true)
-                            ->where('min_age', '<=', $numericValue)
-                            ->where(function ($q) use ($numericValue) {
-                                $q->whereNull('max_age')->orWhere('max_age', '>=', $numericValue);
-                            })
-                            ->value('score_points') ?? 0);
-                    } elseif (!empty($rule['threshold']) && $numericValue > (float) $rule['threshold']) {
-                        $score = (int) ($rule['points'] ?? 0);
-                    } elseif (!empty($rule['range']) && is_array($rule['range']) && count($rule['range']) === 2) {
-                        $min = (float) $rule['range'][0];
-                        $max = (float) $rule['range'][1];
-                        if ($numericValue >= $min && $numericValue <= $max) {
-                            $score = (int) ($rule['points'] ?? 0);
-                        }
-                    }
-                }
-
-                $factorScores[] = max(0, (int) $score);
-            }
-
-            if (($domain->calculation_method ?? 'sum') === 'max') {
-                $domainScore = empty($factorScores) ? 0 : max($factorScores);
-            } else {
-                $domainScore = array_sum($factorScores);
-            }
-
-            if (!empty($domain->max_possible_points)) {
-                $domainScore = min((int) $domain->max_possible_points, (int) $domainScore);
-            }
-
-            $domainScores[(int) $domain->domain_number] = (int) $domainScore;
-        }
-
-        return [
-            'domain_scores' => $domainScores,
-            'cpi_total_score' => array_sum($domainScores),
-        ];
-    }
-
-    /**
      * Compute the weighted CPI (0–100) from findings × system weights and
      * persist it plus the per-system breakdown on the Inspection model.
      *
@@ -753,10 +599,6 @@ class InspectionController extends Controller
             ->orderBy('id')
             ->get();
 
-        $domains = \App\Models\CpiDomain::where('is_active', true)
-            ->orderBy('domain_number')
-            ->get(['domain_number', 'domain_name', 'max_possible_points']);
-        
         // Ensure property exists
         if (!$inspection->property) {
             return redirect()->route('inspections.index')
@@ -778,7 +620,7 @@ class InspectionController extends Controller
             }
         }
         
-        return view('admin.inspections.show', compact('inspection', 'findings', 'materials', 'domains'));
+        return view('admin.inspections.show', compact('inspection', 'findings', 'materials'));
     }
 
     /**
@@ -824,10 +666,6 @@ class InspectionController extends Controller
             ->orderBy('id')
             ->get();
 
-        $domains = \App\Models\CpiDomain::where('is_active', true)
-            ->orderBy('domain_number')
-            ->get(['domain_number', 'domain_name', 'max_possible_points']);
-        
         // Ensure property exists
         if (!$inspection->property) {
             return redirect()->route('inspections.index')
@@ -860,7 +698,7 @@ class InspectionController extends Controller
 
         // Generate PDF
         $isRemote = ($driver !== 'local');
-        $pdf = Pdf::loadView('admin.inspections.invoice-pdf', compact('inspection', 'findings', 'materials', 'domains', 'photoUrls', 'findingPhotoUrls'))
+        $pdf = Pdf::loadView('admin.inspections.invoice-pdf', compact('inspection', 'findings', 'materials', 'photoUrls', 'findingPhotoUrls'))
             ->setPaper('a4', 'landscape')
             ->setOption('margin-top', 10)
             ->setOption('margin-right', 10)
@@ -1053,19 +891,6 @@ class InspectionController extends Controller
             ->unique('task_question')
             ->values();
 
-        // Selected service package (from CPI step) and property-type-specific monthly floor price
-        $selectedServicePackage = null;
-        $selectedServicePackagePrice = 0;
-        if (!empty($inspection->service_package_id)) {
-            $selectedServicePackage = \App\Models\PricingPackage::with('packagePricing')->find($inspection->service_package_id);
-
-            if ($selectedServicePackage) {
-                $propertyType = strtolower((string) ($property->type ?? 'residential'));
-                $pricingService = new BaseServicePricingService();
-                $selectedServicePackagePrice = (float) ($pricingService->getPackageBasePrice($selectedServicePackage->package_name, $propertyType) ?? 0);
-            }
-        }
-
         return view('admin.inspections.form-phar-data', compact(
             'inspection',
             'property',
@@ -1075,8 +900,6 @@ class InspectionController extends Controller
             'fmcMaterialSettings',
             'findingTemplateSettings',
             'defaultPropertySizePsf',
-            'selectedServicePackage',
-            'selectedServicePackagePrice',
             'sortedFindings',
             'systemWeightsMap'
         ));

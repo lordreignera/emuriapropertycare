@@ -300,7 +300,7 @@
                                         <div class="alert alert-secondary">
                                             <strong>PHAR Condition Score:</strong> 
                                             <span class="fs-4 text-primary" id="pharConditionScore">
-                                                {{ $inspection->cpi_total_score ?? (($inspection->domain_1_score ?? 0) + ($inspection->domain_2_score ?? 0) + ($inspection->domain_3_score ?? 0) + ($inspection->domain_4_score ?? 0) + ($inspection->domain_5_score ?? 0) + ($inspection->domain_6_score ?? 0)) }}
+                                                {{ $inspection->cpi_total_score ?? 0 }}
                                             </span>
                                             <small class="text-muted ms-2">(From CPI scoring)</small>
                                         </div>

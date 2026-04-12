@@ -171,30 +171,12 @@ Route::middleware([
         Route::post('products/{product}/toggle-status', [App\Http\Controllers\Admin\ProductManagementController::class, 'toggleStatus'])->name('products.toggle-status');
         Route::post('products/{product}/duplicate', [App\Http\Controllers\Admin\ProductManagementController::class, 'duplicate'])->name('products.duplicate');
         
-        // CPI Pricing System Management
-        Route::resource('pricing-packages', App\Http\Controllers\Admin\PricingPackageController::class)->names('pricing-packages');
+        // Pricing System Management
         Route::resource('property-types', App\Http\Controllers\Admin\PropertyTypeController::class)->names('property-types');
-        Route::resource('cpi-bands', App\Http\Controllers\Admin\CpiBandController::class)->names('cpi-bands');
-        Route::resource('cpi-multipliers', App\Http\Controllers\Admin\CpiMultiplierController::class)->names('cpi-multipliers');
-        Route::resource('cpi-domains', App\Http\Controllers\Admin\CpiDomainController::class)->names('cpi-domains');
-        
-        // CPI Scoring Factors (nested under domains)
-        Route::get('cpi-domains/{cpiDomain}/factors/create', [App\Http\Controllers\Admin\CpiDomainController::class, 'createFactor'])->name('cpi-domains.factors.create');
-        Route::post('cpi-domains/{cpiDomain}/factors', [App\Http\Controllers\Admin\CpiDomainController::class, 'storeFactor'])->name('cpi-domains.factors.store');
-        Route::get('cpi-domains/{cpiDomain}/factors/{factor}/edit', [App\Http\Controllers\Admin\CpiDomainController::class, 'editFactor'])->name('cpi-domains.factors.edit');
-        Route::put('cpi-domains/{cpiDomain}/factors/{factor}', [App\Http\Controllers\Admin\CpiDomainController::class, 'updateFactor'])->name('cpi-domains.factors.update');
-        Route::delete('cpi-domains/{cpiDomain}/factors/{factor}', [App\Http\Controllers\Admin\CpiDomainController::class, 'destroyFactor'])->name('cpi-domains.factors.destroy');
-        
-        Route::resource('supply-materials', App\Http\Controllers\Admin\SupplyMaterialController::class)->names('supply-materials');
-        Route::resource('age-brackets', App\Http\Controllers\Admin\AgeBracketController::class)->names('age-brackets');
-        Route::resource('containment-categories', App\Http\Controllers\Admin\ContainmentCategoryController::class)->names('containment-categories');
-        Route::resource('crawl-access', App\Http\Controllers\Admin\CrawlAccessController::class)->names('crawl-access');
-        Route::resource('roof-access', App\Http\Controllers\Admin\RoofAccessController::class)->names('roof-access');
         Route::resource('equipment-requirements', App\Http\Controllers\Admin\EquipmentRequirementController::class)->names('equipment-requirements');
         Route::resource('complexity-categories', App\Http\Controllers\Admin\ComplexityCategoryController::class)->names('complexity-categories');
         Route::resource('residential-tiers', App\Http\Controllers\Admin\ResidentialTierController::class)->names('residential-tiers');
         Route::resource('commercial-settings', App\Http\Controllers\Admin\CommercialSettingController::class)->names('commercial-settings');
-        Route::resource('mixed-use-settings', App\Http\Controllers\Admin\MixedUseSettingController::class)->names('mixed-use-settings');
         Route::resource('pricing-config', App\Http\Controllers\Admin\PricingConfigController::class)->names('pricing-config');
         Route::post('parameters/reload-defaults', [App\Http\Controllers\Admin\ParameterController::class, 'reloadDefaults'])->name('parameters.reload-defaults');
         Route::resource('parameters', App\Http\Controllers\Admin\ParameterController::class)->except(['show'])->names('parameters');
@@ -204,8 +186,6 @@ Route::middleware([
         Route::resource('finding-template-settings', App\Http\Controllers\Admin\FindingTemplateSettingController::class)->except(['show'])->names('finding-template-settings');
         Route::resource('systems', App\Http\Controllers\Admin\SystemController::class)->except(['show'])->names('systems');
         Route::resource('subsystems', App\Http\Controllers\Admin\SubsystemController::class)->except(['show'])->names('subsystems');
-        Route::resource('reactive-costs', App\Http\Controllers\Admin\ReactiveCostAssumptionController::class)->names('reactive-costs');
-        Route::resource('stewardship-loss', App\Http\Controllers\Admin\StewardshipLossReductionController::class)->names('stewardship-loss');
         
         // BDC Calibration Engine Settings
         Route::get('settings/bdc', [App\Http\Controllers\Admin\BDCSettingsController::class, 'index'])->name('settings.bdc');

@@ -68,7 +68,6 @@ class Inspection extends Model
         'fmc_per_unit_annual',
         'trc_per_unit_annual',
         'final_monthly_per_unit',
-        'service_package_id',
         'recommendations',
         'risk_summary',
         'overall_condition',

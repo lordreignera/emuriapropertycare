@@ -35,7 +35,7 @@ return new class extends Migration
         
         // Add PHAR input fields to inspections table
         Schema::table('inspections', function (Blueprint $table) {
-            $table->decimal('property_size_psf', 10, 2)->nullable()->after('service_package_id');
+            $table->decimal('property_size_psf', 10, 2)->nullable()->after('mixed_use_weight_snapshot');
             $table->decimal('estimated_task_hours', 10, 2)->nullable()->after('property_size_psf');
             $table->decimal('minimum_required_hours', 10, 2)->default(3)->after('estimated_task_hours');
         });

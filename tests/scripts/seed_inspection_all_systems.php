@@ -31,7 +31,6 @@ use Illuminate\Http\Request;
 
 // ── Config ─────────────────────────────────────────────────────────────────
 $propertyId      = 1;
-$servicePackageId = 1;  // Essentials
 $inspectionDate  = now()->format('Y-m-d\TH:i');
 
 // ── Validate prerequisites ─────────────────────────────────────────────────
@@ -123,7 +122,6 @@ $requestData = [
     'inspector_id'      => $admin->id,
     'weather_conditions'=> 'clear',
     'overall_condition' => 'fair',
-    'service_package_id'=> $servicePackageId,
     'inspector_notes'   => 'Full property walk-through with one representative finding logged per building system.',
     'recommendations'   => 'Prioritise Safety (smoke detector), Electrical (double-tap) and Structural (beam) items. Schedule all Critical/High findings within 30 days.',
     'risk_summary'      => 'Multiple systems show signs of deferred maintenance. Structural and Electrical items require immediate review.',

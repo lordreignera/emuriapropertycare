@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PropertyType extends Model
 {
@@ -24,13 +23,5 @@ class PropertyType extends Model
     public function scopeActive($query)
     {
         return $query->where('is_active', true);
-    }
-
-    /**
-     * Get all package pricing records for this property type
-     */
-    public function packagePricing(): HasMany
-    {
-        return $this->hasMany(PackagePricing::class, 'property_type_id');
     }
 }

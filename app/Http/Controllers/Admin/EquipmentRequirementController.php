@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\EquipmentRequirement;
-use App\Models\CpiDomain;
 use Illuminate\Http\Request;
 
 class EquipmentRequirementController extends Controller

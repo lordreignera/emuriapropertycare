@@ -57,11 +57,7 @@ class InspectionController extends Controller
             ->orderBy('id')
             ->get();
 
-        $domains = \App\Models\CpiDomain::where('is_active', true)
-            ->orderBy('domain_number')
-            ->get(['domain_number', 'domain_name', 'max_possible_points']);
-
-        return view('client.inspections.report', compact('inspection', 'findings', 'materials', 'domains'));
+        return view('client.inspections.report', compact('inspection', 'findings', 'materials'));
     }
 
     /**
