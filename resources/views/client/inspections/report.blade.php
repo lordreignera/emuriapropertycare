@@ -25,6 +25,13 @@
                     </div>
                 </div>
 
+                @if(session('success'))
+                    <div class="alert alert-success no-print">{{ session('success') }}</div>
+                @endif
+                @if(session('error'))
+                    <div class="alert alert-danger no-print">{{ session('error') }}</div>
+                @endif
+
                 <!-- Property & Inspection Summary -->
                 <div class="card mb-4">
                     <div class="card-header bg-primary text-white">
@@ -122,9 +129,16 @@
                         'medium'         => ['label' => 'Value Depreciation',         'color' => '#d4a017', 'icon' => '🟡'],
                         'low'            => ['label' => 'Non-Urgent',                 'color' => '#198754', 'icon' => '🟢'],
                     ];
-                    $groupedFindings = collect($inlineFindingsRaw)->groupBy('severity');
-                    $totalLabourHrs  = collect($inlineFindingsRaw)->sum('phar_labour_hours');
-                    $totalMatCost    = collect($inlineFindingsRaw)->sum(fn($f) =>
+                    $indexedFindings = collect($inlineFindingsRaw)
+                        ->values()
+                        ->map(function ($finding, $idx) {
+                            $finding['__finding_index'] = $idx;
+                            return $finding;
+                        });
+
+                    $groupedFindings = $indexedFindings->groupBy('severity');
+                    $totalLabourHrs  = $indexedFindings->sum('phar_labour_hours');
+                    $totalMatCost    = $indexedFindings->sum(fn($f) =>
                         collect($f['phar_materials'] ?? [])->sum(fn($m) => (float)($m['line_total'] ?? 0))
                     );
                 @endphp
@@ -201,6 +215,14 @@
                                                     @endforeach
                                                 </div>
                                             @endif
+                                            <form method="POST" action="{{ route('client.inspections.findings.add-photos', ['inspection' => $inspection->id, 'findingIndex' => $finding['__finding_index']]) }}" enctype="multipart/form-data" class="mt-2 no-print">
+                                                @csrf
+                                                <div class="input-group input-group-sm">
+                                                    <input type="file" name="finding_photos[]" class="form-control" accept="image/*" multiple>
+                                                    <button type="submit" class="btn btn-outline-primary">Upload Photos</button>
+                                                </div>
+                                                <small class="text-muted">You can upload more than one photo for this finding.</small>
+                                            </form>
                                         </td>
                                         <td class="align-top">
                                             <span class="badge bg-secondary">{{ $finding['phar_category'] ?? $finding['type'] ?? 'General' }}</span>
@@ -558,6 +580,15 @@
                     </div>
                 </div>
                 @endif
+
+                <div class="card mb-4">
+                    <div class="card-header bg-dark text-white">
+                        <h5 class="mb-0"><i class="mdi mdi-file-document-outline me-2"></i>Client Job Approval &amp; Service Agreement</h5>
+                    </div>
+                    <div class="card-body">
+                        @include('shared.inspection-job-approval-agreement', ['inspection' => $inspection])
+                    </div>
+                </div>
 
             </div>
         </div>

@@ -242,6 +242,49 @@
         ->orderBy('sort_order')
         ->get(['task_question', 'system_id', 'subsystem_id']);
 
+    $recommendationSettingsRaw = \App\Models\RecommendationSetting::query()
+        ->where('is_active', true)
+        ->orderBy('sort_order')
+        ->orderBy('recommendation')
+        ->get(['recommendation', 'system_id', 'subsystem_id']);
+
+    $recommendationConfig = [
+        'global' => [],
+        'system' => [],
+        'subsystem' => [],
+    ];
+
+    foreach ($recommendationSettingsRaw as $recommendationRow) {
+        $recommendationText = trim((string) ($recommendationRow->recommendation ?? ''));
+        if ($recommendationText === '') {
+            continue;
+        }
+
+        if (!empty($recommendationRow->subsystem_id)) {
+            $key = (string) $recommendationRow->subsystem_id;
+            $recommendationConfig['subsystem'][$key] = $recommendationConfig['subsystem'][$key] ?? [];
+            $recommendationConfig['subsystem'][$key][] = $recommendationText;
+            continue;
+        }
+
+        if (!empty($recommendationRow->system_id)) {
+            $key = (string) $recommendationRow->system_id;
+            $recommendationConfig['system'][$key] = $recommendationConfig['system'][$key] ?? [];
+            $recommendationConfig['system'][$key][] = $recommendationText;
+            continue;
+        }
+
+        $recommendationConfig['global'][] = $recommendationText;
+    }
+
+    $recommendationConfig['global'] = array_values(array_unique($recommendationConfig['global']));
+    $recommendationConfig['system'] = collect($recommendationConfig['system'])
+        ->map(fn($rows) => array_values(array_unique($rows)))
+        ->all();
+    $recommendationConfig['subsystem'] = collect($recommendationConfig['subsystem'])
+        ->map(fn($rows) => array_values(array_unique($rows)))
+        ->all();
+
     // Full PHAR catalog keyed by "system|subsystem|finding" for JS auto-fill
     $pharFindingCatalog = \App\Support\PharCatalog::findingCatalog();
 
@@ -294,11 +337,18 @@ const MATERIAL_UNITS = @json($materialUnits ?? []);
 const FMC_MATERIAL_SETTINGS = @json($fmcMaterialSettings ?? []);
 const PHAR_CATEGORIES = @json($pharCategories ?? []);
 const PHAR_FINDING_CATALOG = @json($pharFindingCatalog ?? []);
+const RECOMMENDATION_CONFIG = @json($recommendationConfig ?? ['global' => [], 'system' => [], 'subsystem' => []]);
 // Photo URLs pre-resolved server-side (works for local disk and private S3 signed URLs)
 const FINDING_PHOTO_URLS = @json($findingPhotoUrls ?? []);
 
 const initialFindings = @json(old('system_findings', $inspection->findings ?? []));
 let findingIndex = 0;
+let findingMediaViewerState = {
+    items: [],
+    index: 0,
+    zoom: 1,
+    rotation: 0,
+};
 
 function escapeHtml(value) {
     const map = {
@@ -311,6 +361,239 @@ function escapeHtml(value) {
 
     return String(value || '').replace(/[&<>"']/g, function (match) {
         return map[match];
+    });
+}
+
+function isVideoMedia(pathOrName) {
+    const clean = String(pathOrName || '').split('?')[0].toLowerCase();
+    return /\.(mp4|webm|mov|avi|mkv|m4v)$/.test(clean);
+}
+
+function ensureFindingMediaViewer() {
+    if (document.getElementById('finding-media-viewer')) {
+        return;
+    }
+
+    const viewer = document.createElement('div');
+    viewer.id = 'finding-media-viewer';
+    viewer.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:12000;display:none;';
+    viewer.innerHTML = `
+        <div style="position:absolute;top:14px;left:50%;transform:translateX(-50%);display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
+            <button type="button" class="btn btn-sm btn-light media-viewer-prev"><i class="mdi mdi-chevron-left"></i> Prev</button>
+            <button type="button" class="btn btn-sm btn-light media-viewer-next">Next <i class="mdi mdi-chevron-right"></i></button>
+            <button type="button" class="btn btn-sm btn-light media-viewer-zoom-out"><i class="mdi mdi-magnify-minus-outline"></i> Zoom Out</button>
+            <button type="button" class="btn btn-sm btn-light media-viewer-zoom-in"><i class="mdi mdi-magnify-plus-outline"></i> Zoom In</button>
+            <button type="button" class="btn btn-sm btn-light media-viewer-rotate-left"><i class="mdi mdi-rotate-left"></i> Rotate Left</button>
+            <button type="button" class="btn btn-sm btn-light media-viewer-rotate-right"><i class="mdi mdi-rotate-right"></i> Rotate Right</button>
+            <button type="button" class="btn btn-sm btn-danger media-viewer-close"><i class="mdi mdi-close"></i> Close</button>
+        </div>
+        <div style="position:absolute;inset:66px 30px 30px 30px;display:flex;align-items:center;justify-content:center;overflow:auto;">
+            <img class="media-viewer-image" alt="Finding media" style="max-width:100%;max-height:100%;object-fit:contain;display:none;transform-origin:center center;">
+            <video class="media-viewer-video" controls style="max-width:100%;max-height:100%;display:none;transform-origin:center center;background:#000;"></video>
+        </div>
+        <div class="media-viewer-caption" style="position:absolute;bottom:10px;left:0;right:0;text-align:center;color:#fff;font-size:12px;"></div>
+    `;
+
+    document.body.appendChild(viewer);
+
+    const closeBtn = viewer.querySelector('.media-viewer-close');
+    const prevBtn = viewer.querySelector('.media-viewer-prev');
+    const nextBtn = viewer.querySelector('.media-viewer-next');
+    const zoomInBtn = viewer.querySelector('.media-viewer-zoom-in');
+    const zoomOutBtn = viewer.querySelector('.media-viewer-zoom-out');
+    const rotateLeftBtn = viewer.querySelector('.media-viewer-rotate-left');
+    const rotateRightBtn = viewer.querySelector('.media-viewer-rotate-right');
+
+    closeBtn?.addEventListener('click', closeFindingMediaViewer);
+    prevBtn?.addEventListener('click', () => stepFindingMedia(-1));
+    nextBtn?.addEventListener('click', () => stepFindingMedia(1));
+    zoomInBtn?.addEventListener('click', () => {
+        findingMediaViewerState.zoom = Math.min(4, Number((findingMediaViewerState.zoom + 0.2).toFixed(2)));
+        renderFindingMediaViewer();
+    });
+    zoomOutBtn?.addEventListener('click', () => {
+        findingMediaViewerState.zoom = Math.max(0.4, Number((findingMediaViewerState.zoom - 0.2).toFixed(2)));
+        renderFindingMediaViewer();
+    });
+    rotateLeftBtn?.addEventListener('click', () => {
+        findingMediaViewerState.rotation -= 90;
+        renderFindingMediaViewer();
+    });
+    rotateRightBtn?.addEventListener('click', () => {
+        findingMediaViewerState.rotation += 90;
+        renderFindingMediaViewer();
+    });
+
+    viewer.addEventListener('click', function (event) {
+        if (event.target === viewer) {
+            closeFindingMediaViewer();
+        }
+    });
+
+    document.addEventListener('keydown', function (event) {
+        if (viewer.style.display !== 'block') {
+            return;
+        }
+        if (event.key === 'Escape') {
+            closeFindingMediaViewer();
+        } else if (event.key === 'ArrowLeft') {
+            stepFindingMedia(-1);
+        } else if (event.key === 'ArrowRight') {
+            stepFindingMedia(1);
+        }
+    });
+}
+
+function closeFindingMediaViewer() {
+    const viewer = document.getElementById('finding-media-viewer');
+    if (!viewer) {
+        return;
+    }
+
+    const video = viewer.querySelector('.media-viewer-video');
+    if (video) {
+        video.pause();
+    }
+    viewer.style.display = 'none';
+}
+
+function stepFindingMedia(direction) {
+    const items = findingMediaViewerState.items || [];
+    if (!items.length) {
+        return;
+    }
+
+    const next = (findingMediaViewerState.index + direction + items.length) % items.length;
+    findingMediaViewerState.index = next;
+    findingMediaViewerState.zoom = 1;
+    findingMediaViewerState.rotation = 0;
+    renderFindingMediaViewer();
+}
+
+function renderFindingMediaViewer() {
+    const viewer = document.getElementById('finding-media-viewer');
+    if (!viewer) {
+        return;
+    }
+
+    const image = viewer.querySelector('.media-viewer-image');
+    const video = viewer.querySelector('.media-viewer-video');
+    const caption = viewer.querySelector('.media-viewer-caption');
+    const items = findingMediaViewerState.items || [];
+    const current = items[findingMediaViewerState.index];
+    if (!current) {
+        return;
+    }
+
+    const transform = `scale(${findingMediaViewerState.zoom}) rotate(${findingMediaViewerState.rotation}deg)`;
+
+    if (current.type === 'video') {
+        if (image) {
+            image.style.display = 'none';
+            image.src = '';
+        }
+        if (video) {
+            video.style.display = '';
+            video.src = current.src;
+            video.style.transform = transform;
+        }
+    } else {
+        if (video) {
+            video.pause();
+            video.style.display = 'none';
+            video.src = '';
+        }
+        if (image) {
+            image.style.display = '';
+            image.src = current.src;
+            image.style.transform = transform;
+        }
+    }
+
+    if (caption) {
+        caption.textContent = `${findingMediaViewerState.index + 1} / ${items.length} - ${current.label}`;
+    }
+}
+
+function openFindingMediaViewer(items, startIndex) {
+    ensureFindingMediaViewer();
+    findingMediaViewerState.items = items;
+    findingMediaViewerState.index = startIndex;
+    findingMediaViewerState.zoom = 1;
+    findingMediaViewerState.rotation = 0;
+    renderFindingMediaViewer();
+
+    const viewer = document.getElementById('finding-media-viewer');
+    if (viewer) {
+        viewer.style.display = 'block';
+    }
+}
+
+function renderFindingMediaGallery(card, findingIndexValue) {
+    const gallery = card.querySelector('.finding-media-gallery');
+    const input = card.querySelector('.finding-media-input');
+    if (!gallery || !input) {
+        return;
+    }
+
+    if (Array.isArray(card._findingMediaBlobUrls)) {
+        card._findingMediaBlobUrls.forEach((url) => URL.revokeObjectURL(url));
+    }
+    card._findingMediaBlobUrls = [];
+
+    const savedUrls = Array.isArray(FINDING_PHOTO_URLS?.[findingIndexValue]) ? FINDING_PHOTO_URLS[findingIndexValue] : [];
+    const selectedFiles = Array.from(input.files || []);
+
+    const items = [];
+    savedUrls.forEach((url) => {
+        const mediaType = isVideoMedia(url) ? 'video' : 'image';
+        items.push({
+            type: mediaType,
+            src: url,
+            label: 'Saved ' + mediaType,
+        });
+    });
+
+    selectedFiles.forEach((file) => {
+        const blobUrl = URL.createObjectURL(file);
+        card._findingMediaBlobUrls.push(blobUrl);
+        items.push({
+            type: file.type.startsWith('video/') ? 'video' : 'image',
+            src: blobUrl,
+            label: 'New ' + (file.type.startsWith('video/') ? 'video' : 'photo'),
+        });
+    });
+
+    gallery.innerHTML = '';
+
+    if (!items.length) {
+        gallery.innerHTML = '<small class="text-muted">No media added yet for this finding.</small>';
+        return;
+    }
+
+    items.forEach((item, idx) => {
+        const wrapper = document.createElement('button');
+        wrapper.type = 'button';
+        wrapper.className = 'btn p-0 border rounded overflow-hidden';
+        wrapper.style.cssText = 'width:88px;height:88px;position:relative;background:#fff;';
+
+        if (item.type === 'video') {
+            wrapper.innerHTML = `
+                <video src="${item.src}" style="width:100%;height:100%;object-fit:cover;" muted playsinline preload="metadata"></video>
+                <span style="position:absolute;right:4px;bottom:4px;background:rgba(0,0,0,.65);color:#fff;font-size:10px;padding:1px 5px;border-radius:999px;">VIDEO</span>
+            `;
+        } else {
+            wrapper.innerHTML = `
+                <img src="${item.src}" alt="Finding photo" style="width:100%;height:100%;object-fit:cover;">
+                <span style="position:absolute;right:4px;bottom:4px;background:rgba(25,135,84,.85);color:#fff;font-size:10px;padding:1px 5px;border-radius:999px;">PHOTO</span>
+            `;
+        }
+
+        wrapper.addEventListener('click', function () {
+            openFindingMediaViewer(items, idx);
+        });
+
+        gallery.appendChild(wrapper);
     });
 }
 
@@ -346,11 +629,24 @@ function getSubsystemConfig(systemId, subsystemId) {
 function collectRecommendationOptions(systemId, subsystemId = '') {
     const system = getSystemConfig(systemId);
     const subsystem = subsystemId ? getSubsystemConfig(systemId, subsystemId) : null;
+    const globalRecommendations = Array.isArray(RECOMMENDATION_CONFIG?.global) ? RECOMMENDATION_CONFIG.global : [];
+    const scopedSystemRecommendations = Array.isArray(RECOMMENDATION_CONFIG?.system?.[String(systemId)])
+        ? RECOMMENDATION_CONFIG.system[String(systemId)]
+        : [];
+    const scopedSubsystemRecommendations = Array.isArray(RECOMMENDATION_CONFIG?.subsystem?.[String(subsystemId)])
+        ? RECOMMENDATION_CONFIG.subsystem[String(subsystemId)]
+        : [];
     const systemRecommendations = Array.isArray(system?.recommended_actions) ? system.recommended_actions : [];
     const subsystemRecommendations = Array.isArray(subsystem?.recommended_actions) ? subsystem.recommended_actions : [];
 
     const unique = new Set();
-    [...subsystemRecommendations, ...systemRecommendations].forEach(item => {
+    [
+        ...scopedSubsystemRecommendations,
+        ...scopedSystemRecommendations,
+        ...globalRecommendations,
+        ...subsystemRecommendations,
+        ...systemRecommendations,
+    ].forEach(item => {
         const value = String(item || '').trim();
         if (value) {
             unique.add(value);
@@ -496,10 +792,39 @@ function buildMaterialUnitsOptions() {
     ).join('');
 }
 
-function buildCpiMaterialPresetOptions() {
+function buildCpiMaterialPresetOptions(searchTerm = '', subsystemId = null) {
+    const normalizedSearch = String(searchTerm || '').trim().toLowerCase();
+
+    const scopedSettings = [...FMC_MATERIAL_SETTINGS].sort((left, right) => {
+        const leftScore = subsystemId && String(left.subsystem_id || '') === String(subsystemId) ? 1 : 0;
+        const rightScore = subsystemId && String(right.subsystem_id || '') === String(subsystemId) ? 1 : 0;
+
+        if (leftScore !== rightScore) {
+            return rightScore - leftScore;
+        }
+
+        return String(left.material_name || '').localeCompare(String(right.material_name || ''));
+    });
+
+    const seen = new Set();
     let html = '<option value="">Custom / Manual</option>';
-    FMC_MATERIAL_SETTINGS.forEach((setting) => {
+    scopedSettings.forEach((setting) => {
         const safeName  = String(setting.material_name ?? '');
+        if (!safeName) {
+            return;
+        }
+
+        const dedupeKey = safeName.toLowerCase();
+        if (seen.has(dedupeKey)) {
+            return;
+        }
+
+        if (normalizedSearch && !dedupeKey.includes(normalizedSearch)) {
+            return;
+        }
+
+        seen.add(dedupeKey);
+
         const safeUnit  = String(setting.default_unit ?? 'ea');
         const rawCost   = Number(setting.default_unit_cost ?? 0);
         const hst       = Number(setting.hst_rate ?? 5);
@@ -511,7 +836,7 @@ function buildCpiMaterialPresetOptions() {
 }
 
 function createCpiMaterialRow(fi, mi, subsystemId = null) {
-    return `<div class="cpi-material-row border rounded p-2 mb-1 bg-white">
+    return `<div class="cpi-material-row border rounded p-2 mb-1 bg-white" data-subsystem-id="${subsystemId ? String(subsystemId) : ''}">
         <div class="d-flex justify-content-end mb-1">
             <button type="button" class="btn btn-sm btn-outline-danger remove-cpi-material py-0 px-1">
                 <i class="mdi mdi-delete-outline"></i> Remove
@@ -520,7 +845,8 @@ function createCpiMaterialRow(fi, mi, subsystemId = null) {
         <div class="row g-2 align-items-end">
             <div class="col-md-3">
                 <label class="form-label" style="font-size:.72rem;font-weight:600;color:#6c757d;">Preset</label>
-                <select class="form-select form-select-sm cpi-material-template">${buildCpiMaterialPresetOptions()}</select>
+                <input type="text" class="form-control form-control-sm cpi-material-search mb-1" placeholder="Search materials...">
+                <select class="form-select form-select-sm cpi-material-template">${buildCpiMaterialPresetOptions('', subsystemId)}</select>
             </div>
             <div class="col-md-3">
                 <label class="form-label" style="font-size:.72rem;font-weight:600;color:#6c757d;">Description</label>
@@ -541,7 +867,8 @@ function createCpiMaterialRow(fi, mi, subsystemId = null) {
             <div class="col-md-2">
                 <label class="form-label" style="font-size:.72rem;font-weight:600;color:#6c757d;">Taxed Unit Cost ($)</label>
                 <input type="number" name="system_findings[${fi}][materials][${mi}][unit_cost]"
-                    class="form-control form-control-sm cpi-mat-cost" min="0" step="0.01" value="0" readonly style="background:#f8f9fa;cursor:default;">
+                    class="form-control form-control-sm cpi-mat-cost" min="0" step="0.01" value="0">
+                <small class="text-muted cpi-material-custom-hint" style="font-size:.70rem;display:none;">Custom mode: type your own taxed unit cost.</small>
             </div>
             <div class="col-md-1">
                 <label class="form-label" style="font-size:.72rem;font-weight:600;color:#6c757d;">Line Total</label>
@@ -684,26 +1011,12 @@ function addSystemFindingRow(systemId, prefill = {}) {
                     <i class="mdi mdi-camera-outline me-1"></i>Finding Photos
                     <span class="fw-normal text-muted">(optional)</span>
                 </label>
-                ${(() => {
-                    // Use server-pre-signed URLs keyed by the finding index (works for local + private S3)
-                    const savedUrls = FINDING_PHOTO_URLS[currentIndex] || [];
-                    if (savedUrls.length > 0) {
-                        const thumbs = savedUrls.map(url =>
-                            `<a href="${url}" target="_blank"><img src="${url}" style="height:60px;width:60px;object-fit:cover;border-radius:4px;border:2px solid #198754;" title="Saved photo"></a>`
-                        ).join('');
-                        return `<div class="mb-2">
-                            <div class="small text-success fw-semibold mb-1"><i class="mdi mdi-check-circle-outline"></i> ${savedUrls.length} photo(s) already saved for this finding:</div>
-                            <div class="d-flex flex-wrap gap-2">${thumbs}</div>
-                            <div class="small text-muted mt-1">Upload new files below to <strong>add more</strong> photos (existing ones are kept).</div>
-                        </div>`;
-                    }
-                    return '';
-                })()}
+                <div class="finding-media-gallery d-flex flex-wrap gap-2 mb-2"></div>
                 <input type="file"
                     name="finding_photos[${currentIndex}][]"
-                    class="form-control form-control-sm"
-                    multiple accept="image/*">
-                <div class="form-text">Attach one or more photos of this specific finding (max 10 MB each)</div>
+                    class="form-control form-control-sm finding-media-input"
+                    multiple accept="image/*,video/*">
+                <div class="form-text">Attach photos or videos for this finding. Items are shown below and can be opened to zoom/rotate/expand (max 50 MB each).</div>
             </div>
         </div>
         <!-- Row 5: Labour Hours + Materials -->
@@ -771,6 +1084,14 @@ function addSystemFindingRow(systemId, prefill = {}) {
     `;
 
     body.appendChild(card);
+
+    const findingMediaInput = card.querySelector('.finding-media-input');
+    if (findingMediaInput) {
+        findingMediaInput.addEventListener('change', function () {
+            renderFindingMediaGallery(card, currentIndex);
+        });
+        renderFindingMediaGallery(card, currentIndex);
+    }
 
     // Wire issue preset select → hidden value
     const issuePresetSelect = card.querySelector('.issue-preset-select');
@@ -865,11 +1186,57 @@ function addSystemFindingRow(systemId, prefill = {}) {
     }
 
     function wireCpiMaterialRow(row) {
+        function setMaterialCostMode(isCustom) {
+            const costEl = row.querySelector('.cpi-mat-cost');
+            const hintEl = row.querySelector('.cpi-material-custom-hint');
+            if (!costEl) {
+                return;
+            }
+
+            costEl.readOnly = !isCustom;
+            costEl.style.background = isCustom ? '' : '#f8f9fa';
+            costEl.style.cursor = isCustom ? '' : 'default';
+
+            if (hintEl) {
+                hintEl.style.display = isCustom ? '' : 'none';
+            }
+        }
+
         // Preset select auto-fills name / unit / taxed cost
         const presetSel = row.querySelector('.cpi-material-template');
+        const searchInput = row.querySelector('.cpi-material-search');
+
+        function refreshPresetOptions() {
+            if (!presetSel) {
+                return;
+            }
+
+            const selectedValue = presetSel.value;
+            const subsystemForRow = row.dataset.subsystemId || null;
+            const searchValue = searchInput ? searchInput.value : '';
+
+            presetSel.innerHTML = buildCpiMaterialPresetOptions(searchValue, subsystemForRow);
+
+            if (selectedValue && Array.from(presetSel.options).some(opt => opt.value === selectedValue)) {
+                presetSel.value = selectedValue;
+            }
+        }
+
+        if (searchInput) {
+            searchInput.addEventListener('input', refreshPresetOptions);
+        }
+
         if (presetSel) {
             presetSel.addEventListener('change', function () {
-                if (!this.value) return;
+                if (!this.value) {
+                    row.dataset.hst = '';
+                    row.dataset.pst = '';
+                    row.dataset.raw = '';
+                    setMaterialCostMode(true);
+                    updateCpiLineTotal(row);
+                    return;
+                }
+
                 const opt    = this.options[this.selectedIndex];
                 const nameEl = row.querySelector(`[name*="[material_name]"]`);
                 const unitEl = row.querySelector(`select[name*="[unit]"]`);
@@ -883,9 +1250,14 @@ function addSystemFindingRow(systemId, prefill = {}) {
                 row.dataset.hst = opt.dataset.hst ?? 5;
                 row.dataset.pst = opt.dataset.pst ?? 7;
                 row.dataset.raw = opt.dataset.raw ?? opt.dataset.cost;
+                setMaterialCostMode(false);
                 updateCpiLineTotal(row);
             });
         }
+
+        refreshPresetOptions();
+        setMaterialCostMode(!presetSel || !presetSel.value);
+
         row.querySelector('.cpi-mat-qty')?.addEventListener('input',  () => updateCpiLineTotal(row));
         row.querySelector('.cpi-mat-cost')?.addEventListener('input', () => updateCpiLineTotal(row));
         row.querySelector('.remove-cpi-material')?.addEventListener('click', () => row.remove());
@@ -904,6 +1276,7 @@ function addSystemFindingRow(systemId, prefill = {}) {
                 const qtyEl  = row.querySelector('.cpi-mat-qty');
                 const unitEl = row.querySelector(`select[name*="[unit]"]`);
                 const costEl = row.querySelector('.cpi-mat-cost');
+                const presetSel = row.querySelector('.cpi-material-template');
                 if (nameEl) nameEl.value = mat.material_name ?? '';
                 if (qtyEl)  qtyEl.value  = mat.quantity ?? 1;
                 if (unitEl && mat.unit) unitEl.value = mat.unit;
@@ -917,6 +1290,9 @@ function addSystemFindingRow(systemId, prefill = {}) {
                         const hst   = Number(fmcMatch.hst_rate ?? 5);
                         const pst   = Number(fmcMatch.pst_rate ?? 7);
                         const taxed = (raw * (1 + hst / 100) * (1 + pst / 100)).toFixed(2);
+                        if (presetSel) {
+                            presetSel.value = fmcMatch.material_name;
+                        }
                         costEl.value    = taxed;
                         row.dataset.hst = hst.toFixed(2);
                         row.dataset.pst = pst.toFixed(2);
@@ -928,6 +1304,26 @@ function addSystemFindingRow(systemId, prefill = {}) {
                 updateCpiLineTotal(row);
                 wireCpiMaterialRow(row);
                 matContainer.appendChild(row);
+            });
+        }
+
+        if (subsystemSelForMat) {
+            subsystemSelForMat.addEventListener('change', function () {
+                matContainer.querySelectorAll('.cpi-material-row').forEach((row) => {
+                    row.dataset.subsystemId = this.value || '';
+                    const presetSel = row.querySelector('.cpi-material-template');
+                    const searchInput = row.querySelector('.cpi-material-search');
+                    if (!presetSel) {
+                        return;
+                    }
+
+                    const selectedValue = presetSel.value;
+                    const searchValue = searchInput ? searchInput.value : '';
+                    presetSel.innerHTML = buildCpiMaterialPresetOptions(searchValue, row.dataset.subsystemId || null);
+                    if (selectedValue && Array.from(presetSel.options).some(opt => opt.value === selectedValue)) {
+                        presetSel.value = selectedValue;
+                    }
+                });
             });
         }
 

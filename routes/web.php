@@ -100,6 +100,14 @@ Route::middleware([
             ->name('inspections.index');
         Route::get('/inspections/{inspection}/report', [App\Http\Controllers\Client\InspectionController::class, 'report'])
             ->name('inspections.report');
+        Route::get('/inspections/{inspection}/agreement', [App\Http\Controllers\Client\InspectionController::class, 'agreement'])
+            ->name('inspections.agreement');
+        Route::get('/inspections/{inspection}/agreement/download', [App\Http\Controllers\Client\InspectionController::class, 'downloadAgreementPdf'])
+            ->name('inspections.agreement.download');
+        Route::post('/inspections/{inspection}/agreement/sign', [App\Http\Controllers\Client\InspectionController::class, 'signAgreement'])
+            ->name('inspections.agreement.sign');
+        Route::post('/inspections/{inspection}/findings/{findingIndex}/photos', [App\Http\Controllers\Client\InspectionController::class, 'addFindingPhotos'])
+            ->name('inspections.findings.add-photos');
         Route::get('/inspections/{inspection}/work-payment', [App\Http\Controllers\Client\InspectionController::class, 'workPayment'])
             ->name('inspections.work-payment');
         Route::post('/inspections/{inspection}/work-payment', [App\Http\Controllers\Client\InspectionController::class, 'processWorkPayment'])
@@ -184,6 +192,9 @@ Route::middleware([
         Route::resource('fmc-material-settings', App\Http\Controllers\Admin\FmcMaterialSettingController::class)->except(['show'])->names('fmc-material-settings');
         Route::post('finding-template-settings/reload-defaults', [App\Http\Controllers\Admin\FindingTemplateSettingController::class, 'reloadDefaults'])->name('finding-template-settings.reload-defaults');
         Route::resource('finding-template-settings', App\Http\Controllers\Admin\FindingTemplateSettingController::class)->except(['show'])->names('finding-template-settings');
+        Route::post('recommendation-settings/reload-defaults', [App\Http\Controllers\Admin\RecommendationSettingController::class, 'reloadDefaults'])->name('recommendation-settings.reload-defaults');
+        Route::resource('recommendation-settings', App\Http\Controllers\Admin\RecommendationSettingController::class)->except(['show'])->names('recommendation-settings');
+        Route::resource('tool-settings', App\Http\Controllers\Admin\ToolSettingController::class)->except(['show'])->names('tool-settings');
         Route::resource('systems', App\Http\Controllers\Admin\SystemController::class)->except(['show'])->names('systems');
         Route::resource('subsystems', App\Http\Controllers\Admin\SubsystemController::class)->except(['show'])->names('subsystems');
         

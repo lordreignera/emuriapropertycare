@@ -24,6 +24,8 @@ class DatabaseSeeder extends Seeder
             InspectionSystemsSeeder::class,
             FmcMaterialSettingsSeeder::class,
             FindingTemplateSettingsSeeder::class,
+            ToolSettingsSeeder::class,
+            RecommendationSettingsSeeder::class,
             // TierSeeder::class, // REMOVED: Tiers are now generated per client after inspection
         ]);
         

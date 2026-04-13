@@ -6,9 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Models\Property;
 use App\Models\Inspection;
 use App\Models\Invoice;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class InspectionController extends Controller
 {
@@ -58,6 +60,116 @@ class InspectionController extends Controller
             ->get();
 
         return view('client.inspections.report', compact('inspection', 'findings', 'materials'));
+    }
+
+    public function agreement(Inspection $inspection)
+    {
+        if (!$inspection->property || (int) $inspection->property->user_id !== (int) Auth::id()) {
+            abort(403, 'Unauthorized access to this inspection agreement.');
+        }
+
+        if (($inspection->status ?? null) !== 'completed') {
+            return redirect()->route('client.inspections.index')
+                ->with('error', 'Agreement is available only after inspection completion.');
+        }
+
+        return view('client.inspections.agreement', compact('inspection'));
+    }
+
+    public function signAgreement(Request $request, Inspection $inspection)
+    {
+        if (!$inspection->property || (int) $inspection->property->user_id !== (int) Auth::id()) {
+            abort(403, 'Unauthorized agreement action.');
+        }
+
+        if (($inspection->status ?? null) !== 'completed') {
+            return redirect()->route('client.inspections.index')
+                ->with('error', 'Agreement can only be signed after inspection completion.');
+        }
+
+        $validated = $request->validate([
+            'client_full_name' => 'required|string|max:255',
+            'client_acknowledgment' => 'required|accepted',
+        ]);
+
+        $fullName = trim((string) $validated['client_full_name']);
+
+        $inspection->update([
+            'approved_by_client' => true,
+            'client_approved_at' => now(),
+            'client_full_name' => $fullName,
+            'client_signature' => 'typed:' . $fullName,
+            'client_acknowledgment' => 'Client accepted Job Approval & Service Agreement online on ' . now()->toDateTimeString(),
+        ]);
+
+        return redirect()->route('client.inspections.agreement', $inspection->id)
+            ->with('success', 'Agreement signed successfully.');
+    }
+
+    public function downloadAgreementPdf(Inspection $inspection)
+    {
+        if (!$inspection->property || (int) $inspection->property->user_id !== (int) Auth::id()) {
+            abort(403, 'Unauthorized agreement download action.');
+        }
+
+        if (($inspection->status ?? null) !== 'completed') {
+            return redirect()->route('client.inspections.index')
+                ->with('error', 'Agreement is available only after inspection completion.');
+        }
+
+        $pdf = Pdf::loadView('client.inspections.agreement-pdf', compact('inspection'))
+            ->setPaper('a4', 'portrait')
+            ->setOption('margin-top', 12)
+            ->setOption('margin-right', 10)
+            ->setOption('margin-bottom', 12)
+            ->setOption('margin-left', 10)
+            ->setOption('isHtml5ParserEnabled', true)
+            ->setOption('isRemoteEnabled', true);
+
+        $clientName = Str::slug((string) ($inspection->property?->user?->name ?? 'client'));
+        $propertyName = Str::slug((string) ($inspection->property?->property_name ?? $inspection->property?->property_code ?? 'property'));
+        $filename = 'Client_Agreement_' . $clientName . '_' . $propertyName . '.pdf';
+
+        return $pdf->download($filename);
+    }
+
+    public function addFindingPhotos(Request $request, Inspection $inspection, int $findingIndex)
+    {
+        if (!$inspection->property || (int) $inspection->property->user_id !== (int) Auth::id()) {
+            abort(403, 'Unauthorized access to this inspection.');
+        }
+
+        $validated = $request->validate([
+            'finding_photos' => 'required|array|min:1',
+            'finding_photos.*' => 'required|image|max:10240',
+        ]);
+
+        $findings = is_array($inspection->findings)
+            ? $inspection->findings
+            : (json_decode($inspection->getRawOriginal('findings') ?? '[]', true) ?? []);
+
+        if (!array_key_exists($findingIndex, $findings)) {
+            return back()->with('error', 'Finding not found.');
+        }
+
+        $existingPhotos = is_array($findings[$findingIndex]['finding_photos'] ?? null)
+            ? $findings[$findingIndex]['finding_photos']
+            : [];
+
+        $disk = config('filesystems.default', 's3');
+        $newPaths = [];
+        foreach ((array) ($validated['finding_photos'] ?? []) as $photo) {
+            if ($photo && $photo->isValid()) {
+                $newPaths[] = $photo->store('inspections/finding-photos', $disk);
+            }
+        }
+
+        $findings[$findingIndex]['finding_photos'] = array_values(array_filter(array_merge($existingPhotos, $newPaths)));
+
+        $inspection->findings = $findings;
+        $inspection->save();
+
+        return back()->with('success', 'Finding photos uploaded successfully.');
     }
 
     /**

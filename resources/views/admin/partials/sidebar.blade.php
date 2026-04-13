@@ -26,6 +26,8 @@
         || request()->routeIs('admin.parameters.*')
         || request()->routeIs('admin.fmc-material-settings.*')
         || request()->routeIs('admin.finding-template-settings.*')
+        || request()->routeIs('admin.recommendation-settings.*')
+        || request()->routeIs('admin.tool-settings.*')
         || request()->routeIs('admin.systems.*')
         || request()->routeIs('admin.subsystems.*')
         || request()->routeIs('admin.settings.bdc*');
@@ -313,23 +315,9 @@
                     <a class="admin-client-sublink {{ request()->routeIs('admin.settings.bdc*') ? 'is-active' : '' }}" href="{{ route('admin.settings.bdc') }}"><span class="admin-client-sublabel">BDC Calibration Engine</span></a>
                     <a class="admin-client-sublink {{ request()->routeIs('admin.fmc-material-settings.*') ? 'is-active' : '' }}" href="{{ route('admin.fmc-material-settings.index') }}"><span class="admin-client-sublabel">FMC Material Settings</span></a>
                     <a class="admin-client-sublink {{ request()->routeIs('admin.finding-template-settings.*') ? 'is-active' : '' }}" href="{{ route('admin.finding-template-settings.index') }}"><span class="admin-client-sublabel">Findings Template Settings</span></a>
+                    <a class="admin-client-sublink {{ request()->routeIs('admin.recommendation-settings.*') ? 'is-active' : '' }}" href="{{ route('admin.recommendation-settings.index') }}"><span class="admin-client-sublabel">Recommendation Settings</span></a>
+                    <a class="admin-client-sublink {{ request()->routeIs('admin.tool-settings.*') ? 'is-active' : '' }}" href="{{ route('admin.tool-settings.index') }}"><span class="admin-client-sublabel">Tool Settings</span></a>
                     <a class="admin-client-sublink {{ request()->routeIs('admin.property-types.*') ? 'is-active' : '' }}" href="{{ route('admin.property-types.index') }}"><span class="admin-client-sublabel">Property Types</span></a>
-                   <!-- <a class="admin-client-sublink {{ request()->routeIs('admin.cpi-bands.*') ? 'is-active' : '' }}" href="{{ route('admin.cpi-bands.index') }}"><span class="admin-client-sublabel">CPI Band Ranges</span></a>
-                    <a class="admin-client-sublink {{ request()->routeIs('admin.cpi-multipliers.*') ? 'is-active' : '' }}" href="{{ route('admin.cpi-multipliers.index') }}"><span class="admin-client-sublabel">CPI Multipliers</span></a>
-                    <a class="admin-client-sublink {{ request()->routeIs('admin.cpi-domains.*') ? 'is-active' : '' }}" href="{{ route('admin.cpi-domains.index') }}"><span class="admin-client-sublabel">CPI Domains</span></a>
-                    <a class="admin-client-sublink {{ request()->routeIs('admin.supply-materials.*') ? 'is-active' : '' }}" href="{{ route('admin.supply-materials.index') }}"><span class="admin-client-sublabel">Supply Materials</span></a>
-                    <a class="admin-client-sublink {{ request()->routeIs('admin.age-brackets.*') ? 'is-active' : '' }}" href="{{ route('admin.age-brackets.index') }}"><span class="admin-client-sublabel">Age Brackets</span></a>
-                    <a class="admin-client-sublink {{ request()->routeIs('admin.containment-categories.*') ? 'is-active' : '' }}" href="{{ route('admin.containment-categories.index') }}"><span class="admin-client-sublabel">Containment Categories</span></a>
-                    <a class="admin-client-sublink {{ request()->routeIs('admin.crawl-access.*') ? 'is-active' : '' }}" href="{{ route('admin.crawl-access.index') }}"><span class="admin-client-sublabel">Crawl Space Access</span></a>
-                    <a class="admin-client-sublink {{ request()->routeIs('admin.roof-access.*') ? 'is-active' : '' }}" href="{{ route('admin.roof-access.index') }}"><span class="admin-client-sublabel">Roof Access</span></a>
-                    <a class="admin-client-sublink {{ request()->routeIs('admin.equipment-requirements.*') ? 'is-active' : '' }}" href="{{ route('admin.equipment-requirements.index') }}"><span class="admin-client-sublabel">Equipment Requirements</span></a>
-                    <a class="admin-client-sublink {{ request()->routeIs('admin.complexity-categories.*') ? 'is-active' : '' }}" href="{{ route('admin.complexity-categories.index') }}"><span class="admin-client-sublabel">Complexity Categories</span></a>
-                    <a class="admin-client-sublink {{ request()->routeIs('admin.residential-tiers.*') ? 'is-active' : '' }}" href="{{ route('admin.residential-tiers.index') }}"><span class="admin-client-sublabel">Residential Size Tiers</span></a>
-                    <a class="admin-client-sublink {{ request()->routeIs('admin.commercial-settings.*') ? 'is-active' : '' }}" href="{{ route('admin.commercial-settings.index') }}"><span class="admin-client-sublabel">Commercial Size Settings</span></a>
-                    <a class="admin-client-sublink {{ request()->routeIs('admin.mixed-use-settings.*') ? 'is-active' : '' }}" href="{{ route('admin.mixed-use-settings.index') }}"><span class="admin-client-sublabel">Mixed-Use Settings</span></a>
-                    <a class="admin-client-sublink {{ request()->routeIs('admin.pricing-config.*') ? 'is-active' : '' }}" href="{{ route('admin.pricing-config.index') }}"><span class="admin-client-sublabel">System Configuration</span></a>
-                    <a class="admin-client-sublink {{ request()->routeIs('admin.parameters.*') ? 'is-active' : '' }}" href="{{ route('admin.parameters.index') }}"><span class="admin-client-sublabel">Parameters</span></a>
-                    -->
                 </div>
             </details>
 

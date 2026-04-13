@@ -228,7 +228,7 @@ class InspectionController extends Controller
             // Per-finding photos (indexed by system_findings input index)
             'finding_photos'     => 'nullable|array',
             'finding_photos.*'   => 'nullable|array',
-            'finding_photos.*.*' => 'nullable|image|max:10240',
+            'finding_photos.*.*' => 'nullable|file|mimetypes:image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,video/x-msvideo,video/x-matroska|max:51200',
             
             // Findings Array
             'findings' => 'nullable|array',

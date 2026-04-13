@@ -573,6 +573,13 @@
 </div>
 @endif
 
+<div class="section">
+    <div class="section-title">Client Job Approval &amp; Service Agreement</div>
+    <div class="section-body">
+        @include('shared.inspection-job-approval-agreement', ['inspection' => $inspection, 'pdfMode' => true])
+    </div>
+</div>
+
 <!-- ════ FOOTER ════ -->
 <div class="footer">
     <strong>EMURIA Regenerative Property Care</strong> &mdash;

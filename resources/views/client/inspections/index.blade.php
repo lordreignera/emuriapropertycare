@@ -73,9 +73,14 @@
                                     </td>
                                     <td>
                                         @if(($inspection->status ?? null) === 'completed')
-                                            <a href="{{ route('client.inspections.report', $inspection->id) }}" class="btn btn-sm btn-info">
-                                                <i class="mdi mdi-eye"></i> Report
-                                            </a>
+                                            <div class="d-flex flex-wrap gap-1">
+                                                <a href="{{ route('client.inspections.report', $inspection->id) }}" class="btn btn-sm btn-info">
+                                                    <i class="mdi mdi-eye"></i> Report
+                                                </a>
+                                                <a href="{{ route('client.inspections.agreement', $inspection->id) }}" class="btn btn-sm {{ $inspection->approved_by_client ? 'btn-success' : 'btn-outline-success' }}">
+                                                    <i class="mdi mdi-file-sign"></i> {{ $inspection->approved_by_client ? 'Agreement Signed' : 'Agreement' }}
+                                                </a>
+                                            </div>
                                         @else
                                             <button class="btn btn-sm btn-secondary text-white border-0" style="opacity: 1; cursor: not-allowed;" disabled>
                                                 Awaiting report
