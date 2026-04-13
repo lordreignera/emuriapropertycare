@@ -13,6 +13,20 @@ return new class extends Migration
             return;
         }
 
+        // Drop any FK that still depends on service_package_id before index/column drops.
+        if (Schema::hasColumn('inspections', 'service_package_id')) {
+            $fkConstraint = DB::table('information_schema.KEY_COLUMN_USAGE')
+                ->where('TABLE_SCHEMA', DB::getDatabaseName())
+                ->where('TABLE_NAME', 'inspections')
+                ->where('COLUMN_NAME', 'service_package_id')
+                ->whereNotNull('REFERENCED_TABLE_NAME')
+                ->value('CONSTRAINT_NAME');
+
+            if ($fkConstraint) {
+                DB::statement("ALTER TABLE inspections DROP FOREIGN KEY `{$fkConstraint}`");
+            }
+        }
+
         $databaseName = DB::getDatabaseName();
 
         $indexExists = DB::table('information_schema.statistics')
