@@ -18,9 +18,36 @@
         ? $agreementInspection->completed_date->format('Y-m-d')
         : '______________________________';
 
-    $agreementLabour = (float) ($agreementInspection->arl_total ?? 0);
-    $agreementMaterials = (float) ($agreementInspection->arm_total ?? 0);
-    $agreementTools = (float) ($agreementInspection->tool_cost_calculated ?? 0);
+    // Resolve actual costs from this inspection's findings first (property-specific),
+    // then fallback to persisted annual snapshots where needed.
+    $agreementFindings = is_array($agreementInspection->findings)
+        ? $agreementInspection->findings
+        : (json_decode($agreementInspection->getRawOriginal('findings') ?? '[]', true) ?? []);
+
+    $agreementLabourHours = collect($agreementFindings)->sum(function ($finding) {
+        return (float) ($finding['phar_labour_hours'] ?? 0);
+    });
+
+    $agreementMaterialsFromFindings = collect($agreementFindings)->sum(function ($finding) {
+        return collect($finding['phar_materials'] ?? [])->sum(function ($material) {
+            return (float) ($material['line_total'] ?? 0);
+        });
+    });
+
+    $agreementHourlyRate = (float) ($agreementInspection->labour_hourly_rate ?? 0);
+    $agreementLabourFromFindings = $agreementHourlyRate > 0
+        ? ($agreementLabourHours * $agreementHourlyRate)
+        : 0;
+
+    $agreementLabour = $agreementLabourFromFindings > 0
+        ? $agreementLabourFromFindings
+        : (float) ($agreementInspection->frlc_annual ?? $agreementInspection->arl_total ?? 0);
+
+    $agreementMaterials = $agreementMaterialsFromFindings > 0
+        ? $agreementMaterialsFromFindings
+        : (float) ($agreementInspection->fmc_annual ?? $agreementInspection->arm_total ?? 0);
+
+    $agreementTools = (float) ($agreementInspection->tool_cost_calculated ?? $agreementInspection->bdc_annual ?? 0);
     $agreementTotal = (float) ($agreementInspection->trc_annual ?? ($agreementInspection->final_charge ?? 0));
 
     if ($agreementTotal <= 0) {
