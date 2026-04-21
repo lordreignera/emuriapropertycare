@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::table('inspections', function (Blueprint $table) {
             if (!Schema::hasColumn('inspections', 'work_schedule')) {
-                $table->json('work_schedule')->nullable()->after('next_installment_due_date');
+                $table->json('work_schedule')->nullable();
             }
         });
     }
