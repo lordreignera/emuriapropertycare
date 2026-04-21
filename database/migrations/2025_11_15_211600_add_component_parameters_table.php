@@ -101,11 +101,7 @@ return new class extends Migration
             $table->index('total_complexity_score');
         });
 
-        // 4. Add complexity tracking to properties table
-        Schema::table('properties', function (Blueprint $table) {
-            $table->integer('current_complexity_score')->default(0)->after('status');
-            $table->string('recommended_tier')->nullable()->after('current_complexity_score');
-        });
+        // Complexity tracking columns are consolidated into create_properties_table migration.
     }
 
     /**
@@ -113,10 +109,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('properties', function (Blueprint $table) {
-            $table->dropColumn(['current_complexity_score', 'recommended_tier']);
-        });
-
         Schema::dropIfExists('property_complexity_scores');
         Schema::dropIfExists('tier_recommendation_rules');
         Schema::dropIfExists('component_parameters');

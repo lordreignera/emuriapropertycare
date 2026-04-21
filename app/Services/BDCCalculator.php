@@ -39,33 +39,17 @@ class BDCCalculator
      */
     public function calculate(?Property $property = null): array
     {
-        // Calculate labour hours per year
-        $labourHoursPerYear = $this->visitsPerYear * $this->hoursPerVisit;
-        
-        // Calculate labour cost per year
-        $labourCostPerYear = $labourHoursPerYear * $this->loadedHourlyRate;
-        
-        // Total BDC (labour-only model)
-        $bdcAnnual = $labourCostPerYear;
-        
-        // Calculate monthly BDC
-        $bdcMonthly = $bdcAnnual / 12;
+        $result = $this->calculateLabourBdc(
+            $this->visitsPerYear,
+            $this->hoursPerVisit,
+            $this->loadedHourlyRate
+        );
 
-        return [
-            // Inputs
+        return array_merge([
             'loaded_hourly_rate' => round($this->loadedHourlyRate, 2),
-            'visits_per_year' => round($this->visitsPerYear, 2),
-            'hours_per_visit' => round($this->hoursPerVisit, 2),
-            'mode' => 'labour',
-            
-            // Calculated values
-            'labour_hours_per_year' => round($labourHoursPerYear, 2),
-            'labour_cost_per_year' => round($labourCostPerYear, 2),
-            
-            // Final BDC
-            'bdc_annual' => round($bdcAnnual, 2),
-            'bdc_monthly' => round($bdcMonthly, 2),
-        ];
+            'visits_per_year'    => round($this->visitsPerYear, 2),
+            'hours_per_visit'    => round($this->hoursPerVisit, 2),
+        ], $result);
     }
 
     /**
@@ -94,7 +78,7 @@ class BDCCalculator
             $timeCost = $travelTimeMinutes * $ratePerMinute;
             $bdcPerVisit = $travelCost + $timeCost;
             $bdcAnnual = $bdcPerVisit * $visitsPerYear;
-            $bdcMonthly = $bdcAnnual / 12;
+            $bdcMonthly = $bdcAnnual;
 
             return [
                 'mode' => 'travel',
@@ -112,20 +96,27 @@ class BDCCalculator
         }
 
         // Fallback: labour-only calculation
-        $labourHoursPerYear = $visitsPerYear * $hoursPerVisit;
-        $labourCostPerYear = $labourHoursPerYear * $loadedHourlyRate;
-        $bdcAnnual = $labourCostPerYear;
-        $bdcMonthly = $bdcAnnual / 12;
+        return array_merge([
+            'loaded_hourly_rate' => round($loadedHourlyRate, 2),
+            'visits_per_year'    => round($visitsPerYear, 2),
+            'hours_per_visit'    => round($hoursPerVisit, 2),
+        ], $this->calculateLabourBdc($visitsPerYear, $hoursPerVisit, $loadedHourlyRate));
+    }
+
+    /**
+     * Core labour-based BDC formula shared by calculate() and calculateWithParams().
+     */
+    private function calculateLabourBdc(float $visits, float $hoursPerVisit, float $hourlyRate): array
+    {
+        $labourHoursPerYear = $visits * $hoursPerVisit;
+        $labourCostPerYear  = $labourHoursPerYear * $hourlyRate;
 
         return [
-            'mode' => 'labour',
-            'loaded_hourly_rate' => round($loadedHourlyRate, 2),
-            'visits_per_year' => round($visitsPerYear, 2),
-            'hours_per_visit' => round($hoursPerVisit, 2),
+            'mode'                  => 'labour',
             'labour_hours_per_year' => round($labourHoursPerYear, 2),
-            'labour_cost_per_year' => round($labourCostPerYear, 2),
-            'bdc_annual' => round($bdcAnnual, 2),
-            'bdc_monthly' => round($bdcMonthly, 2),
+            'labour_cost_per_year'  => round($labourCostPerYear, 2),
+            'bdc_annual'            => round($labourCostPerYear, 2),
+            'bdc_monthly'           => round($labourCostPerYear, 2),
         ];
     }
 
@@ -152,15 +143,15 @@ class BDCCalculator
         
         return "BDC Calculation Breakdown:\n" .
                "══════════════════════════════════════\n" .
-               "Loaded Hourly Rate: \${$calc['loaded_hourly_rate']}/hr\n" .
+                             "Loaded Hourly Rate: $" . $calc['loaded_hourly_rate'] . "/hr\n" .
                "Visits per Year: {$calc['visits_per_year']}\n" .
                "Hours per Visit: {$calc['hours_per_visit']}\n" .
              "Mode: " . ($calc['mode'] ?? 'labour') . "\n" .
                "──────────────────────────────────────\n" .
                "Labour Hours/Year: {$calc['labour_hours_per_year']}\n" .
-             "Labour Cost/Year: \\${$calc['labour_cost_per_year']}\n" .
+                         "Labour Cost/Year: $" . $calc['labour_cost_per_year'] . "\n" .
                "══════════════════════════════════════\n" .
-               "BDC (Annual): \${$calc['bdc_annual']}\n" .
-               "BDC (Monthly): \${$calc['bdc_monthly']}\n";
+                             "BDC (Annual): $" . $calc['bdc_annual'] . "\n" .
+                             "BDC (Monthly): $" . $calc['bdc_monthly'] . "\n";
     }
 }

@@ -44,7 +44,8 @@ class AgreementScheduleService
 
         $labourHours = collect($findings)->sum(static fn(array $f) => (float) ($f['phar_labour_hours'] ?? 0));
 
-        $effectiveHoursPerDay = 2 * 8 * 0.85;
+        // Mon–Sat, 7:00 AM – 6:00 PM = 11 hours/day per technician, 2 technicians, 85% efficiency
+        $effectiveHoursPerDay = 2 * 11 * 0.85;
         $estimatedDays = max(1, (int) ceil($labourHours / max($effectiveHoursPerDay, 1)));
 
         $blockers = [];
@@ -65,7 +66,7 @@ class AgreementScheduleService
 
         if (empty($blockers)) {
             $startDate = $this->nextBusinessDate(now()->toDateString());
-            $completionDate = (clone $startDate)->addDays(max($estimatedDays - 1, 0));
+            $completionDate = $this->addWorkingDays(clone $startDate, max($estimatedDays - 1, 0));
         }
 
         return [
@@ -176,8 +177,23 @@ class AgreementScheduleService
     private function nextBusinessDate(string $fromDate): Carbon
     {
         $date = Carbon::parse($fromDate)->addDay();
-        while ($date->isWeekend()) {
+        // Working week is Mon–Sat; only skip Sunday
+        while ($date->dayOfWeek === Carbon::SUNDAY) {
             $date->addDay();
+        }
+
+        return $date;
+    }
+
+    private function addWorkingDays(Carbon $date, int $days): Carbon
+    {
+        $added = 0;
+        while ($added < $days) {
+            $date->addDay();
+            // Mon–Sat are working days; skip Sunday only
+            if ($date->dayOfWeek !== Carbon::SUNDAY) {
+                $added++;
+            }
         }
 
         return $date;

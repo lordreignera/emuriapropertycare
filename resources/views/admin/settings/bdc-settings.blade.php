@@ -186,10 +186,10 @@
                             </div>
                             <div class="alert alert-info mb-3 py-2">
                                 <div class="d-flex justify-content-between align-items-center">
-                                    <span class="fw-bold">BDC Monthly</span>
+                                    <span class="fw-bold">BDC Total</span>
                                     <span class="h5 mb-0" id="bdc_monthly">—</span>
                                 </div>
-                                <small class="opacity-75">BDC Annual ÷ 12</small>
+                                <small class="opacity-75">Same as BDC Annual</small>
                             </div>
 
                             <!-- Breakdown Table -->
@@ -301,7 +301,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const timeCostPerVisit = min * rateMin;
         const bdcPerVisit      = distCostPerVisit + timeCostPerVisit;
         const bdcAnnual        = bdcPerVisit * visits;
-        const bdcMonthly       = bdcAnnual / 12;
+        const bdcMonthly       = bdcAnnual;
 
         // Labour fallback reference (uses hours from settings)
         const labourHoursPerYear = visits * fixedHoursPerVisit;

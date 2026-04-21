@@ -21,6 +21,8 @@ return new class extends Migration
             $table->json('features'); // Array of included services
             $table->decimal('monthly_price', 10, 2);
             $table->decimal('annual_price', 10, 2);
+            $table->string('stripe_price_id_monthly')->nullable();
+            $table->string('stripe_price_id_annual')->nullable();
             $table->decimal('coverage_limit', 10, 2)->nullable(); // Max covered amount per project
             $table->text('designed_for')->nullable(); // Target audience description
             $table->boolean('is_active')->default(true);

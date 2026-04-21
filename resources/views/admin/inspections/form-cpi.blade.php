@@ -35,6 +35,17 @@
                 <input type="hidden" name="property_id" value="{{ $property->id }}">
                 <input type="hidden" name="status" value="in_progress">
 
+                @if($errors->any())
+                    <div class="alert alert-danger">
+                        <strong>We could not save the inspection form.</strong>
+                        <ul class="mb-0 mt-2">
+                            @foreach($errors->all() as $error)
+                                <li>{{ $error }}</li>
+                            @endforeach
+                        </ul>
+                    </div>
+                @endif
+
                 <div class="card mb-4">
                     <div class="card-header" style="background: #5b67ca; color: white;">
                         <h5 class="mb-0">
@@ -340,6 +351,11 @@ const PHAR_FINDING_CATALOG = @json($pharFindingCatalog ?? []);
 const RECOMMENDATION_CONFIG = @json($recommendationConfig ?? ['global' => [], 'system' => [], 'subsystem' => []]);
 // Photo URLs pre-resolved server-side (works for local disk and private S3 signed URLs)
 const FINDING_PHOTO_URLS = @json($findingPhotoUrls ?? []);
+// Stored paths (for hidden input preservation on re-submit — keyed by [findingIndex][photoIndex])
+const FINDING_PHOTO_PATHS = @json(array_map(fn($f) => is_array($f['finding_photos'] ?? null) ? $f['finding_photos'] : [], ($inspection->findings ?? [])));
+function getStoredPhotoPath(findingIdx, photoIdx) {
+    return (FINDING_PHOTO_PATHS?.[findingIdx]?.[photoIdx]) ?? '';
+}
 
 const initialFindings = @json(old('system_findings', $inspection->findings ?? []));
 let findingIndex = 0;
@@ -1012,6 +1028,9 @@ function addSystemFindingRow(systemId, prefill = {}) {
                     <span class="fw-normal text-muted">(optional)</span>
                 </label>
                 <div class="finding-media-gallery d-flex flex-wrap gap-2 mb-2"></div>
+                <div class="finding-existing-photos">
+                    ${(Array.isArray(FINDING_PHOTO_URLS?.[currentIndex]) ? FINDING_PHOTO_URLS[currentIndex] : []).map((_url, _pi) => `<input type="hidden" name="existing_finding_photos[${currentIndex}][]" value="${escapeHtml(getStoredPhotoPath(currentIndex, _pi))}">`).join('')}
+                </div>
                 <input type="file"
                     name="finding_photos[${currentIndex}][]"
                     class="form-control form-control-sm finding-media-input"

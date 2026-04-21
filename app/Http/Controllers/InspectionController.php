@@ -182,8 +182,9 @@ class InspectionController extends Controller
                 ->where('inspector_id', $user->id)
                 ->whereIn('status', ['scheduled', 'in_progress', 'completed'])
                 ->exists();
+            $hasPermission = $user->can('create inspections');
 
-            if (!$isAssignedToProperty && !$isAssignedToInspection) {
+            if (!$isAssignedToProperty && !$isAssignedToInspection && !$hasPermission) {
                 abort(403, 'You are not assigned to inspect this property.');
             }
         }
@@ -267,9 +268,14 @@ class InspectionController extends Controller
             'photos.*' => 'nullable|image|max:10240',
 
             // Per-finding photos (indexed by system_findings input index)
-            'finding_photos'     => 'nullable|array',
-            'finding_photos.*'   => 'nullable|array',
-            'finding_photos.*.*' => 'nullable|file|mimetypes:image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm,video/quicktime,video/x-msvideo,video/x-matroska|max:51200',
+            'finding_photos'       => 'nullable|array',
+            'finding_photos.*'     => 'nullable|array',
+            'finding_photos.*.*'   => 'nullable|file|mimetypes:image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,video/mp4,video/webm,video/quicktime,video/x-msvideo,video/x-matroska|max:51200',
+
+            // Existing saved photo paths passed back as hidden inputs to preserve on re-submit
+            'existing_finding_photos'     => 'nullable|array',
+            'existing_finding_photos.*'   => 'nullable|array',
+            'existing_finding_photos.*.*' => 'nullable|string',
             
             // Findings Array
             'findings' => 'nullable|array',
@@ -401,23 +407,55 @@ class InspectionController extends Controller
         $disk = config('filesystems.default', 's3');
 
         // Upload per-finding photos before normalizing findings (keyed by system_findings input index)
+        // Some clients submit files as finding_photos[idx][] while others can submit them under
+        // system_findings[idx][finding_photos] — handle both shapes.
+        $findingPhotoFiles = [];
+
+        foreach ((array) $request->file('finding_photos', []) as $idx => $photos) {
+            $findingPhotoFiles[$idx] = array_merge($findingPhotoFiles[$idx] ?? [], (array) $photos);
+        }
+
+        foreach ((array) $request->file('system_findings', []) as $idx => $findingPayload) {
+            $nested = (array) ($findingPayload['finding_photos'] ?? []);
+            if (!empty($nested)) {
+                $findingPhotoFiles[$idx] = array_merge($findingPhotoFiles[$idx] ?? [], $nested);
+            }
+        }
+
         $findingPhotoPaths = [];
-        if ($request->hasFile('finding_photos')) {
-            foreach ((array) $request->file('finding_photos') as $idx => $photos) {
-                $paths = [];
-                foreach ((array) $photos as $photo) {
-                    if ($photo && $photo->isValid()) {
-                        $paths[] = $photo->store('inspections/finding-photos', $disk);
-                    }
+        foreach ($findingPhotoFiles as $idx => $photos) {
+            $paths = [];
+            foreach ((array) $photos as $photo) {
+                if ($photo && $photo->isValid()) {
+                    $paths[] = $photo->store('inspections/finding-photos', $disk);
                 }
-                if (!empty($paths)) {
-                    $findingPhotoPaths[$idx] = $paths;
+            }
+            if (!empty($paths)) {
+                $findingPhotoPaths[$idx] = $paths;
+            }
+        }
+
+        // Preserved existing photo paths submitted as hidden inputs (so they survive re-submit without new upload)
+        $preservedPhotoPaths = [];
+        foreach ((array) $request->input('existing_finding_photos', []) as $idx => $paths) {
+            $clean = array_values(array_filter((array) $paths, fn($p) => is_string($p) && $p !== ''));
+            if (!empty($clean)) {
+                $preservedPhotoPaths[$idx] = $clean;
+            }
+        }
+
+        // Also load previously saved photos from the existing inspection as a final fallback
+        $savedInspectionPhotos = [];
+        if ($inspection) {
+            foreach ((array) ($inspection->findings ?? []) as $fi => $f) {
+                if (!empty($f['finding_photos'])) {
+                    $savedInspectionPhotos[$fi] = array_values(array_filter((array) $f['finding_photos']));
                 }
             }
         }
 
         $normalizedFindings = $systemFindings
-            ->map(function ($finding, $idx) use ($systemNameMap, $systemSlugMap, $subsystemNameMap, $severityAliases, $allowedSeverities, $findingPhotoPaths) {
+            ->map(function ($finding, $idx) use ($systemNameMap, $systemSlugMap, $subsystemNameMap, $severityAliases, $allowedSeverities, $findingPhotoPaths, $preservedPhotoPaths, $savedInspectionPhotos) {
                 $systemId = $finding['system_id'] ?? null;
                 $subsystemId = $finding['subsystem_id'] ?? null;
                 $rawSeverity = (string) ($finding['severity'] ?? 'low');
@@ -442,7 +480,11 @@ class InspectionController extends Controller
                         ->values()
                         ->all(),
                     'type'           => $systemSlugMap[$systemId] ?? null,
-                    'finding_photos' => $findingPhotoPaths[$idx] ?? [],
+                    'finding_photos' => array_values(array_unique(array_merge(
+                        $savedInspectionPhotos[$idx] ?? [],
+                        $preservedPhotoPaths[$idx] ?? [],
+                        $findingPhotoPaths[$idx] ?? []
+                    ))),
                     'risk_impact'       => trim((string) ($finding['risk_impact'] ?? '')),
                     'phar_labour_hours' => (float) ($finding['phar_labour_hours'] ?? 0),
                     'phar_category'     => trim((string) ($finding['phar_category'] ?? '')),
@@ -717,7 +759,7 @@ class InspectionController extends Controller
         }
         
         // Resolve photo URLs for DomPDF (signed S3 URLs or local file:// paths)
-        $disk   = config('filesystems.default', 'public');
+        $disk   = config('filesystems.default', 's3');
         $driver = config("filesystems.disks.{$disk}.driver");
         $rawPhotos = is_array($inspection->photos) ? $inspection->photos : [];
         $photoUrls = collect($rawPhotos)->map(function ($path) use ($disk, $driver) {
@@ -866,6 +908,35 @@ class InspectionController extends Controller
         }
     }
 
+    public function staffSignAgreement(Request $request, Inspection $inspection)
+    {
+        $user = Auth::user();
+        if (!$user || !$user->hasAnyRole(['Super Admin', 'Administrator', 'Admin', 'Project Manager', 'Inspector', 'Technician', 'Finance Officer'])) {
+            abort(403, 'You are not authorized to sign this agreement as Etogo staff.');
+        }
+
+        if (($inspection->status ?? null) !== 'completed') {
+            return back()->with('error', 'Agreement can only be signed after inspection completion.');
+        }
+
+        if (!$inspection->approved_by_client || !$inspection->client_approved_at) {
+            return back()->with('error', 'Etogo staff can only sign after the client signs.');
+        }
+
+        if ($inspection->etogo_signed_at) {
+            return back()->with('info', 'Agreement has already been signed by Etogo staff.');
+        }
+
+        $inspection->update([
+            'etogo_signed_by' => $user->id,
+            'etogo_signed_at' => now(),
+        ]);
+
+        $this->agreementScheduleService->refresh($inspection);
+
+        return back()->with('success', 'Agreement signed by Etogo staff (' . $user->name . ').');
+    }
+
     public function countersignAgreement(Request $request, Inspection $inspection)
     {
         $user = Auth::user();
@@ -901,7 +972,7 @@ class InspectionController extends Controller
 
     /**
      * Save (or replace) the work visit schedule for a fully-executed inspection.
-     * All dates must be weekdays (Mon–Fri). Work hours are 9 AM – 5 PM.
+     * All dates must be Mon–Sat. Work hours are 7 AM – 6 PM.
      */
     public function storeWorkSchedule(Request $request, Inspection $inspection)
     {
@@ -920,12 +991,12 @@ class InspectionController extends Controller
         ]);
 
         $badDates = collect($validated['visit_dates'])->filter(function (string $date) {
-            $dow = Carbon::parse($date)->dayOfWeek;
-            return $dow === Carbon::SATURDAY || $dow === Carbon::SUNDAY;
+            // Working week is Monday–Saturday; only reject Sunday
+            return Carbon::parse($date)->dayOfWeek === Carbon::SUNDAY;
         })->values();
 
         if ($badDates->isNotEmpty()) {
-            return back()->with('error', 'All visit dates must be weekdays (Monday – Friday). Invalid: ' . $badDates->implode(', '));
+            return back()->with('error', 'Visit dates must be Monday – Saturday (no Sundays). Invalid: ' . $badDates->implode(', '));
         }
 
         $schedule = collect($validated['visit_dates'])
@@ -1022,6 +1093,10 @@ class InspectionController extends Controller
             ->concat($catalogFindingTemplateSettings)
             ->unique('task_question')
             ->values();
+
+        // Reconcile stored BDC/TRC against the saved travel inputs on every page load.
+        // Only writes to the DB when the stored value actually differs.
+        $this->syncBdcAndTrc($inspection, onlyIfChanged: true);
 
         return view('admin.inspections.form-phar-data', compact(
             'inspection',
@@ -1141,14 +1216,18 @@ class InspectionController extends Controller
 
         $inspection->findings = $mergedFindings;
 
-        // Auto-derive visits from total finding labour hours: 1 visit = 8 working hours
+        // Auto-derive visits from total finding labour hours: 1 visit = 11 working hours (7AM–6PM)
         $totalLabourHoursFromFindings = collect($mergedFindings)
             ->sum(fn(array $f) => (float) ($f['phar_labour_hours'] ?? 0));
-        $derivedVisits = max(1, (int) ceil($totalLabourHoursFromFindings / 8));
+        $derivedVisits = max(1, (int) ceil($totalLabourHoursFromFindings / 11));
         $inspection->bdc_visits_per_year      = $derivedVisits;
         $inspection->estimated_task_hours     = $totalLabourHoursFromFindings ?: ($validated['estimated_task_hours'] ?? $inspection->estimated_task_hours);
 
         $inspection->save();
+
+        // Keep BDC/TRC in sync on every save (including draft) so the Final PHAR
+        // Dashboard always matches the Live Cost Preview.
+        $this->syncBdcAndTrc($inspection->fresh());
 
         // Draft: save and go back to Step 1 without running calculations
         if ($isDraft) {
@@ -1244,6 +1323,43 @@ class InspectionController extends Controller
     }
 
     /**
+     * Admin-facing finding photo upload (used from preview-report).
+     */
+    public function addFindingPhotos(Request $request, Inspection $inspection, int $findingIndex)
+    {
+        $validated = $request->validate([
+            'finding_photos'   => 'required|array|min:1',
+            'finding_photos.*' => 'required|image|max:10240',
+        ]);
+
+        $findings = is_array($inspection->findings)
+            ? $inspection->findings
+            : (json_decode($inspection->getRawOriginal('findings') ?? '[]', true) ?? []);
+
+        if (!array_key_exists($findingIndex, $findings)) {
+            return back()->with('error', 'Finding not found.');
+        }
+
+        $existingPhotos = is_array($findings[$findingIndex]['finding_photos'] ?? null)
+            ? $findings[$findingIndex]['finding_photos']
+            : [];
+
+        $disk = config('filesystems.default', 's3');
+        $newPaths = [];
+        foreach ((array) ($validated['finding_photos'] ?? []) as $photo) {
+            if ($photo && $photo->isValid()) {
+                $newPaths[] = $photo->store('inspections/finding-photos', $disk);
+            }
+        }
+
+        $findings[$findingIndex]['finding_photos'] = array_values(array_filter(array_merge($existingPhotos, $newPaths)));
+        $inspection->findings = $findings;
+        $inspection->save();
+
+        return back()->with('success', count($newPaths) . ' photo(s) uploaded successfully.');
+    }
+
+    /**
      * Admin preview of the client-facing inspection report (read-only, no auth check on ownership).
      */
     public function previewReport(Inspection $inspection)
@@ -1258,8 +1374,9 @@ class InspectionController extends Controller
             ->orderBy('id')
             ->get();
 
-        return view('client.inspections.report', compact('inspection', 'findings', 'materials'))
-            ->with('adminPreview', true);
+        $adminPreview = true;
+
+        return view('client.inspections.report', compact('inspection', 'findings', 'materials', 'adminPreview'));
     }
 
     /**
@@ -1268,13 +1385,66 @@ class InspectionController extends Controller
     public function previewAgreement(Inspection $inspection)
     {
         $inspection = $this->agreementScheduleService->refresh($inspection);
-        return view('client.inspections.agreement', compact('inspection'))
-            ->with('adminPreview', true);
+        $adminPreview = true;
+        return view('client.inspections.agreement', compact('inspection', 'adminPreview'));
     }
 
     protected function ensureClientInvoiceFromInspection(Inspection $inspection): void
     {
         $this->inspectionInvoiceSyncService->syncProjectInvoice($inspection);
+    }
+
+    /**
+     * Recalculate BDC and TRC from the inspection's stored travel/labour inputs
+     * and persist the result. Used both on page-load reconciliation and on every
+     * save so the Final PHAR Dashboard always matches the Live Cost Preview.
+     *
+     * @param  Inspection  $inspection     Should be a fresh() model when called after a save.
+     * @param  bool        $onlyIfChanged  When true, skips the DB write if bdc_annual is already correct.
+     */
+    private function syncBdcAndTrc(Inspection $inspection, bool $onlyIfChanged = false): void
+    {
+        $calc = new \App\Services\BDCCalculator();
+
+        if ($inspection->bdc_distance_km !== null && $inspection->bdc_time_minutes !== null) {
+            $result = $calc->calculateWithParams([
+                'travel_distance_km'  => (float) $inspection->bdc_distance_km,
+                'travel_time_minutes' => (float) $inspection->bdc_time_minutes,
+                'visits_per_year'     => (float) ($inspection->bdc_visits_per_year ?? 1),
+                'rate_per_km'         => (float) ($inspection->bdc_rate_per_km    ?? 1.50),
+                'rate_per_minute'     => (float) ($inspection->bdc_rate_per_minute ?? 1.65),
+            ]);
+        } else {
+            $result = $calc->calculateWithParams([
+                'visits_per_year' => (float) ($inspection->bdc_visits_per_year ?? 1),
+                'hours_per_visit' => (float) ($inspection->estimated_task_hours ?? 5),
+            ]);
+        }
+
+        $bdc    = $result['bdc_annual'];
+        $visits = max(1.0, (float) ($inspection->bdc_visits_per_year ?? 1));
+        $trc    = $bdc
+            + (float) ($inspection->frlc_annual ?? 0)
+            + (float) ($inspection->fmc_annual  ?? 0);
+
+        if ($onlyIfChanged && round((float) $inspection->bdc_annual, 2) === round($bdc, 2)) {
+            return;
+        }
+
+        $inspection->update([
+            'bdc_annual'                  => $bdc,
+            'bdc_per_visit'               => round($bdc / $visits, 2),
+            'trc_annual'                  => $trc,
+            'trc_per_visit'               => round($trc / $visits, 2),
+            'trc_monthly'                 => $trc,
+            'arp_monthly'                 => $trc,
+            'scientific_final_monthly'    => $trc,
+            'scientific_final_annual'     => $trc,
+            'arp_equivalent_final'        => $trc,
+            'base_package_price_snapshot' => $trc,
+        ]);
+
+        $inspection->refresh();
     }
 
 }

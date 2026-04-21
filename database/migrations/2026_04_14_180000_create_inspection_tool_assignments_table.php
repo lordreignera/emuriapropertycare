@@ -16,9 +16,14 @@ return new class extends Migration
             $table->foreignId('system_id')->nullable()->constrained('systems')->nullOnDelete();
             $table->foreignId('subsystem_id')->nullable()->constrained('subsystems')->nullOnDelete();
             $table->string('tool_name');
+            $table->unsignedSmallInteger('quantity')->default(0);
             $table->string('ownership_status', 30)->nullable();
             $table->string('availability_status', 30)->nullable();
             $table->unsignedInteger('finding_count')->default(0);
+            $table->text('assign_notes')->nullable();
+            $table->timestamp('returned_at')->nullable();
+            $table->foreignId('returned_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->text('return_notes')->nullable();
             $table->timestamps();
 
             $table->unique(['inspection_id', 'tool_name'], 'inspection_tool_assignments_unique_tool');

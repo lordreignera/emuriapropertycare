@@ -58,15 +58,17 @@ class MergeBridgeCalculator
         $fmcCalculation  = $this->calculateFMC($inspection);
 
         // Step 3: TRC (Total Remediation Cost)
-        $trcAnnual  = $bdcAnnual + $frlcCalculation['annual'] + $fmcCalculation['annual'];
-        $trcMonthly = $trcAnnual / 12;
+        $trcAnnual   = $bdcAnnual + $frlcCalculation['annual'] + $fmcCalculation['annual'];
+        $trcMonthly  = $trcAnnual;
+        $visitsPerYear = max(1, (float) ($bdcResult['visits_per_year'] ?? $inspection->bdc_visits_per_year ?? 1));
+        $trcPerVisit = round($trcAnnual / $visitsPerYear, 2);
 
         // Step 4: Final charge depends on customer payment choice.
         // 'per_visit' → client pays per visit (cost is per visit, total is annual TRC)
         // 'full'      → client pays full TRC at once
         // MergeBridgeCalculator always computes both; the locked amount is recorded at payment time.
         $paymentMode = ($inspection->work_payment_cadence === 'per_visit') ? 'per_visit' : 'lump_sum';
-        $finalCharge = ($paymentMode === 'per_visit') ? $trcMonthly : $trcAnnual;
+        $finalCharge = ($paymentMode === 'per_visit') ? $trcPerVisit : $trcAnnual;
 
         // Step 5: Per-Unit Breakdown (multi-unit properties)
         $perUnitBreakdown = $this->calculatePerUnitBreakdown(
@@ -99,8 +101,9 @@ class MergeBridgeCalculator
             'fmc_monthly' => round($fmcCalculation['monthly'], 2),
 
             // TRC (always computed; both views available)
-            'trc_annual'  => round($trcAnnual, 2),
-            'trc_monthly' => round($trcMonthly, 2),
+            'trc_annual'     => round($trcAnnual, 2),
+            'trc_monthly'    => round($trcMonthly, 2),
+            'trc_per_visit'  => round($trcPerVisit, 2),
 
             // Payment mode & final charge
             'payment_mode'  => $paymentMode,
@@ -129,7 +132,7 @@ class MergeBridgeCalculator
         return [
             'total_hours' => $totalHours,
             'annual' => $annualCost,
-            'monthly' => $annualCost / 12,
+            'monthly' => $annualCost,
         ];
     }
 
@@ -146,7 +149,7 @@ class MergeBridgeCalculator
         
         return [
             'annual' => $totalMaterialCost,
-            'monthly' => $totalMaterialCost / 12,
+            'monthly' => $totalMaterialCost,
         ];
     }
 
@@ -189,7 +192,7 @@ class MergeBridgeCalculator
         $inspection->update([
             'bdc_per_visit'          => $calculation['bdc_per_visit'],
             'bdc_annual'             => $calculation['bdc_annual'],
-            // bdc_monthly is always bdc_annual / 12 — not persisted, computed at display time
+            // bdc_monthly equals bdc_annual — no division by 12
             'labour_hourly_rate'     => $calculation['labour_hourly_rate'],
             'frlc_annual'            => $calculation['frlc_annual'],
             'frlc_monthly'           => $calculation['frlc_monthly'],
@@ -197,6 +200,7 @@ class MergeBridgeCalculator
             'fmc_monthly'            => $calculation['fmc_monthly'],
             'trc_annual'                  => $calculation['trc_annual'],
             'trc_monthly'                 => $calculation['trc_monthly'],
+            'trc_per_visit'               => $calculation['trc_per_visit'],
             'arp_monthly'                 => $calculation['arp_monthly'],
             'scientific_final_monthly'    => $calculation['trc_monthly'],
             'scientific_final_annual'     => $calculation['trc_annual'],

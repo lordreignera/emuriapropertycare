@@ -11,6 +11,7 @@ return new class extends Migration
         Schema::create('tool_settings', function (Blueprint $table) {
             $table->id();
             $table->string('tool_name', 150);
+            $table->unsignedSmallInteger('quantity')->default(1)->comment('Number of units of this tool owned');
             $table->foreignId('system_id')->nullable()->constrained('systems')->nullOnDelete();
             $table->foreignId('subsystem_id')->nullable()->constrained('subsystems')->nullOnDelete();
             $table->foreignId('finding_template_setting_id')->nullable()->constrained('finding_template_settings')->nullOnDelete();

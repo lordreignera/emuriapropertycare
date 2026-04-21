@@ -61,6 +61,8 @@ class Property extends Model
         'status',
         'approved_at',
         'approved_by',
+        'current_complexity_score',
+        'recommended_tier',
         'project_manager_id',
         'inspector_id',
         'assigned_at',

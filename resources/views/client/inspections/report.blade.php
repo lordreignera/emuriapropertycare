@@ -1,13 +1,12 @@
-@extends('client.layout')
+@extends($adminPreview ?? false ? 'admin.layout' : 'client.layout')
 
 @section('title', 'Inspection Report & Pricing Breakdown')
 
 @section('content')
-@if(session('adminPreview') || isset($adminPreview))
+@if($adminPreview ?? false)
 <div class="alert alert-warning border-warning mb-3 no-print" role="alert" style="border-left:4px solid #f0ad4e;">
     <i class="mdi mdi-eye me-2"></i>
     <strong>ADMIN PREVIEW MODE</strong> — This is how the client will see their report. No client actions are active.
-    <a href="javascript:window.close()" class="btn btn-sm btn-warning ms-3">Close Preview</a>
 </div>
 @endif
 <div class="row">
@@ -23,9 +22,15 @@
                         <p class="text-muted small mb-0">Complete breakdown of inspection findings and pricing calculation</p>
                     </div>
                     <div>
-                        <a href="{{ route('client.inspections.index') }}" class="btn btn-light btn-sm no-print">
-                            <i class="mdi mdi-arrow-left me-1"></i>Back to Inspections
-                        </a>
+                        @if(isset($adminPreview) && $adminPreview)
+                            <a href="{{ route('inspections.phar-data', $inspection->id) }}" class="btn btn-light btn-sm no-print">
+                                <i class="mdi mdi-arrow-left me-1"></i>Back to PHAR Dashboard
+                            </a>
+                        @else
+                            <a href="{{ route('client.inspections.index') }}" class="btn btn-light btn-sm no-print">
+                                <i class="mdi mdi-arrow-left me-1"></i>Back to Inspections
+                            </a>
+                        @endif
                         <button onclick="window.print()" class="btn btn-outline-secondary btn-sm no-print">
                             <i class="mdi mdi-printer me-1"></i>Print Report
                         </button>
@@ -161,6 +166,51 @@
                             return $finding;
                         });
 
+                    $normalizePhotoPaths = function ($value) {
+                        if (is_array($value)) {
+                            return array_values(array_filter($value, fn($p) => is_string($p) && trim($p) !== ''));
+                        }
+                        if (is_string($value) && trim($value) !== '') {
+                            $decoded = json_decode($value, true);
+                            if (is_array($decoded)) {
+                                return array_values(array_filter($decoded, fn($p) => is_string($p) && trim($p) !== ''));
+                            }
+                        }
+                        return [];
+                    };
+
+                    $findingMatchKey = function ($issueOrTask, $category) {
+                        $left = strtolower(trim((string) $issueOrTask));
+                        $right = strtolower(trim((string) $category));
+                        return $left . '|' . $right;
+                    };
+
+                    // Fallback photo source from relational PHAR findings in case the
+                    // inline JSON entry has no finding_photos but photo_ids exist.
+                    $pharPhotoFallbackByIndex = collect($findings ?? [])
+                        ->values()
+                        ->mapWithKeys(function ($f, $idx) use ($normalizePhotoPaths) {
+                            $paths = $normalizePhotoPaths($f->photo_ids ?? []);
+                            return [$idx => $paths];
+                        })
+                        ->all();
+
+                    // Primary fallback map: match by task/issue + category instead of index.
+                    $pharPhotoFallbackByKey = [];
+                    foreach (collect($findings ?? [])->values() as $f) {
+                        $key = $findingMatchKey($f->task_question ?? '', $f->category ?? '');
+                        if ($key === '|') {
+                            continue;
+                        }
+                        $paths = $normalizePhotoPaths($f->photo_ids ?? []);
+                        if (!empty($paths)) {
+                            $pharPhotoFallbackByKey[$key] = array_values(array_unique(array_merge(
+                                $pharPhotoFallbackByKey[$key] ?? [],
+                                $paths
+                            )));
+                        }
+                    }
+
                     $groupedFindings = $indexedFindings->groupBy('severity');
                     $totalLabourHrs  = $indexedFindings->sum('phar_labour_hours');
                     $totalMatCost    = $indexedFindings->sum(fn($f) =>
@@ -210,6 +260,17 @@
                                         $extraMats      = array_slice($pharMaterials, 1);
                                         $findingMatCost = collect($pharMaterials)->sum(fn($m) => (float)($m['line_total'] ?? 0));
                                         $recommendations = $finding['recommendations'] ?? [];
+                                        $findingPhotos = $normalizePhotoPaths($finding['finding_photos'] ?? []);
+                                        $rowKey = $findingMatchKey(
+                                            $finding['task_question'] ?? ($finding['issue'] ?? ''),
+                                            $finding['phar_category'] ?? ($finding['category'] ?? '')
+                                        );
+                                        if (empty($findingPhotos)) {
+                                            $findingPhotos = $pharPhotoFallbackByKey[$rowKey] ?? [];
+                                        }
+                                        if (empty($findingPhotos)) {
+                                            $findingPhotos = $pharPhotoFallbackByIndex[$finding['__finding_index']] ?? [];
+                                        }
                                     @endphp
                                     <tr>
                                         <td class="text-muted small align-top">{{ $rowNum }}</td>
@@ -231,23 +292,18 @@
                                                     @endforeach
                                                 </ul>
                                             @endif
-                                            @if(!empty($finding['finding_photos']))
+                                            @if(!empty($findingPhotos))
                                                 <div class="d-flex flex-wrap gap-1 mt-2">
-                                                    @foreach($finding['finding_photos'] as $fp)
+                                                    @foreach($findingPhotos as $fp)
                                                         <a href="{{ $inspection->getStorageUrl($fp) }}" target="_blank" title="View photo">
                                                             <img src="{{ $inspection->getStorageUrl($fp) }}" style="height:52px;width:52px;object-fit:cover;border-radius:4px;border:1px solid #dee2e6;" alt="Finding photo">
                                                         </a>
                                                     @endforeach
                                                 </div>
                                             @endif
-                                            <form method="POST" action="{{ route('client.inspections.findings.add-photos', ['inspection' => $inspection->id, 'findingIndex' => $finding['__finding_index']]) }}" enctype="multipart/form-data" class="mt-2 no-print">
-                                                @csrf
-                                                <div class="input-group input-group-sm">
-                                                    <input type="file" name="finding_photos[]" class="form-control" accept="image/*" multiple>
-                                                    <button type="submit" class="btn btn-outline-primary">Upload Photos</button>
-                                                </div>
-                                                <small class="text-muted">You can upload more than one photo for this finding.</small>
-                                            </form>
+                                            @if(empty($findingPhotos))
+                                                <small class="text-muted d-block mt-2">No inspection photo uploaded for this finding.</small>
+                                            @endif
                                         </td>
                                         <td class="align-top">
                                             <span class="badge bg-secondary">{{ $finding['phar_category'] ?? $finding['type'] ?? 'General' }}</span>
@@ -368,8 +424,8 @@
                                         </div>
                                         <div class="col-md-4 text-end">
                                             <div class="fs-3">
-                                                <strong>${{ number_format($inspection->trc_monthly ?? 0, 2) }}</strong>
-                                                <div class="fs-6">per month</div>
+                                                <strong>${{ number_format($inspection->trc_annual ?? 0, 2) }}</strong>
+                                                <div class="fs-6">total</div>
                                             </div>
                                         </div>
                                     </div>
@@ -386,11 +442,12 @@
                                 <div class="col-md-6">
                                     <div class="card border-primary">
                                         <div class="card-body">
-                                            <h6 class="text-muted mb-1">ARP (Monthly TRC)</h6>
-                                            <div class="fs-4 text-primary">${{ number_format($inspection->arp_monthly ?? 0, 2) }}</div>
+                                            <h6 class="text-muted mb-1">ARP (Total Remediation Cost)</h6>
+                                            <div class="fs-4 text-primary">${{ number_format($inspection->trc_annual ?? 0, 2) }}</div>
                                         </div>
                                     </div>
                                 </div>
+                                @if(false) {{-- CPI Score hidden --}}
                                 <div class="col-md-6">
                                     <div class="card border-primary">
                                         <div class="card-body">
@@ -413,8 +470,10 @@
                                         </div>
                                     </div>
                                 </div>
+                                @endif {{-- end hidden CPI --}}
                             </div>
 
+                            @if(false) {{-- ASI/TUS scores hidden --}}
                             <div class="row mt-3">
                                 <div class="col-md-6">
                                     <div class="card border-success">
@@ -449,58 +508,11 @@
                                     </div>
                                 </div>
                             </div>
+                            @endif {{-- end hidden ASI/TUS --}}
                         </div>
 
                         <!-- Per-Unit Breakdown (Multi-Unit Properties) -->
-                        @if(($inspection->units_for_calculation ?? 1) > 1)
-                        @php
-                            $arpMonthlyTotal = (float)($inspection->arp_monthly ?? $inspection->trc_monthly ?? 0);
-                        @endphp
-                        <div class="mb-4">
-                            <h6 class="text-primary border-bottom pb-2">
-                                <i class="mdi mdi-home-group me-2"></i>Per-Unit Cost Breakdown ({{ $inspection->units_for_calculation }} Units)
-                            </h6>
-                            <div class="table-responsive">
-                                <table class="table table-bordered">
-                                    <thead class="table-dark">
-                                        <tr>
-                                            <th>Cost Component</th>
-                                            <th class="text-end">Annual Total</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr>
-                                            <td>BDC</td>
-                                            <td class="text-end">${{ number_format($inspection->bdc_annual ?? 0, 2) }}</td>
-                                        </tr>
-                                        <tr>
-                                            <td>FRLC</td>
-                                            <td class="text-end">${{ number_format($inspection->frlc_annual ?? 0, 2) }}</td>
-                                        </tr>
-                                        <tr>
-                                            <td>FMC</td>
-                                            <td class="text-end">${{ number_format($inspection->fmc_annual ?? 0, 2) }}</td>
-                                        </tr>
-                                        <tr class="table-secondary">
-                                            <td><strong>TRC <small class="text-muted fw-normal">(BDC+FRLC+FMC)</small></strong></td>
-                                            <td class="text-end"><strong>${{ number_format($inspection->trc_annual ?? 0, 2) }}</strong></td>
-                                        </tr>
-                                    </tbody>
-                                    <tfoot>
-                                        @php
-                                            $rptPaymentMode = $inspection->work_payment_cadence === 'per_visit' ? 'per_visit' : 'lump_sum';
-                                            $rptFinalCharge = (float)($inspection->trc_annual ?? 0);
-                                        @endphp
-                                        <tr style="background:#198754;color:white;">
-                                            <td><strong>Total Project Cost</strong></td>
-                                            <td class="text-end"><strong>${{ number_format($rptFinalCharge, 2) }}</strong></td>
-                                        </tr>
-                                    </tfoot>
-                                </table>
-                            </div>
-                            <p class="text-muted small mt-1"><strong>Total Project Cost</strong> = BDC + FRLC + FMC. Payment is {{ $rptPaymentMode === 'per_visit' ? 'per visit ('.($inspection->bdc_visits_per_year ?? 1).' visits)' : 'in full' }}.</p>
-                        </div>
-                        @endif
+                        @include('shared.inspections._per-unit-breakdown', ['inspection' => $inspection])
 
                     </div>
                 </div>
@@ -589,14 +601,9 @@
                 <!-- Work Payment (if not yet paid) -->
                 @if($inspection->status === 'completed' && ($inspection->work_payment_status ?? 'pending') !== 'paid')
                 @php
-                    $rptFullAmt  = (float) ($inspection->trc_annual ?? max(
-                        $inspection->scientific_final_monthly ?? 0,
-                        $inspection->arp_equivalent_final ?? 0,
-                        $inspection->arp_monthly ?? 0,
-                        $inspection->trc_monthly ?? 0,
-                    ) * 12);
+                    $rptFullAmt  = (float) ($inspection->trc_annual ?? $inspection->arp_equivalent_final ?? 0);
                     $rptVisits   = max(1, (int) ($inspection->bdc_visits_per_year ?? 1));
-                    $rptPerVisit = $rptVisits > 0 ? round($rptFullAmt / $rptVisits, 2) : 0;
+                    $rptPerVisit = (float) ($inspection->trc_per_visit ?? ($rptVisits > 0 ? round($rptFullAmt / $rptVisits, 2) : 0));
                 @endphp
                 <div class="card mb-4 border-success">
                     <div class="card-header bg-success text-white">
@@ -687,7 +694,7 @@
                     </div>
                     <div class="card-body">
                         <p class="text-muted small mb-3">
-                            All visits are scheduled <strong>Monday – Friday, 9:00 AM – 5:00 PM</strong>.
+                            All visits are scheduled <strong>Monday – Saturday, 7:00 AM – 6:00 PM</strong>.
                             Please ensure site access and utilities are available on each visit date.
                         </p>
                         <div class="table-responsive">
@@ -708,7 +715,7 @@
                                         <td>{{ $csIdx + 1 }}</td>
                                         <td>{{ \Carbon\Carbon::parse($csVisit['date'])->format('M d, Y') }}</td>
                                         <td>{{ \Carbon\Carbon::parse($csVisit['date'])->format('l') }}</td>
-                                        <td>9:00 AM – 5:00 PM</td>
+                                        <td>7:00 AM – 6:00 PM</td>
                                         <td>
                                             <span class="badge bg-{{ $csStatus === 'completed' ? 'success' : ($csStatus === 'cancelled' ? 'danger' : 'secondary') }} text-capitalize">
                                                 {{ $csStatus }}

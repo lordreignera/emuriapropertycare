@@ -420,8 +420,8 @@
             </div>
             <div class="trc-banner">
                 <div class="label">Annual: ${{ number_format($inspection->trc_annual ?? 0, 2) }}</div>
-                <div class="amount">${{ number_format($inspection->trc_monthly ?? 0, 2) }}</div>
-                <div class="sub">per month</div>
+                <div class="amount">${{ number_format($inspection->trc_annual ?? 0, 2) }}</div>
+                <div class="sub">total</div>
             </div>
         </div>
 
@@ -434,43 +434,33 @@
                 <tr>
                     <td>
                         <div class="cost-box" style="border-left-color:#3498db;">
-                            <h4>ARP Monthly</h4>
-                            <div class="amount">${{ number_format($inspection->arp_monthly ?? 0, 2) }}</div>
-                            <div class="note">= TRC / 12</div>
+                            <h4>ARP</h4>
+                            <div class="amount">${{ number_format($inspection->trc_annual ?? 0, 2) }}</div>
+                            <div class="note">= TRC</div>
                         </div>
                     </td>
-                    <td>
-                        <div class="cost-box" style="border-left-color:#9b59b6;">
-                            <h4>CPI Score</h4>
-                            <div class="amount">{{ number_format($inspection->cpi_total_score ?? 0, 1) }}<span style="font-size:11px;">/100</span></div>
-                            <div class="note">{{ $inspection->cpi_rating ?? '' }}</div>
-                        </div>
-                    </td>
-                    <td>
-                        <div class="cost-box" style="border-left-color:#27ae60;">
-                            <h4>ASI Score &nbsp;<span style="font-weight:normal;">(CPI×60% + TUS×40%)</span></h4>
-                            <div class="amount">{{ number_format($inspection->asi_score ?? 0, 1) }}<span style="font-size:11px;">/100</span></div>
-                            <div class="note">{{ $inspection->asi_rating ?? '' }}</div>
-                        </div>
-                    </td>
+                    {{-- CPI Score hidden --}}
+                    {{-- ASI Score hidden --}}
                 </tr>
             </table>
         </div>
 
         <!-- Final Charge -->
         @php
-            $pdfPaymentMode = $inspection->work_payment_cadence === 'monthly' ? 'monthly' : 'lump_sum';
-            $pdfFinalCharge = (float)($inspection->final_charge ?? ($pdfPaymentMode === 'monthly' ? ($inspection->arp_monthly ?? 0) : ($inspection->trc_annual ?? 0)));
+            $pdfPaymentMode = $inspection->work_payment_cadence === 'per_visit' ? 'per_visit' : 'lump_sum';
+            $pdfVisits      = max(1, (int)($inspection->bdc_visits_per_year ?? 1));
+            $pdfFinalCharge = $pdfPaymentMode === 'per_visit'
+                ? (float)($inspection->trc_per_visit ?? round(($inspection->trc_annual ?? 0) / $pdfVisits, 2))
+                : (float)($inspection->trc_annual ?? 0);
+            $pdfChargeLabel = $pdfPaymentMode === 'per_visit'
+                ? 'Per Visit Payment (×'.$pdfVisits.' visits)'
+                : 'Lump Sum Payment (Full TRC)';
         @endphp
         <div style="margin-top:8px;">
-            <div class="final-monthly">
-                <div class="label">{{ $pdfPaymentMode === 'monthly' ? 'Monthly Property Care Price' : 'Lump Sum Payment (Full TRC)' }}</div>
+                <div class="final-monthly">
+                <div class="label">{{ $pdfChargeLabel }}</div>
                 <div class="amount">${{ number_format($pdfFinalCharge, 2) }}</div>
-                @if($pdfPaymentMode === 'monthly')
-                <div class="sub">per month &nbsp;|&nbsp; Annual: ${{ number_format($pdfFinalCharge * 12, 2) }}</div>
-                @else
-                <div class="sub">one-time annual charge</div>
-                @endif
+                <div class="sub">{{ $pdfPaymentMode === 'per_visit' ? 'per visit · '.$pdfVisits.' visits total' : 'total charge' }}</div>
             </div>
         </div>
 
@@ -481,7 +471,7 @@
                 Per-Unit Cost Breakdown ({{ $inspection->units_for_calculation }} Units)
             </div>
             @php
-                $pdfArpMonthlyTotal = (float)($inspection->arp_monthly ?? $inspection->trc_monthly ?? 0);
+                $pdfArpMonthlyTotal = (float)($inspection->trc_annual ?? 0);
             @endphp
             <table class="data">
                 <thead>
@@ -510,12 +500,12 @@
                 </tbody>
                 <tfoot>
                     <tr>
-                        <td><strong>ARP</strong> <span style="font-size:8px;font-weight:normal;">(TRC &#247; 12)</span></td>
-                        <td class="r"><strong>${{ number_format($pdfArpMonthlyTotal, 2) }}/mo</strong></td>
+                        <td><strong>ARP</strong> <span style="font-size:8px;font-weight:normal;">(= TRC)</span></td>
+                        <td class="r"><strong>${{ number_format($pdfArpMonthlyTotal, 2) }}</strong></td>
                     </tr>
                 </tfoot>
             </table>
-            <p style="font-size:8px;color:#666;margin-top:4px;"><strong>ARP</strong> = Annual Recurring Price = TRC &#247; 12. This is the monthly amount the client pays.</p>
+            <p style="font-size:8px;color:#666;margin-top:4px;"><strong>ARP</strong> = Annual Recurring Price = TRC. This is the total amount the client pays.</p>
         </div>
         @endif
 

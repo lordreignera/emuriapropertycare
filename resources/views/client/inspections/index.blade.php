@@ -57,16 +57,57 @@
                                         @endif
                                     </td>
                                         @php
-                                            $displayPrice = ($inspection->work_payment_cadence === 'monthly')
-                                                ? (float) ($inspection->arp_monthly ?? $inspection->trc_monthly ?? 0)
-                                                : (float) ($inspection->trc_annual ?? 0);
+                                            $cadenceLabel = match($inspection->work_payment_cadence) {
+                                                'per_visit' => 'Visit',
+                                                'annual'    => 'Annual',
+                                                'monthly'   => 'Monthly',
+                                                'full'      => 'Full',
+                                                default     => 'Monthly',
+                                            };
+                                            $displayPrice = $inspection->work_payment_amount > 0
+                                                ? $inspection->work_payment_amount
+                                                : ($inspection->scientific_final_monthly ?? 0);
                                         @endphp
-                                        <td>${{ number_format($displayPrice, 2) }}</td>
+                                        <td>
+                                            @if($displayPrice > 0)
+                                                ${{ number_format($displayPrice, 2) }}<br>
+                                                <small class="text-muted">{{ $cadenceLabel }}</small>
+                                            @else
+                                                <span class="text-muted">—</span>
+                                            @endif
+                                        </td>
+                                    @php
+                                        $wps       = $inspection->work_payment_status ?? 'pending';
+                                        $cadence   = $inspection->work_payment_cadence;
+                                        $payPlan   = $inspection->payment_plan ?? 'full';
+                                        $isPaid    = $wps === 'paid';
+                                        $isFullyPaid = $inspection->arp_fully_paid_at !== null;
+                                        $payAmt    = $inspection->work_payment_amount > 0
+                                                        ? $inspection->work_payment_amount
+                                                        : ($inspection->scientific_final_monthly ?? 0);
+                                        $instAmt   = $inspection->installment_amount > 0
+                                                        ? $inspection->installment_amount
+                                                        : $payAmt;
+                                        $instPaid  = (int) ($inspection->installments_paid ?? 0);
+                                        $instTotal = (int) ($inspection->installment_months ?? 0);
+                                        $canPay    = ($inspection->status ?? null) === 'completed'
+                                                        && $inspection->approved_by_client
+                                                        && !$isPaid
+                                                        && $payAmt > 0;
+                                    @endphp
                                     <td>
                                         @if(($inspection->status ?? null) !== 'completed')
                                             <span class="badge bg-secondary">N/A</span>
-                                        @elseif(($inspection->work_payment_status ?? 'pending') === 'paid')
-                                            <span class="badge bg-success">Paid ({{ ucfirst($inspection->work_payment_cadence ?? 'monthly') }})</span>
+                                        @elseif($isFullyPaid)
+                                            <span class="badge bg-success">Fully Paid</span>
+                                        @elseif($isPaid && $payPlan === 'installment')
+                                            <span class="badge bg-info text-dark">{{ $instPaid }}/{{ $instTotal }} Installments</span>
+                                        @elseif($isPaid)
+                                            <span class="badge bg-success">Paid</span>
+                                        @elseif($payAmt > 0)
+                                            <span class="badge bg-danger">
+                                                Outstanding — ${{ number_format($cadence === 'per_visit' || $payPlan === 'installment' ? $instAmt : $payAmt, 2) }}
+                                            </span>
                                         @else
                                             <span class="badge bg-warning text-dark">Pending</span>
                                         @endif
@@ -79,8 +120,17 @@
                                                 </a>
                                                 <a href="{{ route('client.inspections.agreement', $inspection->id) }}" class="btn btn-sm {{ $inspection->approved_by_client ? 'btn-success' : 'btn-outline-success' }}">
                                                     <i class="mdi mdi-file-sign"></i>
-                                                    {{ $inspection->etogo_signed_at ? 'Agreement Finalized' : ($inspection->approved_by_client ? 'Awaiting Etogo Sign' : 'Agreement') }}
+                                                    {{ $inspection->etogo_signed_at ? 'Finalized' : ($inspection->approved_by_client ? 'Awaiting Countersign' : 'Sign Agreement') }}
                                                 </a>
+                                                @if($canPay)
+                                                    <a href="{{ route('client.inspections.work-payment', $inspection->id) }}" class="btn btn-sm btn-danger">
+                                                        <i class="mdi mdi-credit-card"></i>
+                                                        @if($cadence === 'per_visit') Pay Visit
+                                                        @elseif($payPlan === 'installment') Pay Installment
+                                                        @else Pay Now
+                                                        @endif
+                                                    </a>
+                                                @endif
                                             </div>
                                         @else
                                             <button class="btn btn-sm btn-secondary text-white border-0" style="opacity: 1; cursor: not-allowed;" disabled>

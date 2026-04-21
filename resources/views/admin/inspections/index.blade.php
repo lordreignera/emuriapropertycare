@@ -353,9 +353,9 @@
                     <p class="mb-3 text-muted small">Inspection ID: <span id="assignInspectionId">-</span> &bull; Property: <span id="assignPropertyName">-</span></p>
 
                     <div class="mb-3">
-                        <label for="project_manager_id" class="form-label">Project Manager <span class="text-danger">*</span></label>
-                        <select name="project_manager_id" id="project_manager_id" class="form-select" required>
-                            <option value="">-- Select Project Manager --</option>
+                        <label for="project_manager_id" class="form-label">Project Manager <span class="text-muted small fw-normal">(leave blank to keep current)</span></label>
+                        <select name="project_manager_id" id="project_manager_id" class="form-select">
+                            <option value="">-- No change --</option>
                             @foreach($projectManagers ?? [] as $pm)
                                 <option value="{{ $pm->id }}">{{ $pm->name }}</option>
                             @endforeach
@@ -363,9 +363,9 @@
                     </div>
 
                     <div class="mb-3">
-                        <label for="inspector_id" class="form-label">Inspector <span class="text-danger">*</span></label>
-                        <select name="inspector_id" id="inspector_id" class="form-select" required>
-                            <option value="">-- Select Inspector --</option>
+                        <label for="inspector_id" class="form-label">Inspector <span class="text-muted small fw-normal">(leave blank to keep current)</span></label>
+                        <select name="inspector_id" id="inspector_id" class="form-select">
+                            <option value="">-- No change --</option>
                             @foreach($inspectors ?? [] as $insp)
                                 <option value="{{ $insp->id }}">{{ $insp->name }}</option>
                             @endforeach
@@ -375,7 +375,7 @@
                     <div class="mb-3">
                         <label for="technician_id" class="form-label">Technician <span class="text-muted small fw-normal">(optional)</span></label>
                         <select name="technician_id" id="technician_id" class="form-select">
-                            <option value="">-- Select Technician --</option>
+                            <option value="">-- None / Remove --</option>
                             @foreach($technicians ?? [] as $tech)
                                 <option value="{{ $tech->id }}">{{ $tech->name }}</option>
                             @endforeach
@@ -445,7 +445,8 @@ let _scheduleVisits = 1;
 
 function nextWeekday(date) {
     let d = new Date(date);
-    while (d.getDay() === 0 || d.getDay() === 6) {
+    // Mon–Sat are working days; only skip Sunday (getDay() === 0)
+    while (d.getDay() === 0) {
         d.setDate(d.getDate() + 1);
     }
     return d;
@@ -462,13 +463,13 @@ function generateVisitDates() {
         return;
     }
     const total = _scheduleVisits;
-    const spacing = Math.round(365 / total);
     let dates = [];
     let current = nextWeekday(new Date(firstVal + 'T12:00:00'));
     dates.push(toDateInputVal(current));
     for (let i = 1; i < total; i++) {
         let next = new Date(current);
-        next.setDate(next.getDate() + spacing);
+        // Advance 1 calendar day then skip any Sunday to get next working day
+        next.setDate(next.getDate() + 1);
         next = nextWeekday(next);
         dates.push(toDateInputVal(next));
         current = next;

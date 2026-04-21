@@ -33,12 +33,8 @@ return new class extends Migration
             $table->index('property_id');
         });
         
-        // Add PHAR input fields to inspections table
-        Schema::table('inspections', function (Blueprint $table) {
-            $table->decimal('property_size_psf', 10, 2)->nullable()->after('mixed_use_weight_snapshot');
-            $table->decimal('estimated_task_hours', 10, 2)->nullable()->after('property_size_psf');
-            $table->decimal('minimum_required_hours', 10, 2)->default(3)->after('estimated_task_hours');
-        });
+        // Note: property_size_psf, estimated_task_hours, minimum_required_hours
+        // are defined in the base create_inspections_table migration.
     }
 
     /**
@@ -46,10 +42,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('inspections', function (Blueprint $table) {
-            $table->dropColumn(['property_size_psf', 'estimated_task_hours', 'minimum_required_hours']);
-        });
-        
+        // Inspection columns are part of the base table and dropped with it.
         Schema::dropIfExists('inspection_materials');
     }
 };

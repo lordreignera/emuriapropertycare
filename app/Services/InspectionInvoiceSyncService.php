@@ -143,10 +143,11 @@ class InspectionInvoiceSyncService
             (float) ($inspection->arp_total_locked ?? 0),
             (float) ($inspection->trc_annual ?? 0),
             (float) ($inspection->scientific_final_annual ?? 0),
-            (float) ($inspection->trc_monthly ?? 0) * 12,
-            (float) ($inspection->scientific_final_monthly ?? 0) * 12,
-            (float) ($inspection->arp_equivalent_final ?? 0) * 12,
-            (float) ($inspection->base_package_price_snapshot ?? 0) * 12,
+            (float) ($inspection->trc_monthly ?? 0),
+            (float) ($inspection->scientific_final_monthly ?? 0),
+            (float) ($inspection->arp_equivalent_final ?? 0),
+            (float) ($inspection->base_package_price_snapshot ?? 0),
+            (float) ($inspection->work_payment_amount ?? 0),
         ), 2);
     }
 

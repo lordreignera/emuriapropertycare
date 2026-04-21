@@ -1,4 +1,4 @@
-@extends('client.layout')
+@extends($adminPreview ?? false ? 'admin.layout' : 'client.layout')
 
 @section('title', 'Client Agreement')
 
@@ -6,7 +6,7 @@
 @if(session('adminPreview') || isset($adminPreview))
 <div class="alert alert-warning border-warning mb-3 no-print" role="alert" style="border-left:4px solid #f0ad4e;">
     <i class="mdi mdi-eye me-2"></i>
-    <strong>ADMIN PREVIEW MODE — CONTRACT DRAFT</strong> — This is the contract as the client will see it. Signing is disabled in preview.
+    <strong>ADMIN PREVIEW MODE — CONTRACT DRAFT</strong> — This is the contract as the client will see it. Staff signature is available only after client signature.
     <a href="javascript:window.close()" class="btn btn-sm btn-warning ms-3">Close Preview</a>
 </div>
 @endif
@@ -46,7 +46,28 @@
 
                 <hr class="my-4">
 
-                @if($inspection->approved_by_client)
+                @if($adminPreview ?? false)
+                    @if($inspection->etogo_signed_at)
+                        <div class="alert alert-success mb-0">
+                            <strong>Etogo Staff Signature Completed</strong><br>
+                            Signed by staff user ID: {{ $inspection->etogo_signed_by ?? '-' }}<br>
+                            Date: {{ optional($inspection->etogo_signed_at)->format('M d, Y h:i A') ?: '-' }}
+                        </div>
+                    @elseif(!$inspection->approved_by_client)
+                        <div class="alert alert-info mb-0">
+                            <strong>Awaiting Client Signature</strong><br>
+                            Etogo staff can sign only after the client has signed this agreement.
+                        </div>
+                    @else
+                        <form method="POST" action="{{ route('inspections.agreement.staff-sign', $inspection->id) }}">
+                            @csrf
+                            <button type="submit" class="btn btn-primary">
+                                <i class="mdi mdi-pen me-1"></i>Sign as Etogo Staff
+                            </button>
+                            <div class="text-muted small mt-2">Business rule: staff can sign only after client signature.</div>
+                        </form>
+                    @endif
+                @elseif($inspection->approved_by_client)
                     <div class="alert alert-success mb-0">
                         <strong>Agreement Signed</strong><br>
                         Signed by: {{ $inspection->client_full_name ?: 'Client' }}<br>

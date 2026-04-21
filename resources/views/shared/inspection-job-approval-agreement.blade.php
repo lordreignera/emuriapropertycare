@@ -54,9 +54,9 @@
         $agreementTotal = $agreementLabour + $agreementMaterials + $agreementTools;
     }
 
-    $agreementDeposit = $agreementTotal * 0.5;
-    $agreementProgress = $agreementTotal * 0.25;
-    $agreementFinal = max($agreementTotal - ($agreementDeposit + $agreementProgress), 0);
+    $agreementDeposit  = round($agreementTotal * 0.5,  2);
+    $agreementProgress = round($agreementTotal * 0.25, 2);
+    $agreementFinal    = max(round($agreementTotal - $agreementDeposit - $agreementProgress, 2), 0);
 
     $agreementStartDate = $agreementInspection->planned_start_date
         ? $agreementInspection->planned_start_date->format('Y-m-d')
@@ -97,7 +97,7 @@
     <div>• Start Date: {{ $agreementStartDate }}</div>
     <div>• Completion Target: {{ $agreementCompletionDate }}</div>
     <div>• Estimated Duration: {{ $agreementDuration }}</div>
-    <div>• Working Hours: Monday – Friday, 9:00 AM – 5:00 PM (no work on weekends or statutory holidays)</div>
+    <div>• Working Hours: Monday – Saturday, 7:00 AM – 6:00 PM (no work on Sundays or statutory holidays)</div>
     <div>• Total Scheduled Visits: {{ count($agreementInspection->work_schedule ?? []) ?: (int)($agreementInspection->bdc_visits_per_year ?? 0) ?: 'To be confirmed' }}</div>
     @php
         $agreementScheduledVisits = collect($agreementInspection->work_schedule ?? [])
@@ -119,7 +119,7 @@
                 <td style="padding:3px 8px; border:1px solid #ddd;">{{ $vIdx + 1 }}</td>
                 <td style="padding:3px 8px; border:1px solid #ddd;">{{ \Illuminate\Support\Carbon::parse($visit['date'])->format('M d, Y') }}</td>
                 <td style="padding:3px 8px; border:1px solid #ddd;">{{ \Illuminate\Support\Carbon::parse($visit['date'])->format('l') }}</td>
-                <td style="padding:3px 8px; border:1px solid #ddd;">9:00 AM – 5:00 PM</td>
+                <td style="padding:3px 8px; border:1px solid #ddd;">7:00 AM – 6:00 PM</td>
                 <td style="padding:3px 8px; border:1px solid #ddd; text-transform:capitalize;">{{ $visit['status'] ?? 'scheduled' }}</td>
             </tr>
             @endforeach

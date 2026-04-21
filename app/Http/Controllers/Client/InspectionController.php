@@ -32,7 +32,12 @@ class InspectionController extends Controller
      */
     private function authorizeInspection(Inspection $inspection): void
     {
-        if (!$inspection->property || (int) $inspection->property->user_id !== (int) Auth::id()) {
+        $user = Auth::user();
+        // Admins, inspectors, and project managers can access any inspection
+        if ($user->hasRole(['Super Admin', 'Administrator', 'Inspector', 'Project Manager'])) {
+            return;
+        }
+        if (!$inspection->property || (int) $inspection->property->user_id !== (int) $user->id) {
             abort(403, 'Unauthorized access to this inspection.');
         }
     }

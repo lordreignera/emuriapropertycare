@@ -110,7 +110,8 @@
                 } else {
                     $cursor = \Illuminate\Support\Carbon::tomorrow();
                     for ($i = 0; $i < $totalVisits; $i++) {
-                        while (in_array($cursor->dayOfWeek, [\Illuminate\Support\Carbon::SATURDAY, \Illuminate\Support\Carbon::SUNDAY])) {
+                        // Mon–Sat working week; only skip Sunday
+                        while ($cursor->dayOfWeek === \Illuminate\Support\Carbon::SUNDAY) {
                             $cursor->addDay();
                         }
                         $suggestedDates[] = $cursor->toDateString();
@@ -121,7 +122,7 @@
             <div class="card mb-4 border-success">
                 <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
                     <h5 class="mb-0"><i class="mdi mdi-calendar-check me-2"></i>Work Visit Schedule</h5>
-                    <small>Mon – Fri &nbsp;|&nbsp; 9:00 AM – 5:00 PM &nbsp;|&nbsp; {{ $totalVisits }} visit(s) required</small>
+                    <small>Mon – Sat &nbsp;|&nbsp; 7:00 AM – 6:00 PM &nbsp;|&nbsp; {{ $totalVisits }} visit(s) required</small>
                 </div>
                 <div class="card-body">
                     @if(session('success'))
@@ -145,7 +146,7 @@
                                         <td>{{ $vi + 1 }}</td>
                                         <td>{{ \Illuminate\Support\Carbon::parse($visit['date'])->format('M d, Y') }}</td>
                                         <td>{{ \Illuminate\Support\Carbon::parse($visit['date'])->format('l') }}</td>
-                                        <td>9:00 AM – 5:00 PM</td>
+                                        <td>7:00 AM – 6:00 PM</td>
                                         <td><span class="badge bg-{{ ($visit['status'] ?? 'scheduled') === 'completed' ? 'success' : 'secondary' }} text-capitalize">{{ $visit['status'] ?? 'scheduled' }}</span></td>
                                     </tr>
                                     @endforeach
@@ -156,7 +157,7 @@
 
                     <form method="POST" action="{{ route('inspections.work-schedule.store', $inspection->id) }}">
                         @csrf
-                        <p class="text-muted small mb-2">Set or update the {{ $totalVisits }} work visit date(s). Only weekdays (Mon–Fri) are accepted.</p>
+                        <p class="text-muted small mb-2">Set or update the {{ $totalVisits }} work visit date(s). Monday – Saturday are accepted (no Sundays).</p>
                         <div class="row g-2" id="visitDatesContainer">
                             @for($i = 0; $i < $totalVisits; $i++)
                             <div class="col-md-3 col-sm-4 col-6">
@@ -531,8 +532,8 @@
                                     </div>
                                     <div class="col-md-4 text-end">
                                         <div class="fs-3">
-                                            <strong>${{ number_format($inspection->trc_monthly ?? 0, 2) }}</strong>
-                                            <div class="fs-6">per month</div>
+                                            <strong>${{ number_format($inspection->trc_annual ?? 0, 2) }}</strong>
+                                            <div class="fs-6">total</div>
                                         </div>
                                     </div>
                                 </div>
@@ -549,11 +550,12 @@
                             <div class="col-md-6">
                                 <div class="card border-primary">
                                     <div class="card-body">
-                                        <h6 class="text-muted mb-1">ARP (Monthly TRC)</h6>
-                                        <div class="fs-4 text-primary">${{ number_format($inspection->arp_monthly ?? 0, 2) }}</div>
+                                        <h6 class="text-muted mb-1">ARP (Total Remediation Cost)</h6>
+                                        <div class="fs-4 text-primary">${{ number_format($inspection->trc_annual ?? 0, 2) }}</div>
                                     </div>
                                 </div>
                             </div>
+                            @if(false) {{-- CPI Score hidden --}}
                             <div class="col-md-6">
                                 <div class="card border-primary">
                                     <div class="card-body">
@@ -576,8 +578,10 @@
                                     </div>
                                 </div>
                             </div>
+                            @endif {{-- end hidden CPI --}}
                         </div>
 
+                        @if(false) {{-- ASI/TUS scores hidden --}}
                         <div class="row mt-3">
                             <div class="col-md-6">
                                 <div class="card border-success">
@@ -612,58 +616,11 @@
                                 </div>
                             </div>
                         </div>
+                        @endif {{-- end hidden ASI/TUS --}}
                     </div>
 
                     <!-- Per-Unit Breakdown (Multi-Unit Properties) -->
-                    @if(($inspection->units_for_calculation ?? 1) > 1)
-                    @php
-                        $arpMonthlyTotal = (float)($inspection->arp_monthly ?? $inspection->trc_monthly ?? 0);
-                    @endphp
-                    <div class="mb-4">
-                        <h6 class="text-primary border-bottom pb-2">
-                            <i class="mdi mdi-home-group me-2"></i>Per-Unit Cost Breakdown ({{ $inspection->units_for_calculation }} Units)
-                        </h6>
-                        <div class="table-responsive">
-                            <table class="table table-bordered">
-                                <thead class="table-dark">
-                                    <tr>
-                                        <th>Cost Component</th>
-                                        <th class="text-end">Annual Total</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr>
-                                        <td>BDC</td>
-                                        <td class="text-end">${{ number_format($inspection->bdc_annual ?? 0, 2) }}</td>
-                                    </tr>
-                                    <tr>
-                                        <td>FRLC</td>
-                                        <td class="text-end">${{ number_format($inspection->frlc_annual ?? 0, 2) }}</td>
-                                    </tr>
-                                    <tr>
-                                        <td>FMC</td>
-                                        <td class="text-end">${{ number_format($inspection->fmc_annual ?? 0, 2) }}</td>
-                                    </tr>
-                                    <tr class="table-secondary">
-                                        <td><strong>TRC <small class="text-muted fw-normal">(BDC+FRLC+FMC)</small></strong></td>
-                                        <td class="text-end"><strong>${{ number_format($inspection->trc_annual ?? 0, 2) }}</strong></td>
-                                    </tr>
-                                </tbody>
-                                <tfoot>
-                                    @php
-                                        $showPaymentMode = $inspection->work_payment_cadence === 'monthly' ? 'monthly' : 'lump_sum';
-                                        $showFinalCharge = (float)($inspection->final_charge ?? ($showPaymentMode === 'monthly' ? $arpMonthlyTotal : ($inspection->trc_annual ?? 0)));
-                                    @endphp
-                                    <tr style="background:#198754;color:white;">
-                                        <td><strong>Final Charge <small style="font-weight:normal;opacity:.85;">({{ $showPaymentMode === 'monthly' ? 'Monthly' : 'Lump Sum' }})</small></strong></td>
-                                        <td class="text-end"><strong>${{ number_format($showFinalCharge, 2) }}{{ $showPaymentMode === 'monthly' ? '/mo' : ' total' }}</strong></td>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
-                        <p class="text-muted small mt-1"><strong>Final Charge</strong> = {{ $showPaymentMode === 'monthly' ? 'TRC ÷ 12 (client pays monthly)' : 'Full TRC paid at once (lump sum)' }}.</p>
-                    </div>
-                    @endif
+                    @include('shared.inspections._per-unit-breakdown', ['inspection' => $inspection])
 
                 </div>
             </div>

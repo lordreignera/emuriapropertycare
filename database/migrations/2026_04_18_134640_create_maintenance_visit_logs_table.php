@@ -16,6 +16,7 @@ return new class extends Migration
             $table->foreignId('logged_by')->nullable()->constrained('users')->nullOnDelete();
             $table->text('work_description');
             $table->json('after_photos')->nullable();
+            $table->json('tools_used')->nullable();
             $table->decimal('hours_worked', 5, 2)->nullable();
             $table->enum('status', ['pending', 'in_progress', 'completed'])->default('pending');
             $table->text('notes')->nullable();

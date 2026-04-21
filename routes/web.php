@@ -40,21 +40,33 @@ Route::middleware([
     
     // Main workflow routes
     Route::resource('properties', App\Http\Controllers\PropertyController::class);
-    Route::post('/properties/{property}/approve', [App\Http\Controllers\PropertyController::class, 'approve'])->name('properties.approve');
-    Route::post('/properties/{property}/reject', [App\Http\Controllers\PropertyController::class, 'reject'])->name('properties.reject');
-    Route::post('/properties/{property}/assign', [App\Http\Controllers\PropertyController::class, 'assign'])->name('properties.assign');
+    Route::prefix('properties/{property}')->name('properties.')->group(function () {
+        Route::middleware('role:Super Admin|Administrator')->group(function () {
+            Route::post('/approve', [App\Http\Controllers\PropertyController::class, 'approve'])->name('approve');
+            Route::post('/reject', [App\Http\Controllers\PropertyController::class, 'reject'])->name('reject');
+        });
+        Route::post('/assign', [App\Http\Controllers\PropertyController::class, 'assign'])
+            ->name('assign')
+            ->middleware('role:Super Admin|Administrator|Project Manager');
+    });
     Route::resource('inspections', App\Http\Controllers\InspectionController::class)
         ->except(['update', 'destroy']);
-    Route::get('/inspections/{inspection}/download-invoice', [App\Http\Controllers\InspectionController::class, 'downloadInvoice'])->name('inspections.download-invoice');
-    Route::get('/inspections/{inspection}/work-payment', [App\Http\Controllers\InspectionController::class, 'workPayment'])->name('inspections.work-payment');
-    Route::post('/inspections/{inspection}/work-payment', [App\Http\Controllers\InspectionController::class, 'processWorkPayment'])->name('inspections.process-work-payment');
-    Route::post('/inspections/{inspection}/agreement/countersign', [App\Http\Controllers\InspectionController::class, 'countersignAgreement'])->name('inspections.agreement.countersign');
-    Route::post('/inspections/{inspection}/work-schedule', [App\Http\Controllers\InspectionController::class, 'storeWorkSchedule'])->name('inspections.work-schedule.store');
-    Route::get('/inspections/{inspection}/phar-data', [App\Http\Controllers\InspectionController::class, 'pharData'])->name('inspections.phar-data');
-    Route::post('/inspections/{inspection}/store-phar-data', [App\Http\Controllers\InspectionController::class, 'storePharData'])->name('inspections.store-phar-data');
-    Route::post('/inspections/{inspection}/complete-assessment', [App\Http\Controllers\InspectionController::class, 'completeAssessment'])->name('inspections.complete-assessment');
-    Route::get('/inspections/{inspection}/preview-report', [App\Http\Controllers\InspectionController::class, 'previewReport'])->name('inspections.preview-report');
-    Route::get('/inspections/{inspection}/preview-agreement', [App\Http\Controllers\InspectionController::class, 'previewAgreement'])->name('inspections.preview-agreement');
+    Route::prefix('inspections/{inspection}')
+        ->name('inspections.')
+        ->group(function () {
+            Route::get('/download-invoice', [App\Http\Controllers\InspectionController::class, 'downloadInvoice'])->name('download-invoice');
+            Route::get('/work-payment', [App\Http\Controllers\InspectionController::class, 'workPayment'])->name('work-payment');
+            Route::post('/work-payment', [App\Http\Controllers\InspectionController::class, 'processWorkPayment'])->name('process-work-payment');
+            Route::post('/agreement/staff-sign', [App\Http\Controllers\InspectionController::class, 'staffSignAgreement'])->name('agreement.staff-sign');
+            Route::post('/agreement/countersign', [App\Http\Controllers\InspectionController::class, 'countersignAgreement'])->name('agreement.countersign');
+            Route::post('/work-schedule', [App\Http\Controllers\InspectionController::class, 'storeWorkSchedule'])->name('work-schedule.store');
+            Route::get('/phar-data', [App\Http\Controllers\InspectionController::class, 'pharData'])->name('phar-data');
+            Route::post('/store-phar-data', [App\Http\Controllers\InspectionController::class, 'storePharData'])->name('store-phar-data');
+            Route::post('/complete-assessment', [App\Http\Controllers\InspectionController::class, 'completeAssessment'])->name('complete-assessment');
+            Route::get('/preview-report', [App\Http\Controllers\InspectionController::class, 'previewReport'])->name('preview-report');
+            Route::get('/preview-agreement', [App\Http\Controllers\InspectionController::class, 'previewAgreement'])->name('preview-agreement');
+            Route::post('/findings/{findingIndex}/photos', [App\Http\Controllers\InspectionController::class, 'addFindingPhotos'])->name('findings.add-photos');
+        });
     Route::resource('projects', App\Http\Controllers\ProjectController::class);
     Route::resource('invoices', App\Http\Controllers\InvoiceController::class);
     Route::resource('work-logs', App\Http\Controllers\WorkLogController::class);
@@ -100,8 +112,8 @@ Route::middleware([
         return view('admin.notifications');
     })->name('notifications.index');
     
-    // Client routes - No role middleware needed (FREE access model)
-    Route::prefix('client')->name('client.')->group(function() {
+    // Client routes - client-only access (Super Admin and other staff roles excluded)
+    Route::prefix('client')->name('client.')->middleware('role:Client')->group(function() {
         // Properties
         Route::resource('properties', App\Http\Controllers\Client\PropertyController::class);
         
@@ -111,40 +123,32 @@ Route::middleware([
         Route::get('/tenants/property-password/{property}', [App\Http\Controllers\Client\TenantController::class, 'getPropertyPassword'])->name('tenants.property-password');
         
         // Inspections
-        Route::get('/inspections', [App\Http\Controllers\Client\InspectionController::class, 'index'])
-            ->name('inspections.index');
-        Route::get('/inspections/{inspection}/report', [App\Http\Controllers\Client\InspectionController::class, 'report'])
-            ->name('inspections.report');
-        Route::get('/inspections/{inspection}/agreement', [App\Http\Controllers\Client\InspectionController::class, 'agreement'])
-            ->name('inspections.agreement');
-        Route::get('/inspections/{inspection}/agreement/download', [App\Http\Controllers\Client\InspectionController::class, 'downloadAgreementPdf'])
-            ->name('inspections.agreement.download');
-        Route::post('/inspections/{inspection}/agreement/sign', [App\Http\Controllers\Client\InspectionController::class, 'signAgreement'])
-            ->name('inspections.agreement.sign');
-        Route::post('/inspections/{inspection}/findings/{findingIndex}/photos', [App\Http\Controllers\Client\InspectionController::class, 'addFindingPhotos'])
-            ->name('inspections.findings.add-photos');
-        Route::get('/inspections/{inspection}/work-payment', [App\Http\Controllers\Client\InspectionController::class, 'workPayment'])
-            ->name('inspections.work-payment');
-        Route::post('/inspections/{inspection}/work-payment', [App\Http\Controllers\Client\InspectionController::class, 'processWorkPayment'])
-            ->name('inspections.process-work-payment');
-        Route::get('/inspections/{inspection}/installment', [App\Http\Controllers\Client\InspectionController::class, 'payInstallment'])
-            ->name('inspections.pay-installment');
-        Route::post('/inspections/{inspection}/installment', [App\Http\Controllers\Client\InspectionController::class, 'processInstallment'])
-            ->name('inspections.process-installment');
+        Route::get('/inspections', [App\Http\Controllers\Client\InspectionController::class, 'index'])->name('inspections.index');
+        Route::get('/inspections/{inspection}/report', [App\Http\Controllers\Client\InspectionController::class, 'report'])->name('inspections.report');
+        Route::get('/inspections/{inspection}/agreement', [App\Http\Controllers\Client\InspectionController::class, 'agreement'])->name('inspections.agreement');
+        Route::get('/inspections/{inspection}/agreement/download', [App\Http\Controllers\Client\InspectionController::class, 'downloadAgreementPdf'])->name('inspections.agreement.download');
+        Route::post('/inspections/{inspection}/agreement/sign', [App\Http\Controllers\Client\InspectionController::class, 'signAgreement'])->name('inspections.agreement.sign');
+        Route::post('/inspections/{inspection}/findings/{findingIndex}/photos', [App\Http\Controllers\Client\InspectionController::class, 'addFindingPhotos'])->name('inspections.findings.add-photos');
+        Route::get('/inspections/{inspection}/work-payment', [App\Http\Controllers\Client\InspectionController::class, 'workPayment'])->name('inspections.work-payment');
+        Route::post('/inspections/{inspection}/work-payment', [App\Http\Controllers\Client\InspectionController::class, 'processWorkPayment'])->name('inspections.process-work-payment');
+        Route::get('/inspections/{inspection}/installment', [App\Http\Controllers\Client\InspectionController::class, 'payInstallment'])->name('inspections.pay-installment');
+        Route::post('/inspections/{inspection}/installment', [App\Http\Controllers\Client\InspectionController::class, 'processInstallment'])->name('inspections.process-installment');
 
         // Schedule & pay for inspection
-        Route::get('/inspections/{property}/schedule', [App\Http\Controllers\Client\InspectionController::class, 'scheduleCreate'])
-            ->name('inspections.schedule');
-        Route::post('/inspections/{property}/schedule', [App\Http\Controllers\Client\InspectionController::class, 'scheduleStore'])
-            ->name('inspections.store-schedule');
-        Route::get('/inspections/checkout-success', [App\Http\Controllers\Client\InspectionController::class, 'checkoutSuccess'])
-            ->name('inspections.checkout-success');
-        Route::get('/inspections/checkout-cancel', [App\Http\Controllers\Client\InspectionController::class, 'checkoutCancel'])
-            ->name('inspections.checkout-cancel');
+        Route::get('/inspections/{property}/schedule', [App\Http\Controllers\Client\InspectionController::class, 'scheduleCreate'])->name('inspections.schedule');
+        Route::post('/inspections/{property}/schedule', [App\Http\Controllers\Client\InspectionController::class, 'scheduleStore'])->name('inspections.store-schedule');
+        Route::get('/inspections/checkout-success', [App\Http\Controllers\Client\InspectionController::class, 'checkoutSuccess'])->name('inspections.checkout-success');
+        Route::get('/inspections/checkout-cancel', [App\Http\Controllers\Client\InspectionController::class, 'checkoutCancel'])->name('inspections.checkout-cancel');
         
         // Projects
         Route::get('/projects', function() {
-            return view('client.projects.index');
+            $user = auth()->user();
+            $propertyIds = \App\Models\Property::where('user_id', $user->id)->pluck('id');
+            $projects = \App\Models\Project::whereIn('property_id', $propertyIds)
+                ->with(['property', 'inspections'])
+                ->latest()
+                ->get();
+            return view('client.projects.index', compact('projects'));
         })->name('projects.index');
         
         // Invoices
@@ -176,8 +180,8 @@ Route::middleware([
         })->name('support');
     });
     
-    // Admin routes
-    Route::prefix('admin')->name('admin.')->group(function() {
+    // Admin routes — restricted to Super Admin and Administrator only
+    Route::prefix('admin')->name('admin.')->middleware('role:Super Admin|Administrator')->group(function() {
         // Access Control
         Route::resource('users', App\Http\Controllers\Admin\UserManagementController::class);
         Route::post('users/{user}/assign-role', [App\Http\Controllers\Admin\UserManagementController::class, 'assignRole'])->name('users.assign-role');

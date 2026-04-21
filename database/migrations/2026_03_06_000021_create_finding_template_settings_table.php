@@ -11,17 +11,18 @@ return new class extends Migration
         Schema::create('finding_template_settings', function (Blueprint $table) {
             $table->id();
             $table->string('task_question', 255);
+            $table->foreignId('system_id')->nullable()->constrained('systems')->nullOnDelete();
+            $table->foreignId('subsystem_id')->nullable()->constrained('subsystems')->nullOnDelete();
             $table->string('category', 120)->nullable();
-            $table->unsignedTinyInteger('default_priority')->default(2);
             $table->boolean('default_included')->default(true);
-            $table->decimal('default_labour_hours', 8, 2)->default(0);
-            $table->string('photo_reference', 50)->nullable();
             $table->text('default_notes')->nullable();
+            $table->json('default_recommendations')->nullable();
             $table->boolean('is_active')->default(true);
             $table->integer('sort_order')->default(0);
             $table->timestamps();
 
             $table->index(['is_active', 'sort_order']);
+            $table->index(['system_id', 'subsystem_id'], 'fts_system_subsystem_idx');
         });
     }
 

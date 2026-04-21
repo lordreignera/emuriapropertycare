@@ -188,8 +188,10 @@
                                                     && (
                                                         (int) ($startableInspection->inspector_id ?? 0) === (int) auth()->id()
                                                         || (int) ($property->inspector_id ?? 0) === (int) auth()->id()
+                                                        || auth()->user()->can('create inspections')
                                                     );
                                                 $canAdminStart = $startableInspection
+                                                    && !auth()->user()->hasRole('Inspector')
                                                     && (
                                                         auth()->user()->can('create inspections')
                                                         || auth()->user()->hasRole(['Super Admin', 'Super Administrator', 'Administrator', 'Project Manager'])

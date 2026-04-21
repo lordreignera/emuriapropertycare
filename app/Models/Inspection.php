@@ -19,7 +19,6 @@ class Inspection extends Model
         'completed_date',
         'summary',
         'findings',
-        'notes',
         'report_file',
         'photos',
         'status',
@@ -69,6 +68,7 @@ class Inspection extends Model
         'fmc_monthly',
         'trc_annual',
         'trc_monthly',
+        'trc_per_visit',
         'arp_monthly',
         'condition_score',
         'tier_score',
@@ -158,6 +158,7 @@ class Inspection extends Model
         // TRC / ARP
         'trc_annual'             => 'decimal:2',
         'trc_monthly'            => 'decimal:2',
+        'trc_per_visit'          => 'decimal:2',
         'trc_per_unit_annual'    => 'decimal:2',
         'arp_monthly'            => 'decimal:2',
         'labour_hourly_rate'     => 'decimal:2',

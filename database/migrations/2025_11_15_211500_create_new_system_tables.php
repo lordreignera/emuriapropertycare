@@ -11,16 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // 1. Add property_code and tenant support to properties table
-        Schema::table('properties', function (Blueprint $table) {
-            $table->string('property_code', 20)->unique()->after('id');
-            $table->string('property_brand', 100)->nullable()->after('property_name');
-            $table->boolean('has_tenants')->default(false)->after('property_brand');
-            $table->integer('number_of_units')->default(1)->after('has_tenants');
-            $table->string('tenant_common_password')->nullable()->after('number_of_units');
-        });
-
-        // 2. Create tenants table (simplified - login via property code + tenant number)
+        // 1. Create tenants table (simplified - login via property code + tenant number)
         Schema::create('tenants', function (Blueprint $table) {
             $table->id();
             $table->foreignId('property_id')->constrained()->onDelete('cascade');
@@ -186,17 +177,12 @@ return new class extends Migration
             $table->index('report_number');
         });
 
-        // 7. Update subscriptions table
+        // 7. Add FK from subscriptions.custom_product_id -> client_custom_products (created above)
         Schema::table('subscriptions', function (Blueprint $table) {
-            $table->foreignId('custom_product_id')->nullable()->after('tier_id')->constrained('client_custom_products')->onDelete('set null');
-            $table->enum('payment_model', ['pay_as_you_go', 'monthly', 'annual', 'hybrid'])->default('monthly')->after('payment_cadence');
+            $table->foreign('custom_product_id')->references('id')->on('client_custom_products')->nullOnDelete();
         });
 
-        // 8. Update users table
-        Schema::table('users', function (Blueprint $table) {
-            $table->boolean('requires_subscription')->default(false)->after('email_verified_at');
-            $table->enum('account_type', ['client', 'staff', 'tenant'])->default('client')->after('requires_subscription');
-        });
+        // users columns (requires_subscription, account_type) are consolidated into create_users_table migration.
     }
 
     /**
@@ -204,29 +190,16 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            $table->dropColumn(['requires_subscription', 'account_type']);
-        });
-
         Schema::table('subscriptions', function (Blueprint $table) {
             $table->dropForeign(['custom_product_id']);
-            $table->dropColumn(['custom_product_id', 'payment_model']);
         });
+
+        // Note: users requires_subscription/account_type removed in create_users_table migration.
 
         Schema::dropIfExists('tenant_emergency_reports');
         Schema::dropIfExists('client_custom_products');
         Schema::dropIfExists('product_components');
         Schema::dropIfExists('products');
         Schema::dropIfExists('tenants');
-
-        Schema::table('properties', function (Blueprint $table) {
-            $table->dropColumn([
-                'property_code',
-                'property_brand',
-                'has_tenants',
-                'number_of_units',
-                'tenant_common_password'
-            ]);
-        });
     }
 };
