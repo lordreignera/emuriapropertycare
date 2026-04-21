@@ -80,7 +80,7 @@ class Invoice extends Model
 
     public function scopeOverdue($query)
     {
-        return $query->where('payment_status', '!=', 'paid')
-                     ->where('due_date', '<', now());
+        return $query->where('status', '!=', 'paid')
+            ->whereDate('due_date', '<', now()->toDateString());
     }
 }

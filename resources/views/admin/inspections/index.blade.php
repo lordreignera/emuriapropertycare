@@ -10,8 +10,16 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <div>
-                            <h4 class="card-title mb-0">Inspections Management</h4>
-                            <p class="text-muted small mb-0">Scheduled and paid inspections</p>
+                            @if(request('view') === 'pending-etogo')
+                                <h4 class="card-title mb-0"><i class="mdi mdi-pen me-2 text-warning"></i>Pending Etogo Signature</h4>
+                                <p class="text-muted small mb-0">Client has signed &amp; paid — awaiting your countersignature to start work</p>
+                            @elseif(request('view') === 'needs-schedule')
+                                <h4 class="card-title mb-0"><i class="mdi mdi-calendar-clock me-2 text-primary"></i>Project Scheduling</h4>
+                                <p class="text-muted small mb-0">Agreement countersigned — visit dates not yet set</p>
+                            @else
+                                <h4 class="card-title mb-0">Inspections Management</h4>
+                                <p class="text-muted small mb-0">Scheduled and paid inspections</p>
+                            @endif
                         </div>
                     </div>
 
@@ -22,7 +30,8 @@
                     </div>
                     @endif
 
-                    <!-- Filter Tabs -->
+                    <!-- Filter Tabs — only shown in normal (non-special-view) mode -->
+                    @if(!request('view'))
                     <ul class="nav nav-pills mb-3" role="tablist">
                         <li class="nav-item">
                             <a class="nav-link {{ request('status') == 'scheduled' ? 'active' : '' }}" 
@@ -46,6 +55,7 @@
                             </a>
                         </li>
                     </ul>
+                    @endif
 
                     <!-- Search Form -->
                     <form method="GET" action="{{ route('inspections.index') }}" class="mb-3">
@@ -74,6 +84,7 @@
                                     <th>Location</th>
                                     <th>Owner</th>
                                     <th>Inspector</th>
+                                    <th>Technician</th>
                                     <th>Project Manager</th>
                                     <th>Scheduled Date</th>
                                     <th>Payment Status</th>
@@ -105,6 +116,15 @@
                                         </span>
                                         @else
                                         <span class="badge badge-warning">Not assigned</span>
+                                        @endif
+                                    </td>
+                                    <td>
+                                        @if($inspection->technician)
+                                        <span class="badge badge-secondary">
+                                            <i class="mdi mdi-tools"></i> {{ $inspection->technician->name }}
+                                        </span>
+                                        @else
+                                        <span class="text-muted small">—</span>
                                         @endif
                                     </td>
                                     <td>
@@ -148,9 +168,18 @@
                                         @if($inspection->status === 'completed')
                                             <br>
                                             @if(($inspection->work_payment_status ?? 'pending') === 'paid')
+                                                @php
+                                                    $cadenceLabel = match($inspection->work_payment_cadence ?? '') {
+                                                        'full'      => 'In Full',
+                                                        'per_visit' => 'Per Visit',
+                                                        'annual'    => 'Annual',
+                                                        'monthly'   => 'Monthly',
+                                                        default     => ucfirst($inspection->work_payment_cadence ?? '')
+                                                    };
+                                                @endphp
                                                 <span class="badge badge-info mt-1">
                                                     <i class="mdi mdi-credit-card-check-outline"></i>
-                                                    Work: Paid {{ ucfirst($inspection->work_payment_cadence ?? 'monthly') }}
+                                                    Work: Paid {{ $cadenceLabel }}
                                                 </span>
                                             @else
                                                 <span class="badge badge-warning mt-1 text-dark">
@@ -183,13 +212,18 @@
                                             </span>
                                             @endif
                                             @endif
-                                                @if(!$inspection->inspector_id || !$inspection->property?->project_manager_id)
-                                            <button type="button" class="btn btn-sm btn-primary" 
-                                                    onclick="assignInspector({{ $inspection->id }}, {{ $inspection->property_id }}, '{{ addslashes($inspection->property?->property_name ?? 'Property') }}', {{ $inspection->property?->project_manager_id ?? 'null' }}, {{ $inspection->inspector_id ?? 'null' }})" 
-                                                    title="Assign Inspector">
-                                                <i class="mdi mdi-account-plus"></i>
+                                                @php
+                                                    $resolvedPm = $inspection->project?->managed_by
+                                                        ?? $inspection->property?->project_manager_id;
+                                                    $teamFullyAssigned = $inspection->inspector_id && $resolvedPm;
+                                                @endphp
+                                            <button type="button"
+                                                    class="btn btn-sm {{ $teamFullyAssigned ? 'btn-outline-primary' : 'btn-primary' }}"
+                                                    onclick="assignInspector({{ $inspection->id }}, {{ $inspection->property_id }}, '{{ addslashes($inspection->property?->property_name ?? 'Property') }}', {{ $resolvedPm ?? 'null' }}, {{ $inspection->inspector_id ?? 'null' }}, {{ $inspection->technician_id ?? 'null' }})"
+                                                    title="{{ $teamFullyAssigned ? 'Edit Team / Add Technician' : 'Assign Inspector, Technician & Project Manager' }}">
+                                                <i class="mdi mdi-account-{{ $teamFullyAssigned ? 'edit' : 'plus' }} me-1"></i>
+                                                {{ $teamFullyAssigned ? 'Edit Team' : 'Assign Team' }}
                                             </button>
-                                            @endif
                                             @if($inspection->status !== 'completed')
                                             @php
                                                 $isInProgress = $inspection->status === 'in_progress';
@@ -209,15 +243,41 @@
                                                 {{ $isInProgress ? 'Continue Inspection' : 'Start Inspection' }}
                                             </a>
                                             @endif
+                                            @if(request('view') === 'pending-etogo' && !$inspection->etogo_signed_at)
+                                            <form method="POST" action="{{ route('inspections.agreement.countersign', $inspection) }}" class="d-inline"
+                                                  onsubmit="return confirm('Countersign agreement for {{ addslashes($inspection->property->property_name ?? 'this property') }}? This authorises work to begin.')">
+                                                @csrf
+                                                <button type="submit" class="btn btn-warning fw-bold px-3" title="Countersign Agreement">
+                                                    <i class="mdi mdi-draw me-1"></i> Countersign
+                                                </button>
+                                            </form>
+                                            @endif
+                                            @if(request('view') === 'needs-schedule' && $inspection->etogo_signed_at)
+                                            <button type="button"
+                                                    class="btn btn-success fw-bold px-3"
+                                                    onclick="openWorkScheduleModal(
+                                                        {{ $inspection->id }},
+                                                        '{{ addslashes($inspection->property?->property_name ?? '') }}',
+                                                        {{ (int)($inspection->bdc_visits_per_year ?? 1) }},
+                                                        {{ json_encode($inspection->work_schedule ?? []) }}
+                                                    )"
+                                                    title="Set visit schedule">
+                                                <i class="mdi mdi-calendar-check me-1"></i> Schedule Visits
+                                            </button>
+                                            @endif
                                         </div>
                                     </td>
                                 </tr>
                                 @empty
                                 <tr>
-                                    <td colspan="9" class="text-center py-4">
+                                    <td colspan="10" class="text-center py-4">
                                         <i class="mdi mdi-clipboard-check-outline" style="font-size: 3rem; color: #ddd;"></i>
                                         <p class="text-muted mt-2">
-                                            @if(request('status') == 'scheduled')
+                                            @if(request('view') === 'pending-etogo')
+                                                No properties awaiting Etogo countersignature
+                                            @elseif(request('view') === 'needs-schedule')
+                                                No properties awaiting project scheduling
+                                            @elseif(request('status') == 'scheduled')
                                                 No scheduled inspections found
                                             @elseif(request('status') == 'in_progress')
                                                 No in progress inspections found
@@ -283,21 +343,21 @@
         <div class="modal-content bg-white text-dark">
             <div class="modal-header bg-white text-dark border-bottom">
                 <h5 class="modal-title">
-                    <i class="mdi mdi-account-multiple me-2"></i>Assign Inspector & Project Manager
+                    <i class="mdi mdi-account-multiple me-2"></i>Assign Project Team
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <form id="assignTeamForm" method="POST" action="">
                 @csrf
                 <div class="modal-body bg-white text-dark">
-                    <p class="mb-3 text-muted small">Inspection ID: <span id="assignInspectionId">-</span> • Property: <span id="assignPropertyName">-</span></p>
+                    <p class="mb-3 text-muted small">Inspection ID: <span id="assignInspectionId">-</span> &bull; Property: <span id="assignPropertyName">-</span></p>
 
                     <div class="mb-3">
                         <label for="project_manager_id" class="form-label">Project Manager <span class="text-danger">*</span></label>
                         <select name="project_manager_id" id="project_manager_id" class="form-select" required>
                             <option value="">-- Select Project Manager --</option>
-                            @foreach($projectManagers ?? [] as $projectManager)
-                                <option value="{{ $projectManager->id }}">{{ $projectManager->name }}</option>
+                            @foreach($projectManagers ?? [] as $pm)
+                                <option value="{{ $pm->id }}">{{ $pm->name }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -306,8 +366,18 @@
                         <label for="inspector_id" class="form-label">Inspector <span class="text-danger">*</span></label>
                         <select name="inspector_id" id="inspector_id" class="form-select" required>
                             <option value="">-- Select Inspector --</option>
-                            @foreach($inspectors ?? [] as $inspector)
-                                <option value="{{ $inspector->id }}">{{ $inspector->name }}</option>
+                            @foreach($inspectors ?? [] as $insp)
+                                <option value="{{ $insp->id }}">{{ $insp->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="technician_id" class="form-label">Technician <span class="text-muted small fw-normal">(optional)</span></label>
+                        <select name="technician_id" id="technician_id" class="form-select">
+                            <option value="">-- Select Technician --</option>
+                            @foreach($technicians ?? [] as $tech)
+                                <option value="{{ $tech->id }}">{{ $tech->name }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -322,22 +392,142 @@
         </div>
     </div>
 </div>
+
+<!-- Work Schedule Modal -->
+<div class="modal fade" id="workScheduleModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content bg-white text-dark">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="mdi mdi-calendar-check me-2"></i>Set Visit Schedule
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form id="workScheduleForm" method="POST" action="">
+                @csrf
+                <div class="modal-body bg-white text-dark">
+                    <div class="alert alert-info py-2 mb-3" id="scheduleInfo">
+                        <strong id="schedulePropName"></strong> &mdash;
+                        <span id="scheduleVisitCount"></span> visit(s) required per year
+                    </div>
+
+                    <div class="row align-items-end mb-3">
+                        <div class="col-md-7">
+                            <label class="form-label fw-semibold">First Visit Date <span class="text-danger">*</span></label>
+                            <input type="date" id="firstVisitDate" class="form-control"
+                                   min="{{ now()->toDateString() }}">
+                            <div class="form-text">Remaining dates will auto-fill, spaced evenly across the year. Weekends are skipped.</div>
+                        </div>
+                        <div class="col-md-5">
+                            <button type="button" class="btn btn-outline-primary w-100" onclick="generateVisitDates()">
+                                <i class="mdi mdi-refresh me-1"></i> Auto-fill Remaining Dates
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="visitDatesList" class="row g-2"></div>
+                </div>
+                <div class="modal-footer bg-white border-top">
+                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="mdi mdi-calendar-check me-1"></i> Save Schedule
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 @endsection
 
 @push('scripts')
 <script>
-function assignInspector(inspectionId, propertyId, propertyName, projectManagerId, inspectorId) {
+let _scheduleVisits = 1;
+
+function nextWeekday(date) {
+    let d = new Date(date);
+    while (d.getDay() === 0 || d.getDay() === 6) {
+        d.setDate(d.getDate() + 1);
+    }
+    return d;
+}
+
+function toDateInputVal(d) {
+    return d.toISOString().split('T')[0];
+}
+
+function generateVisitDates() {
+    const firstVal = document.getElementById('firstVisitDate').value;
+    if (!firstVal) {
+        alert('Please pick a first visit date first.');
+        return;
+    }
+    const total = _scheduleVisits;
+    const spacing = Math.round(365 / total);
+    let dates = [];
+    let current = nextWeekday(new Date(firstVal + 'T12:00:00'));
+    dates.push(toDateInputVal(current));
+    for (let i = 1; i < total; i++) {
+        let next = new Date(current);
+        next.setDate(next.getDate() + spacing);
+        next = nextWeekday(next);
+        dates.push(toDateInputVal(next));
+        current = next;
+    }
+    renderDateFields(dates);
+}
+
+function renderDateFields(dates) {
+    const container = document.getElementById('visitDatesList');
+    container.innerHTML = '';
+    dates.forEach(function(d, i) {
+        const col = document.createElement('div');
+        col.className = 'col-md-4 col-sm-6';
+        col.innerHTML = '<label class="form-label small fw-semibold text-muted">Visit ' + (i + 1) + '</label>' +
+            '<input type="date" name="visit_dates[]" class="form-control" value="' + d + '" required min="{{ now()->toDateString() }}">';
+        container.appendChild(col);
+    });
+}
+
+function openWorkScheduleModal(inspectionId, propertyName, totalVisits, existingSchedule) {
+    _scheduleVisits = totalVisits || 1;
+    const form = document.getElementById('workScheduleForm');
+    form.action = '/inspections/' + inspectionId + '/work-schedule';
+    document.getElementById('schedulePropName').textContent = propertyName;
+    document.getElementById('scheduleVisitCount').textContent = totalVisits;
+    document.getElementById('firstVisitDate').value = '';
+
+    // Pre-fill from existing schedule if any
+    if (existingSchedule && existingSchedule.length > 0) {
+        const existing = existingSchedule.map(function(e) { return e.date || e; });
+        document.getElementById('firstVisitDate').value = existing[0];
+        renderDateFields(existing);
+    } else {
+        document.getElementById('visitDatesList').innerHTML = '<p class="text-muted small col-12">Pick a first visit date above and click <strong>Auto-fill</strong>.</p>';
+    }
+
+    // When first date changes, auto-regenerate
+    const firstInput = document.getElementById('firstVisitDate');
+    firstInput.oninput = function() {
+        if (this.value) generateVisitDates();
+    };
+
+    new bootstrap.Modal(document.getElementById('workScheduleModal')).show();
+}
+
+function assignInspector(inspectionId, propertyId, propertyName, projectManagerId, inspectorId, technicianId) {
     const form = document.getElementById('assignTeamForm');
     const inspectionIdNode = document.getElementById('assignInspectionId');
     const propertyNameNode = document.getElementById('assignPropertyName');
     const pmSelect = document.getElementById('project_manager_id');
     const inspectorSelect = document.getElementById('inspector_id');
+    const techSelect = document.getElementById('technician_id');
 
     form.action = "{{ route('properties.assign', ['property' => '__PROPERTY_ID__']) }}".replace('__PROPERTY_ID__', propertyId);
     inspectionIdNode.textContent = inspectionId;
     propertyNameNode.textContent = propertyName || 'Property';
     pmSelect.value = (projectManagerId && projectManagerId !== 'null') ? String(projectManagerId) : '';
     inspectorSelect.value = (inspectorId && inspectorId !== 'null') ? String(inspectorId) : '';
+    techSelect.value = (technicianId && technicianId !== 'null') ? String(technicianId) : '';
 
     const modal = new bootstrap.Modal(document.getElementById('assignTeamModal'));
     modal.show();
@@ -355,7 +545,7 @@ $(document).ready(function() {
             "info": "Showing _START_ to _END_ of _TOTAL_ inspections"
         },
         "columnDefs": [
-            { "orderable": false, "targets": [8] }
+            { "orderable": false, "targets": [9] }  // Actions column is now index 9
         ]
     });
     @endif

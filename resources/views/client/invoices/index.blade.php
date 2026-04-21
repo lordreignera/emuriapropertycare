@@ -79,9 +79,16 @@
                                     <td>${{ number_format((float)($invoice->total ?? 0), 2) }}</td>
                                     <td>
                                         @if($invoice->status === 'paid')
-                                            <span class="badge bg-success">Sent / Paid</span>
+                                            <span class="badge bg-success">Paid</span>
+                                        @elseif($invoice->status === 'partial')
+                                            <span class="badge bg-primary">Partially Paid</span>
+                                        @elseif($invoice->status === 'overdue')
+                                            <span class="badge bg-danger">Overdue</span>
                                         @else
-                                            <span class="badge bg-warning text-dark">Sent / Not Paid</span>
+                                            <span class="badge bg-warning text-dark">Awaiting Payment</span>
+                                        @endif
+                                        @if((float)($invoice->balance ?? 0) > 0)
+                                            <div class="small text-muted mt-1">Balance: ${{ number_format((float)($invoice->balance ?? 0), 2) }}</div>
                                         @endif
                                     </td>
                                     <td>{{ optional($invoice->due_date)->format('M d, Y') ?? '-' }}</td>

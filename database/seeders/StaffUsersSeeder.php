@@ -39,8 +39,24 @@ class StaffUsersSeeder extends Seeder
             $inspector->syncRoles([$inspectorRole]);
         }
 
+        // Technician
+        $technician = User::updateOrCreate(
+            ['email' => 'technician@emuria.com'],
+            [
+                'name' => 'Technician User',
+                'password' => Hash::make('P@ssw0rd123!'),
+                'email_verified_at' => now(),
+            ]
+        );
+
+        $techRole = Role::where('name', 'Technician')->first();
+        if ($techRole) {
+            $technician->syncRoles([$techRole]);
+        }
+
         $this->command->info('Staff users seeded successfully!');
         $this->command->info('Project Manager: pm@emuria.com / P@ssw0rd123!');
         $this->command->info('Inspector: inspector@emuria.com / P@ssw0rd123!');
+        $this->command->info('Technician: technician@emuria.com / P@ssw0rd123!');
     }
 }

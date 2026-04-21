@@ -13,6 +13,7 @@ class Inspection extends Model
         'project_id',
         'property_id',
         'inspector_id',
+        'technician_id',
         'assigned_by',
         'scheduled_date',
         'completed_date',
@@ -27,6 +28,12 @@ class Inspection extends Model
         'client_signature',
         'client_full_name',
         'client_acknowledgment',
+        'etogo_signed_by',
+        'etogo_signed_at',
+        'planned_start_date',
+        'estimated_duration_days',
+        'target_completion_date',
+        'schedule_blocked_reason',
         'inspection_fee_amount',
         'inspection_fee_status',
         'inspection_fee_paid_at',
@@ -35,6 +42,13 @@ class Inspection extends Model
         'work_payment_cadence',
         'work_payment_paid_at',
         'work_stripe_payment_intent_id',
+        'payment_plan',
+        'installment_months',
+        'installments_paid',
+        'arp_total_locked',
+        'installment_amount',
+        'arp_fully_paid_at',
+        'next_installment_due_date',
         'property_size_psf',
         'estimated_task_hours',
         'minimum_required_hours',
@@ -82,6 +96,19 @@ class Inspection extends Model
         'tus_score',
         'asi_score',
         'asi_rating',
+        // Property snapshot fields (captured at inspection time)
+        'work_schedule',
+        'owner_name',
+        'owner_email',
+        'owner_phone',
+        'property_code',
+        'property_name',
+        'property_address_snapshot',
+        'property_type_snapshot',
+        'residential_units_snapshot',
+        'commercial_sqft_snapshot',
+        'mixed_use_weight_snapshot',
+        'property_year_built',
     ];
 
     protected $casts = [
@@ -92,14 +119,65 @@ class Inspection extends Model
         'photos'          => 'array',
         'approved_by_client' => 'boolean',
         'client_approved_at' => 'datetime',
+        'etogo_signed_by' => 'integer',
+        'etogo_signed_at' => 'datetime',
+        'planned_start_date' => 'date',
+        'estimated_duration_days' => 'integer',
+        'target_completion_date' => 'date',
         'inspection_fee_amount' => 'decimal:2',
         'inspection_fee_paid_at' => 'datetime',
         'work_payment_amount' => 'decimal:2',
         'work_payment_paid_at' => 'datetime',
+        'arp_total_locked' => 'decimal:2',
+        'installment_amount' => 'decimal:2',
+        'arp_fully_paid_at' => 'datetime',
+        'next_installment_due_date' => 'date',
+        'installment_months' => 'integer',
+        'installments_paid' => 'integer',
         'property_size_psf' => 'decimal:2',
         'estimated_task_hours' => 'decimal:2',
         'minimum_required_hours' => 'decimal:2',
+        'work_schedule'       => 'array',
         'bdc_visits_per_year' => 'decimal:2',
+        // Travel BDC numeric fields
+        'bdc_distance_km'        => 'decimal:2',
+        'bdc_time_minutes'       => 'decimal:2',
+        'bdc_rate_per_km'        => 'decimal:2',
+        'bdc_rate_per_minute'    => 'decimal:2',
+        'bdc_per_visit'          => 'decimal:2',
+        'bdc_annual'             => 'decimal:2',
+        'bdc_monthly'            => 'decimal:2',
+        'bdc_per_unit_annual'    => 'decimal:2',
+        // FRLC / FMC
+        'frlc_annual'            => 'decimal:2',
+        'frlc_monthly'           => 'decimal:2',
+        'frlc_per_unit_annual'   => 'decimal:2',
+        'fmc_annual'             => 'decimal:2',
+        'fmc_monthly'            => 'decimal:2',
+        'fmc_per_unit_annual'    => 'decimal:2',
+        // TRC / ARP
+        'trc_annual'             => 'decimal:2',
+        'trc_monthly'            => 'decimal:2',
+        'trc_per_unit_annual'    => 'decimal:2',
+        'arp_monthly'            => 'decimal:2',
+        'labour_hourly_rate'     => 'decimal:2',
+        // Scoring
+        'condition_score'        => 'decimal:2',
+        'tier_score'             => 'decimal:2',
+        'tier_arp'               => 'decimal:2',
+        'tier_final'             => 'decimal:2',
+        'multiplier_final'       => 'decimal:2',
+        'cpi_total_score'        => 'decimal:2',
+        'tus_score'              => 'decimal:2',
+        'asi_score'              => 'decimal:2',
+        // Snapshot / computed totals
+        'arp_equivalent_final'        => 'decimal:2',
+        'base_package_price_snapshot' => 'decimal:2',
+        'scientific_final_monthly'    => 'decimal:2',
+        'scientific_final_annual'     => 'decimal:2',
+        // Per-unit
+        'units_for_calculation'  => 'integer',
+        'final_monthly_per_unit' => 'decimal:2',
     ];
 
     // Relationships
@@ -118,9 +196,19 @@ class Inspection extends Model
         return $this->belongsTo(User::class, 'inspector_id');
     }
 
+    public function technician(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'technician_id');
+    }
+
     public function assignedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_by');
+    }
+
+    public function etogoRepresentative(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'etogo_signed_by');
     }
 
     public function scopeOfWorks(): HasMany
@@ -133,9 +221,19 @@ class Inspection extends Model
         return $this->hasMany(PHARFinding::class);
     }
 
+    public function maintenanceVisitLogs(): HasMany
+    {
+        return $this->hasMany(MaintenanceVisitLog::class);
+    }
+
     public function materials(): HasMany
     {
         return $this->hasMany(InspectionMaterial::class);
+    }
+
+    public function toolAssignments(): HasMany
+    {
+        return $this->hasMany(InspectionToolAssignment::class, 'inspection_id');
     }
 
     // Helper methods

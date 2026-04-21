@@ -43,17 +43,32 @@ Route::middleware([
     Route::post('/properties/{property}/approve', [App\Http\Controllers\PropertyController::class, 'approve'])->name('properties.approve');
     Route::post('/properties/{property}/reject', [App\Http\Controllers\PropertyController::class, 'reject'])->name('properties.reject');
     Route::post('/properties/{property}/assign', [App\Http\Controllers\PropertyController::class, 'assign'])->name('properties.assign');
-    Route::resource('inspections', App\Http\Controllers\InspectionController::class);
+    Route::resource('inspections', App\Http\Controllers\InspectionController::class)
+        ->except(['update', 'destroy']);
     Route::get('/inspections/{inspection}/download-invoice', [App\Http\Controllers\InspectionController::class, 'downloadInvoice'])->name('inspections.download-invoice');
     Route::get('/inspections/{inspection}/work-payment', [App\Http\Controllers\InspectionController::class, 'workPayment'])->name('inspections.work-payment');
     Route::post('/inspections/{inspection}/work-payment', [App\Http\Controllers\InspectionController::class, 'processWorkPayment'])->name('inspections.process-work-payment');
+    Route::post('/inspections/{inspection}/agreement/countersign', [App\Http\Controllers\InspectionController::class, 'countersignAgreement'])->name('inspections.agreement.countersign');
+    Route::post('/inspections/{inspection}/work-schedule', [App\Http\Controllers\InspectionController::class, 'storeWorkSchedule'])->name('inspections.work-schedule.store');
     Route::get('/inspections/{inspection}/phar-data', [App\Http\Controllers\InspectionController::class, 'pharData'])->name('inspections.phar-data');
     Route::post('/inspections/{inspection}/store-phar-data', [App\Http\Controllers\InspectionController::class, 'storePharData'])->name('inspections.store-phar-data');
     Route::post('/inspections/{inspection}/complete-assessment', [App\Http\Controllers\InspectionController::class, 'completeAssessment'])->name('inspections.complete-assessment');
+    Route::get('/inspections/{inspection}/preview-report', [App\Http\Controllers\InspectionController::class, 'previewReport'])->name('inspections.preview-report');
+    Route::get('/inspections/{inspection}/preview-agreement', [App\Http\Controllers\InspectionController::class, 'previewAgreement'])->name('inspections.preview-agreement');
     Route::resource('projects', App\Http\Controllers\ProjectController::class);
     Route::resource('invoices', App\Http\Controllers\InvoiceController::class);
     Route::resource('work-logs', App\Http\Controllers\WorkLogController::class);
     Route::resource('milestones', App\Http\Controllers\MilestoneController::class);
+
+    // Property Maintenance Visit Logs
+    Route::get('/maintenance-visit-logs', [App\Http\Controllers\MaintenanceVisitLogController::class, 'index'])->name('maintenance-visit-logs.index');
+    Route::get('/maintenance-visit-logs/{inspection}', [App\Http\Controllers\MaintenanceVisitLogController::class, 'show'])->name('maintenance-visit-logs.show');
+    Route::post('/maintenance-visit-logs/{inspection}/log', [App\Http\Controllers\MaintenanceVisitLogController::class, 'store'])->name('maintenance-visit-logs.store');
+
+    // Tool Return & Assignment (accessible to all project team roles)
+    Route::get('/tool-assignments', [App\Http\Controllers\ToolAssignmentController::class, 'index'])->name('tool-assignments.index');
+    Route::post('/tool-assignments/{assignment}/assign', [App\Http\Controllers\ToolAssignmentController::class, 'assignQuantity'])->name('tool-assignments.assign');
+    Route::post('/tool-assignments/{assignment}/return', [App\Http\Controllers\ToolAssignmentController::class, 'markReturned'])->name('tool-assignments.return');
     Route::resource('budgets', App\Http\Controllers\BudgetController::class);
     Route::resource('change-orders', App\Http\Controllers\ChangeOrderController::class);
     Route::resource('communications', App\Http\Controllers\CommunicationController::class);
@@ -112,6 +127,10 @@ Route::middleware([
             ->name('inspections.work-payment');
         Route::post('/inspections/{inspection}/work-payment', [App\Http\Controllers\Client\InspectionController::class, 'processWorkPayment'])
             ->name('inspections.process-work-payment');
+        Route::get('/inspections/{inspection}/installment', [App\Http\Controllers\Client\InspectionController::class, 'payInstallment'])
+            ->name('inspections.pay-installment');
+        Route::post('/inspections/{inspection}/installment', [App\Http\Controllers\Client\InspectionController::class, 'processInstallment'])
+            ->name('inspections.process-installment');
 
         // Schedule & pay for inspection
         Route::get('/inspections/{property}/schedule', [App\Http\Controllers\Client\InspectionController::class, 'scheduleCreate'])
@@ -194,7 +213,9 @@ Route::middleware([
         Route::resource('finding-template-settings', App\Http\Controllers\Admin\FindingTemplateSettingController::class)->except(['show'])->names('finding-template-settings');
         Route::post('recommendation-settings/reload-defaults', [App\Http\Controllers\Admin\RecommendationSettingController::class, 'reloadDefaults'])->name('recommendation-settings.reload-defaults');
         Route::resource('recommendation-settings', App\Http\Controllers\Admin\RecommendationSettingController::class)->except(['show'])->names('recommendation-settings');
-        Route::resource('tool-settings', App\Http\Controllers\Admin\ToolSettingController::class)->except(['show'])->names('tool-settings');
+        Route::resource('tool-settings', App\Http\Controllers\Admin\ToolSettingController::class)->except(['show'])->names('tool-settings')->parameters(['tool-settings' => 'toolSetting']);
+        Route::get('tool-settings/{toolSetting}/logs', [App\Http\Controllers\Admin\ToolSettingController::class, 'logs'])->name('tool-settings.logs');
+        Route::post('tool-assignments/{assignment}/return', [App\Http\Controllers\Admin\ToolSettingController::class, 'markReturned'])->name('admin-tool-assignments.return');
         Route::resource('systems', App\Http\Controllers\Admin\SystemController::class)->except(['show'])->names('systems');
         Route::resource('subsystems', App\Http\Controllers\Admin\SubsystemController::class)->except(['show'])->names('subsystems');
         

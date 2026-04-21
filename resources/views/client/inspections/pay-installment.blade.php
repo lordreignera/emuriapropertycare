@@ -1,52 +1,43 @@
 @extends('client.layout')
 
-@section('title', 'Pay to Start Work')
+@section('title', 'Pay for Visit {{ $installmentNumber }}')
 
 @section('content')
 <div class="row justify-content-center">
     <div class="col-lg-7">
-
-        {{-- Plan toggle --}}
-        <div class="card mb-3">
-            <div class="card-body py-3">
-                <p class="text-center text-muted small mb-2">Total project cost: <strong>${{ number_format($arpTotal, 2) }}</strong> &bull; {{ $totalVisits }} visit(s) required</p>
-                <div class="d-flex justify-content-center gap-2">
-                    <a href="{{ route('client.inspections.work-payment', ['inspection' => $inspection->id, 'plan' => 'full']) }}"
-                       class="btn {{ $plan === 'full' ? 'btn-success' : 'btn-outline-success' }} px-4">
-                        <i class="mdi mdi-cash-check me-1"></i>
-                        Pay in Full<br>
-                        <small>${{ number_format($arpTotal, 2) }} once</small>
-                    </a>
-                    <a href="{{ route('client.inspections.work-payment', ['inspection' => $inspection->id, 'plan' => 'per_visit']) }}"
-                       class="btn {{ $plan === 'per_visit' ? 'btn-primary' : 'btn-outline-primary' }} px-4">
-                        <i class="mdi mdi-calendar-check me-1"></i>
-                        Pay Per Visit<br>
-                        <small>${{ number_format($perVisit, 2) }}/visit &times; {{ $totalVisits }}</small>
-                    </a>
-                </div>
-            </div>
-        </div>
-
         <div class="card">
-            <div class="card-header {{ $plan === 'full' ? 'bg-success' : 'bg-primary' }} text-white">
+            <div class="card-header bg-primary text-white">
                 <h5 class="mb-0">
                     <i class="mdi mdi-lock me-2"></i>
-                    {{ $plan === 'full' ? 'Pay in Full' : 'Per-Visit Payment Plan' }}
+                    Visit {{ $installmentNumber }} of {{ $totalInstallments }} — Payment
                 </h5>
             </div>
             <div class="card-body">
+
+                {{-- Visit Progress Bar --}}
+                @php
+                    $progressPct = round((($installmentNumber - 1) / $totalInstallments) * 100);
+                @endphp
+                <div class="mb-4">
+                    <div class="d-flex justify-content-between small text-muted mb-1">
+                        <span>{{ $installmentNumber - 1 }} of {{ $totalInstallments }} visits paid</span>
+                        <span>${{ number_format($amountPaidSoFar, 2) }} / ${{ number_format($arpTotal, 2) }}</span>
+                    </div>
+                    <div class="progress" style="height:10px;">
+                        <div class="progress-bar bg-primary" style="width:{{ $progressPct }}%;"></div>
+                    </div>
+                </div>
+
                 <div class="alert alert-info">
                     <strong>Property:</strong> {{ $inspection->property?->property_name }}<br>
                     <strong>Total Project Cost:</strong> ${{ number_format($arpTotal, 2) }}<br>
-                    <strong>Visits Required:</strong> {{ $totalVisits }}<br>
-                    @if($plan === 'full')
-                        <strong>Amount due now:</strong> <span class="fs-5 text-success">${{ number_format($chargeAmount, 2) }}</span>
-                        <br><small class="text-muted">Full cost settled in one payment. Work starts immediately.</small>
-                    @else
-                        <strong>Cost per visit (visit 1 of {{ $totalVisits }}):</strong>
-                        <span class="fs-5 text-primary">${{ number_format($chargeAmount, 2) }}</span>
-                        <br><small class="text-muted">Pay ${{ number_format($perVisit, 2) }} before each visit &times; {{ $totalVisits }} visits. Work starts after this first payment.</small>
-                    @endif
+                    <strong>This visit (#{{ $installmentNumber }}) cost:</strong>
+                    <span class="fs-5 text-primary">${{ number_format($installAmount, 2) }}</span><br>
+                    <small class="text-muted">
+                        Remaining after this payment:
+                        ${{ number_format(max(0, $arpTotal - $amountPaidSoFar - $installAmount), 2) }}
+                        ({{ $totalInstallments - $installmentNumber }} visit(s) left)
+                    </small>
                 </div>
 
                 @if(app()->environment('local', 'development'))
@@ -55,7 +46,7 @@
                 </div>
                 @endif
 
-                <form id="work-payment-form">
+                <form id="installment-payment-form">
                     @csrf
                     <div class="mb-3">
                         <label class="form-label">Card Details</label>
@@ -65,18 +56,18 @@
 
                     <div class="d-flex justify-content-between">
                         <a href="{{ route('client.inspections.report', $inspection->id) }}" class="btn btn-secondary">Back</a>
-                        <button type="submit" id="submit-button" class="btn {{ $plan === 'full' ? 'btn-success' : 'btn-primary' }}">
+                        <button type="submit" id="submit-button" class="btn btn-primary">
                             <span id="button-text">
                                 <i class="mdi mdi-lock me-1"></i>
-                                {{ $plan === 'full' ? 'Pay $'.number_format($chargeAmount, 2).' & Start Work' : 'Pay $'.number_format($chargeAmount, 2).' (Visit 1 of '.$totalVisits.')' }}
+                                Pay ${{ number_format($installAmount, 2) }} (Visit {{ $installmentNumber }})
                             </span>
                             <span id="spinner" class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
                         </button>
                     </div>
                 </form>
+
             </div>
         </div>
-
     </div>
 </div>
 @endsection
@@ -93,7 +84,7 @@
         document.getElementById('card-errors').textContent = event.error ? event.error.message : '';
     });
 
-    const form = document.getElementById('work-payment-form');
+    const form = document.getElementById('installment-payment-form');
     const submitButton = document.getElementById('submit-button');
     const buttonText = document.getElementById('button-text');
     const spinner = document.getElementById('spinner');
@@ -117,17 +108,14 @@
             return;
         }
 
-        const response = await fetch('{{ route('client.inspections.process-work-payment', $inspection->id) }}', {
+        const response = await fetch('{{ route('client.inspections.process-installment', $inspection->id) }}', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 'X-CSRF-TOKEN': '{{ csrf_token() }}',
                 'Accept': 'application/json'
             },
-            body: JSON.stringify({
-                payment_intent_id: paymentIntent.id,
-                plan: '{{ $plan }}'
-            })
+            body: JSON.stringify({ payment_intent_id: paymentIntent.id })
         });
 
         const data = await response.json();

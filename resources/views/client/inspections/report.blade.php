@@ -3,6 +3,13 @@
 @section('title', 'Inspection Report & Pricing Breakdown')
 
 @section('content')
+@if(session('adminPreview') || isset($adminPreview))
+<div class="alert alert-warning border-warning mb-3 no-print" role="alert" style="border-left:4px solid #f0ad4e;">
+    <i class="mdi mdi-eye me-2"></i>
+    <strong>ADMIN PREVIEW MODE</strong> — This is how the client will see their report. No client actions are active.
+    <a href="javascript:window.close()" class="btn btn-sm btn-warning ms-3">Close Preview</a>
+</div>
+@endif
 <div class="row">
     <div class="col-lg-12 grid-margin stretch-card">
         <div class="card">
@@ -103,9 +110,27 @@
                                         <th>Work Payment:</th>
                                         <td>
                                             @if(($inspection->work_payment_status ?? 'pending') === 'paid')
-                                                <span class="badge bg-success">Paid ({{ ucfirst($inspection->work_payment_cadence ?? 'monthly') }})</span>
+                                                <span class="badge bg-success">Paid ({{ $inspection->work_payment_cadence === 'per_visit' ? 'Per Visit' : 'In Full' }})</span>
                                             @else
                                                 <span class="badge bg-warning text-dark">Pending</span>
+                                            @endif
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <th>Planned Start:</th>
+                                        <td>{{ optional($inspection->planned_start_date)->format('M d, Y') ?? 'Pending' }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Target Completion:</th>
+                                        <td>{{ optional($inspection->target_completion_date)->format('M d, Y') ?? 'Pending' }}</td>
+                                    </tr>
+                                    <tr>
+                                        <th>Etogo Countersign:</th>
+                                        <td>
+                                            @if($inspection->etogo_signed_at)
+                                                <span class="badge bg-success">Signed</span>
+                                            @else
+                                                <span class="badge bg-secondary">Awaiting</span>
                                             @endif
                                         </td>
                                     </tr>
@@ -463,17 +488,17 @@
                                     </tbody>
                                     <tfoot>
                                         @php
-                                            $rptPaymentMode = $inspection->work_payment_cadence === 'monthly' ? 'monthly' : 'lump_sum';
-                                            $rptFinalCharge = (float)($inspection->final_charge ?? ($rptPaymentMode === 'monthly' ? $arpMonthlyTotal : ($inspection->trc_annual ?? 0)));
+                                            $rptPaymentMode = $inspection->work_payment_cadence === 'per_visit' ? 'per_visit' : 'lump_sum';
+                                            $rptFinalCharge = (float)($inspection->trc_annual ?? 0);
                                         @endphp
                                         <tr style="background:#198754;color:white;">
-                                            <td><strong>Final Charge <small style="font-weight:normal;opacity:.85;">({{ $rptPaymentMode === 'monthly' ? 'Monthly' : 'Lump Sum' }})</small></strong></td>
-                                            <td class="text-end"><strong>${{ number_format($rptFinalCharge, 2) }}{{ $rptPaymentMode === 'monthly' ? '/mo' : ' total' }}</strong></td>
+                                            <td><strong>Total Project Cost</strong></td>
+                                            <td class="text-end"><strong>${{ number_format($rptFinalCharge, 2) }}</strong></td>
                                         </tr>
                                     </tfoot>
                                 </table>
                             </div>
-                            <p class="text-muted small mt-1"><strong>Final Charge</strong> = {{ $rptPaymentMode === 'monthly' ? 'TRC ÷ 12 (client pays monthly)' : 'Full TRC paid at once (lump sum)' }}.</p>
+                            <p class="text-muted small mt-1"><strong>Total Project Cost</strong> = BDC + FRLC + FMC. Payment is {{ $rptPaymentMode === 'per_visit' ? 'per visit ('.($inspection->bdc_visits_per_year ?? 1).' visits)' : 'in full' }}.</p>
                         </div>
                         @endif
 
@@ -563,21 +588,143 @@
 
                 <!-- Work Payment (if not yet paid) -->
                 @if($inspection->status === 'completed' && ($inspection->work_payment_status ?? 'pending') !== 'paid')
+                @php
+                    $rptFullAmt  = (float) ($inspection->trc_annual ?? max(
+                        $inspection->scientific_final_monthly ?? 0,
+                        $inspection->arp_equivalent_final ?? 0,
+                        $inspection->arp_monthly ?? 0,
+                        $inspection->trc_monthly ?? 0,
+                    ) * 12);
+                    $rptVisits   = max(1, (int) ($inspection->bdc_visits_per_year ?? 1));
+                    $rptPerVisit = $rptVisits > 0 ? round($rptFullAmt / $rptVisits, 2) : 0;
+                @endphp
                 <div class="card mb-4 border-success">
                     <div class="card-header bg-success text-white">
                         <h5 class="mb-0"><i class="mdi mdi-credit-card me-2"></i>Start Remediation Work</h5>
                     </div>
                     <div class="card-body">
-                        <p class="mb-3">Your inspection is complete. You can now initiate the remediation work by making a payment.</p>
-                        <div class="d-flex gap-2 no-print">
-                            <a href="{{ route('client.inspections.work-payment', ['inspection' => $inspection->id, 'cadence' => 'monthly']) }}" class="btn btn-success">
-                                <i class="mdi mdi-credit-card me-1"></i>Pay Monthly (${{ number_format($inspection->arp_monthly ?? 0, 2) }}/mo)
+                        <p class="mb-2">Your inspection is complete. Total project cost: <strong>${{ number_format($rptFullAmt, 2) }}</strong> across <strong>{{ $rptVisits }} visit(s)</strong>.</p>
+                        <div class="d-flex gap-2 flex-wrap no-print">
+                            <a href="{{ route('client.inspections.work-payment', ['inspection' => $inspection->id, 'plan' => 'full']) }}" class="btn btn-success">
+                                <i class="mdi mdi-cash-check me-1"></i>Pay in Full (${{ number_format($rptFullAmt, 2) }})
                             </a>
-                            <a href="{{ route('client.inspections.work-payment', ['inspection' => $inspection->id, 'cadence' => 'annual']) }}" class="btn btn-outline-success">
-                                <i class="mdi mdi-credit-card-settings me-1"></i>Pay Annual (${{ number_format(($inspection->arp_monthly ?? 0) * 12, 2) }}/yr)
+                            <a href="{{ route('client.inspections.work-payment', ['inspection' => $inspection->id, 'plan' => 'per_visit']) }}" class="btn btn-outline-primary">
+                                <i class="mdi mdi-calendar-check me-1"></i>Pay Per Visit (${{ number_format($rptPerVisit, 2) }}/visit &times; {{ $rptVisits }})
                             </a>
                         </div>
                     </div>
+                </div>
+                @endif
+
+                {{-- Per-visit payment progress tracker (shown after work starts on per_visit plan) --}}
+                @if(
+                    ($inspection->work_payment_status ?? 'pending') === 'paid'
+                    && ($inspection->payment_plan ?? 'full') === 'per_visit'
+                    && !$inspection->arp_fully_paid_at
+                )
+                @php
+                    $instPaid   = (int) ($inspection->installments_paid ?? 0);
+                    $instTotal  = (int) ($inspection->installment_months ?? 1);
+                    $instAmt    = (float) ($inspection->installment_amount ?? 0);
+                    $instArpTot = (float) ($inspection->arp_total_locked ?? 0);
+                    $instPaidAmt = round($instAmt * $instPaid, 2);
+                    $instRemaining = max(0, $instArpTot - $instPaidAmt);
+                    $instPct = $instTotal > 0 ? round(($instPaid / $instTotal) * 100) : 0;
+                @endphp
+                <div class="card mb-4 border-primary">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="mdi mdi-calendar-clock me-2"></i>Visit Payment Progress</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between small text-muted mb-1">
+                            <span>{{ $instPaid }} of {{ $instTotal }} visits paid</span>
+                            <span>${{ number_format($instPaidAmt, 2) }} of ${{ number_format($instArpTot, 2) }}</span>
+                        </div>
+                        <div class="progress mb-3" style="height:12px;">
+                            <div class="progress-bar bg-primary" style="width:{{ $instPct }}%;"></div>
+                        </div>
+                        <div class="row text-center mb-3">
+                            <div class="col-4">
+                                <div class="fw-bold text-success">${{ number_format($instPaidAmt, 2) }}</div>
+                                <small class="text-muted">Paid so far</small>
+                            </div>
+                            <div class="col-4">
+                                <div class="fw-bold text-primary">${{ number_format($instAmt, 2) }}</div>
+                                <small class="text-muted">Per visit</small>
+                            </div>
+                            <div class="col-4">
+                                <div class="fw-bold text-danger">${{ number_format($instRemaining, 2) }}</div>
+                                <small class="text-muted">Remaining</small>
+                            </div>
+                        </div>
+                        <div class="no-print">
+                            <a href="{{ route('client.inspections.pay-installment', $inspection->id) }}" class="btn btn-primary">
+                                <i class="mdi mdi-credit-card me-1"></i>
+                                Pay Visit {{ $instPaid + 1 }} of {{ $instTotal }} (${{ number_format($instAmt, 2) }})
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                @endif
+
+                {{-- Fully paid badge --}}
+                @if(($inspection->work_payment_status ?? 'pending') === 'paid' && $inspection->arp_fully_paid_at)
+                <div class="alert alert-success mb-4">
+                    <i class="mdi mdi-check-circle me-2"></i>
+                    <strong>Project Cost Fully Paid</strong> — Settled on
+                    {{ \Carbon\Carbon::parse($inspection->arp_fully_paid_at)->format('M d, Y') }}.
+                </div>
+                @endif
+
+                {{-- Work Visit Schedule --}}
+                @php
+                    $clientSchedule = collect($inspection->work_schedule ?? [])->sortBy('date')->values();
+                @endphp
+                @if($clientSchedule->isNotEmpty())
+                <div class="card mb-4">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0"><i class="mdi mdi-calendar-check me-2"></i>Work Visit Schedule</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small mb-3">
+                            All visits are scheduled <strong>Monday – Friday, 9:00 AM – 5:00 PM</strong>.
+                            Please ensure site access and utilities are available on each visit date.
+                        </p>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-bordered">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Date</th>
+                                        <th>Day</th>
+                                        <th>Hours</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($clientSchedule as $csIdx => $csVisit)
+                                    @php $csStatus = $csVisit['status'] ?? 'scheduled'; @endphp
+                                    <tr class="{{ $csStatus === 'completed' ? 'table-success' : '' }}">
+                                        <td>{{ $csIdx + 1 }}</td>
+                                        <td>{{ \Carbon\Carbon::parse($csVisit['date'])->format('M d, Y') }}</td>
+                                        <td>{{ \Carbon\Carbon::parse($csVisit['date'])->format('l') }}</td>
+                                        <td>9:00 AM – 5:00 PM</td>
+                                        <td>
+                                            <span class="badge bg-{{ $csStatus === 'completed' ? 'success' : ($csStatus === 'cancelled' ? 'danger' : 'secondary') }} text-capitalize">
+                                                {{ $csStatus }}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                @elseif($inspection->etogo_signed_at)
+                <div class="alert alert-info mb-4">
+                    <i class="mdi mdi-calendar-clock me-2"></i>
+                    <strong>Visit Schedule Pending</strong> — Your work visit dates are being finalised by the Etogo team. You will see them here once confirmed.
                 </div>
                 @endif
 

@@ -100,7 +100,14 @@
                                         @if(($completedInspection->work_payment_status ?? 'pending') === 'paid')
                                             <div class="small mt-1 text-success">
                                                 <i class="mdi mdi-check-circle-outline me-1"></i>
-                                                Work Payment: Paid ({{ ucfirst($completedInspection->work_payment_cadence ?? 'monthly') }})
+                                                Work Payment: Paid
+                                                @if(($completedInspection->work_payment_cadence ?? '') === 'per_visit')
+                                                    (Per Visit)
+                                                @elseif(($completedInspection->work_payment_cadence ?? '') === 'full')
+                                                    (In Full)
+                                                @else
+                                                    ({{ ucfirst($completedInspection->work_payment_cadence ?? '') }})
+                                                @endif
                                             </div>
                                         @else
                                             <div class="small mt-1 text-warning">
@@ -131,73 +138,94 @@
                                     @endif
                                 </td>
                                 <td>
-                                    <div class="d-flex gap-2 justify-content-end">
-                                        <a href="{{ route('client.properties.show', $property->id) }}" 
-                                           class="btn btn-sm btn-outline-info" 
+                                    <div class="d-flex gap-1 justify-content-end flex-nowrap">
+                                        {{-- View --}}
+                                        <a href="{{ route('client.properties.show', $property->id) }}"
+                                           class="btn btn-sm btn-outline-info action-btn"
                                            title="View Details"
                                            data-bs-toggle="tooltip">
                                             <i class="mdi mdi-eye"></i>
                                         </a>
 
                                         @if(!$hasScheduledInspection)
-                                            {{-- Show Schedule button if inspection not yet paid --}}
-                                            <a href="{{ route('client.inspections.schedule', $property->id) }}" 
-                                               class="btn btn-sm btn-success" 
+                                            {{-- Schedule inspection --}}
+                                            <a href="{{ route('client.inspections.schedule', $property->id) }}"
+                                               class="btn btn-sm btn-success action-btn"
                                                title="Schedule Inspection & Pay"
                                                data-bs-toggle="tooltip">
                                                 <i class="mdi mdi-calendar-check me-1"></i> Schedule
                                             </a>
                                         @elseif($completedInspection)
+                                            {{-- Report --}}
                                             <a href="{{ route('client.inspections.report', $completedInspection->id) }}"
-                                               class="btn btn-sm btn-primary"
+                                               class="btn btn-sm btn-primary action-btn"
                                                title="View Inspection Report"
                                                data-bs-toggle="tooltip">
                                                 <i class="mdi mdi-file-document-outline me-1"></i> Report
                                             </a>
 
                                             @if(($completedInspection->work_payment_status ?? 'pending') !== 'paid')
-                                                <a href="{{ route('client.inspections.work-payment', ['inspection' => $completedInspection->id, 'cadence' => 'monthly']) }}"
-                                                   class="btn btn-sm btn-success"
-                                                   title="Pay Monthly"
-                                                   data-bs-toggle="tooltip">
-                                                    <i class="mdi mdi-credit-card me-1"></i> Pay Monthly
-                                                </a>
-                                                <a href="{{ route('client.inspections.work-payment', ['inspection' => $completedInspection->id, 'cadence' => 'annual']) }}"
-                                                   class="btn btn-sm btn-outline-success"
-                                                   title="Pay Annual"
-                                                   data-bs-toggle="tooltip">
-                                                    <i class="mdi mdi-credit-card-settings me-1"></i> Pay Annual
-                                                </a>
+                                                {{-- Payment dropdown --}}
+                                                <div class="btn-group" role="group">
+                                                    <button type="button"
+                                                            class="btn btn-sm btn-success action-btn dropdown-toggle"
+                                                            data-bs-toggle="dropdown"
+                                                            aria-expanded="false"
+                                                            title="Choose payment plan">
+                                                        <i class="mdi mdi-credit-card me-1"></i> Pay
+                                                    </button>
+                                                    <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+                                                        <li>
+                                                            <a class="dropdown-item"
+                                                               href="{{ route('client.inspections.work-payment', ['inspection' => $completedInspection->id, 'plan' => 'per_visit']) }}">
+                                                                <i class="mdi mdi-calendar-sync me-2 text-success"></i>
+                                                                <strong>Pay Per Visit</strong>
+                                                                <div class="text-muted small">Split across {{ $completedInspection->bdc_visits_per_year ?? '—' }} visits</div>
+                                                            </a>
+                                                        </li>
+                                                        <li><hr class="dropdown-divider"></li>
+                                                        <li>
+                                                            <a class="dropdown-item"
+                                                               href="{{ route('client.inspections.work-payment', ['inspection' => $completedInspection->id, 'plan' => 'full']) }}">
+                                                                <i class="mdi mdi-credit-card-check me-2 text-primary"></i>
+                                                                <strong>Pay in Full</strong>
+                                                                <div class="text-muted small">Single annual payment</div>
+                                                            </a>
+                                                        </li>
+                                                    </ul>
+                                                </div>
                                             @else
-                                                <button class="btn btn-sm btn-outline-success" disabled>
+                                                <button class="btn btn-sm btn-outline-success action-btn" disabled>
                                                     <i class="mdi mdi-check-circle me-1"></i> Paid
                                                 </button>
                                             @endif
                                         @else
-                                            {{-- Inspection already scheduled and paid --}}
-                                            <button class="btn btn-sm btn-outline-success" 
+                                            {{-- Awaiting inspection completion --}}
+                                            <button class="btn btn-sm btn-outline-success action-btn"
                                                     title="Inspection Scheduled"
                                                     data-bs-toggle="tooltip"
                                                     disabled>
                                                 <i class="mdi mdi-check-circle me-1"></i> Scheduled
                                             </button>
                                         @endif
-                                        
-                                        <a href="{{ route('client.properties.edit', $property->id) }}" 
-                                           class="btn btn-sm btn-outline-warning" 
+
+                                        {{-- Edit --}}
+                                        <a href="{{ route('client.properties.edit', $property->id) }}"
+                                           class="btn btn-sm btn-outline-warning action-btn"
                                            title="Edit Property"
                                            data-bs-toggle="tooltip">
                                             <i class="mdi mdi-pencil"></i>
                                         </a>
-                                        
-                                        <form action="{{ route('client.properties.destroy', $property->id) }}" 
-                                              method="POST" 
+
+                                        {{-- Delete --}}
+                                        <form action="{{ route('client.properties.destroy', $property->id) }}"
+                                              method="POST"
                                               onsubmit="return confirm('Are you sure you want to delete this property?');"
                                               class="d-inline">
                                             @csrf
                                             @method('DELETE')
-                                            <button type="submit" 
-                                                    class="btn btn-sm btn-outline-danger" 
+                                            <button type="submit"
+                                                    class="btn btn-sm btn-outline-danger action-btn"
                                                     title="Delete Property"
                                                     data-bs-toggle="tooltip">
                                                 <i class="mdi mdi-delete"></i>
@@ -229,6 +257,29 @@
 </div>
 @endsection
 
+@push('styles')
+<style>
+    .action-btn {
+        min-width: 2.1rem;
+        height: 2rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding-left: .5rem;
+        padding-right: .5rem;
+        font-size: .8rem;
+        white-space: nowrap;
+    }
+    .action-btn.dropdown-toggle {
+        padding-right: .65rem;
+    }
+    /* Keep the dropdown menu above DataTables overflow */
+    #propertiesTable .btn-group .dropdown-menu {
+        z-index: 1050;
+    }
+</style>
+@endpush
+
 @push('scripts')
 <script>
 $(document).ready(function() {
@@ -253,13 +304,12 @@ $(document).ready(function() {
         },
         "columnDefs": [
             { "orderable": false, "targets": [5, 6] } // Disable sorting for Photos and Actions columns
-        ]
-    });
-    
-    // Initialize Bootstrap tooltips
-    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-        return new bootstrap.Tooltip(tooltipTriggerEl);
+        ],
+        "drawCallback": function() {
+            // Re-init tooltips after DataTable redraws
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+            tooltipTriggerList.map(function(el) { return new bootstrap.Tooltip(el); });
+        }
     });
     @endif
 });

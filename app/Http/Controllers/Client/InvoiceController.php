@@ -6,11 +6,16 @@ use App\Http\Controllers\Controller;
 use App\Models\Inspection;
 use App\Models\Invoice;
 use App\Models\Property;
+use App\Services\InspectionInvoiceSyncService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Support\Facades\Auth;
 
 class InvoiceController extends Controller
 {
+    public function __construct(private readonly InspectionInvoiceSyncService $inspectionInvoiceSyncService)
+    {
+    }
+
     public function index()
     {
         $user = Auth::user();
@@ -40,25 +45,25 @@ class InvoiceController extends Controller
 
         $inspection = $this->resolveInspectionForInvoice($invoice);
 
-        $bdcMonthly = (float) ($inspection->bdc_monthly ?? 0);
-        $frlcMonthly = (float) ($inspection->frlc_monthly ?? 0);
-        $fmcMonthly = (float) ($inspection->fmc_monthly ?? 0);
-        $trcMonthly = (float) ($inspection->trc_monthly ?? 0);
+        $bdcAnnual = (float) ($inspection->bdc_annual ?? 0);
+        $frlcAnnual = (float) ($inspection->frlc_annual ?? 0);
+        $fmcAnnual = (float) ($inspection->fmc_annual ?? 0);
+        $trcAnnual = (float) ($inspection->trc_annual ?? 0);
 
         $scientificFinal = (float) ($inspection->scientific_final_monthly ?? 0);
         $arpEquivalentFinal = (float) ($inspection->arp_equivalent_final ?? 0);
         $basePackageFloor = (float) ($inspection->base_package_price_snapshot ?? 0);
 
         $invoiceTotal = (float) ($invoice->total ?? 0);
-        $otherAdjustment = max(0, $invoiceTotal - $trcMonthly);
+        $otherAdjustment = max(0, $invoiceTotal - $trcAnnual);
 
         return view('client.invoices.show', compact(
             'invoice',
             'inspection',
-            'bdcMonthly',
-            'frlcMonthly',
-            'fmcMonthly',
-            'trcMonthly',
+            'bdcAnnual',
+            'frlcAnnual',
+            'fmcAnnual',
+            'trcAnnual',
             'scientificFinal',
             'arpEquivalentFinal',
             'basePackageFloor',
@@ -78,20 +83,20 @@ class InvoiceController extends Controller
         $invoice->load(['project.property']);
         $inspection = $this->resolveInspectionForInvoice($invoice);
 
-        $bdcMonthly = (float) ($inspection->bdc_monthly ?? 0);
-        $frlcMonthly = (float) ($inspection->frlc_monthly ?? 0);
-        $fmcMonthly = (float) ($inspection->fmc_monthly ?? 0);
-        $trcMonthly = (float) ($inspection->trc_monthly ?? 0);
+        $bdcAnnual = (float) ($inspection->bdc_annual ?? 0);
+        $frlcAnnual = (float) ($inspection->frlc_annual ?? 0);
+        $fmcAnnual = (float) ($inspection->fmc_annual ?? 0);
+        $trcAnnual = (float) ($inspection->trc_annual ?? 0);
         $invoiceTotal = (float) ($invoice->total ?? 0);
-        $otherAdjustment = max(0, $invoiceTotal - $trcMonthly);
+        $otherAdjustment = max(0, $invoiceTotal - $trcAnnual);
 
         $pdf = Pdf::loadView('client.invoices.pdf', compact(
             'invoice',
             'inspection',
-            'bdcMonthly',
-            'frlcMonthly',
-            'fmcMonthly',
-            'trcMonthly',
+            'bdcAnnual',
+            'frlcAnnual',
+            'fmcAnnual',
+            'trcAnnual',
             'otherAdjustment',
             'invoiceTotal'
         ))
@@ -122,62 +127,7 @@ class InvoiceController extends Controller
             ->get();
 
         foreach ($inspections as $inspection) {
-            $projectId = (int) ($inspection->project_id ?? 0);
-            if ($projectId <= 0) {
-                continue;
-            }
-
-            $existingInvoice = Invoice::where('user_id', $userId)
-                ->where('project_id', $projectId)
-                ->where('type', 'project')
-                ->first();
-
-            if ($existingInvoice) {
-                continue;
-            }
-
-            $monthlyAmount = (float) max(
-                (float) ($inspection->scientific_final_monthly ?? 0),
-                (float) ($inspection->arp_equivalent_final ?? 0),
-                (float) ($inspection->base_package_price_snapshot ?? 0),
-                (float) ($inspection->trc_monthly ?? 0)
-            );
-
-            if ($monthlyAmount <= 0) {
-                continue;
-            }
-
-            $invoiceNumber = 'INV-' . now()->format('Ymd') . '-' . $inspection->id;
-            $counter = 1;
-            while (Invoice::where('invoice_number', $invoiceNumber)->exists()) {
-                $invoiceNumber = 'INV-' . now()->format('Ymd') . '-' . $inspection->id . '-' . $counter;
-                $counter++;
-            }
-
-            Invoice::create([
-                'invoice_number' => $invoiceNumber,
-                'project_id' => $projectId,
-                'user_id' => $userId,
-                'type' => 'project',
-                'subtotal' => $monthlyAmount,
-                'tax' => 0,
-                'total' => $monthlyAmount,
-                'paid_amount' => 0,
-                'balance' => $monthlyAmount,
-                'status' => 'sent',
-                'issue_date' => now()->toDateString(),
-                'due_date' => now()->addDays(14)->toDateString(),
-                'line_items' => [
-                    [
-                        'description' => 'Inspection Service - ' . ($inspection->property?->property_name ?? 'Property'),
-                        'inspection_id' => $inspection->id,
-                        'quantity' => 1,
-                        'unit_price' => $monthlyAmount,
-                        'total' => $monthlyAmount,
-                    ],
-                ],
-                'notes' => 'Auto-generated from completed inspection #' . $inspection->id,
-            ]);
+            $this->inspectionInvoiceSyncService->syncProjectInvoice($inspection);
         }
     }
 
@@ -197,63 +147,7 @@ class InvoiceController extends Controller
             ->get();
 
         foreach ($inspections as $inspection) {
-            $projectId = (int) ($inspection->project_id ?? 0);
-            if ($projectId <= 0) {
-                continue;
-            }
-
-            $existingInvoice = Invoice::where('user_id', $userId)
-                ->where('project_id', $projectId)
-                ->where('type', 'additional')
-                ->get()
-                ->first(function (Invoice $invoice) use ($inspection) {
-                    return (int) data_get($invoice->line_items, '0.inspection_id') === (int) $inspection->id;
-                });
-
-            if ($existingInvoice) {
-                continue;
-            }
-
-            $amount = (float) ($inspection->inspection_fee_amount ?? 0);
-            if ($amount <= 0) {
-                continue;
-            }
-
-            $invoiceNumber = 'INV-INSP-' . now()->format('Ymd') . '-' . $inspection->id;
-            $counter = 1;
-            while (Invoice::where('invoice_number', $invoiceNumber)->exists()) {
-                $invoiceNumber = 'INV-INSP-' . now()->format('Ymd') . '-' . $inspection->id . '-' . $counter;
-                $counter++;
-            }
-
-            $isPaid = ($inspection->inspection_fee_status ?? 'pending') === 'paid';
-
-            Invoice::create([
-                'invoice_number' => $invoiceNumber,
-                'project_id' => $projectId,
-                'user_id' => $userId,
-                'type' => 'additional',
-                'subtotal' => $amount,
-                'tax' => 0,
-                'total' => $amount,
-                'paid_amount' => $isPaid ? $amount : 0,
-                'balance' => $isPaid ? 0 : $amount,
-                'status' => $isPaid ? 'paid' : 'sent',
-                'issue_date' => optional($inspection->inspection_fee_paid_at)->toDateString() ?? now()->toDateString(),
-                'due_date' => $isPaid
-                    ? (optional($inspection->inspection_fee_paid_at)->toDateString() ?? now()->toDateString())
-                    : now()->addDays(14)->toDateString(),
-                'line_items' => [
-                    [
-                        'description' => 'Pre-Inspection Fee - ' . ($inspection->property?->property_name ?? 'Property'),
-                        'inspection_id' => $inspection->id,
-                        'quantity' => 1,
-                        'unit_price' => $amount,
-                        'total' => $amount,
-                    ],
-                ],
-                'notes' => 'Auto-generated pre-inspection fee invoice for inspection #' . $inspection->id,
-            ]);
+            $this->inspectionInvoiceSyncService->syncInspectionFeeInvoice($inspection);
         }
     }
 

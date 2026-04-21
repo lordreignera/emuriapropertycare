@@ -41,14 +41,14 @@
 
     $agreementLabour = $agreementLabourFromFindings > 0
         ? $agreementLabourFromFindings
-        : (float) ($agreementInspection->frlc_annual ?? $agreementInspection->arl_total ?? 0);
+        : (float) ($agreementInspection->frlc_annual ?? 0);
 
     $agreementMaterials = $agreementMaterialsFromFindings > 0
         ? $agreementMaterialsFromFindings
-        : (float) ($agreementInspection->fmc_annual ?? $agreementInspection->arm_total ?? 0);
+        : (float) ($agreementInspection->fmc_annual ?? 0);
 
-    $agreementTools = (float) ($agreementInspection->tool_cost_calculated ?? $agreementInspection->bdc_annual ?? 0);
-    $agreementTotal = (float) ($agreementInspection->trc_annual ?? ($agreementInspection->final_charge ?? 0));
+    $agreementTools = (float) ($agreementInspection->bdc_annual ?? 0);
+    $agreementTotal = (float) ($agreementInspection->trc_annual ?? 0);
 
     if ($agreementTotal <= 0) {
         $agreementTotal = $agreementLabour + $agreementMaterials + $agreementTools;
@@ -57,6 +57,20 @@
     $agreementDeposit = $agreementTotal * 0.5;
     $agreementProgress = $agreementTotal * 0.25;
     $agreementFinal = max($agreementTotal - ($agreementDeposit + $agreementProgress), 0);
+
+    $agreementStartDate = $agreementInspection->planned_start_date
+        ? $agreementInspection->planned_start_date->format('Y-m-d')
+        : 'Pending stage completion';
+    $agreementCompletionDate = $agreementInspection->target_completion_date
+        ? $agreementInspection->target_completion_date->format('Y-m-d')
+        : 'Pending stage completion';
+    $agreementDuration = $agreementInspection->estimated_duration_days
+        ? ($agreementInspection->estimated_duration_days . ' day(s)')
+        : 'To be calculated';
+
+    $assignedTools = $agreementInspection->toolAssignments()
+        ->orderBy('tool_name')
+        ->get();
 @endphp
 
 <div class="job-approval-agreement" style="border:1px solid #d8dbe2; padding:14px; border-radius:6px; margin-top:14px; {{ !empty($pdfMode) ? 'font-size:11px;' : '' }}">
@@ -79,10 +93,41 @@
     <div style="margin-top:6px;">Included Services: findings → remediation actions (as listed in this report).</div>
     <p style="margin-top:6px;">Locked Scope Clause: The scope of work is fixed upon execution of this Agreement. Etogo is only responsible for the tasks explicitly listed above. Any additional work, discovery of hidden defects, or requested modifications must follow the formal Change Order Process (Section 5).</p>
 
-    <h4 style="margin:10px 0 4px 0;">3. PROJECT TIMELINE</h4>
-    <div>• Start Date: ________________________</div>
-    <div>• Completion Target: _________________</div>
-    <div>• Estimated Duration: _______________</div>
+    <h4 style="margin:10px 0 4px 0;">3. PROJECT TIMELINE &amp; WORK SCHEDULE</h4>
+    <div>• Start Date: {{ $agreementStartDate }}</div>
+    <div>• Completion Target: {{ $agreementCompletionDate }}</div>
+    <div>• Estimated Duration: {{ $agreementDuration }}</div>
+    <div>• Working Hours: Monday – Friday, 9:00 AM – 5:00 PM (no work on weekends or statutory holidays)</div>
+    <div>• Total Scheduled Visits: {{ count($agreementInspection->work_schedule ?? []) ?: (int)($agreementInspection->bdc_visits_per_year ?? 0) ?: 'To be confirmed' }}</div>
+    @php
+        $agreementScheduledVisits = collect($agreementInspection->work_schedule ?? [])
+            ->sortBy('date')
+            ->values();
+    @endphp
+    @if($agreementScheduledVisits->isNotEmpty())
+        <div style="margin-top:6px;"><strong>Confirmed Visit Dates:</strong></div>
+        <table style="width:100%; border-collapse:collapse; margin:4px 0 6px 0; font-size:{{ !empty($pdfMode) ? '10px' : '13px' }};">
+            <tr style="background:#f4f4f4;">
+                <th style="padding:3px 8px; text-align:left; border:1px solid #ddd;">Visit #</th>
+                <th style="padding:3px 8px; text-align:left; border:1px solid #ddd;">Date</th>
+                <th style="padding:3px 8px; text-align:left; border:1px solid #ddd;">Day</th>
+                <th style="padding:3px 8px; text-align:left; border:1px solid #ddd;">Hours</th>
+                <th style="padding:3px 8px; text-align:left; border:1px solid #ddd;">Status</th>
+            </tr>
+            @foreach($agreementScheduledVisits as $vIdx => $visit)
+            <tr>
+                <td style="padding:3px 8px; border:1px solid #ddd;">{{ $vIdx + 1 }}</td>
+                <td style="padding:3px 8px; border:1px solid #ddd;">{{ \Illuminate\Support\Carbon::parse($visit['date'])->format('M d, Y') }}</td>
+                <td style="padding:3px 8px; border:1px solid #ddd;">{{ \Illuminate\Support\Carbon::parse($visit['date'])->format('l') }}</td>
+                <td style="padding:3px 8px; border:1px solid #ddd;">9:00 AM – 5:00 PM</td>
+                <td style="padding:3px 8px; border:1px solid #ddd; text-transform:capitalize;">{{ $visit['status'] ?? 'scheduled' }}</td>
+            </tr>
+            @endforeach
+        </table>
+    @endif
+    @if(!empty($agreementInspection->schedule_blocked_reason))
+        <div style="margin-top:6px;color:#9a3412;"><strong>Scheduling Note:</strong> {{ $agreementInspection->schedule_blocked_reason }}</div>
+    @endif
     <p style="margin-top:6px;">Timeline Clause: The timeline is an estimate based on the current scope, material availability, and site conditions. Etogo shall not be held liable for delays caused by Client-initiated changes, restricted site access, permit delays, or force majeure events (e.g., extreme weather).</p>
 
     <h4 style="margin:10px 0 4px 0;">4. PRICING &amp; PAYMENT TERMS</h4>
@@ -117,6 +162,24 @@
     <div>• Digital tool tracking and operator accountability.</div>
     <div>• Measured output delivery (e.g., turnover standards).</div>
     <div>• Defined material allocation protocols.</div>
+    @if($assignedTools->isNotEmpty())
+        <div style="margin-top:6px;"><strong>Assigned Tool Set for This Property:</strong></div>
+        @foreach($assignedTools as $tool)
+            <div>
+                • {{ $tool->tool_name }} &times;{{ $tool->quantity ?? 1 }}
+                @if($tool->ownership_status)
+                    ({{ ucfirst(str_replace('_', ' ', $tool->ownership_status)) }}
+                @endif
+                @if($tool->availability_status)
+                    {{ $tool->ownership_status ? ', ' : '(' }}{{ ucfirst(str_replace('_', ' ', $tool->availability_status)) }})
+                @elseif($tool->ownership_status)
+                    )
+                @endif
+            </div>
+        @endforeach
+    @else
+        <div style="margin-top:6px;">• Assigned tool set will populate automatically once assessment scope is synchronized.</div>
+    @endif
     <p style="margin-top:6px;">This system ensures that the project is executed to Etogo’s professional quality standards and "Proactive Property Stewardship" benchmarks.</p>
 
     <h4 style="margin:10px 0 4px 0;">8. SITE ACCESS &amp; RESPONSIBILITIES</h4>
@@ -144,27 +207,41 @@
     <p style="margin:0 0 6px 0;">This Agreement shall be governed by and construed in accordance with the laws of the Province of British Columbia and the federal laws of Canada applicable therein. The parties irrevocably attorn to the exclusive jurisdiction of the courts of the Province of British Columbia, sitting in Vancouver, British Columbia, in respect of any dispute arising under or in connection with this Agreement.</p>
 
     <h4 style="margin:10px 0 4px 0;">14. AUTHORIZATION</h4>
-    <p style="margin:0 0 10px 0;">CLIENT: By signing below, the Client approves the Scope of Work and agrees to the terms and conditions set forth above.</p>
+    <p style="margin:0 0 6px 0;"><strong>Execution Process — Three Required Steps:</strong></p>
+    <div style="margin-bottom:6px;">
+        <strong>Step 1 — Client Signature:</strong> The Client reviews and signs this Agreement below, confirming approval of the Scope of Work and acceptance of all terms.<br>
+        <strong>Step 2 — Work Payment / Deposit:</strong> The Client confirms the first work payment (full amount or first visit payment), which mobilizes the project.<br>
+        <strong>Step 3 — Etogo Countersignature:</strong> An authorized Etogo representative countersigns to fully execute this Agreement. Work scheduling commences upon completion of all three steps.
+    </div>
+    <p style="margin:0 0 10px 0;">This Agreement is not binding until all three steps above are completed.</p>
 
     <table style="width:100%; border-collapse:collapse; margin-top:6px;">
         <tr>
-            <td style="width:50%; vertical-align:top; padding-right:14px;">
-                <strong>CLIENT</strong><br><br>
+            <td style="width:50%; vertical-align:top; padding-right:14px; border-top:2px solid #333; padding-top:8px;">
+                <strong>STEP 1 — CLIENT SIGNATURE</strong><br><br>
                 @if(!empty($agreementInspection->approved_by_client) && !empty($agreementInspection->client_full_name))
-                    Signature: Digitally Signed<br>
+                    Signature: <em>Digitally Signed</em><br>
                     Date: {{ optional($agreementInspection->client_approved_at)->format('Y-m-d h:i A') ?: 'N/A' }}<br>
                     Name (Print): {{ $agreementInspection->client_full_name }}
                 @else
                     Signature: _________________________________<br>
                     Date: ____________________<br>
-                    Name (Print): ______________________________
+                    Name (Print): ______________________________<br>
+                    <small style="color:#888;">(Client signs first)</small>
                 @endif
             </td>
-            <td style="width:50%; vertical-align:top; padding-left:14px;">
-                <strong>ETOGO REPRESENTATIVE</strong><br><br>
-                Signature: _________________________________<br>
-                Date: ____________________<br>
-                Name (Print): ______________________________
+            <td style="width:50%; vertical-align:top; padding-left:14px; border-top:2px solid #333; padding-top:8px;">
+                <strong>STEP 3 — ETOGO COUNTERSIGNATURE</strong><br><br>
+                @if(!empty($agreementInspection->etogo_signed_at))
+                    Signature: <em>Digitally Signed</em><br>
+                    Date: {{ optional($agreementInspection->etogo_signed_at)->format('Y-m-d h:i A') ?: 'N/A' }}<br>
+                    Name (Print): {{ $agreementInspection->etogoRepresentative?->name ?? 'Etogo Representative' }}
+                @else
+                    Signature: _________________________________<br>
+                    Date: ____________________<br>
+                    Name (Print): ______________________________<br>
+                    <small style="color:#888;">(Etogo signs after client + payment confirmed)</small>
+                @endif
             </td>
         </tr>
     </table>

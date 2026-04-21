@@ -5,7 +5,8 @@ namespace App\Http\Controllers\Client;
 use App\Http\Controllers\Controller;
 use App\Models\Property;
 use App\Models\Inspection;
-use App\Models\Invoice;
+use App\Services\AgreementScheduleService;
+use App\Services\InspectionInvoiceSyncService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -17,6 +18,24 @@ class InspectionController extends Controller
     // Inspection fee in cents (for Stripe)
     private const INSPECTION_FEE_CENTS = 29900; // $299.00
     private const INSPECTION_FEE_DOLLARS = 299;
+
+    public function __construct(
+        private readonly AgreementScheduleService $agreementScheduleService,
+        private readonly InspectionInvoiceSyncService $inspectionInvoiceSyncService,
+    )
+    {
+    }
+
+    /**
+     * Verify the inspection belongs to the authenticated user.
+     * Aborts with 403 if it does not.
+     */
+    private function authorizeInspection(Inspection $inspection): void
+    {
+        if (!$inspection->property || (int) $inspection->property->user_id !== (int) Auth::id()) {
+            abort(403, 'Unauthorized access to this inspection.');
+        }
+    }
 
     /**
      * List client's inspections (scheduled, in progress, completed).
@@ -47,40 +66,36 @@ class InspectionController extends Controller
      */
     public function report(Inspection $inspection)
     {
-        if (!$inspection->property || (int) $inspection->property->user_id !== (int) Auth::id()) {
-            abort(403, 'Unauthorized access to this inspection report.');
+        $this->authorizeInspection($inspection);
+
+        if (($inspection->status ?? null) === 'completed') {
+            $inspection = $this->agreementScheduleService->refresh($inspection);
         }
 
         $findings = \App\Models\PHARFinding::where('inspection_id', $inspection->id)
             ->orderBy('id')
             ->get();
 
-        $materials = \App\Models\InspectionMaterial::where('inspection_id', $inspection->id)
-            ->orderBy('id')
-            ->get();
-
-        return view('client.inspections.report', compact('inspection', 'findings', 'materials'));
+        return view('client.inspections.report', compact('inspection', 'findings'));
     }
 
     public function agreement(Inspection $inspection)
     {
-        if (!$inspection->property || (int) $inspection->property->user_id !== (int) Auth::id()) {
-            abort(403, 'Unauthorized access to this inspection agreement.');
-        }
+        $this->authorizeInspection($inspection);
 
         if (($inspection->status ?? null) !== 'completed') {
             return redirect()->route('client.inspections.index')
                 ->with('error', 'Agreement is available only after inspection completion.');
         }
 
+        $inspection = $this->agreementScheduleService->refresh($inspection);
+
         return view('client.inspections.agreement', compact('inspection'));
     }
 
     public function signAgreement(Request $request, Inspection $inspection)
     {
-        if (!$inspection->property || (int) $inspection->property->user_id !== (int) Auth::id()) {
-            abort(403, 'Unauthorized agreement action.');
-        }
+        $this->authorizeInspection($inspection);
 
         if (($inspection->status ?? null) !== 'completed') {
             return redirect()->route('client.inspections.index')
@@ -102,20 +117,22 @@ class InspectionController extends Controller
             'client_acknowledgment' => 'Client accepted Job Approval & Service Agreement online on ' . now()->toDateTimeString(),
         ]);
 
+        $inspection = $this->agreementScheduleService->refresh($inspection);
+
         return redirect()->route('client.inspections.agreement', $inspection->id)
             ->with('success', 'Agreement signed successfully.');
     }
 
     public function downloadAgreementPdf(Inspection $inspection)
     {
-        if (!$inspection->property || (int) $inspection->property->user_id !== (int) Auth::id()) {
-            abort(403, 'Unauthorized agreement download action.');
-        }
+        $this->authorizeInspection($inspection);
 
         if (($inspection->status ?? null) !== 'completed') {
             return redirect()->route('client.inspections.index')
                 ->with('error', 'Agreement is available only after inspection completion.');
         }
+
+        $inspection = $this->agreementScheduleService->refresh($inspection);
 
         $pdf = Pdf::loadView('client.inspections.agreement-pdf', compact('inspection'))
             ->setPaper('a4', 'portrait')
@@ -135,9 +152,7 @@ class InspectionController extends Controller
 
     public function addFindingPhotos(Request $request, Inspection $inspection, int $findingIndex)
     {
-        if (!$inspection->property || (int) $inspection->property->user_id !== (int) Auth::id()) {
-            abort(403, 'Unauthorized access to this inspection.');
-        }
+        $this->authorizeInspection($inspection);
 
         $validated = $request->validate([
             'finding_photos' => 'required|array|min:1',
@@ -173,13 +188,13 @@ class InspectionController extends Controller
     }
 
     /**
-     * Show Stripe payment page for starting work (monthly/annual).
+     * Show Stripe payment page for starting work.
+     * plan=full  → charge full ARP total at once
+     * plan=installment → charge ARP/12 monthly starting now
      */
     public function workPayment(Request $request, Inspection $inspection)
     {
-        if (!$inspection->property || (int) $inspection->property->user_id !== (int) Auth::id()) {
-            abort(403, 'Unauthorized access to this payment.');
-        }
+        $this->authorizeInspection($inspection);
 
         if ($inspection->status !== 'completed') {
             return redirect()->route('client.inspections.index')
@@ -191,62 +206,57 @@ class InspectionController extends Controller
                 ->with('info', 'Work payment has already been completed.');
         }
 
-        $cadence = $request->query('cadence', 'monthly');
-        if (!in_array($cadence, ['monthly', 'annual'], true)) {
-            $cadence = 'monthly';
+        $plan = $request->query('plan', 'full');
+        if (!in_array($plan, ['full', 'per_visit'], true)) {
+            $plan = 'full';
         }
 
-        $monthlyBase = (float) max(
-            (float) ($inspection->scientific_final_monthly ?? 0),
-            (float) ($inspection->arp_equivalent_final ?? 0),
-            (float) ($inspection->base_package_price_snapshot ?? 0),
-            (float) ($inspection->arp_monthly ?? 0),
-            (float) ($inspection->trc_monthly ?? 0),
-        );
+        $arpTotal    = (float) ($inspection->trc_annual ?? ($this->resolveMonthlyBase($inspection) * 12));
+        $totalVisits = max(1, (int) ($inspection->bdc_visits_per_year ?? 1));
+        $perVisit    = round($arpTotal / $totalVisits, 2);
+        $chargeAmount = $plan === 'full' ? round($arpTotal, 2) : $perVisit;
 
-        if ($monthlyBase <= 0) {
+        if ($chargeAmount <= 0) {
             return redirect()->route('client.inspections.report', $inspection->id)
                 ->with('error', 'Pricing has not been calculated yet for this inspection.');
         }
 
-        $amount = $cadence === 'annual' ? ($monthlyBase * 12) : $monthlyBase;
-
         $stripe = new \Stripe\StripeClient(config('cashier.secret'));
         $paymentIntent = $stripe->paymentIntents->create([
-            'amount' => (int) round($amount * 100),
+            'amount'   => (int) round($chargeAmount * 100),
             'currency' => 'usd',
             'metadata' => [
                 'inspection_id' => $inspection->id,
-                'property_id' => $inspection->property_id,
-                'project_id' => $inspection->project_id,
-                'payment_type' => 'work_start',
-                'cadence' => $cadence,
-                'client_user_id' => Auth::id(),
+                'property_id'   => $inspection->property_id,
+                'project_id'    => $inspection->project_id,
+                'payment_type'  => 'work_start',
+                'plan'          => $plan,
+                'client_user_id'=> Auth::id(),
             ],
         ]);
 
         return view('client.inspections.work-payment', [
-            'inspection' => $inspection,
-            'cadence' => $cadence,
-            'amount' => $amount,
-            'monthlyBase' => $monthlyBase,
-            'clientSecret' => $paymentIntent->client_secret,
-            'stripeKey' => config('cashier.key'),
+            'inspection'     => $inspection,
+            'plan'           => $plan,
+            'arpTotal'       => round($arpTotal, 2),
+            'totalVisits'    => $totalVisits,
+            'perVisit'       => $perVisit,
+            'chargeAmount'   => $chargeAmount,
+            'clientSecret'   => $paymentIntent->client_secret,
+            'stripeKey'      => config('cashier.key'),
         ]);
     }
 
     /**
-     * Confirm Stripe payment and start work.
+     * Confirm first work payment and start work.
      */
     public function processWorkPayment(Request $request, Inspection $inspection)
     {
-        if (!$inspection->property || (int) $inspection->property->user_id !== (int) Auth::id()) {
-            abort(403, 'Unauthorized payment action.');
-        }
+        $this->authorizeInspection($inspection);
 
         $validated = $request->validate([
             'payment_intent_id' => 'required|string',
-            'cadence' => 'required|in:monthly,annual',
+            'plan'              => 'required|in:full,per_visit',
         ]);
 
         DB::beginTransaction();
@@ -258,33 +268,49 @@ class InspectionController extends Controller
                 throw new \RuntimeException('Payment not completed.');
             }
 
-            $inspection->update([
-                'work_payment_status' => 'paid',
-                'work_payment_paid_at' => now(),
-                'work_payment_amount' => ((float) $paymentIntent->amount_received) / 100,
-                'work_payment_cadence' => $validated['cadence'],
-                'work_stripe_payment_intent_id' => $paymentIntent->id,
-            ]);
+            $plan        = $validated['plan'];
+            $arpTotal    = (float) ($inspection->trc_annual ?? ($this->resolveMonthlyBase($inspection) * 12));
+            $totalVisits = max(1, (int) ($inspection->bdc_visits_per_year ?? 1));
+            $perVisit    = round($arpTotal / $totalVisits, 2);
+
+            $fields = [
+                'work_payment_status'          => 'paid',
+                'work_payment_paid_at'         => now(),
+                'work_payment_amount'          => ((float) $paymentIntent->amount_received) / 100,
+                'work_payment_cadence'         => $plan,
+                'work_stripe_payment_intent_id'=> $paymentIntent->id,
+                'payment_plan'                 => $plan,
+                'installment_months'           => $plan === 'per_visit' ? $totalVisits : 1,
+                'installments_paid'            => 1,
+                'arp_total_locked'             => round($arpTotal, 2),
+                'installment_amount'           => $plan === 'per_visit' ? $perVisit : round($arpTotal, 2),
+                'arp_fully_paid_at'            => $plan === 'full' ? now() : null,
+                'next_installment_due_date'    => null,
+            ];
+
+            $inspection->update($fields);
+            $this->inspectionInvoiceSyncService->syncProjectInvoice($inspection->fresh(['property', 'project']));
+            $inspection = $this->agreementScheduleService->refresh($inspection);
 
             if ($inspection->project) {
                 $inspection->project->update([
-                    'status' => 'in_progress',
-                    'actual_start_date' => $inspection->project->actual_start_date ?: now()->toDateString(),
+                    'status'             => 'in_progress',
+                    'actual_start_date'  => $inspection->project->actual_start_date ?: now()->toDateString(),
                 ]);
             }
 
             DB::commit();
 
             return response()->json([
-                'success' => true,
+                'success'  => true,
                 'redirect' => route('client.inspections.report', $inspection->id),
-                'message' => 'Payment successful. Work has started.',
+                'message'  => 'Payment successful. Work has started.',
             ]);
         } catch (\Throwable $e) {
             DB::rollBack();
             \Log::error('Client work payment failed', [
                 'inspection_id' => $inspection->id,
-                'error' => $e->getMessage(),
+                'error'         => $e->getMessage(),
             ]);
 
             return response()->json([
@@ -292,6 +318,135 @@ class InspectionController extends Controller
                 'message' => 'Payment verification failed. Please try again.',
             ], 400);
         }
+    }
+
+    /**
+     * Show Stripe payment page for the next per-visit payment.
+     */
+    public function payInstallment(Inspection $inspection)
+    {
+        $this->authorizeInspection($inspection);
+
+        if (($inspection->work_payment_status ?? 'pending') !== 'paid') {
+            return redirect()->route('client.inspections.report', $inspection->id)
+                ->with('error', 'Work has not been started yet.');
+        }
+
+        if (($inspection->payment_plan ?? 'full') !== 'per_visit') {
+            return redirect()->route('client.inspections.report', $inspection->id)
+                ->with('info', 'This inspection is on a full-payment plan.');
+        }
+
+        $paid  = (int) ($inspection->installments_paid ?? 0);
+        $total = (int) ($inspection->installment_months ?? 1);
+
+        if ($paid >= $total) {
+            return redirect()->route('client.inspections.report', $inspection->id)
+                ->with('success', 'All visits have been paid. Project cost fully settled.');
+        }
+
+        $installAmount    = (float) ($inspection->installment_amount ?? 0);
+        $installmentNumber = $paid + 1;
+
+        $stripe = new \Stripe\StripeClient(config('cashier.secret'));
+        $paymentIntent = $stripe->paymentIntents->create([
+            'amount'   => (int) round($installAmount * 100),
+            'currency' => 'usd',
+            'metadata' => [
+                'inspection_id'      => $inspection->id,
+                'property_id'        => $inspection->property_id,
+                'payment_type'       => 'per_visit',
+                'visit_number'       => $installmentNumber,
+                'client_user_id'     => Auth::id(),
+            ],
+        ]);
+
+        return view('client.inspections.pay-installment', [
+            'inspection'        => $inspection,
+            'installAmount'     => $installAmount,
+            'installmentNumber' => $installmentNumber,
+            'totalInstallments' => $total,
+            'arpTotal'          => (float) ($inspection->arp_total_locked ?? 0),
+            'amountPaidSoFar'   => round($installAmount * $paid, 2),
+            'clientSecret'      => $paymentIntent->client_secret,
+            'stripeKey'         => config('cashier.key'),
+        ]);
+    }
+
+    /**
+     * Process a per-visit payment.
+     */
+    public function processInstallment(Request $request, Inspection $inspection)
+    {
+        $this->authorizeInspection($inspection);
+
+        if (($inspection->payment_plan ?? 'full') !== 'per_visit') {
+            abort(403, 'This inspection is not on a per-visit payment plan.');
+        }
+
+        $validated = $request->validate([
+            'payment_intent_id' => 'required|string',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $stripe = new \Stripe\StripeClient(config('cashier.secret'));
+            $paymentIntent = $stripe->paymentIntents->retrieve($validated['payment_intent_id']);
+
+            if (($paymentIntent->status ?? null) !== 'succeeded') {
+                throw new \RuntimeException('Payment not completed.');
+            }
+
+            $paid  = (int) ($inspection->installments_paid ?? 0) + 1;
+            $total = (int) ($inspection->installment_months ?? 1);
+
+            $fields = [
+                'installments_paid'          => $paid,
+                'next_installment_due_date'  => null,
+                'arp_fully_paid_at'          => $paid >= $total ? now() : null,
+            ];
+
+            $inspection->update($fields);
+            $this->inspectionInvoiceSyncService->syncProjectInvoice($inspection->fresh(['property', 'project']));
+
+            DB::commit();
+
+            $remaining = $total - $paid;
+            $message   = $paid >= $total
+                ? 'Final visit payment received — project cost fully settled!'
+                : "Visit {$paid} of {$total} paid. {$remaining} visit(s) remaining.";
+
+            return response()->json([
+                'success'  => true,
+                'redirect' => route('client.inspections.report', $inspection->id),
+                'message'  => $message,
+            ]);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            \Log::error('Per-visit payment failed', [
+                'inspection_id' => $inspection->id,
+                'error'         => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Payment verification failed. Please try again.',
+            ], 400);
+        }
+    }
+
+    /**
+     * Resolve the base monthly ARP amount from whichever PHAR field is populated.
+     */
+    private function resolveMonthlyBase(Inspection $inspection): float
+    {
+        return (float) max(
+            (float) ($inspection->scientific_final_monthly ?? 0),
+            (float) ($inspection->arp_equivalent_final ?? 0),
+            (float) ($inspection->base_package_price_snapshot ?? 0),
+            (float) ($inspection->arp_monthly ?? 0),
+            (float) ($inspection->trc_monthly ?? 0),
+        );
     }
 
     /**
@@ -413,30 +568,56 @@ class InspectionController extends Controller
     }
 
     /**
-     * Handle successful payment redirect from Stripe
+     * Handle successful payment redirect from Stripe (legacy Checkout Session flow).
+     * Verifies the Stripe session before marking inspection as paid.
      */
     public function checkoutSuccess(Request $request)
     {
         $inspectionId = $request->get('inspection_id');
+        $sessionId    = $request->get('session_id');
 
-        if (!$inspectionId) {
+        if (!$inspectionId || !$sessionId) {
             return redirect()->route('client.properties.index')
                 ->with('error', 'Invalid inspection request.');
         }
 
         $inspection = Inspection::find($inspectionId);
 
-        if (!$inspection || $inspection->property->user_id !== Auth::id()) {
+        if (!$inspection || (int) $inspection->property->user_id !== (int) Auth::id()) {
             abort(403, 'Unauthorized access.');
         }
 
-        // Update inspection fee status to paid
+        // Already paid — idempotent
+        if ($inspection->inspection_fee_status === 'paid') {
+            return redirect()->route('client.properties.index')
+                ->with('success', 'Inspection already confirmed.');
+        }
+
+        // Verify the Stripe Checkout Session is actually paid
+        try {
+            $stripe          = new \Stripe\StripeClient(config('cashier.secret'));
+            $checkoutSession = $stripe->checkout->sessions->retrieve($sessionId);
+
+            if (($checkoutSession->payment_status ?? null) !== 'paid') {
+                return redirect()->route('client.properties.index')
+                    ->with('error', 'Payment has not been completed. Please try scheduling again.');
+            }
+        } catch (\Throwable $e) {
+            \Log::error('Stripe checkout session verification failed', [
+                'inspection_id' => $inspectionId,
+                'session_id'    => $sessionId,
+                'error'         => $e->getMessage(),
+            ]);
+            return redirect()->route('client.properties.index')
+                ->with('error', 'Payment verification failed. Please contact support.');
+        }
+
+        // Safe to mark as paid now
         $inspection->update([
-            'inspection_fee_status' => 'paid',
+            'inspection_fee_status'  => 'paid',
             'inspection_fee_paid_at' => now(),
         ]);
 
-        // Update property status to awaiting_inspection
         $inspection->property->update([
             'status' => 'awaiting_inspection',
         ]);
@@ -468,10 +649,6 @@ class InspectionController extends Controller
 
     protected function ensureInspectionFeeInvoice(Inspection $inspection): void
     {
-        if (!$inspection->property || !$inspection->property->user_id) {
-            return;
-        }
-
         if (!$inspection->project_id) {
             $project = \App\Models\Project::firstOrCreate(
                 ['property_id' => $inspection->property_id],
@@ -491,60 +668,6 @@ class InspectionController extends Controller
             $inspection->refresh();
         }
 
-        $amount = (float) ($inspection->inspection_fee_amount ?? 0);
-        if ($amount <= 0) {
-            return;
-        }
-
-        $userId = (int) $inspection->property->user_id;
-        $projectId = (int) $inspection->project_id;
-
-        $existingInvoice = Invoice::where('user_id', $userId)
-            ->where('project_id', $projectId)
-            ->where('type', 'additional')
-            ->get()
-            ->first(function (Invoice $invoice) use ($inspection) {
-                return (int) data_get($invoice->line_items, '0.inspection_id') === (int) $inspection->id;
-            });
-
-        if ($existingInvoice) {
-            return;
-        }
-
-        $invoiceNumber = 'INV-INSP-' . now()->format('Ymd') . '-' . $inspection->id;
-        $counter = 1;
-        while (Invoice::where('invoice_number', $invoiceNumber)->exists()) {
-            $invoiceNumber = 'INV-INSP-' . now()->format('Ymd') . '-' . $inspection->id . '-' . $counter;
-            $counter++;
-        }
-
-        $isPaid = ($inspection->inspection_fee_status ?? 'pending') === 'paid';
-
-        Invoice::create([
-            'invoice_number' => $invoiceNumber,
-            'project_id' => $projectId,
-            'user_id' => $userId,
-            'type' => 'additional',
-            'subtotal' => $amount,
-            'tax' => 0,
-            'total' => $amount,
-            'paid_amount' => $isPaid ? $amount : 0,
-            'balance' => $isPaid ? 0 : $amount,
-            'status' => $isPaid ? 'paid' : 'sent',
-            'issue_date' => optional($inspection->inspection_fee_paid_at)->toDateString() ?? now()->toDateString(),
-            'due_date' => $isPaid
-                ? (optional($inspection->inspection_fee_paid_at)->toDateString() ?? now()->toDateString())
-                : now()->addDays(14)->toDateString(),
-            'line_items' => [
-                [
-                    'description' => 'Pre-Inspection Fee - ' . ($inspection->property?->property_name ?? 'Property'),
-                    'inspection_id' => $inspection->id,
-                    'quantity' => 1,
-                    'unit_price' => $amount,
-                    'total' => $amount,
-                ],
-            ],
-            'notes' => 'Auto-generated pre-inspection fee invoice for inspection #' . $inspection->id,
-        ]);
+        $this->inspectionInvoiceSyncService->syncInspectionFeeInvoice($inspection);
     }
 }

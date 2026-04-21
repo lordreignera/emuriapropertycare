@@ -206,22 +206,31 @@ class PropertyController extends Controller
     {
         $validated = $request->validate([
             'project_manager_id' => 'required|exists:users,id',
-            'inspector_id' => 'required|exists:users,id',
+            'inspector_id'       => 'required|exists:users,id',
+            'technician_id'      => 'nullable|exists:users,id',
         ]);
 
-        // Find the paid inspection for this property
+        // Find the most recent paid inspection for this property (any status)
         $inspection = $property->inspections()
             ->where('inspection_fee_status', 'paid')
-            ->where('status', 'scheduled')
+            ->whereIn('status', ['scheduled', 'in_progress', 'completed'])
             ->latest('id')
             ->first();
 
         if (!$inspection) {
-            return redirect()->back()
-                ->with('error', 'No scheduled paid inspection found for this property.');
+            // Fall back to any paid inspection
+            $inspection = $property->inspections()
+                ->where('inspection_fee_status', 'paid')
+                ->latest('id')
+                ->first();
         }
 
-        // Verify the users have correct roles
+        if (!$inspection) {
+            return redirect()->back()
+                ->with('error', 'No paid inspection found for this property.');
+        }
+
+        // Verify roles
         $projectManager = User::findOrFail($validated['project_manager_id']);
         if (!$projectManager->hasRole('Project Manager')) {
             return redirect()->back()
@@ -234,20 +243,39 @@ class PropertyController extends Controller
                 ->with('error', 'Selected user is not an inspector.');
         }
 
-        // Assign both PM and inspector to the inspection
-        $inspection->inspector_id = $validated['inspector_id'];
-        $inspection->assigned_by = Auth::id();
+        $technician = null;
+        if (!empty($validated['technician_id'])) {
+            $technician = User::findOrFail($validated['technician_id']);
+            if (!$technician->hasRole('Technician')) {
+                return redirect()->back()
+                    ->with('error', 'Selected user is not a technician.');
+            }
+        }
+
+        // Assign inspection team
+        $inspection->inspector_id  = $validated['inspector_id'];
+        $inspection->technician_id = $validated['technician_id'] ?? null;
+        $inspection->assigned_by   = Auth::id();
         $inspection->save();
 
-        // Also update the property with PM assignment
-        $property->project_manager_id = $validated['project_manager_id'];
-        $property->inspector_id = $validated['inspector_id'];
-        $property->assigned_at = $property->assigned_at ?: now();
+        // Also update the property
+        $property->project_manager_id  = $validated['project_manager_id'];
+        $property->inspector_id        = $validated['inspector_id'];
+        $property->assigned_at         = $property->assigned_at ?: now();
         $property->inspection_scheduled_at = $property->inspection_scheduled_at ?: $inspection->scheduled_date;
         $property->save();
 
-        return redirect()->back()
-            ->with('success', "Project Manager and Inspector assigned successfully! Inspection is ready to be conducted.");
+        // Also update the project's manager if a project exists
+        if ($inspection->project) {
+            $inspection->project->update(['managed_by' => $validated['project_manager_id']]);
+        }
+
+        $successMsg = "Project Manager ({$projectManager->name}) and Inspector ({$inspector->name}) assigned successfully!";
+        if ($technician) {
+            $successMsg .= " Technician ({$technician->name}) also assigned.";
+        }
+
+        return redirect()->back()->with('success', $successMsg);
     }
 
     /**

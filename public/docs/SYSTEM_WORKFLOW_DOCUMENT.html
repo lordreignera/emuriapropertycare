@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office"
+      xmlns:w="urn:schemas-microsoft-com:office:word"
+      xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="UTF-8">
+<meta name="ProgId" content="Word.Document">
+<meta name="Generator" content="Microsoft Word">
+<title>Emuria Regenerative Property Care — System Workflow Document</title>
+<style>
+  @page {
+    size: Letter;
+    margin: 1in 1in 1in 1in;
+    mso-header-margin: .5in;
+    mso-footer-margin: .5in;
+  }
+  body {
+    font-family: Calibri, sans-serif;
+    font-size: 11pt;
+    color: #222;
+    line-height: 1.5;
+  }
+  h1 {
+    font-family: "Calibri Light", sans-serif;
+    font-size: 20pt;
+    color: #1e3a5f;
+    border-bottom: 2px solid #1e3a5f;
+    padding-bottom: 4pt;
+    margin-top: 24pt;
+    page-break-before: always;
+  }
+  h1.first { page-break-before: avoid; }
+  h2 {
+    font-family: "Calibri Light", sans-serif;
+    font-size: 14pt;
+    color: #1e3a5f;
+    margin-top: 18pt;
+    border-left: 4pt solid #1e7ab3;
+    padding-left: 8pt;
+  }
+  h3 {
+    font-size: 12pt;
+    color: #2c5282;
+    margin-top: 12pt;
+  }
+  h4 {
+    font-size: 11pt;
+    color: #555;
+    margin-top: 10pt;
+    font-style: italic;
+  }
+  p { margin: 6pt 0; }
+  ul, ol { margin: 6pt 0 6pt 18pt; }
+  li { margin: 3pt 0; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 10pt 0;
+    font-size: 10pt;
+  }
+  th {
+    background-color: #1e3a5f;
+    color: #fff;
+    padding: 5pt 8pt;
+    text-align: left;
+    border: 1pt solid #aaa;
+  }
+  td {
+    padding: 4pt 8pt;
+    border: 1pt solid #ccc;
+    vertical-align: top;
+  }
+  tr:nth-child(even) td { background-color: #f5f8fc; }
+  .cover {
+    text-align: center;
+    margin-top: 60pt;
+    page-break-after: always;
+  }
+  .cover h1 {
+    font-size: 28pt;
+    border: none;
+    page-break-before: avoid;
+    color: #1e3a5f;
+  }
+  .cover .subtitle {
+    font-size: 16pt;
+    color: #555;
+    margin-top: 8pt;
+  }
+  .cover .meta {
+    font-size: 11pt;
+    color: #888;
+    margin-top: 40pt;
+  }
+  .note {
+    background: #eaf4fb;
+    border-left: 4pt solid #1e7ab3;
+    padding: 6pt 10pt;
+    margin: 8pt 0;
+    font-size: 10pt;
+  }
+  .warning {
+    background: #fff8e1;
+    border-left: 4pt solid #f0a500;
+    padding: 6pt 10pt;
+    margin: 8pt 0;
+    font-size: 10pt;
+  }
+  .success {
+    background: #e8f5e9;
+    border-left: 4pt solid #2e7d32;
+    padding: 6pt 10pt;
+    margin: 8pt 0;
+    font-size: 10pt;
+  }
+  code {
+    font-family: Consolas, monospace;
+    font-size: 9.5pt;
+    background: #f4f4f4;
+    padding: 1pt 4pt;
+    border: 1pt solid #ddd;
+  }
+  pre {
+    font-family: Consolas, monospace;
+    font-size: 9pt;
+    background: #f4f4f4;
+    border: 1pt solid #ddd;
+    padding: 8pt 12pt;
+    margin: 8pt 0;
+    white-space: pre-wrap;
+  }
+  .toc { margin: 20pt 0; }
+  .toc li { list-style: none; margin: 4pt 0; }
+  .toc a { color: #1e3a5f; text-decoration: none; }
+  .step-table td:first-child {
+    font-weight: bold;
+    width: 22%;
+    background-color: #e8f0fb;
+  }
+  .flow-box {
+    border: 1pt solid #1e7ab3;
+    padding: 8pt 12pt;
+    margin: 8pt 0;
+    background: #f0f7ff;
+    font-family: Consolas, monospace;
+    font-size: 9.5pt;
+    white-space: pre;
+  }
+</style>
+</head>
+<body>
+
+<!-- ============================================================ COVER PAGE -->
+<div class="cover">
+  <h1 class="first">Emuria Regenerative Property Care</h1>
+  <p class="subtitle">System Workflow &amp; Technical Reference Document</p>
+  <p class="subtitle" style="font-size:13pt; color:#1e7ab3;">Full End-to-End Operational Guide</p>
+  <p class="meta">
+    Version 1.0 &nbsp;|&nbsp; April 18, 2026<br>
+    Prepared by: Etogo Engineering<br>
+    Confidential — Internal Use Only
+  </p>
+</div>
+
+<!-- ============================================================ TABLE OF CONTENTS -->
+<h1 class="first" style="page-break-before:avoid;">Table of Contents</h1>
+<ul class="toc">
+  <li>1. System Overview</li>
+  <li>2. Complete End-to-End Workflow</li>
+  <li>3. Pricing Pipeline</li>
+  <li>4. Payment Model</li>
+  <li>5. Agreement &amp; Signing Flow</li>
+  <li>6. Work Scheduling</li>
+  <li>7. Key Database Fields</li>
+  <li>8. Controller &amp; Service Reference</li>
+  <li>9. Authorization &amp; Security</li>
+  <li>10. Known Constraints &amp; Rules</li>
+</ul>
+
+<!-- ============================================================ SECTION 1 -->
+<h1>1. System Overview</h1>
+
+<p>Emuria Regenerative Property Care is a full-stack Laravel web application that manages the complete lifecycle of property health assessments, remediation agreements, and work scheduling for Etogo's property stewardship service.</p>
+
+<h2>Technology Stack</h2>
+<table>
+  <tr><th>Layer</th><th>Technology</th></tr>
+  <tr><td>Backend Framework</td><td>Laravel 10/11 (PHP)</td></tr>
+  <tr><td>Frontend</td><td>Blade templates, Bootstrap 5, Vanilla JS</td></tr>
+  <tr><td>Database</td><td>MySQL (via WAMP)</td></tr>
+  <tr><td>Payments</td><td>Stripe PHP SDK — PaymentIntents (work) + Checkout Sessions (inspection fee)</td></tr>
+  <tr><td>PDF Generation</td><td>Barryvdh DomPDF</td></tr>
+  <tr><td>File Storage</td><td>AWS S3 (configurable via <code>filesystems.default</code>)</td></tr>
+  <tr><td>Roles &amp; Permissions</td><td>Spatie Laravel-Permission</td></tr>
+</table>
+
+<h2>User Roles</h2>
+<table>
+  <tr><th>Role</th><th>Capabilities</th></tr>
+  <tr><td>Super Admin / Admin</td><td>Full access — manage inspections, countersign agreements, schedule work visits, access all reports</td></tr>
+  <tr><td>Project Manager</td><td>Manage assigned inspections, countersign agreements, schedule work visits</td></tr>
+  <tr><td>Inspector</td><td>Conduct and fill in inspection findings</td></tr>
+  <tr><td>Client</td><td>View their own inspection reports, sign agreements, make payments, view visit schedule</td></tr>
+</table>
+
+<!-- ============================================================ SECTION 2 -->
+<h1>2. Complete End-to-End Workflow</h1>
+
+<p>The system processes each property through nine sequential phases. Each phase must be completed before the next becomes available.</p>
+
+<table class="step-table">
+  <tr>
+    <th>Phase</th>
+    <th>Who Acts</th>
+    <th>What Happens</th>
+    <th>Key Fields Set</th>
+  </tr>
+  <tr>
+    <td>Phase 1<br>Property Setup</td>
+    <td>Client</td>
+    <td>Client registers their property with address, type (residential / commercial / mixed-use), unit count, square footage.</td>
+    <td><code>number_of_units</code>, <code>residential_units</code>, <code>type</code>, <code>square_footage_interior</code></td>
+  </tr>
+  <tr>
+    <td>Phase 2<br>Inspection Fee Payment</td>
+    <td>Client</td>
+    <td>Client pays the $299 inspection fee via Stripe Checkout Session. System verifies <code>payment_status === 'paid'</code> directly with Stripe API before marking as paid — no trust in URL parameters alone.</td>
+    <td><code>inspection_fee_status = 'paid'</code>, <code>inspection_fee_paid_at</code></td>
+  </tr>
+  <tr>
+    <td>Phase 3<br>Inspection Creation (Step 1)</td>
+    <td>Admin / Project Manager</td>
+    <td>Admin creates the inspection record via the Step 1 form. Assigns inspector, sets scheduled date, status. Property snapshot fields are captured at this point (owner name, address, type etc.).</td>
+    <td><code>status = 'scheduled'</code>, <code>owner_name</code>, <code>property_address_snapshot</code>, <code>property_type_snapshot</code>, all snapshot fields</td>
+  </tr>
+  <tr>
+    <td>Phase 4<br>PHAR Data Entry (Step 2)</td>
+    <td>Admin / Inspector</td>
+    <td>Admin fills in the PHAR (Property Health Assessment Report) form. Records findings per system/subsystem with labour hours and materials. BDC travel inputs (distance, time) are entered here. Pricing is calculated but the assessment is NOT completed yet — admin can review before committing.</td>
+    <td><code>findings</code>, <code>bdc_distance_km</code>, <code>bdc_time_minutes</code>, all pricing fields via MergeBridgeCalculator</td>
+  </tr>
+  <tr>
+    <td>Phase 5<br>Preview &amp; Complete Assessment</td>
+    <td>Admin / Project Manager</td>
+    <td>After PHAR data is saved, the "Pricing Ready" card on the form shows a summary. Admin can preview the client report and contract draft before finalising. Two preview buttons open the views with an "ADMIN PREVIEW" banner. When satisfied, admin clicks "Complete Assessment" to seal the inspection.</td>
+    <td><code>status = 'completed'</code>, <code>completed_date</code></td>
+  </tr>
+  <tr>
+    <td>Phase 6<br>Client Views Report &amp; Signs Agreement</td>
+    <td>Client</td>
+    <td>Client sees the completed inspection report — pricing breakdown, findings, payment options. Client goes to the Agreement page, reviews the contract (with start/end dates, work hours, visit schedule), then digitally signs by typing their full name and ticking the acknowledgment checkbox. Client signs FIRST.</td>
+    <td><code>approved_by_client = true</code>, <code>client_approved_at</code>, <code>client_full_name</code>, <code>client_signature</code></td>
+  </tr>
+  <tr>
+    <td>Phase 7<br>Work Payment</td>
+    <td>Client</td>
+    <td>Client chooses payment plan — "Pay in Full" (single charge) or "Pay Per Visit" (charged once per visit, N visits = bdc_visits_per_year). First payment is processed via Stripe PaymentIntent. Status verified with Stripe before recording.</td>
+    <td><code>work_payment_status = 'paid'</code>, <code>payment_plan</code>, <code>installment_months</code>, <code>installments_paid = 1</code>, <code>arp_total_locked</code></td>
+  </tr>
+  <tr>
+    <td>Phase 8<br>Etogo Countersignature</td>
+    <td>Admin / Project Manager</td>
+    <td>After client has signed AND payment is confirmed, an authorized Etogo representative countersigns from the admin inspection show page. This fully executes the agreement. The Work Visit Schedule input form then becomes available.</td>
+    <td><code>etogo_signed_by</code>, <code>etogo_signed_at</code></td>
+  </tr>
+  <tr>
+    <td>Phase 9<br>Work Scheduling</td>
+    <td>Admin / Project Manager</td>
+    <td>Admin enters the specific visit dates (N = bdc_visits_per_year). Only weekdays Mon–Fri are accepted; Saturdays and Sundays are rejected. Dates are saved as a JSON schedule. The first date becomes the start date; the last becomes the target completion date. Client can view the confirmed visit schedule on their report.</td>
+    <td><code>work_schedule</code>, <code>planned_start_date</code>, <code>target_completion_date</code></td>
+  </tr>
+</table>
+
+<div class="note">
+  <strong>Note on Scheduling Blockers:</strong> The <code>AgreementScheduleService</code> automatically calculates an estimated start date ("next business day") while waiting for client signature and payment. Once the admin manually saves the work schedule (Phase 9), those auto-calculated dates are locked and can no longer be overwritten by the service.
+</div>
+
+<!-- ============================================================ SECTION 3 -->
+<h1>3. Pricing Pipeline</h1>
+
+<h2>How Pricing Flows</h2>
+<div class="flow-box">PHAR Form (labour hours + materials per finding)
+    ↓
+BDCCalculator::calculate()
+    Uses: bdc_distance_km, bdc_time_minutes, bdc_rate_per_km,
+          bdc_rate_per_minute (rates from BDCSetting table)
+    Produces: bdc_per_visit, bdc_annual
+    ↓
+MergeBridgeCalculator::calculate()
+    Uses: BDC output + FRLC (labour cost) + FMC (material cost)
+    Applies: CPI multiplier, tier pricing, payment mode
+    Produces: trc_annual, trc_monthly, arp_monthly, per-unit breakdowns
+    ↓
+MergeBridgeCalculator::saveToInspection()
+    Saves ALL pricing fields to the inspections table</div>
+
+<h2>Auto-Derived Fields (Never User-Entered)</h2>
+<table>
+  <tr><th>Field</th><th>Formula</th><th>Where Set</th></tr>
+  <tr><td><code>bdc_visits_per_year</code></td><td><code>ceil(sum_of_phar_labour_hours / 8)</code></td><td><code>storePharData()</code></td></tr>
+  <tr><td><code>estimated_task_hours</code></td><td>Sum of all finding <code>phar_labour_hours</code></td><td><code>storePharData()</code></td></tr>
+  <tr><td><code>labour_hourly_rate</code></td><td>Read from <code>BDCSetting</code> table — never submitted by user</td><td><code>storePharData()</code></td></tr>
+  <tr><td><code>scientific_final_monthly</code></td><td>= <code>trc_monthly</code></td><td><code>saveToInspection()</code></td></tr>
+  <tr><td><code>arp_equivalent_final</code></td><td>= <code>trc_annual</code></td><td><code>saveToInspection()</code></td></tr>
+  <tr><td><code>base_package_price_snapshot</code></td><td>= <code>arp_monthly</code></td><td><code>saveToInspection()</code></td></tr>
+</table>
+
+<h2>Key Pricing Fields Saved to Database</h2>
+<table>
+  <tr><th>Field</th><th>Meaning</th></tr>
+  <tr><td><code>bdc_per_visit</code></td><td>BDC (travel + mobilisation) cost per single visit</td></tr>
+  <tr><td><code>bdc_annual</code></td><td>Total annual BDC cost (bdc_per_visit × bdc_visits_per_year)</td></tr>
+  <tr><td><code>frlc_annual</code></td><td>Field Resource Labour Cost annual total</td></tr>
+  <tr><td><code>frlc_monthly</code></td><td>FRLC monthly</td></tr>
+  <tr><td><code>fmc_annual</code></td><td>Field Material Cost annual total</td></tr>
+  <tr><td><code>fmc_monthly</code></td><td>FMC monthly</td></tr>
+  <tr><td><code>trc_annual</code></td><td>Total Remediation Cost annual (BDC + FRLC + FMC after multipliers) — the ARP total used for payment</td></tr>
+  <tr><td><code>trc_monthly</code></td><td>TRC monthly = trc_annual / 12</td></tr>
+  <tr><td><code>arp_monthly</code></td><td>Annual Remediation Programme monthly rate</td></tr>
+  <tr><td><code>units_for_calculation</code></td><td>Unit count used (residential_units for residential; number_of_units for commercial)</td></tr>
+  <tr><td><code>trc_per_unit_annual</code></td><td>Cost per unit per year = trc_annual / units</td></tr>
+</table>
+
+<!-- ============================================================ SECTION 4 -->
+<h1>4. Payment Model</h1>
+
+<h2>Two Payment Plans</h2>
+<table>
+  <tr><th>Plan</th><th>Value Stored</th><th>How It Works</th></tr>
+  <tr>
+    <td>Pay in Full</td>
+    <td><code>payment_plan = 'full'</code></td>
+    <td>Client is charged <code>trc_annual</code> in a single Stripe PaymentIntent. <code>arp_fully_paid_at</code> is set immediately on success.</td>
+  </tr>
+  <tr>
+    <td>Pay Per Visit</td>
+    <td><code>payment_plan = 'per_visit'</code></td>
+    <td>Client is charged <code>trc_annual ÷ bdc_visits_per_year</code> once per visit. <code>installment_months</code> stores total visit count. <code>installments_paid</code> increments with each payment. <code>arp_fully_paid_at</code> is set when <code>installments_paid ≥ installment_months</code>.</td>
+  </tr>
+</table>
+
+<h2>Payment Fields</h2>
+<table>
+  <tr><th>Field</th><th>Purpose</th></tr>
+  <tr><td><code>work_payment_status</code></td><td>'pending' or 'paid' — whether the first work payment has been confirmed</td></tr>
+  <tr><td><code>work_payment_cadence</code></td><td>Mirrors payment_plan ('full' or 'per_visit')</td></tr>
+  <tr><td><code>arp_total_locked</code></td><td>The calculated trc_annual value locked at payment time — never changes even if PHAR is re-calculated</td></tr>
+  <tr><td><code>installment_amount</code></td><td>Per-visit charge amount (= arp_total_locked ÷ installment_months)</td></tr>
+  <tr><td><code>installment_months</code></td><td>Total number of visits (equals bdc_visits_per_year for per_visit plan)</td></tr>
+  <tr><td><code>installments_paid</code></td><td>How many visits have been paid so far</td></tr>
+  <tr><td><code>arp_fully_paid_at</code></td><td>Timestamp when full project cost was settled</td></tr>
+  <tr><td><code>next_installment_due_date</code></td><td>Reserved for future scheduled reminders (currently null)</td></tr>
+</table>
+
+<h2>Inspection Fee (Separate from Work Payment)</h2>
+<table>
+  <tr><th>Field</th><th>Value</th></tr>
+  <tr><td>Amount</td><td>$299.00 (constant <code>INSPECTION_FEE_DOLLARS = 299</code>)</td></tr>
+  <tr><td>Method</td><td>Stripe Checkout Session</td></tr>
+  <tr><td><code>inspection_fee_status</code></td><td>'pending' or 'paid'</td></tr>
+  <tr><td>Verification</td><td>On success redirect, system calls <code>$stripe->checkout->sessions->retrieve($sessionId)</code> and checks <code>payment_status === 'paid'</code> before marking paid</td></tr>
+</table>
+
+<!-- ============================================================ SECTION 5 -->
+<h1>5. Agreement &amp; Signing Flow</h1>
+
+<h2>Three-Step Execution Process (Defined in Contract Section 14)</h2>
+
+<p>The agreement is not legally binding until all three steps are completed. This process is enforced in code — each step is gated by the previous one.</p>
+
+<table>
+  <tr><th>Step</th><th>Actor</th><th>Action</th><th>Gate (Precondition)</th></tr>
+  <tr>
+    <td><strong>Step 1</strong><br>Client Signature</td>
+    <td>Client</td>
+    <td>Client types full name and ticks acknowledgment on the agreement page. Recorded digitally with timestamp.</td>
+    <td>Inspection must be <code>status = 'completed'</code></td>
+  </tr>
+  <tr>
+    <td><strong>Step 2</strong><br>Work Payment</td>
+    <td>Client</td>
+    <td>Client pays first work payment (full or first visit). Verified via Stripe API.</td>
+    <td>Inspection must be completed</td>
+  </tr>
+  <tr>
+    <td><strong>Step 3</strong><br>Etogo Countersign</td>
+    <td>Admin / Project Manager</td>
+    <td>Authorized Etogo representative countersigns from admin inspection show page.</td>
+    <td>Client must have signed AND work payment must be confirmed. Role check: Super Admin / Admin / Project Manager only.</td>
+  </tr>
+</table>
+
+<div class="success">
+  <strong>After Step 3:</strong> The Work Visit Schedule form becomes available on the admin inspection show page. The agreement is now fully executed and enforceable.
+</div>
+
+<h2>What the Contract Contains</h2>
+<ul>
+  <li><strong>Section 1:</strong> Job identification, property details, PHAR reference, approval date</li>
+  <li><strong>Section 2:</strong> Locked Scope of Work — generated from PHAR findings</li>
+  <li><strong>Section 3:</strong> Project Timeline &amp; Work Schedule — start date, completion target, duration, <strong>working hours (Mon–Fri, 9 AM–5 PM)</strong>, confirmed visit dates table</li>
+  <li><strong>Section 4:</strong> Pricing &amp; Payment Terms — labour, materials, tools breakdown; deposit/progress/final payment structure</li>
+  <li><strong>Sections 5–13:</strong> Change orders, access requirements, quality assurance, warranty, liability, governing law (British Columbia)</li>
+  <li><strong>Section 14:</strong> Authorization — explicit three-step signing order with Client (Step 1) and Etogo Representative (Step 3) signature blocks</li>
+</ul>
+
+<h2>PDF Download</h2>
+<p>Client can download the signed agreement as a PDF at any time via the agreement page. The filename is: <code>Client_Agreement_{client-name}_{property-name}.pdf</code></p>
+
+<!-- ============================================================ SECTION 6 -->
+<h1>6. Work Scheduling</h1>
+
+<h2>Overview</h2>
+<p>Once the agreement is fully executed (all three signing steps complete), the Etogo admin or project manager schedules the specific work visit dates. This is the only point where start/end dates are manually entered by staff.</p>
+
+<h2>Rules</h2>
+<ul>
+  <li>All visit dates must be <strong>weekdays (Monday to Friday)</strong></li>
+  <li>Weekends (Saturday and Sunday) are rejected by both the server-side validator and the contract text</li>
+  <li>Working hours are <strong>9:00 AM – 5:00 PM</strong> (stated in the contract, shown on the client report)</li>
+  <li>Number of visits = <code>bdc_visits_per_year</code> (auto-derived as <code>ceil(total_labour_hours / 8)</code>)</li>
+  <li>Duplicate dates are silently deduplicated; dates are auto-sorted ascending</li>
+</ul>
+
+<h2>How Admin Enters the Schedule</h2>
+<ol>
+  <li>Admin navigates to the inspection show page (<code>Admin → Inspections → [Inspection] → Show</code>)</li>
+  <li>After countersigning, a <strong>"Work Visit Schedule" card</strong> (green) appears automatically</li>
+  <li>The card shows N date-picker inputs (N = <code>bdc_visits_per_year</code>), pre-filled with suggested consecutive weekdays starting from tomorrow</li>
+  <li>Admin adjusts dates as needed and clicks <strong>"Save Visit Schedule"</strong></li>
+  <li>If any selected date is a weekend, the form is rejected with a clear error showing which dates are invalid</li>
+</ol>
+
+<h2>What Gets Saved</h2>
+<table>
+  <tr><th>Field</th><th>Value</th></tr>
+  <tr><td><code>work_schedule</code></td><td>JSON array: <code>[{"date": "2026-05-01", "status": "scheduled"}, ...]</code></td></tr>
+  <tr><td><code>planned_start_date</code></td><td>First visit date</td></tr>
+  <tr><td><code>target_completion_date</code></td><td>Last visit date</td></tr>
+  <tr><td><code>schedule_blocked_reason</code></td><td>Cleared to null once schedule is set</td></tr>
+</table>
+
+<h2>Visit Statuses</h2>
+<table>
+  <tr><th>Status</th><th>Meaning</th><th>Display Colour</th></tr>
+  <tr><td>scheduled</td><td>Date confirmed, work not yet started</td><td>Grey</td></tr>
+  <tr><td>completed</td><td>Visit carried out successfully</td><td>Green</td></tr>
+  <tr><td>cancelled</td><td>Visit was cancelled</td><td>Red</td></tr>
+</table>
+
+<h2>Client View</h2>
+<p>The client sees the confirmed visit schedule as a table on their inspection report page. If the agreement has been countersigned but no schedule has been saved yet, a message reads: <em>"Your work visit dates are being finalised by the Etogo team. You will see them here once confirmed."</em></p>
+
+<h2>Date Lock Behaviour</h2>
+<p>The <code>AgreementScheduleService</code> runs automatically at several points (after sign, after payment, after countersign) to compute an estimated start date. Once the admin saves a manual schedule, these auto-calculated dates are frozen — subsequent <code>refresh()</code> calls will no longer overwrite <code>planned_start_date</code> or <code>target_completion_date</code>.</p>
+
+<!-- ============================================================ SECTION 7 -->
+<h1>7. Key Database Fields</h1>
+
+<h2>Inspections Table — Complete Field Reference</h2>
+<table>
+  <tr><th>Column</th><th>Type</th><th>Purpose</th></tr>
+  <tr><td><code>status</code></td><td>string</td><td>scheduled / in_progress / completed / cancelled</td></tr>
+  <tr><td><code>scheduled_date</code></td><td>datetime</td><td>Date inspection was booked</td></tr>
+  <tr><td><code>completed_date</code></td><td>datetime</td><td>Set when admin completes assessment</td></tr>
+  <tr><td><code>findings</code></td><td>JSON</td><td>Array of finding objects from Step 1 inspection</td></tr>
+  <tr><td><code>owner_name</code></td><td>string</td><td>Snapshot: property owner name at inspection time</td></tr>
+  <tr><td><code>owner_email</code></td><td>string</td><td>Snapshot: owner email</td></tr>
+  <tr><td><code>owner_phone</code></td><td>string</td><td>Snapshot: owner phone</td></tr>
+  <tr><td><code>property_code</code></td><td>string</td><td>Snapshot: property code at inspection time</td></tr>
+  <tr><td><code>property_name</code></td><td>string</td><td>Snapshot: property name</td></tr>
+  <tr><td><code>property_address_snapshot</code></td><td>string</td><td>Snapshot: full address</td></tr>
+  <tr><td><code>property_type_snapshot</code></td><td>string</td><td>Snapshot: residential / commercial / mixed_use</td></tr>
+  <tr><td><code>residential_units_snapshot</code></td><td>integer</td><td>Snapshot: residential unit count</td></tr>
+  <tr><td><code>commercial_sqft_snapshot</code></td><td>decimal</td><td>Snapshot: commercial square footage</td></tr>
+  <tr><td><code>mixed_use_weight_snapshot</code></td><td>decimal</td><td>Snapshot: commercial weight in mixed-use</td></tr>
+  <tr><td><code>property_year_built</code></td><td>integer</td><td>Snapshot: year property was built</td></tr>
+  <tr><td><code>bdc_visits_per_year</code></td><td>decimal</td><td>Auto-derived: ceil(labour_hours / 8)</td></tr>
+  <tr><td><code>estimated_task_hours</code></td><td>decimal</td><td>Sum of all phar_labour_hours in findings</td></tr>
+  <tr><td><code>labour_hourly_rate</code></td><td>decimal</td><td>Loaded hourly rate from BDCSetting at time of calculation</td></tr>
+  <tr><td><code>bdc_distance_km</code></td><td>decimal</td><td>Travel distance from Etogo office to property (km)</td></tr>
+  <tr><td><code>bdc_time_minutes</code></td><td>decimal</td><td>One-way travel time in minutes</td></tr>
+  <tr><td><code>bdc_rate_per_km</code></td><td>decimal</td><td>Rate per km (from BDCSetting)</td></tr>
+  <tr><td><code>bdc_rate_per_minute</code></td><td>decimal</td><td>Rate per travel minute (from BDCSetting)</td></tr>
+  <tr><td><code>trc_annual</code></td><td>decimal</td><td>Total Remediation Cost annual — used as ARP total</td></tr>
+  <tr><td><code>trc_monthly</code></td><td>decimal</td><td>TRC / 12</td></tr>
+  <tr><td><code>arp_monthly</code></td><td>decimal</td><td>Monthly ARP rate</td></tr>
+  <tr><td><code>approved_by_client</code></td><td>boolean</td><td>True when client digitally signs</td></tr>
+  <tr><td><code>client_approved_at</code></td><td>datetime</td><td>When client signed</td></tr>
+  <tr><td><code>client_full_name</code></td><td>string</td><td>Name typed by client as digital signature</td></tr>
+  <tr><td><code>etogo_signed_by</code></td><td>FK → users</td><td>User ID of Etogo rep who countersigned</td></tr>
+  <tr><td><code>etogo_signed_at</code></td><td>datetime</td><td>When Etogo countersigned</td></tr>
+  <tr><td><code>work_payment_status</code></td><td>string</td><td>'pending' or 'paid'</td></tr>
+  <tr><td><code>payment_plan</code></td><td>string</td><td>'full' or 'per_visit'</td></tr>
+  <tr><td><code>arp_total_locked</code></td><td>decimal</td><td>Locked total at payment time</td></tr>
+  <tr><td><code>installment_amount</code></td><td>decimal</td><td>Per-visit charge</td></tr>
+  <tr><td><code>installment_months</code></td><td>integer</td><td>Total visit count</td></tr>
+  <tr><td><code>installments_paid</code></td><td>integer</td><td>Visits paid to date</td></tr>
+  <tr><td><code>arp_fully_paid_at</code></td><td>datetime</td><td>When full project cost settled</td></tr>
+  <tr><td><code>work_schedule</code></td><td>JSON</td><td>Array of visit objects: date + status</td></tr>
+  <tr><td><code>planned_start_date</code></td><td>date</td><td>First visit date (set by admin)</td></tr>
+  <tr><td><code>target_completion_date</code></td><td>date</td><td>Last visit date (set by admin)</td></tr>
+  <tr><td><code>estimated_duration_days</code></td><td>integer</td><td>Auto-calculated from labour hours</td></tr>
+  <tr><td><code>schedule_blocked_reason</code></td><td>string</td><td>Human-readable blocker message (null when cleared)</td></tr>
+</table>
+
+<!-- ============================================================ SECTION 8 -->
+<h1>8. Controller &amp; Service Reference</h1>
+
+<h2>Admin InspectionController (<code>app/Http/Controllers/InspectionController.php</code>)</h2>
+<table>
+  <tr><th>Method</th><th>Route</th><th>Purpose</th></tr>
+  <tr><td><code>store()</code></td><td>POST /inspections</td><td>Create inspection record (Step 1)</td></tr>
+  <tr><td><code>pharData()</code></td><td>GET /inspections/{id}/phar-data</td><td>Show PHAR data form (Step 2)</td></tr>
+  <tr><td><code>storePharData()</code></td><td>POST /inspections/{id}/store-phar-data</td><td>Save findings, calculate pricing, redirect back to form</td></tr>
+  <tr><td><code>completeAssessment()</code></td><td>POST /inspections/{id}/complete-assessment</td><td>Seal inspection as completed</td></tr>
+  <tr><td><code>previewReport()</code></td><td>GET /inspections/{id}/preview-report</td><td>Admin preview of client report (with banner)</td></tr>
+  <tr><td><code>previewAgreement()</code></td><td>GET /inspections/{id}/preview-agreement</td><td>Admin preview of contract draft (with banner)</td></tr>
+  <tr><td><code>countersignAgreement()</code></td><td>POST /inspections/{id}/agreement/countersign</td><td>Etogo countersigns — requires client signed + payment paid</td></tr>
+  <tr><td><code>storeWorkSchedule()</code></td><td>POST /inspections/{id}/work-schedule</td><td>Save visit dates — requires etogo_signed_at set; rejects weekends</td></tr>
+</table>
+
+<h2>Client InspectionController (<code>app/Http/Controllers/Client/InspectionController.php</code>)</h2>
+<table>
+  <tr><th>Method</th><th>Route</th><th>Purpose</th></tr>
+  <tr><td><code>report()</code></td><td>GET /client/inspections/{id}/report</td><td>Client inspection report with pricing, payment options, visit schedule</td></tr>
+  <tr><td><code>agreement()</code></td><td>GET /client/inspections/{id}/agreement</td><td>Agreement view with signing form</td></tr>
+  <tr><td><code>signAgreement()</code></td><td>POST /client/inspections/{id}/agreement/sign</td><td>Record client digital signature</td></tr>
+  <tr><td><code>downloadAgreementPdf()</code></td><td>GET /client/inspections/{id}/agreement/download</td><td>Stream PDF download</td></tr>
+  <tr><td><code>workPayment()</code></td><td>GET /client/inspections/{id}/work-payment</td><td>Show Stripe payment form (full or per-visit)</td></tr>
+  <tr><td><code>processWorkPayment()</code></td><td>POST /client/inspections/{id}/work-payment</td><td>Verify PaymentIntent with Stripe, record payment, start project</td></tr>
+  <tr><td><code>payInstallment()</code></td><td>GET /client/inspections/{id}/installment</td><td>Show per-visit payment form for next visit</td></tr>
+  <tr><td><code>processInstallment()</code></td><td>POST /client/inspections/{id}/installment</td><td>Verify and record per-visit payment</td></tr>
+  <tr><td><code>scheduleCreate()</code></td><td>GET /client/inspections/{property}/schedule</td><td>Show inspection fee payment page</td></tr>
+  <tr><td><code>scheduleStore()</code></td><td>POST /client/inspections/{property}/schedule</td><td>Create inspection record after fee payment</td></tr>
+  <tr><td><code>checkoutSuccess()</code></td><td>GET /client/inspections/checkout-success</td><td>Verify Stripe Checkout Session and mark fee paid</td></tr>
+</table>
+
+<h2>Key Services</h2>
+<table>
+  <tr><th>Service</th><th>File</th><th>Purpose</th></tr>
+  <tr><td><code>BDCCalculator</code></td><td><code>app/Services/BDCCalculator.php</code></td><td>Calculates BDC (travel mobilisation cost) from distance, time, rates, visits</td></tr>
+  <tr><td><code>MergeBridgeCalculator</code></td><td><code>app/Services/MergeBridgeCalculator.php</code></td><td>Combines BDC + FRLC + FMC, applies CPI multiplier and tier pricing, saves to DB</td></tr>
+  <tr><td><code>AgreementScheduleService</code></td><td><code>app/Services/AgreementScheduleService.php</code></td><td>Syncs tool assignments, calculates estimated duration and start dates, manages scheduling blockers</td></tr>
+</table>
+
+<!-- ============================================================ SECTION 9 -->
+<h1>9. Authorization &amp; Security</h1>
+
+<h2>Client Inspection Authorization</h2>
+<p>Every client-facing inspection method begins with a single authorization check via a private helper method:</p>
+<pre>private function authorizeInspection(Inspection $inspection): void
+{
+    if (!$inspection->property || (int) $inspection->property->user_id !== (int) Auth::id()) {
+        abort(403, 'Unauthorized access to this inspection.');
+    }
+}</pre>
+<p>This method is called at the start of all 9 client inspection methods. No inline duplication exists.</p>
+
+<h2>Stripe Payment Security</h2>
+<ul>
+  <li><strong>Inspection Fee:</strong> On the success redirect, <code>session_id</code> query parameter is required. The system calls <code>$stripe->checkout->sessions->retrieve($sessionId)</code> and checks <code>payment_status === 'paid'</code> before updating the database. URL manipulation alone cannot mark a fee as paid.</li>
+  <li><strong>Work Payment:</strong> The submitted <code>payment_intent_id</code> is verified by calling <code>$stripe->paymentIntents->retrieve($id)</code> and checking <code>status === 'succeeded'</code> before recording payment.</li>
+  <li><strong>Per-Visit Payment:</strong> Same PaymentIntent verification. Additionally gated by <code>payment_plan === 'per_visit'</code> check — clients on a full plan cannot call this endpoint.</li>
+</ul>
+
+<h2>Admin Role Gates</h2>
+<table>
+  <tr><th>Action</th><th>Required Role</th></tr>
+  <tr><td>Countersign agreement</td><td>Super Admin, Admin, or Project Manager</td></tr>
+  <tr><td>Save work schedule</td><td>Super Admin, Admin, or Project Manager</td></tr>
+  <tr><td>Complete assessment</td><td>Super Admin or Admin</td></tr>
+  <tr><td>PHAR data entry</td><td>Super Admin or Admin</td></tr>
+</table>
+
+<!-- ============================================================ SECTION 10 -->
+<h1>10. Known Constraints &amp; Business Rules</h1>
+
+<table>
+  <tr><th>Rule</th><th>Implementation</th></tr>
+  <tr><td>Visits per year always auto-derived — never user-typed</td><td><code>bdc_visits_per_year</code> field is <code>disabled</code> in the form (no <code>name</code> attribute), always overwritten server-side with <code>ceil(hours/8)</code></td></tr>
+  <tr><td>Labour rate always comes from BDCSetting — not user-editable on the form</td><td><code>labour_hourly_rate</code> input has no <code>name</code> attribute; server reads from <code>BDCSetting::getValue('loaded_hourly_rate')</code></td></tr>
+  <tr><td>ARP total is locked at first payment and never changed</td><td>Stored in <code>arp_total_locked</code> at payment time; per-visit amount = <code>arp_total_locked ÷ installment_months</code></td></tr>
+  <tr><td>Assessment must be previewed before completing</td><td><code>storePharData()</code> calculates pricing but does NOT complete — admin must explicitly click "Complete Assessment" after previewing</td></tr>
+  <tr><td>Admin-set visit dates override auto-schedule permanently</td><td><code>AgreementScheduleService::refresh()</code> checks <code>!empty($inspection->work_schedule)</code> before writing dates</td></tr>
+  <tr><td>Work schedule form only appears after Etogo countersigns</td><td>Admin show page wraps the scheduling card in <code>@if($inspection->etogo_signed_at)</code></td></tr>
+  <tr><td>Only weekday visit dates are allowed</td><td>Server validates <code>dayOfWeek !== Saturday &amp;&amp; !== Sunday</code>; invalid dates listed in error message</td></tr>
+  <tr><td>Commercial properties use number_of_units for per-unit cost breakdown</td><td><code>MergeBridgeCalculator</code> uses <code>$property->number_of_units</code> for commercial type; <code>$property->residential_units</code> for residential</td></tr>
+  <tr><td>Client signs before Etogo — order is enforced</td><td><code>countersignAgreement()</code> checks <code>$inspection->approved_by_client</code> before allowing countersign</td></tr>
+  <tr><td>Payment must be confirmed before Etogo countersigns</td><td><code>countersignAgreement()</code> checks <code>work_payment_status === 'paid'</code></td></tr>
+  <tr><td>Per-visit payments cannot exceed total visits</td><td>Payment is blocked server-side when <code>installments_paid >= installment_months</code></td></tr>
+  <tr><td>Governing law: British Columbia, Canada</td><td>Stated in contract Section 13 — not enforced in code</td></tr>
+</table>
+
+<div class="warning">
+  <strong>Upcoming — Not Yet Implemented:</strong> Visit status updates (marking a visit as "completed" or "cancelled" from the admin panel). Currently all saved visits default to "scheduled" status. This would be the natural next feature for work-in-progress tracking.
+</div>
+
+<br><br>
+<hr style="border:1pt solid #ccc;">
+<p style="text-align:center; color:#888; font-size:9pt;">
+  Emuria Regenerative Property Care &nbsp;|&nbsp; Etogo Proactive Property &amp; People Stewardship™<br>
+  Document generated April 18, 2026 &nbsp;|&nbsp; Confidential — Internal Use Only
+</p>
+
+</body>
+</html>

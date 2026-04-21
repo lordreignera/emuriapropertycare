@@ -13,7 +13,8 @@
 
     $propertiesOpen = request()->routeIs('properties.*');
     $inspectionsOpen = request()->routeIs('inspections.*');
-    $projectsOpen = request()->routeIs('projects.*') || request()->routeIs('work-logs.*') || request()->routeIs('milestones.*') || request()->routeIs('change-orders.*');
+    $maintenanceOpen = request()->routeIs('maintenance-visit-logs.*');
+    $projectsOpen = request()->routeIs('projects.*') || request()->routeIs('milestones.*') || request()->routeIs('change-orders.*') || request()->routeIs('maintenance-visit-logs.*');
     $billingOpen = request()->routeIs('invoices.*') || request()->routeIs('budgets.*');
     $reportsOpen = request()->routeIs('reports.*') || request()->routeIs('savings.*');
     $accessControlOpen = request()->routeIs('admin.users.*') || request()->routeIs('admin.roles.*') || request()->routeIs('admin.permissions.*');
@@ -84,11 +85,32 @@
 
     $projectsWithScopeCount = \App\Models\Project::whereHas('scopeOfWorks')->count();
 
+    // Stage 1: Client has signed + paid, waiting for Etogo to countersign
+    $pendingEtogoCount = \App\Models\Inspection::whereNotNull('client_signature')
+        ->where('work_payment_status', 'paid')
+        ->whereNull('etogo_signed_at')
+        ->count();
+
+    // Stage 2: Etogo countersigned but no visit schedule set yet
+    $awaitingScheduleCount = \App\Models\Inspection::whereNotNull('etogo_signed_at')
+        ->where(function($q) { $q->whereNull('work_schedule')->orWhere('work_schedule', '[]'); })
+        ->count();
+
+    // Stage 3: Active — schedule is set, work is underway
+    $activeWorkCount = \App\Models\Inspection::whereNotNull('etogo_signed_at')
+        ->whereNotNull('work_schedule')
+        ->where('work_schedule', '!=', '[]')
+        ->count();
+
     $activeProjectsCount = $user->hasRole('Technician')
         ? \App\Models\Project::where('assigned_to', $user->id)->where('status', 'active')->count()
         : \App\Models\Project::where('status', 'active')->count();
 
     $unpaidInvoicesCount = \App\Models\Invoice::pending()->count();
+
+    $unreturnedToolCount = \App\Models\InspectionToolAssignment::whereNull('returned_at')
+        ->whereHas('inspection', fn($q) => $q->whereNotNull('etogo_signed_at'))
+        ->count();
 @endphp
 
 <nav class="sidebar sidebar-offcanvas admin-client-sidebar" id="sidebar">
@@ -203,25 +225,45 @@
                 </summary>
                 <div class="admin-client-submenu">
                     @if($user->hasRole(['Project Manager', 'Super Admin', 'Administrator']) || $user->can('view-all-projects'))
-                        <a class="admin-client-sublink {{ request()->get('has_scope') == 'true' ? 'is-active' : '' }}" href="{{ route('projects.index') }}?has_scope=true">
-                            <span class="admin-client-sublabel">Scope of Work &amp; Quotes</span>
-                            @if($projectsWithScopeCount > 0)
-                                <span class="admin-client-badge">{{ $projectsWithScopeCount }}</span>
+
+                        {{-- Stage 1: Client signed + paid, pending Etogo countersign --}}
+                        <a class="admin-client-sublink {{ request()->routeIs('inspections.index') && request()->get('view') == 'pending-etogo' ? 'is-active' : '' }}"
+                           href="{{ route('inspections.index') }}?view=pending-etogo">
+                            <span class="admin-client-sublabel">Pending Etogo Signature</span>
+                            @if($pendingEtogoCount > 0)
+                                <span class="admin-client-badge">{{ $pendingEtogoCount }}</span>
                             @endif
                         </a>
-                        <a class="admin-client-sublink {{ request()->routeIs('projects.index') && request()->get('view') == 'scheduling' ? 'is-active' : '' }}" href="{{ route('projects.index') }}?view=scheduling">
+
+                        {{-- Stage 2: Etogo signed, no visit dates set yet --}}
+                        <a class="admin-client-sublink {{ request()->routeIs('inspections.index') && request()->get('view') == 'needs-schedule' ? 'is-active' : '' }}"
+                           href="{{ route('inspections.index') }}?view=needs-schedule">
                             <span class="admin-client-sublabel">Project Scheduling</span>
+                            @if($awaitingScheduleCount > 0)
+                                <span class="admin-client-badge">{{ $awaitingScheduleCount }}</span>
+                            @endif
                         </a>
+
                     @endif
-                    <a class="admin-client-sublink {{ request()->get('status') == 'active' ? 'is-active' : '' }}" href="{{ route('projects.index') }}?status=active">
+
+                    {{-- Stage 3: Active projects — schedule set, work happening --}}
+                    <a class="admin-client-sublink {{ request()->routeIs('maintenance-visit-logs.*') ? 'is-active' : '' }}"
+                       href="{{ route('maintenance-visit-logs.index') }}">
                         <span class="admin-client-sublabel">Active Projects</span>
-                        @if($activeProjectsCount > 0)
-                            <span class="admin-client-badge">{{ $activeProjectsCount }}</span>
+                        @if($activeWorkCount > 0)
+                            <span class="admin-client-badge">{{ $activeWorkCount }}</span>
                         @endif
                     </a>
-                    <a class="admin-client-sublink {{ request()->routeIs('work-logs.*') ? 'is-active' : '' }}" href="{{ route('work-logs.index') }}">
-                        <span class="admin-client-sublabel">Work Logs &amp; Progress</span>
+
+                    {{-- Tool Return & Assignment --}}
+                    <a class="admin-client-sublink {{ request()->routeIs('tool-assignments.index') ? 'is-active' : '' }}"
+                       href="{{ route('tool-assignments.index') }}">
+                        <span class="admin-client-sublabel">Tool Return &amp; Assignment</span>
+                        @if($unreturnedToolCount > 0)
+                            <span class="admin-client-badge">{{ $unreturnedToolCount }}</span>
+                        @endif
                     </a>
+
                     @if($user->hasRole(['Project Manager', 'Super Admin', 'Administrator']) || $user->can('view-all-projects'))
                         <a class="admin-client-sublink {{ request()->routeIs('milestones.*') ? 'is-active' : '' }}" href="{{ route('milestones.index') }}">
                             <span class="admin-client-sublabel">Milestones &amp; Budget</span>
@@ -230,9 +272,6 @@
                             <span class="admin-client-sublabel">Change Orders</span>
                         </a>
                     @endif
-                    <a class="admin-client-sublink {{ !request()->has('status') && !request()->has('has_scope') && !request()->has('view') ? 'is-active' : '' }}" href="{{ route('projects.index') }}">
-                        <span class="admin-client-sublabel">All Projects</span>
-                    </a>
                 </div>
             </details>
         @endif

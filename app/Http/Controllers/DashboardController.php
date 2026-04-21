@@ -70,16 +70,16 @@ class DashboardController extends Controller
         if ($user->hasRole('Finance')) {
             // Get invoice statistics
             $totalInvoices = Invoice::count();
-            $paidInvoices = Invoice::where('status', 'paid')->count();
-            $pendingInvoices = Invoice::where('status', 'pending')->count();
+            $paidInvoices = Invoice::paid()->count();
+            $pendingInvoices = Invoice::pending()->count();
             $overdueInvoices = Invoice::where('status', 'overdue')->count();
             
             // Calculate revenue
-            $totalRevenue = Invoice::where('status', 'paid')->sum('amount');
-            $pendingRevenue = Invoice::where('status', 'pending')->sum('amount');
-            $monthlyRevenue = Invoice::where('status', 'paid')
-                ->whereMonth('created_at', now()->month)
-                ->sum('amount');
+            $totalRevenue = Invoice::sum('paid_amount');
+            $pendingRevenue = Invoice::pending()->sum('balance');
+            $monthlyRevenue = Invoice::whereNotNull('paid_at')
+                ->whereMonth('paid_at', now()->month)
+                ->sum('paid_amount');
             
             // Get recent invoices
             $recentInvoices = Invoice::with(['user'])

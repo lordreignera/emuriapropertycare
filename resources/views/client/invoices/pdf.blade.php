@@ -37,7 +37,7 @@
     </div>
 
     <div class="card">
-        <div class="card-header">{{ $isInspectionFeeInvoice ? 'Inspection Fee Breakdown' : 'Amount Breakdown (Monthly)' }}</div>
+        <div class="card-header">{{ $isInspectionFeeInvoice ? 'Inspection Fee Breakdown' : 'Amount Breakdown (Annual Project Cost)' }}</div>
         <div class="card-body">
             <table>
                 <thead>
@@ -59,19 +59,19 @@
                     @else
                         <tr>
                             <td>BDC (Baseline Deterioration Cost)</td>
-                            <td class="text-right">${{ number_format($bdcMonthly, 2) }}</td>
+                            <td class="text-right">${{ number_format($bdcAnnual, 2) }}</td>
                         </tr>
                         <tr>
                             <td>FRLC (Findings Remediation Labour Cost)</td>
-                            <td class="text-right">${{ number_format($frlcMonthly, 2) }}</td>
+                            <td class="text-right">${{ number_format($frlcAnnual, 2) }}</td>
                         </tr>
                         <tr>
                             <td>FMC (Findings Material Cost)</td>
-                            <td class="text-right">${{ number_format($fmcMonthly, 2) }}</td>
+                            <td class="text-right">${{ number_format($fmcAnnual, 2) }}</td>
                         </tr>
                         <tr>
                             <td><strong>TRC (BDC + FRLC + FMC)</strong></td>
-                            <td class="text-right"><strong>${{ number_format($trcMonthly, 2) }}</strong></td>
+                            <td class="text-right"><strong>${{ number_format($trcAnnual, 2) }}</strong></td>
                         </tr>
                         <tr>
                             <td>Other / Adjustment</td>

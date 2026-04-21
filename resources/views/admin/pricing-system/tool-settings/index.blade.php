@@ -84,6 +84,8 @@
                             <tr>
                                 <th>#</th>
                                 <th>Tool</th>
+                                <th class="text-center">Total Stock</th>
+                                <th class="text-center">Stock Status<br><span class="fw-normal text-muted" style="font-size:0.72rem;">Deployed / Remaining</span></th>
                                 <th>System</th>
                                 <th>Subsystem</th>
                                 <th>Finding Resolved</th>
@@ -98,6 +100,17 @@
                                 <tr>
                                     <td>{{ $tools->firstItem() + $loop->index }}</td>
                                     <td><strong>{{ $tool->tool_name }}</strong></td>
+                                    <td class="text-center">
+                                        <span class="fw-bold" style="font-size:1.05rem;">{{ $tool->quantity }}</span>
+                                    </td>
+                                    <td class="text-center">
+                                        @php
+                                            $dep = $tool->deployedQuantity();
+                                            $rem = $tool->remainingQuantity();
+                                        @endphp
+                                        <span class="badge bg-warning text-dark me-1" title="Currently deployed to projects">{{ $dep }} out</span>
+                                        <span class="badge {{ $rem <= 0 ? 'bg-danger' : ($rem < 3 ? 'bg-warning text-dark' : 'bg-success') }}" title="Available in store">{{ $rem }} in store</span>
+                                    </td>
                                     <td>{{ $tool->system?->name ?: '--' }}</td>
                                     <td>{{ $tool->subsystem?->name ?: '--' }}</td>
                                     <td>
@@ -121,6 +134,10 @@
                                         @endif
                                     </td>
                                     <td>
+                                        <a href="{{ route('admin.tool-settings.logs', $tool) }}"
+                                           class="btn btn-sm btn-outline-info" title="View Deployment Logs">
+                                            <i class="mdi mdi-history"></i> Logs
+                                        </a>
                                         <a href="{{ route('admin.tool-settings.edit', $tool) }}" class="btn btn-sm btn-warning">
                                             <i class="mdi mdi-pencil"></i> Edit
                                         </a>
@@ -135,7 +152,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="9" class="text-center py-4 text-muted">No tool settings found.</td>
+                                    <td colspan="11" class="text-center py-4 text-muted">No tool settings found.</td>
                                 </tr>
                             @endforelse
                         </tbody>

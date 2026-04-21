@@ -45,6 +45,204 @@
                     </div>
                 @endif
 
+            <div class="card mb-4 border-dark">
+                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="mdi mdi-file-sign me-2"></i>Agreement Workflow</h5>
+                    @if(($inspection->status ?? null) === 'completed' && $inspection->approved_by_client && ($inspection->work_payment_status ?? 'pending') === 'paid' && !$inspection->etogo_signed_at)
+                        <form method="POST" action="{{ route('inspections.agreement.countersign', $inspection->id) }}" class="no-print">
+                            @csrf
+                            <button type="submit" class="btn btn-sm btn-light">
+                                <i class="mdi mdi-pen me-1"></i>Etogo Countersign
+                            </button>
+                        </form>
+                    @endif
+                </div>
+                <div class="card-body">
+                    <div class="row g-2">
+                        <div class="col-md-4">
+                            Client Sign:
+                            @if($inspection->approved_by_client)
+                                <span class="badge bg-success">Done</span>
+                            @else
+                                <span class="badge bg-warning text-dark">Pending</span>
+                            @endif
+                        </div>
+                        <div class="col-md-4">
+                            Deposit:
+                            @if(($inspection->work_payment_status ?? 'pending') === 'paid')
+                                <span class="badge bg-success">Confirmed</span>
+                            @else
+                                <span class="badge bg-warning text-dark">Pending</span>
+                            @endif
+                        </div>
+                        <div class="col-md-4">
+                            Etogo Sign:
+                            @if($inspection->etogo_signed_at)
+                                <span class="badge bg-success">Done</span>
+                            @else
+                                <span class="badge bg-secondary">Awaiting</span>
+                            @endif
+                        </div>
+                    </div>
+                    <div class="mt-2 small text-muted">
+                        Planned Start: {{ optional($inspection->planned_start_date)->format('M d, Y') ?? 'Pending' }} |
+                        Target Completion: {{ optional($inspection->target_completion_date)->format('M d, Y') ?? 'Pending' }} |
+                        Estimated Duration: {{ $inspection->estimated_duration_days ? $inspection->estimated_duration_days . ' day(s)' : 'N/A' }}
+                    </div>
+                    @if(!empty($inspection->schedule_blocked_reason))
+                        <div class="alert alert-warning mt-3 mb-0">
+                            <strong>Scheduling Blocker:</strong> {{ $inspection->schedule_blocked_reason }}
+                        </div>
+                    @endif
+                </div>
+            </div>
+
+            {{-- ====== WORK VISIT SCHEDULE ====== --}}
+            @if($inspection->etogo_signed_at)
+            @php
+                $totalVisits   = max(1, (int)($inspection->bdc_visits_per_year ?? 1));
+                $savedSchedule = collect($inspection->work_schedule ?? [])->sortBy('date')->values();
+
+                // Pre-populate date inputs: use saved dates if available, else generate sequential weekday dates
+                $suggestedDates = [];
+                if ($savedSchedule->isNotEmpty()) {
+                    $suggestedDates = $savedSchedule->pluck('date')->all();
+                } else {
+                    $cursor = \Illuminate\Support\Carbon::tomorrow();
+                    for ($i = 0; $i < $totalVisits; $i++) {
+                        while (in_array($cursor->dayOfWeek, [\Illuminate\Support\Carbon::SATURDAY, \Illuminate\Support\Carbon::SUNDAY])) {
+                            $cursor->addDay();
+                        }
+                        $suggestedDates[] = $cursor->toDateString();
+                        $cursor->addDay();
+                    }
+                }
+            @endphp
+            <div class="card mb-4 border-success">
+                <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="mdi mdi-calendar-check me-2"></i>Work Visit Schedule</h5>
+                    <small>Mon – Fri &nbsp;|&nbsp; 9:00 AM – 5:00 PM &nbsp;|&nbsp; {{ $totalVisits }} visit(s) required</small>
+                </div>
+                <div class="card-body">
+                    @if(session('success'))
+                        <div class="alert alert-success alert-dismissible fade show">
+                            {{ session('success') }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    @endif
+
+                    @if($savedSchedule->isNotEmpty())
+                        <div class="table-responsive mb-3">
+                            <table class="table table-sm table-bordered">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>#</th><th>Date</th><th>Day</th><th>Hours</th><th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($savedSchedule as $vi => $visit)
+                                    <tr class="{{ ($visit['status'] ?? 'scheduled') === 'completed' ? 'table-success' : '' }}">
+                                        <td>{{ $vi + 1 }}</td>
+                                        <td>{{ \Illuminate\Support\Carbon::parse($visit['date'])->format('M d, Y') }}</td>
+                                        <td>{{ \Illuminate\Support\Carbon::parse($visit['date'])->format('l') }}</td>
+                                        <td>9:00 AM – 5:00 PM</td>
+                                        <td><span class="badge bg-{{ ($visit['status'] ?? 'scheduled') === 'completed' ? 'success' : 'secondary' }} text-capitalize">{{ $visit['status'] ?? 'scheduled' }}</span></td>
+                                    </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    @endif
+
+                    <form method="POST" action="{{ route('inspections.work-schedule.store', $inspection->id) }}">
+                        @csrf
+                        <p class="text-muted small mb-2">Set or update the {{ $totalVisits }} work visit date(s). Only weekdays (Mon–Fri) are accepted.</p>
+                        <div class="row g-2" id="visitDatesContainer">
+                            @for($i = 0; $i < $totalVisits; $i++)
+                            <div class="col-md-3 col-sm-4 col-6">
+                                <label class="form-label small mb-1">Visit {{ $i + 1 }}</label>
+                                <input type="date"
+                                       name="visit_dates[]"
+                                       class="form-control form-control-sm"
+                                       value="{{ $suggestedDates[$i] ?? '' }}"
+                                       required>
+                            </div>
+                            @endfor
+                        </div>
+                        <div class="mt-3">
+                            <button type="submit" class="btn btn-success btn-sm">
+                                <i class="mdi mdi-content-save me-1"></i>Save Visit Schedule
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            @endif
+
+            <!-- ====== ASSIGNED TOOLS ====== -->
+            @if($toolAssignments->isNotEmpty())
+            <div class="card mb-4 border-info">
+                <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="mdi mdi-toolbox-outline me-2"></i>Assigned Tools &amp; Equipment</h5>
+                    <span class="badge bg-white text-info">{{ $toolAssignments->count() }} item(s)</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Tool / Equipment</th>
+                                    <th class="text-center">Qty Out</th>
+                                    <th>Ownership</th>
+                                    <th>Status</th>
+                                    <th>Dispatch Notes</th>
+                                    <th>Returned</th>
+                                    <th>Return Notes</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($toolAssignments as $ta)
+                                <tr class="{{ $ta->returned_at ? 'table-success' : '' }}">
+                                    <td class="fw-semibold">{{ $ta->tool_name }}</td>
+                                    <td class="text-center">
+                                        <span class="badge bg-{{ $ta->returned_at ? 'success' : 'warning text-dark' }}">
+                                            {{ $ta->quantity }}
+                                        </span>
+                                    </td>
+                                    <td class="text-capitalize small">{{ $ta->ownership_status ?? '—' }}</td>
+                                    <td>
+                                        @if($ta->returned_at)
+                                            <span class="badge bg-success"><i class="mdi mdi-check me-1"></i>Returned</span>
+                                        @else
+                                            <span class="badge bg-warning text-dark"><i class="mdi mdi-hammer-wrench me-1"></i>In Use</span>
+                                        @endif
+                                    </td>
+                                    <td class="small text-muted">{{ $ta->assign_notes ?? '—' }}</td>
+                                    <td class="small">
+                                        @if($ta->returned_at)
+                                            {{ $ta->returned_at->format('M d, Y') }}<br>
+                                            <span class="text-muted">by {{ $ta->returnedBy->name ?? 'N/A' }}</span>
+                                        @else
+                                            <span class="text-muted">—</span>
+                                        @endif
+                                    </td>
+                                    <td class="small text-muted">{{ $ta->return_notes ?? '—' }}</td>
+                                </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            @elseif($inspection->status === 'completed')
+            <div class="card mb-4 border-secondary">
+                <div class="card-body text-muted small">
+                    <i class="mdi mdi-toolbox-outline me-1"></i>No tools have been assigned to this inspection yet.
+                    <a href="{{ route('tool-assignments.index') }}" class="ms-2">Assign Tools</a>
+                </div>
+            </div>
+            @endif
+
             <!-- Property & Inspection Summary -->
             <div class="card mb-4">
                 <div class="card-header bg-primary text-white">

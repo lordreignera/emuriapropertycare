@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\FindingTemplateSetting;
 use App\Models\InspectionSubsystem;
 use App\Models\InspectionSystem;
+use App\Models\InspectionToolAssignment;
 use App\Models\ToolSetting;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -89,6 +90,7 @@ class ToolSettingController extends Controller
     {
         $validated = $request->validate([
             'tool_name' => 'required|string|max:150',
+            'quantity' => 'nullable|integer|min:1|max:999',
             'system_id' => 'nullable|exists:systems,id',
             'subsystem_id' => 'nullable|exists:subsystems,id',
             'finding_template_setting_id' => 'nullable|exists:finding_template_settings,id',
@@ -100,6 +102,7 @@ class ToolSettingController extends Controller
         ]);
 
         $validated['tool_name'] = trim((string) $validated['tool_name']);
+        $validated['quantity'] = max(1, (int) ($validated['quantity'] ?? 1));
         $validated['sort_order'] = $validated['sort_order'] ?? 0;
         $validated['is_active'] = $request->boolean('is_active', true);
         $validated['subsystem_id'] = $validated['subsystem_id'] ?? null;
@@ -137,6 +140,7 @@ class ToolSettingController extends Controller
     {
         $validated = $request->validate([
             'tool_name' => 'required|string|max:150',
+            'quantity' => 'nullable|integer|min:1|max:999',
             'system_id' => 'nullable|exists:systems,id',
             'subsystem_id' => 'nullable|exists:subsystems,id',
             'finding_template_setting_id' => 'nullable|exists:finding_template_settings,id',
@@ -148,6 +152,7 @@ class ToolSettingController extends Controller
         ]);
 
         $validated['tool_name'] = trim((string) $validated['tool_name']);
+        $validated['quantity'] = max(1, (int) ($validated['quantity'] ?? 1));
         $validated['sort_order'] = $validated['sort_order'] ?? 0;
         $validated['is_active'] = $request->boolean('is_active');
         $validated['subsystem_id'] = $validated['subsystem_id'] ?? null;
@@ -167,6 +172,60 @@ class ToolSettingController extends Controller
 
         return redirect()->route('admin.tool-settings.index')
             ->with('success', 'Tool setting deleted successfully.');
+    }
+
+    public function logs(ToolSetting $toolSetting, Request $request)
+    {
+        $filterStatus = $request->input('status', 'all'); // all | active | returned
+
+        $query = InspectionToolAssignment::with([
+            'inspection:id,property_id,status,created_at,etogo_signed_at',
+            'inspection.property:id,property_name,property_address',
+            'returnedBy:id,name',
+        ])->where('tool_setting_id', $toolSetting->id);
+
+        if ($filterStatus === 'active') {
+            $query->whereNull('returned_at');
+        } elseif ($filterStatus === 'returned') {
+            $query->whereNotNull('returned_at');
+        }
+
+        $assignments = $query->orderByRaw('returned_at IS NULL DESC')->orderBy('created_at', 'desc')->get();
+
+        $activeCount   = InspectionToolAssignment::where('tool_setting_id', $toolSetting->id)->whereNull('returned_at')->count();
+        $returnedCount = InspectionToolAssignment::where('tool_setting_id', $toolSetting->id)->whereNotNull('returned_at')->count();
+
+        return view('admin.pricing-system.tool-settings.logs', compact(
+            'toolSetting', 'assignments', 'filterStatus', 'activeCount', 'returnedCount'
+        ));
+    }
+
+    public function markReturned(InspectionToolAssignment $assignment, Request $request)
+    {
+        if ($assignment->returned_at) {
+            return back()->with('error', 'This assignment is already marked as returned.');
+        }
+
+        $validated = $request->validate([
+            'return_notes' => 'nullable|string|max:500',
+        ]);
+
+        $assignment->update([
+            'returned_at'  => now(),
+            'returned_by'  => auth()->id(),
+            'return_notes' => $validated['return_notes'] ?? null,
+        ]);
+
+        // If no more unreturned assignments, flip tool back to available
+        $stillOut = InspectionToolAssignment::where('tool_setting_id', $assignment->tool_setting_id)
+            ->whereNull('returned_at')->exists();
+
+        if (!$stillOut) {
+            ToolSetting::where('id', $assignment->tool_setting_id)
+                ->update(['availability_status' => 'available']);
+        }
+
+        return back()->with('success', 'Tool marked as returned.');
     }
 
     private function validateScopeConsistency(array $validated): void

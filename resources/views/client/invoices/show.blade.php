@@ -12,6 +12,7 @@
 @section('content')
 @php
     $isInspectionFeeInvoice = ($invoice->type === 'additional');
+    $isProjectInvoice = ! $isInspectionFeeInvoice;
 @endphp
 <div class="row mb-4">
     <div class="col-12">
@@ -20,23 +21,33 @@
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
                     <div>
                         <h3 class="fw-bold mb-1">{{ $invoice->invoice_number }}</h3>
-                        <p class="mb-0 opacity-75">{{ $isInspectionFeeInvoice ? 'Pre-inspection fee invoice' : 'Post-inspection work invoice breakdown' }}</p>
+                        <p class="mb-0 opacity-75">{{ $isInspectionFeeInvoice ? 'Pre-inspection fee invoice' : 'Project work invoice breakdown' }}</p>
                     </div>
                     @php
-                        $canPayInvoice = !$isInspectionFeeInvoice
-                            && in_array($invoice->status, ['draft', 'sent', 'partial', 'overdue'])
+                        $canStartWorkPayment = $isProjectInvoice
+                            && in_array($invoice->status, ['draft', 'sent', 'overdue'], true)
                             && $inspection
                             && ($inspection->status === 'completed')
                             && (($inspection->work_payment_status ?? 'pending') !== 'paid');
+                        $canPayInstallment = $isProjectInvoice
+                            && $inspection
+                            && (($inspection->payment_plan ?? 'full') === 'per_visit')
+                            && (($inspection->work_payment_status ?? 'pending') === 'paid')
+                            && ((int) ($inspection->installments_paid ?? 0) < (int) ($inspection->installment_months ?? 1));
                     @endphp
                     <div class="text-end d-flex flex-column align-items-end gap-2">
                         <div class="badge bg-light text-dark fs-5 px-3 py-2">
                             Total: ${{ number_format($invoiceTotal, 2) }}
                         </div>
                         <div class="d-flex gap-2">
-                            @if($canPayInvoice)
+                            @if($canStartWorkPayment)
                                 <a href="{{ route('client.inspections.work-payment', $inspection) }}" class="btn btn-sm btn-success">
                                     <i class="mdi mdi-credit-card-outline me-1"></i>Pay Now
+                                </a>
+                            @endif
+                            @if($canPayInstallment)
+                                <a href="{{ route('client.inspections.pay-installment', $inspection) }}" class="btn btn-sm btn-primary">
+                                    <i class="mdi mdi-calendar-check me-1"></i>Pay Next Visit
                                 </a>
                             @endif
                             <a href="{{ route('client.invoices.download', $invoice) }}" class="btn btn-sm btn-light">
@@ -57,7 +68,7 @@
     <div class="col-lg-8">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-header bg-light border-0 py-3">
-                <h5 class="mb-0 fw-semibold">{{ $isInspectionFeeInvoice ? 'Inspection Fee Breakdown' : 'Invoice Amount Breakdown (Monthly)' }}</h5>
+                <h5 class="mb-0 fw-semibold">{{ $isInspectionFeeInvoice ? 'Inspection Fee Breakdown' : 'Invoice Amount Breakdown (Annual Project Cost)' }}</h5>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
@@ -81,19 +92,19 @@
                             @else
                                 <tr>
                                     <td>BDC (Baseline Deterioration Cost)</td>
-                                    <td class="text-end">${{ number_format($bdcMonthly, 2) }}</td>
+                                    <td class="text-end">${{ number_format($bdcAnnual, 2) }}</td>
                                 </tr>
                                 <tr>
                                     <td>FRLC (Findings Remediation Labour Cost)</td>
-                                    <td class="text-end">${{ number_format($frlcMonthly, 2) }}</td>
+                                    <td class="text-end">${{ number_format($frlcAnnual, 2) }}</td>
                                 </tr>
                                 <tr>
                                     <td>FMC (Findings Material Cost)</td>
-                                    <td class="text-end">${{ number_format($fmcMonthly, 2) }}</td>
+                                    <td class="text-end">${{ number_format($fmcAnnual, 2) }}</td>
                                 </tr>
                                 <tr class="table-secondary">
                                     <td class="fw-semibold">TRC (BDC + FRLC + FMC)</td>
-                                    <td class="text-end fw-semibold">${{ number_format($trcMonthly, 2) }}</td>
+                                    <td class="text-end fw-semibold">${{ number_format($trcAnnual, 2) }}</td>
                                 </tr>
                                 <tr>
                                     <td>Other / Adjustment</td>
@@ -125,12 +136,18 @@
                 @endif
                 <div class="mb-2"><strong>Issue Date:</strong> {{ optional($invoice->issue_date)->format('M d, Y') ?? '-' }}</div>
                 <div class="mb-2"><strong>Due Date:</strong> {{ optional($invoice->due_date)->format('M d, Y') ?? '-' }}</div>
+                <div class="mb-2"><strong>Paid Amount:</strong> ${{ number_format((float) ($invoice->paid_amount ?? 0), 2) }}</div>
+                <div class="mb-2"><strong>Balance:</strong> ${{ number_format((float) ($invoice->balance ?? 0), 2) }}</div>
                 <div class="mb-2">
                     <strong>Status:</strong>
                     @if($invoice->status === 'paid')
-                        <span class="badge bg-success">Sent / Paid</span>
+                        <span class="badge bg-success">Paid</span>
+                    @elseif($invoice->status === 'partial')
+                        <span class="badge bg-primary">Partially Paid</span>
+                    @elseif($invoice->status === 'overdue')
+                        <span class="badge bg-danger">Overdue</span>
                     @else
-                        <span class="badge bg-warning text-dark">Sent / Not Paid</span>
+                        <span class="badge bg-warning text-dark">Awaiting Payment</span>
                     @endif
                 </div>
             </div>

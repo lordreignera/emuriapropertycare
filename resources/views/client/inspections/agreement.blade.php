@@ -3,6 +3,13 @@
 @section('title', 'Client Agreement')
 
 @section('content')
+@if(session('adminPreview') || isset($adminPreview))
+<div class="alert alert-warning border-warning mb-3 no-print" role="alert" style="border-left:4px solid #f0ad4e;">
+    <i class="mdi mdi-eye me-2"></i>
+    <strong>ADMIN PREVIEW MODE — CONTRACT DRAFT</strong> — This is the contract as the client will see it. Signing is disabled in preview.
+    <a href="javascript:window.close()" class="btn btn-sm btn-warning ms-3">Close Preview</a>
+</div>
+@endif
 <div class="row">
     <div class="col-lg-12 grid-margin stretch-card">
         <div class="card">
@@ -24,6 +31,16 @@
                 @if(session('error'))
                     <div class="alert alert-danger">{{ session('error') }}</div>
                 @endif
+
+                <div class="alert alert-info">
+                    <strong>Agreement Workflow</strong><br>
+                    1. Client sign: {!! $inspection->approved_by_client ? '<span class="badge bg-success">Completed</span>' : '<span class="badge bg-warning text-dark">Pending</span>' !!}<br>
+                    2. Deposit confirmation: {!! ($inspection->work_payment_status ?? 'pending') === 'paid' ? '<span class="badge bg-success">Completed</span>' : '<span class="badge bg-warning text-dark">Pending</span>' !!}<br>
+                    3. Etogo countersign: {!! $inspection->etogo_signed_at ? '<span class="badge bg-success">Completed</span>' : '<span class="badge bg-secondary">Awaiting</span>' !!}
+                    @if(!empty($inspection->schedule_blocked_reason))
+                        <div class="mt-2 mb-0"><small>{{ $inspection->schedule_blocked_reason }}</small></div>
+                    @endif
+                </div>
 
                 @include('shared.inspection-job-approval-agreement', ['inspection' => $inspection])
 

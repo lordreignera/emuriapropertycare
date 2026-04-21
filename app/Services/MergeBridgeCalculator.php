@@ -62,10 +62,11 @@ class MergeBridgeCalculator
         $trcMonthly = $trcAnnual / 12;
 
         // Step 4: Final charge depends on customer payment choice.
-        // 'monthly'  → client pays TRC / 12 each month.
-        // 'lump_sum' → client pays full TRC at once.
-        $paymentMode = ($inspection->work_payment_cadence === 'monthly') ? 'monthly' : 'lump_sum';
-        $finalCharge = ($paymentMode === 'monthly') ? $trcMonthly : $trcAnnual;
+        // 'per_visit' → client pays per visit (cost is per visit, total is annual TRC)
+        // 'full'      → client pays full TRC at once
+        // MergeBridgeCalculator always computes both; the locked amount is recorded at payment time.
+        $paymentMode = ($inspection->work_payment_cadence === 'per_visit') ? 'per_visit' : 'lump_sum';
+        $finalCharge = ($paymentMode === 'per_visit') ? $trcMonthly : $trcAnnual;
 
         // Step 5: Per-Unit Breakdown (multi-unit properties)
         $perUnitBreakdown = $this->calculatePerUnitBreakdown(
@@ -164,8 +165,8 @@ class MergeBridgeCalculator
         $units = 1;
         if ($property->type === 'residential' && $property->residential_units) {
             $units = $property->residential_units;
-        } elseif ($property->type === 'commercial' && $property->commercial_units) {
-            $units = $property->commercial_units;
+        } elseif ($property->type === 'commercial' && $property->number_of_units) {
+            $units = $property->number_of_units;
         }
         
         $units = max(1, $units); // At least 1
@@ -194,10 +195,14 @@ class MergeBridgeCalculator
             'frlc_monthly'           => $calculation['frlc_monthly'],
             'fmc_annual'             => $calculation['fmc_annual'],
             'fmc_monthly'            => $calculation['fmc_monthly'],
-            'trc_annual'             => $calculation['trc_annual'],
-            'trc_monthly'            => $calculation['trc_monthly'],
-            'arp_monthly'            => $calculation['arp_monthly'],
-            'units_for_calculation'  => $calculation['units_for_calculation'],
+            'trc_annual'                  => $calculation['trc_annual'],
+            'trc_monthly'                 => $calculation['trc_monthly'],
+            'arp_monthly'                 => $calculation['arp_monthly'],
+            'scientific_final_monthly'    => $calculation['trc_monthly'],
+            'scientific_final_annual'     => $calculation['trc_annual'],
+            'arp_equivalent_final'        => $calculation['trc_annual'],
+            'base_package_price_snapshot' => $calculation['arp_monthly'],
+            'units_for_calculation'       => $calculation['units_for_calculation'],
             'bdc_per_unit_annual'    => $calculation['bdc_per_unit_annual'],
             'frlc_per_unit_annual'   => $calculation['frlc_per_unit_annual'],
             'fmc_per_unit_annual'    => $calculation['fmc_per_unit_annual'],

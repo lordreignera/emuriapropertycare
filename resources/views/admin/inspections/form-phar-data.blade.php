@@ -244,11 +244,14 @@
                                     </div>
                                     <div class="col-md-6">
                                         <div class="form-group">
-                                            <label>Visits per Year (Property-specific) <span class="text-danger">*</span></label>
-                                            <input type="number" name="bdc_visits_per_year" id="bdcVisitsPerYear" class="form-control"
-                                                   value="{{ old('bdc_visits_per_year', $inspection->bdc_visits_per_year ?? '') }}"
-                                                   placeholder="e.g., 8" step="0.1" min="0" required />
-                                            <small class="text-muted">This can change per property inspection</small>
+                                            <label>Visits Required <span class="badge bg-info text-dark ms-1" style="font-size:.7rem;">Auto-computed</span></label>
+                                            <div class="input-group">
+                                                <input type="number" id="bdcVisitsPerYear" class="form-control bg-light text-muted"
+                                                       value="{{ $inspection->bdc_visits_per_year ?? max(1, (int)ceil($totalLabourHrs2/8)) }}"
+                                                       step="1" min="1" disabled />
+                                                <span class="input-group-text" id="visitsFormula" title="ceil(total labour hours / 8)">= &lceil; <span id="totalHrsDisplay">{{ number_format($totalLabourHrs2, 1) }}</span> hrs &divide; 8 &rceil;</span>
+                                            </div>
+                                            <small class="text-muted">Derived from total finding labour hours &divide; 8 hrs/day (Mon&ndash;Fri)</small>
                                         </div>
                                     </div>
                                 </div>
@@ -256,11 +259,11 @@
                                 <div class="row">
                                     <div class="col-md-6">
                                         <div class="form-group">
-                                            <label>Hours per Visit <small class="text-muted fw-normal">(labour fallback only)</small></label>
-                                            <input type="number" name="estimated_task_hours" id="hoursPerVisit" class="form-control" 
-                                                   value="{{ old('estimated_task_hours', $inspection->estimated_task_hours ?? '') }}" 
-                                                   placeholder="e.g., 4.5" step="0.1" min="0" />
-                                            <small class="text-muted">Used only when no travel distance/time is entered above</small>
+                                            <label>Total Estimated Hours <span class="badge bg-info text-dark ms-1" style="font-size:.7rem;">Auto-computed</span></label>
+                                            <input type="number" id="hoursPerVisit" class="form-control bg-light text-muted" 
+                                                   value="{{ $totalLabourHrs2 ?: ($inspection->estimated_task_hours ?? '') }}" 
+                                                   placeholder="0.0" step="0.1" min="0" disabled />
+                                            <small class="text-muted">Sum of all finding labour hours &mdash; updates as you fill in findings below</small>
                                         </div>
                                     </div>
                                     <div class="col-md-6">
@@ -275,7 +278,7 @@
                                     <div class="col-md-6">
                                         <div class="form-group">
                                             <label>Loaded Hourly Rate ($/hr) <span class="text-danger">*</span></label>
-                                            <input type="number" name="labour_hourly_rate" id="labourHourlyRate" class="form-control" 
+                                            <input type="number" id="labourHourlyRate" class="form-control" 
                                                    value="{{ old('labour_hourly_rate', $inspection->labour_hourly_rate ?? ($bdcSettings['loaded_hourly_rate'] ?? 165)) }}" 
                                                   placeholder="165" step="0.01" min="0" required readonly />
                                             <small class="text-muted">Static setting value (managed in BDC Settings)</small>
@@ -815,17 +818,69 @@
                     {{-- Complete Assessment — separate POST, only shown once pricing has been calculated --}}
                     @if(($inspection->bdc_annual ?? 0) > 0 && $inspection->status !== 'completed')
                     <div class="card border-success mb-4">
-                        <div class="card-body d-flex justify-content-between align-items-center">
-                            <div>
-                                <strong class="text-success"><i class="mdi mdi-check-decagram me-1"></i>Ready to Complete?</strong>
-                                <p class="text-muted small mb-0">Pricing has been calculated. Click the button to mark this assessment as complete.</p>
+                        <div class="card-header bg-success text-white py-2">
+                            <strong><i class="mdi mdi-check-decagram me-1"></i>Pricing Ready — Preview Before Completing</strong>
+                        </div>
+                        <div class="card-body">
+                            {{-- Pricing summary --}}
+                            <div class="row text-center mb-3">
+                                <div class="col-md-3">
+                                    <div class="border rounded p-2">
+                                        <small class="text-muted d-block">Total Project Cost</small>
+                                        <strong class="fs-5 text-success">${{ number_format($inspection->trc_annual ?? ($inspection->bdc_annual ?? 0), 2) }}</strong>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="border rounded p-2">
+                                        <small class="text-muted d-block">Visits Required</small>
+                                        <strong class="fs-5">{{ $inspection->bdc_visits_per_year ?? 1 }}</strong>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="border rounded p-2">
+                                        <small class="text-muted d-block">Cost per Visit</small>
+                                        @php
+                                            $prevVisits = max(1, (int)($inspection->bdc_visits_per_year ?? 1));
+                                            $prevTotal  = (float)($inspection->trc_annual ?? ($inspection->bdc_annual ?? 0));
+                                            $prevPerVisit = $prevVisits > 0 ? round($prevTotal / $prevVisits, 2) : 0;
+                                        @endphp
+                                        <strong class="fs-5 text-primary">${{ number_format($prevPerVisit, 2) }}</strong>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="border rounded p-2">
+                                        <small class="text-muted d-block">Total Hours</small>
+                                        <strong class="fs-5">{{ number_format($inspection->estimated_task_hours ?? 0, 1) }} hrs</strong>
+                                    </div>
+                                </div>
                             </div>
-                            <form method="POST" action="{{ route('inspections.complete-assessment', $inspection->id) }}">
-                                @csrf
-                                <button type="submit" class="btn btn-success btn-lg">
-                                    <i class="mdi mdi-flag-checkered me-1"></i>Complete Assessment
-                                </button>
-                            </form>
+
+                            {{-- Preview actions --}}
+                            <p class="text-muted small mb-3">
+                                Preview the report and contract draft exactly as the client will see them, then complete to lock in the assessment.
+                            </p>
+                            <div class="d-flex flex-wrap gap-2 mb-3">
+                                <a href="{{ route('inspections.preview-report', $inspection->id) }}" target="_blank"
+                                   class="btn btn-outline-info">
+                                    <i class="mdi mdi-file-eye me-1"></i>Preview Inspection Report
+                                </a>
+                                <a href="{{ route('inspections.preview-agreement', $inspection->id) }}" target="_blank"
+                                   class="btn btn-outline-secondary">
+                                    <i class="mdi mdi-file-document-outline me-1"></i>Preview Contract Draft
+                                </a>
+                            </div>
+
+                            {{-- Complete button --}}
+                            <hr class="my-2">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <small class="text-muted">Satisfied with the pricing and contract? Complete to notify the client.</small>
+                                <form method="POST" action="{{ route('inspections.complete-assessment', $inspection->id) }}" class="d-inline">
+                                    @csrf
+                                    <button type="submit" class="btn btn-success btn-lg">
+                                        <i class="mdi mdi-flag-checkered me-1"></i>Complete Assessment
+                                    </button>
+                                </form>
+                            </div>
                         </div>
                     </div>
                     @endif
@@ -912,13 +967,51 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     // ===== CONFIGURATION =====
-    const labourRateInput = document.querySelector('input[name="labour_hourly_rate"]');
+    const labourRateInput = document.getElementById('labourHourlyRate');
     const visitsPerYearInput = document.getElementById('bdcVisitsPerYear');
     const hoursPerVisitInput = document.getElementById('hoursPerVisit');
 
     // Server-side pre-computed totals from Step 1 findings
-    const SERVER_FRLC = {{ $totalFRLC2 }};
-    const SERVER_FMC  = {{ $totalMatCost2 }};
+    const SERVER_FRLC        = {{ $totalFRLC2 }};
+    const SERVER_FMC         = {{ $totalMatCost2 }};
+    const SERVER_LABOUR_HRS  = {{ $totalLabourHrs2 }};
+    const HOURS_PER_DAY      = 8;
+
+    // Keep visits + total hours fields in sync with live labour hours inputs
+    function recomputeVisits() {
+        // Sum all labour_hours inputs visible in the findings table
+        let totalHrs = 0;
+        document.querySelectorAll('input[name^="findings["][name$="[labour_hours]"]').forEach(function(inp) {
+            totalHrs += parseFloat(inp.value) || 0;
+        });
+        // Fall back to server total if no inputs are visible (read-only row mode)
+        if (totalHrs === 0) totalHrs = SERVER_LABOUR_HRS;
+        const visits = Math.max(1, Math.ceil(totalHrs / HOURS_PER_DAY));
+        const visitsEl = document.getElementById('bdcVisitsPerYear');
+        const hrsEl    = document.getElementById('hoursPerVisit');
+        const dispEl   = document.getElementById('totalHrsDisplay');
+        if (visitsEl) visitsEl.value = visits;
+        if (hrsEl)    hrsEl.value   = totalHrs.toFixed(1);
+        if (dispEl)   dispEl.textContent = totalHrs.toFixed(1);
+        return visits;
+    }
+
+    // Attach listener to every labour hours input
+    function attachLabourListeners() {
+        document.querySelectorAll('input[name^="findings["][name$="[labour_hours]"]').forEach(function(inp) {
+            inp.addEventListener('input', function() {
+                recomputeVisits();
+                calculateBDCFromTravel();
+                updateCalculationSummary();
+            });
+        });
+    }
+    attachLabourListeners();
+    // Re-attach after any dynamic row additions (mutation observer)
+    new MutationObserver(function() { attachLabourListeners(); })
+        .observe(document.body, { childList: true, subtree: true });
+
+    recomputeVisits(); // run once on page load
 
     function getLabourRate() {
         return parseFloat(labourRateInput?.value) || 165;
@@ -951,11 +1044,10 @@ document.addEventListener('DOMContentLoaded', function() {
             bdcAnnual  = travelBDC.bdcAnnual;
             bdcMonthly = travelBDC.bdcMonthly;
         } else {
-            // Labour fallback
-            const visitsPerYear = parseFloat(document.getElementById('bdcVisitsPerYear')?.value) || 0;
-            const hoursPerVisit = parseFloat(document.getElementById('hoursPerVisit')?.value)    || 0;
-            const labourRate    = parseFloat(labourRateInput?.value) || 165;
-            bdcAnnual  = visitsPerYear * hoursPerVisit * labourRate;
+            // Labour fallback: total hours × loaded rate = total FRLC cost (also = BDC fallback)
+            const totalHours = parseFloat(document.getElementById('hoursPerVisit')?.value) || SERVER_LABOUR_HRS;
+            const labourRate = parseFloat(labourRateInput?.value) || 165;
+            bdcAnnual  = totalHours * labourRate;
             bdcMonthly = bdcAnnual / 12;
         }
         

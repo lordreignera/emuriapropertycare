@@ -78,7 +78,8 @@
                                                     <i class="mdi mdi-eye"></i> Report
                                                 </a>
                                                 <a href="{{ route('client.inspections.agreement', $inspection->id) }}" class="btn btn-sm {{ $inspection->approved_by_client ? 'btn-success' : 'btn-outline-success' }}">
-                                                    <i class="mdi mdi-file-sign"></i> {{ $inspection->approved_by_client ? 'Agreement Signed' : 'Agreement' }}
+                                                    <i class="mdi mdi-file-sign"></i>
+                                                    {{ $inspection->etogo_signed_at ? 'Agreement Finalized' : ($inspection->approved_by_client ? 'Awaiting Etogo Sign' : 'Agreement') }}
                                                 </a>
                                             </div>
                                         @else

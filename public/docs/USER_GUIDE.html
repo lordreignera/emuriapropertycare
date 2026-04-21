@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EMURIA Regenerative Property Care – User Guide</title>
+<style>
+  body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #1a1a1a; margin: 0; padding: 0; }
+  .page { max-width: 900px; margin: 0 auto; padding: 40px 60px; }
+
+  /* Cover */
+  .cover { page-break-after: always; text-align: center; padding: 120px 60px 80px; background: #0f3d2e; color: #fff; min-height: 100vh; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; }
+  .cover h1 { font-size: 32pt; font-weight: 700; letter-spacing: 1px; margin-bottom: 12px; }
+  .cover .subtitle { font-size: 15pt; color: #a8d5b5; margin-bottom: 40px; }
+  .cover .version { font-size: 10pt; color: #88c5a0; margin-top: 60px; }
+  .cover .divider { width: 80px; height: 4px; background: #4caf7d; margin: 28px auto; border-radius: 2px; }
+
+  /* TOC */
+  .toc-page { page-break-after: always; padding: 60px; }
+  .toc-title { font-size: 20pt; font-weight: 700; color: #0f3d2e; border-bottom: 3px solid #4caf7d; padding-bottom: 8px; margin-bottom: 28px; }
+  .toc-item { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px dotted #ccc; font-size: 11pt; }
+  .toc-item.sub { padding-left: 24px; font-size: 10.5pt; color: #444; }
+  .toc-section { font-weight: 700; color: #0f3d2e; padding: 10px 0 3px; font-size: 12pt; }
+
+  /* Body pages */
+  h1.section { font-size: 17pt; font-weight: 700; color: #fff; background: #0f3d2e; padding: 14px 20px; border-radius: 4px; margin-top: 36px; margin-bottom: 20px; page-break-before: always; }
+  h2.section { font-size: 13pt; font-weight: 700; color: #0f3d2e; border-left: 5px solid #4caf7d; padding: 6px 12px; background: #f0f7f4; margin-top: 28px; margin-bottom: 14px; }
+  h3.section { font-size: 11.5pt; font-weight: 700; color: #2c6e49; margin-top: 20px; margin-bottom: 8px; }
+
+  p { margin: 6px 0 10px; line-height: 1.65; }
+  ul, ol { margin: 8px 0 12px 24px; line-height: 1.7; }
+  li { margin-bottom: 4px; }
+
+  /* Role badge */
+  .role { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 9pt; font-weight: 700; vertical-align: middle; margin-left: 6px; }
+  .role-admin   { background: #e8f5e9; color: #1b5e20; border: 1px solid #a5d6a7; }
+  .role-client  { background: #e3f2fd; color: #0d47a1; border: 1px solid #90caf9; }
+  .role-insp    { background: #fff3e0; color: #e65100; border: 1px solid #ffcc80; }
+  .role-pm      { background: #f3e5f5; color: #4a148c; border: 1px solid #ce93d8; }
+  .role-tech    { background: #fce4ec; color: #880e4f; border: 1px solid #f48fb1; }
+  .role-finance { background: #e0f7fa; color: #006064; border: 1px solid #80deea; }
+
+  /* Step boxes */
+  .step-box { display: flex; gap: 14px; align-items: flex-start; background: #f8fffe; border: 1px solid #b2dfdb; border-radius: 6px; padding: 12px 16px; margin: 10px 0; }
+  .step-num { flex-shrink: 0; width: 30px; height: 30px; background: #0f3d2e; color: #fff; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12pt; }
+  .step-content { flex: 1; }
+  .step-content strong { display: block; font-size: 10.5pt; margin-bottom: 2px; color: #0f3d2e; }
+
+  /* Info / warning / tip boxes */
+  .info  { background: #e3f2fd; border-left: 4px solid #1976d2; padding: 10px 14px; margin: 12px 0; border-radius: 0 4px 4px 0; font-size: 10.5pt; }
+  .warn  { background: #fff8e1; border-left: 4px solid #f57c00; padding: 10px 14px; margin: 12px 0; border-radius: 0 4px 4px 0; font-size: 10.5pt; }
+  .success { background: #e8f5e9; border-left: 4px solid #388e3c; padding: 10px 14px; margin: 12px 0; border-radius: 0 4px 4px 0; font-size: 10.5pt; }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: 10.5pt; }
+  th { background: #0f3d2e; color: #fff; padding: 8px 12px; text-align: left; font-weight: 600; }
+  td { padding: 7px 12px; border-bottom: 1px solid #e0e0e0; vertical-align: top; }
+  tr:nth-child(even) td { background: #f9f9f9; }
+
+  /* URL / code */
+  .url  { font-family: Consolas, monospace; background: #f4f4f4; padding: 2px 7px; border-radius: 3px; font-size: 10pt; color: #0f3d2e; }
+  .cred { font-family: Consolas, monospace; background: #fff3e0; padding: 2px 7px; border-radius: 3px; font-size: 10pt; color: #e65100; }
+
+  /* Flow arrows */
+  .flow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 14px 0; font-size: 10pt; }
+  .flow-box { background: #e8f5e9; border: 1px solid #a5d6a7; border-radius: 4px; padding: 5px 12px; white-space: nowrap; color: #1b5e20; font-weight: 600; }
+  .flow-arrow { color: #4caf7d; font-size: 14pt; font-weight: 700; }
+
+  /* Photo caption */
+  .caption { font-size: 9pt; color: #777; text-align: center; margin-top: -8px; margin-bottom: 12px; font-style: italic; }
+
+  /* Section header tag */
+  .who-tag { font-size: 9pt; color: #555; font-style: italic; margin-bottom: 6px; }
+
+  /* Footer */
+  .footer { margin-top: 60px; padding-top: 12px; border-top: 2px solid #e0e0e0; font-size: 9pt; color: #888; text-align: center; }
+
+  /* Checklist */
+  .checklist li::marker { content: "✅ "; }
+  .checklist-warn li::marker { content: "⚠️ "; }
+
+  @media print {
+    h1.section { page-break-before: always; }
+    .cover { page-break-after: always; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════
+     COVER PAGE
+     ═══════════════════════════════════════════ -->
+<div class="cover">
+  <div>
+    <div style="font-size:11pt; letter-spacing:4px; color:#88c5a0; text-transform:uppercase; margin-bottom:12px;">OFFICIAL USER GUIDE</div>
+    <h1>EMURIA Regenerative<br>Property Care</h1>
+    <div class="divider"></div>
+    <div class="subtitle">Complete System User Guide<br>from Registration to Maintenance Visits</div>
+    <div style="font-size:10pt; color:#a8d5b5; margin-top:40px; line-height:1.8;">
+      Covers: Authentication · Property Registration · Payments · PHAR Inspection<br>
+      Contract Signing · Work Scheduling · Maintenance Visit Logs
+    </div>
+    <div class="version">Version 1.0 &nbsp;|&nbsp; April 2026 &nbsp;|&nbsp; Confidential</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     TABLE OF CONTENTS
+     ═══════════════════════════════════════════ -->
+<div class="toc-page page">
+  <div class="toc-title">Table of Contents</div>
+
+  <div class="toc-section">System Roles Overview</div>
+  <div class="toc-item"><span>1. User Roles &amp; Account Types</span><span>3</span></div>
+  <div class="toc-item sub"><span>Login Credentials by Role</span></div>
+
+  <div class="toc-section">Section A – Client Journey</div>
+  <div class="toc-item"><span>2. Client Registration &amp; Login</span><span>4</span></div>
+  <div class="toc-item sub"><span>How to register &amp; what screen you see</span></div>
+  <div class="toc-item"><span>3. Property Registration</span><span>5</span></div>
+  <div class="toc-item sub"><span>Submitting a property for inspection</span></div>
+  <div class="toc-item"><span>4. Inspection Fee Payment ($299)</span><span>6</span></div>
+  <div class="toc-item sub"><span>Stripe payment, success, receipt</span></div>
+  <div class="toc-item"><span>5. Reading the Inspection Report</span><span>7</span></div>
+  <div class="toc-item sub"><span>Findings, photos, CPI score</span></div>
+  <div class="toc-item"><span>6. Signing the Job Approval Agreement</span><span>8</span></div>
+  <div class="toc-item sub"><span>Step 1 of 3 – Client signature</span></div>
+  <div class="toc-item"><span>7. Work Payment</span><span>9</span></div>
+  <div class="toc-item sub"><span>Full payment or per-visit plan</span></div>
+  <div class="toc-item"><span>8. Tracking Your Visit Schedule</span><span>10</span></div>
+
+  <div class="toc-section">Section B – Admin / Inspector / PM Journey</div>
+  <div class="toc-item"><span>9. Admin: Reviewing &amp; Approving Properties</span><span>11</span></div>
+  <div class="toc-item"><span>10. Inspector: PHAR Assessment Form</span><span>12</span></div>
+  <div class="toc-item sub"><span>Phase 1 findings · Phase 2 PHAR data · CPI pricing</span></div>
+  <div class="toc-item"><span>11. Admin: Countersigning the Agreement</span><span>14</span></div>
+  <div class="toc-item sub"><span>Step 3 of 3 – Etogo countersign</span></div>
+  <div class="toc-item"><span>12. Admin: Setting the Work Visit Schedule</span><span>15</span></div>
+  <div class="toc-item"><span>13. Maintenance Visit Log (Before &amp; After Photos)</span><span>16</span></div>
+
+  <div class="toc-section">Section C – Reference</div>
+  <div class="toc-item"><span>14. Signing Order &amp; What Unlocks What</span><span>18</span></div>
+  <div class="toc-item"><span>15. URL Reference &amp; Quick Links</span><span>19</span></div>
+  <div class="toc-item"><span>16. Stripe Test Cards</span><span>20</span></div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════
+     SECTION 1 – ROLES OVERVIEW
+     ═══════════════════════════════════════════ -->
+<div class="page">
+<h1 class="section">1 · User Roles &amp; Account Types</h1>
+
+<p>The EMURIA system has two main portals: the <strong>Admin Portal</strong> (staff) and the <strong>Client Portal</strong>. Every user is assigned one role that determines what they see and can do.</p>
+
+<table>
+  <tr>
+    <th>Role</th>
+    <th>Portal</th>
+    <th>Who Creates the Account</th>
+    <th>Key Responsibilities</th>
+  </tr>
+  <tr>
+    <td><strong>Super Admin</strong> <span class="role role-admin">Super Admin</span></td>
+    <td>Admin</td>
+    <td>System seeded (pre-created)</td>
+    <td>Full system control, create all staff accounts, configure pricing</td>
+  </tr>
+  <tr>
+    <td><strong>Administrator</strong> <span class="role role-admin">Admin</span></td>
+    <td>Admin</td>
+    <td>Super Admin</td>
+    <td>Manage staff, approve properties, countersign contracts</td>
+  </tr>
+  <tr>
+    <td><strong>Project Manager</strong> <span class="role role-pm">PM</span></td>
+    <td>Admin</td>
+    <td>Super Admin / Admin</td>
+    <td>Assign inspectors, create projects, schedule visits</td>
+  </tr>
+  <tr>
+    <td><strong>Inspector</strong> <span class="role role-insp">Inspector</span></td>
+    <td>Admin</td>
+    <td>Super Admin / Admin</td>
+    <td>Conduct PHAR assessments, upload findings &amp; photos</td>
+  </tr>
+  <tr>
+    <td><strong>Technician</strong> <span class="role role-tech">Technician</span></td>
+    <td>Admin</td>
+    <td>Super Admin / Admin</td>
+    <td>Execute scheduled maintenance visits, upload after-photos, log work</td>
+  </tr>
+  <tr>
+    <td><strong>Finance</strong> <span class="role role-finance">Finance</span></td>
+    <td>Admin</td>
+    <td>Super Admin / Admin</td>
+    <td>View invoices, billing, payment reports</td>
+  </tr>
+  <tr>
+    <td><strong>Client</strong> <span class="role role-client">Client</span></td>
+    <td>Client</td>
+    <td>Self-registers at <span class="url">/register</span></td>
+    <td>Register properties, pay inspection fee, sign agreement, pay for work</td>
+  </tr>
+</table>
+
+<h2 class="section">Default / Seeded Credentials</h2>
+<table>
+  <tr><th>Role</th><th>Email</th><th>Password</th><th>Login URL</th></tr>
+  <tr>
+    <td>Super Admin</td>
+    <td><span class="cred">admin@emuria.com</span></td>
+    <td><span class="cred">@dm1n2@25</span></td>
+    <td><span class="url">http://localhost/login</span></td>
+  </tr>
+  <tr>
+    <td>Client (example)</td>
+    <td><span class="cred">client@example.com</span></td>
+    <td><span class="cred">set on registration</span></td>
+    <td><span class="url">http://localhost/login</span></td>
+  </tr>
+</table>
+
+<div class="info"><strong>Note:</strong> All staff accounts (Admin, PM, Inspector, Technician, Finance) are created by the Super Admin through <span class="url">/admin/users/create</span>. Clients self-register for free at <span class="url">/register</span>.</div>
+
+</div><!-- /page -->
+
+
+<!-- ═══════════════════════════════════════════
+     SECTION 2 – CLIENT REGISTRATION
+     ═══════════════════════════════════════════ -->
+<div class="page">
+<h1 class="section">2 · Client Registration &amp; Login</h1>
+<p class="who-tag">Who performs this: <span class="role role-client">Client</span> (property owner / manager)</p>
+
+<h2 class="section">2.1 Registering a New Account</h2>
+
+<div class="step-box">
+  <div class="step-num">1</div>
+  <div class="step-content">
+    <strong>Visit the registration page</strong>
+    Go to <span class="url">http://localhost/register</span>. Registration is completely free — no credit card is needed at this stage.
+  </div>
+</div>
+
+<div class="step-box">
+  <div class="step-num">2</div>
+  <div class="step-content">
+    <strong>Fill in your details</strong>
+    Enter your full name, email address, and a secure password (minimum 8 characters). Accept the terms and conditions.
+  </div>
+</div>
+
+<div class="step-box">
+  <div class="step-num">3</div>
+  <div class="step-content">
+    <strong>Verify your email</strong>
+    An email verification link is sent to your inbox. Click the link to activate your account. Check your spam/junk folder if it does not arrive within 2 minutes.
+  </div>
+</div>
+
+<div class="step-box">
+  <div class="step-num">4</div>
+  <div class="step-content">
+    <strong>Log in</strong>
+    Go to <span class="url">http://localhost/login</span>, enter your email and password. You are redirected to your Client Dashboard.
+  </div>
+</div>
+
+<h2 class="section">2.2 What the Client Dashboard Shows</h2>
+<p>After logging in, clients land on the <strong>Client Dashboard</strong> which shows:</p>
+<ul>
+  <li>Your registered properties and their status</li>
+  <li>Any active inspections linked to your properties</li>
+  <li>Outstanding payments or actions required</li>
+  <li>Quick links to view reports and sign agreements</li>
+</ul>
+
+<div class="info"><strong>After Login URL:</strong> <span class="url">http://localhost/dashboard</span> — the system auto-detects your role and shows the correct dashboard view.</div>
+
+</div>
+
+
+<!-- ═══════════════════════════════════════════
+     SECTION 3 – PROPERTY REGISTRATION
+     ═══════════════════════════════════════════ -->
+<div class="page">
+<h1 class="section">3 · Property Registration</h1>
+<p class="who-tag">Who performs this: <span class="role role-client">Client</span></p>
+
+<h2 class="section">3.1 Registering Your Property</h2>
+
+<div class="step-box">
+  <div class="step-num">1</div>
+  <div class="step-content">
+    <strong>Navigate to My Properties</strong>
+    From the left sidebar, click <strong>My Properties</strong> or go to <span class="url">http://localhost/client/properties/create</span>.
+  </div>
+</div>
+
+<div class="step-box">
+  <div class="step-num">2</div>
+  <div class="step-content">
+    <strong>Complete the property form</strong>
+    Fill in:
+    <ul>
+      <li><strong>Property Name</strong> – e.g., "Kiwatule Apartments Block A"</li>
+      <li><strong>Address</strong> – full physical address</li>
+      <li><strong>Property Type</strong> – residential, commercial, industrial</li>
+      <li><strong>Number of Units</strong> (for commercial/multi-unit)</li>
+      <li><strong>Building Size (sq ft)</strong></li>
+      <li><strong>Year Built</strong></li>
+      <li><strong>Description / Notes</strong> – anything you want the inspector to know</li>
+    </ul>
+  </div>
+</div>
+
+<div class="step-box">
+  <div class="step-num">3</div>
+  <div class="step-content">
+    <strong>Upload property photos</strong>
+    Upload up to 10 exterior and interior photos. Accepted formats: JPEG, PNG, WebP (max 5 MB each). Good photos help the inspector prepare.
+  </div>
+</div>
+
+<div class="step-box">
+  <div class="step-num">4</div>
+  <div class="step-content">
+    <strong>Submit for review</strong>
+    Click <strong>Submit Property</strong>. The property status becomes <em>Pending Review</em>. An admin will review it before scheduling an inspection.
+  </div>
+</div>
+
+<h2 class="section">3.2 Property Status Flow</h2>
+<div class="flow">
+  <div class="flow-box">Pending Review</div><div class="flow-arrow">→</div>
+  <div class="flow-box">Approved</div><div class="flow-arrow">→</div>
+  <div class="flow-box">Inspection Scheduled</div><div class="flow-arrow">→</div>
+  <div class="flow-box">Inspection Paid</div><div class="flow-arrow">→</div>
+  <div class="flow-box">Assessment Complete</div>
+</div>
+
+<div class="warn"><strong>Important:</strong> You can edit property details while the status is <em>Pending Review</em>. Once approved by admin, property details are locked.</div>
+
+</div>
+
+
+<!-- ═══════════════════════════════════════════
+     SECTION 4 – INSPECTION FEE PAYMENT
+     ═══════════════════════════════════════════ -->
+<div class="page">
+<h1 class="section">4 · Inspection Fee Payment</h1>
+<p class="who-tag">Who performs this: <span class="role role-client">Client</span> · Amount: <strong>$299.00</strong></p>
+
+<p>After the admin approves your property and schedules an inspection, you are required to pay a one-time <strong>$299 inspection fee</strong> before the inspector visits. This fee covers the PHAR (Property Health Assessment Report) assessment.</p>
+
+<h2 class="section">4.1 Paying the Inspection Fee</h2>
+
+<div class="step-box">
+  <div class="step-num">1</div>
+  <div class="step-content">
+    <strong>Receive payment notification</strong>
+    You will see a banner on your dashboard and inspections list prompting you to pay the inspection fee.
+  </div>
+</div>
+
+<div class="step-box">
+  <div class="step-num">2</div>
+  <div class="step-content">
+    <strong>Click "Pay Inspection Fee"</strong>
+    Go to <span class="url">http://localhost/client/inspections/{id}/checkout</span> or click the "Pay Now" button on your inspection card.
+  </div>
+</div>
+
+<div class="step-box">
+  <div class="step-num">3</div>
+  <div class="step-content">
+    <strong>Complete Stripe Checkout</strong>
+    You are redirected to Stripe's secure hosted payment page. Enter your card details:
+    <ul>
+      <li>Card number, expiry, and CVC</li>
+      <li>Billing name and email</li>
+    </ul>
+    Click <strong>Pay $299.00</strong>.
+  </div>
+</div>
+
+<div class="step-box">
+  <div class="step-num">4</div>
+  <div class="step-content">
+    <strong>Payment confirmed</strong>
+    You are redirected back to the success page. Your inspection fee status changes to <strong>Paid</strong>. A receipt/invoice is available to download from the inspection detail page.
+  </div>
+</div>
+
+<h2 class="section">4.2 What Happens After Payment</h2>
+<ul>
+  <li>The inspection is unlocked for the inspector to begin the PHAR Assessment</li>
+  <li>The admin receives notification that the fee is paid</li>
+  <li>The inspector is assigned (if not already) and their dashboard shows the property as ready</li>
+</ul>
+
+<div class="info"><strong>Test Card (sandbox/testing environment):</strong> Card number <span class="cred">4242 4242 4242 4242</span> · Any future expiry · Any 3-digit CVC</div>
+
+</div>
+
+
+<!-- ═══════════════════════════════════════════
+     SECTION 5 – CLIENT: READING THE REPORT
+     ═══════════════════════════════════════════ -->
+<div class="page">
+<h1 class="section">5 · Reading the Inspection Report</h1>
+<p class="who-tag">Who performs this: <span class="role role-client">Client</span> — after inspector completes the assessment</p>
+
+<p>Once the inspector completes the PHAR assessment and an admin marks it as complete, you can view the full inspection report from your client portal.</p>
+
+<h2 class="section">5.1 Accessing the Report</h2>
+
+<div class="step-box">
+  <div class="step-num">1</div>
+  <div class="step-content">
+    <strong>Go to My Inspections</strong>
+    From your dashboard sidebar, click <strong>My Inspections</strong>, or visit <span class="url">http://localhost/client/inspections</span>.
+  </div>
+</div>
+
+<div class="step-box">
+  <div class="step-num">2</div>
+  <div class="step-content">
+    <strong>Click "View Report"</strong>
+    Find your inspection (status: Completed) and click the <strong>View Report</strong> button. URL: <span class="url">/client/inspections/{id}/report</span>
+  </div>
+</div>
+
+<h2 class="section">5.2 What the Report Contains</h2>
+
+<table>
+  <tr><th>Section</th><th>Description</th></tr>
+  <tr><td>Property Summary</td><td>Address, type, size, inspection date</td></tr>
+  <tr><td>Condition Score</td><td>Overall property health score calculated by the CPI engine</td></tr>
+  <tr><td>Findings</td><td>All issues found during inspection — each with priority (Critical / High / Medium / Low), photos, estimated labour hours, and material costs</td></tr>
+  <tr><td>Pricing Breakdown</td><td>BDC (Base Delivery Cost), FRLC (Fixed Running Labour Cost), FMC (Fixed Material Cost), TRC (Total Regeneration Cost), and the final ARP (Annual Regeneration Price)</td></tr>
+  <tr><td>Payment Plan</td><td>Option chosen: Full payment or Per-Visit plan, total visits per year</td></tr>
+  <tr><td>Visit Schedule</td><td>Scheduled visit dates (once admin sets them after contract is signed)</td></tr>
+  <tr><td>Add Photos</td><td>Client can upload additional photos against any finding using the "Add Photo" button</td></tr>
+</table>
+
+<div class="info"><strong>Next Step:</strong> After reviewing the report, the client proceeds to sign the Job Approval Agreement (see Section 6).</div>
+
+</div>
+
+
+<!-- ═══════════════════════════════════════════
+     SECTION 6 – CLIENT: SIGNING THE AGREEMENT
+     ═══════════════════════════════════════════ -->
+<div class="page">
+<h1 class="section">6 · Signing the Job Approval Agreement</h1>
+<p class="who-tag">Who performs this: <span class="role role-client">Client</span> — Step 1 of 3 in the contract process</p>
+
+<div class="warn"><strong>3-Step Signing Process:</strong> The agreement is only binding after all three steps are completed — (1) Client signs → (2) Client pays for work → (3) Etogo countersigns.</div>
+
+<h2 class="section">6.1 Reading the Agreement</h2>
+
+<div class="step-box">
+  <div class="step-num">1</div>
+  <div class="step-content">
+    <strong>Access the agreement</strong>
+    From the inspection report page, click <strong>View &amp; Sign Agreement</strong>. URL: <span class="url">/client/inspections/{id}/agreement</span>
+  </div>
+</div>
+
+<div class="step-box">
+  <div class="step-num">2</div>
+  <div class="step-content">
+    <strong>Read the full contract</strong>
+    The agreement includes:
+    <ul>
+      <li>Scope of work and services included</li>
+      <li>ARP pricing (annual cost) and payment plan details</li>
+      <li>Project Timeline — planned start and estimated completion</li>
+      <li>Working hours: Monday–Friday, 9:00 AM – 5:00 PM only</li>
+      <li>Visit schedule table (if already set by admin)</li>
+      <li>Terms, obligations and cancellation policy</li>
+      <li>Authorization section showing all 3 signing steps</li>
+    </ul>
+  </div>
+</div>
+
+<div class="step-box">
+  <div class="step-num">3</div>
+  <div class="step-content">
+    <strong>Sign the agreement</strong>
+    At the bottom of the agreement, enter:
+    <ul>
+      <li>Your full legal name</li>
+      <li>Check the acknowledgment checkbox confirming you have read and agree</li>
+    </ul>
+    Click <strong>Sign Agreement</strong>.
+  </div>
+</div>
+
+<div class="step-box">
+  <div class="step-num">4</div>
+  <div class="step-content">
+    <strong>Download a copy</strong>
+    After signing, click <strong>Download PDF</strong> to save a copy of the signed agreement for your records.
+  </div>
+</div>
+
+<h2 class="section">6.2 After Signing</h2>
+<ul>
+  <li>The agreement shows your name and signature date</li>
+  <li>The page now prompts you to <strong>proceed to work payment</strong> (Step 2)</li>
+  <li>Etogo (admin) is notified and will countersign after payment (Step 3)</li>
+</ul>
+
+</div>
+
+
+<!-- ═══════════════════════════════════════════
+     SECTION 7 – CLIENT: WORK PAYMENT
+     ═══════════════════════════════════════════ -->
+<div class="page">
+<h1 class="section">7 · Work Payment</h1>
+<p class="who-tag">Who performs this: <span class="role role-client">Client</span> — Step 2 of 3 in the contract process</p>
+
+<p>After signing the agreement, the client must pay for the maintenance work before Etogo countersigns and work officially begins. Two payment options are available:</p>
+
+<table>
+  <tr><th>Plan</th><th>How It Works</th><th>Best For</th></tr>
+  <tr>
+    <td><strong>Full Payment</strong></td>
+    <td>Pay the entire annual ARP amount in one lump sum. Calculated as TRC (Total Regeneration Cost).</td>
+    <td>Clients who prefer a single transaction</td>
+  </tr>
+  <tr>
+    <td><strong>Per-Visit Plan</strong></td>
+    <td>The total annual cost is divided equally by the number of scheduled visits (bdc_visits_per_year). One payment is processed per visit.</td>
+    <td>Clients who prefer to spread payments across visits</td>
+  </tr>
+</table>
+
+<h2 class="section">7.1 Paying for Work</h2>
+
+<div class="step-box">
+  <div class="step-num">1</div>
+  <div class="step-content">
+    <strong>Click "Proceed to Work Payment"</strong>
+    From the agreement page, click the payment button. URL: <span class="url">/client/inspections/{id}/work-payment</span>
+  </div>
+</div>
+
+<div class="step-box">
+  <div class="step-num">2</div>
+  <div class="step-content">
+    <strong>Choose your payment plan</strong>
+    Select <em>Full Payment</em> or <em>Per-Visit Plan</em>. The page shows the amount due for each option.
+  </div>
+</div>
+
+<div class="step-box">
+  <div class="step-num">3</div>
+  <div class="step-content">
+    <strong>Complete Stripe payment</strong>
+    You are taken to Stripe's secure payment page. Enter your card details and confirm the payment.
+  </div>
+</div>
+
+<div class="step-box">
+  <div class="step-num">4</div>
+  <div class="step-content">
+    <strong>Payment confirmed</strong>
+    Your work payment status changes to <strong>Paid</strong>. The system notifies the admin to countersign.
+  </div>
+</div>
+
+<h2 class="section">7.2 Per-Visit — Subsequent Payments</h2>
+<p>If you selected the Per-Visit plan, subsequent payments are triggered for each upcoming visit. A "Pay for next visit" button appears on your dashboard before each scheduled visit date.</p>
+
+</div>
+
+
+<!-- ═══════════════════════════════════════════
+     SECTION 8 – CLIENT: VISIT SCHEDULE
+     ═══════════════════════════════════════════ -->
+<div class="page">
+<h1 class="section">8 · Tracking Your Visit Schedule</h1>
+<p class="who-tag">Who performs this: <span class="role role-client">Client</span> — read-only view</p>
+
+<p>Once Etogo countersigns the agreement and sets the visit schedule, you can track all scheduled maintenance visits from your inspection report page.</p>
+
+<h2 class="section">8.1 Where to Find the Schedule</h2>
+<p>Go to <span class="url">/client/inspections/{id}/report</span> and scroll down to the <strong>Visit Schedule</strong> section. It shows:</p>
+
+<table>
+  <tr><th>Column</th><th>What It Means</th></tr>
+  <tr><td>Visit #</td><td>Sequential visit number (e.g., Visit 1, Visit 2…)</td></tr>
+  <tr><td>Date</td><td>The confirmed visit date (weekdays only, Mon–Fri)</td></tr>
+  <tr><td>Day</td><td>Day of the week</td></tr>
+  <tr><td>Hours</td><td>Scheduled working hours (9:00 AM – 5:00 PM)</td></tr>
+  <tr><td>Status</td><td>Scheduled / In Progress / Completed</td></tr>
+</table>
+
+<div class="success"><strong>When visits are completed:</strong> The row turns green and shows "Completed". The technician will have uploaded after-photos which can be viewed in the Maintenance Visit Log section.</div>
+
+<div class="info"><strong>Schedule Not Yet Available?</strong> If you have signed and paid but the schedule is not visible yet, it means the admin is still finalising visit dates. You will see: <em>"Visit Schedule Pending — being finalised by the Etogo team."</em></div>
+
+</div>
+
+
+<!-- ═══════════════════════════════════════════
+     SECTION 9 – ADMIN: REVIEW & APPROVE PROPERTIES
+     ═══════════════════════════════════════════ -->
+<div class="page">
+<h1 class="section">9 · Admin: Reviewing &amp; Approving Properties</h1>
+<p class="who-tag">Who performs this: <span class="role role-admin">Super Admin</span> <span class="role role-admin">Admin</span> <span class="role role-pm">Project Manager</span></p>
+
+<h2 class="section">9.1 Reviewing Submitted Properties</h2>
+
+<div class="step-box">
+  <div class="step-num">1</div>
+  <div class="step-content">
+    <strong>Log in to the admin portal</strong>
+    Go to <span class="url">http://localhost/login</span> with your staff credentials and you are taken to the admin dashboard.
+  </div>
+</div>
+
+<div class="step-box">
+  <div class="step-num">2</div>
+  <div class="step-content">
+    <strong>Open Property Management</strong>
+    Click <strong>Property Management</strong> in the sidebar. Filter by <em>"Not Scheduled"</em> to see newly submitted client properties awaiting approval.
+  </div>
+</div>
+
+<div class="step-box">
+  <div class="step-num">3</div>
+  <div class="step-content">
+    <strong>Review and approve</strong>
+    Open the property details page. Review all submitted information and photos. Click <strong>Approve</strong> to move it forward, or <strong>Reject</strong> with a reason.
+  </div>
+</div>
+
+<h2 class="section">9.2 Creating an Inspection &amp; Assigning an Inspector</h2>
+
+<div class="step-box">
+  <div class="step-num">4</div>
+  <div class="step-content">
+    <strong>Create an Inspection record</strong>
+    From the approved property, click <strong>Create Inspection</strong>. Set the scheduled date and any notes for the inspector.
+  </div>
+</div>
+
+<div class="step-box">
+  <div class="step-num">5</div>
+  <div class="step-content">
+    <strong>Assign the Inspector</strong>
+    Select an inspector from the dropdown. The inspector immediately sees this property on their dashboard as a pending assignment.
+  </div>
+</div>
+
+<div class="step-box">
+  <div class="step-num">6</div>
+  <div class="step-content">
+    <strong>Wait for client inspection fee payment</strong>
+    The client is notified to pay the $299 inspection fee. The PHAR form unlocks for the inspector once payment is confirmed.
+  </div>
+</div>
+
+</div>
+
+
+<!-- ═══════════════════════════════════════════
+     SECTION 10 – INSPECTOR: PHAR ASSESSMENT
+     ═══════════════════════════════════════════ -->
+<div class="page">
+<h1 class="section">10 · Inspector: PHAR Assessment Form</h1>
+<p class="who-tag">Who performs this: <span class="role role-insp">Inspector</span> — on-site and in the admin portal</p>
+
+<p>The PHAR (Property Health Assessment Report) is the core technical assessment of the property. It has two phases completed by the inspector.</p>
+
+<h2 class="section">10.1 Phase 1 – On-Site Findings</h2>
+
+<div class="step-box">
+  <div class="step-num">1</div>
+  <div class="step-content">
+    <strong>Open the assigned inspection</strong>
+    From your Inspector Dashboard, click the property or go to <span class="url">/inspections</span> → Awaiting Assessment.
+  </div>
+</div>
+
+<div class="step-box">
+  <div class="step-num">2</div>
+  <div class="step-content">
+    <strong>Record findings on-site</strong>
+    Use the <strong>Inspection Form</strong> on the show page to enter Phase 1 findings:
+    <ul>
+      <li>System / subsystem (e.g., Plumbing, Electrical, Roofing)</li>
+      <li>Issue description / task question</li>
+      <li>Severity: Critical · High · Medium · Low · NOI Protection</li>
+      <li>Upload finding photos (before photos — important: these become the BEFORE images in the maintenance log)</li>
+      <li>Labour hours and material cost estimate</li>
+    </ul>
+  </div>
+</div>
+
+<div class="step-box">
+  <div class="step-num">3</div>
+  <div class="step-content">
+    <strong>Save all findings</strong>
+    Click <strong>Save Findings</strong>. Findings are stored against the inspection and are visible to PM, Admin, and eventually the client on their report.
+  </div>
+</div>
+
+<h2 class="section">10.2 Phase 2 – PHAR Data Entry</h2>
+
+<div class="step-box">
+  <div class="step-num">4</div>
+  <div class="step-content">
+    <strong>Open the PHAR Data form</strong>
+    Click <strong>PHAR Data</strong> tab or go to <span class="url">/inspections/{id}/phar-data</span>.
+  </div>
+</div>
+
+<div class="step-box">
+  <div class="step-num">5</div>
+  <div class="step-content">
+    <strong>Enter PHAR parameters</strong>
+    Fill in all required fields:
+    <ul>
+      <li><strong>Property Size (PSF)</strong> — square footage</li>
+      <li><strong>Condition Score</strong> — overall condition, calculated from the findings</li>
+      <li><strong>BDC Travel Details</strong> — distance (km) and time (minutes) to property, rates per km/minute</li>
+      <li><strong>Labour Hourly Rate</strong> — read-only (display only, set by Admin in system config)</li>
+      <li><strong>Visits per Year</strong> — auto-calculated from total labour hours ÷ 8; <em>you cannot edit this field</em></li>
+      <li><strong>FMC Material Band</strong> — select the material cost tier for this property type</li>
+    </ul>
+  </div>
+</div>
+
+<div class="step-box">
+  <div class="step-num">6</div>
+  <div class="step-content">
+    <strong>Calculate &amp; Save</strong>
+    Click <strong>Calculate &amp; Save PHAR Data</strong>. The system runs the BDC → MergeBridge pricing pipeline and saves:
+    <ul>
+      <li>BDC Annual / Monthly</li>
+      <li>FRLC Annual / Monthly</li>
+      <li>FMC Annual / Monthly</li>
+      <li>TRC (Total Regeneration Cost)</li>
+      <li>ARP (Annual Regeneration Price) — the final locked price</li>
+    </ul>
+  </div>
+</div>
+
+<h2 class="section">10.3 Preview &amp; Complete the Assessment</h2>
+
+<div class="step-box">
+  <div class="step-num">7</div>
+  <div class="step-content">
+    <strong>Preview the report and agreement</strong>
+    Before completing, click <strong>Preview Report</strong> and <strong>Preview Agreement</strong> to verify all data looks correct. These show exactly what the client will see.
+  </div>
+</div>
+
+<div class="step-box">
+  <div class="step-num">8</div>
+  <div class="step-content">
+    <strong>Complete the assessment</strong>
+    Once satisfied, click <strong>Complete Assessment</strong>. This locks all pricing values — they cannot change after this point. The client is notified that their report is ready.
+  </div>
+</div>
+
+<div class="warn"><strong>Important — Pricing is Immutable After Completion:</strong> Once the assessment is marked complete, all ARP/TRC values are frozen. The client will pay exactly what was quoted.</div>
+
+</div>
+
+
+<!-- ═══════════════════════════════════════════
+     SECTION 11 – ADMIN: COUNTERSIGN
+     ═══════════════════════════════════════════ -->
+<div class="page">
+<h1 class="section">11 · Admin: Countersigning the Agreement</h1>
+<p class="who-tag">Who performs this: <span class="role role-admin">Super Admin</span> <span class="role role-admin">Admin</span> — Step 3 of 3 in the contract process</p>
+
+<p>The admin countersigns only after <em>both</em> the client has signed AND the client has paid for the work. This is the final step that makes the contract binding.</p>
+
+<h2 class="section">11.1 Prereqiusites Before Countersigning</h2>
+<ul class="checklist">
+  <li>Client has signed the agreement (client signature + date is visible)</li>
+  <li>Work payment has been confirmed (Stripe payment status = paid)</li>
+</ul>
+
+<h2 class="section">11.2 How to Countersign</h2>
+
+<div class="step-box">
+  <div class="step-num">1</div>
+  <div class="step-content">
+    <strong>Open the inspection in admin panel</strong>
+    Go to <span class="url">/inspections/{id}</span>. Scroll down to the <strong>Agreement Status</strong> section.
+  </div>
+</div>
+
+<div class="step-box">
+  <div class="step-num">2</div>
+  <div class="step-content">
+    <strong>Review all three conditions</strong>
+    Confirm the panel shows:
+    <ul>
+      <li>✅ Client signed</li>
+      <li>✅ Work payment paid</li>
+      <li>⬜ Etogo countersign — pending (your action)</li>
+    </ul>
+  </div>
+</div>
+
+<div class="step-box">
+  <div class="step-num">3</div>
+  <div class="step-content">
+    <strong>Click "Countersign as Etogo"</strong>
+    Click the green <strong>Countersign Agreement</strong> button. The system records your name and the current timestamp as the Etogo signature. The contract is now legally binding.
+  </div>
+</div>
+
+<h2 class="section">11.3 What Unlocks After Countersigning</h2>
+<ul class="checklist">
+  <li>The Work Visit Schedule form appears on the admin inspection page</li>
+  <li>The client can see the signed agreement with all three steps completed</li>
+  <li>The maintenance visit log becomes active for this property</li>
+</ul>
+
+</div>
+
+
+<!-- ═══════════════════════════════════════════
+     SECTION 12 – ADMIN: WORK VISIT SCHEDULE
+     ═══════════════════════════════════════════ -->
+<div class="page">
+<h1 class="section">12 · Admin: Setting the Work Visit Schedule</h1>
+<p class="who-tag">Who performs this: <span class="role role-admin">Super Admin</span> <span class="role role-admin">Admin</span> <span class="role role-pm">Project Manager</span></p>
+
+<p>After countersigning, the admin sets the exact calendar dates of each maintenance visit. The number of visits is calculated automatically from the PHAR assessment (total labour hours ÷ 8 hours per visit).</p>
+
+<h2 class="section">12.1 Setting Visit Dates</h2>
+
+<div class="step-box">
+  <div class="step-num">1</div>
+  <div class="step-content">
+    <strong>Open the inspection show page</strong>
+    Go to <span class="url">/inspections/{id}</span> and scroll to the green <strong>Work Visit Schedule</strong> card. This card only appears after countersigning.
+  </div>
+</div>
+
+<div class="step-box">
+  <div class="step-num">2</div>
+  <div class="step-content">
+    <strong>Review the pre-suggested dates</strong>
+    The form pre-populates N date-pickers with consecutive weekday suggestions starting from tomorrow. You can change any date — but all dates must be <strong>weekdays only (Monday–Friday)</strong>.
+  </div>
+</div>
+
+<div class="step-box">
+  <div class="step-num">3</div>
+  <div class="step-content">
+    <strong>Enter the actual agreed dates</strong>
+    Change the dates to match the schedule you have confirmed with the client. Each visit represents one full working day (9:00 AM – 5:00 PM).
+  </div>
+</div>
+
+<div class="step-box">
+  <div class="step-num">4</div>
+  <div class="step-content">
+    <strong>Save Visit Schedule</strong>
+    Click <strong>Save Visit Schedule</strong>. The system:
+    <ul>
+      <li>Saves the JSON schedule to the inspection</li>
+      <li>Sets <code>planned_start_date</code> = first visit date</li>
+      <li>Sets <code>target_completion_date</code> = last visit date</li>
+      <li>Updates the contract with the confirmed schedule</li>
+    </ul>
+  </div>
+</div>
+
+<div class="warn"><strong>Weekend dates are rejected.</strong> The system will show an error if any selected date falls on a Saturday or Sunday. All maintenance work is weekdays 9 AM–5 PM only.</div>
+
+<h2 class="section">12.2 After Setting the Schedule</h2>
+<ul class="checklist">
+  <li>The client can see all visit dates on their inspection report</li>
+  <li>The Maintenance Visit Log activates with a panel per visit</li>
+  <li>The signed agreement PDF now shows the confirmed visit table</li>
+</ul>
+
+</div>
+
+
+<!-- ═══════════════════════════════════════════
+     SECTION 13 – MAINTENANCE VISIT LOG
+     ═══════════════════════════════════════════ -->
+<div class="page">
+<h1 class="section">13 · Maintenance Visit Log — Before &amp; After Photos</h1>
+<p class="who-tag">Who performs this: <span class="role role-insp">Inspector</span> <span class="role role-tech">Technician</span> <span class="role role-pm">Project Manager</span> <span class="role role-admin">Admin</span></p>
+
+<p>The Maintenance Visit Log is where the team documents every on-site visit: what was done, how many hours, and — most importantly — <strong>before and after photos per issue/finding</strong>.</p>
+
+<h2 class="section">13.1 Accessing the Visit Log</h2>
+
+<div class="step-box">
+  <div class="step-num">1</div>
+  <div class="step-content">
+    <strong>Click "Maintenance Visit Log" in the sidebar</strong>
+    This item appears under the <em>Services</em> section in the admin sidebar. URL: <span class="url">http://localhost/maintenance-visit-logs</span>
+  </div>
+</div>
+
+<div class="step-box">
+  <div class="step-num">2</div>
+  <div class="step-content">
+    <strong>Select a property</strong>
+    The index page shows property cards with progress bars (total visits, completed visits, log entries). Click a property card to open its visit log.
+  </div>
+</div>
+
+<h2 class="section">13.2 The Visit Log Page</h2>
+<p>The show page lists every scheduled visit as a collapsible card:</p>
+<ul>
+  <li><strong>Visit 1, Visit 2…</strong> — each with the confirmed date, day, and current status</li>
+  <li>Status badge: <em>Scheduled</em> (orange) / <em>In Progress</em> (blue) / <em>Completed</em> (green)</li>
+</ul>
+
+<h2 class="section">13.3 Logging Work Done During a Visit</h2>
+
+<div class="step-box">
+  <div class="step-num">3</div>
+  <div class="step-content">
+    <strong>Click "Log Work" on a visit card</strong>
+    A form expands below the visit header. Fill in:
+    <ul>
+      <li><strong>Issue / Finding</strong> — link this log entry to a specific PHAR finding (dropdown of all findings for this property). Optional — can be a general visit.</li>
+      <li><strong>Visit Status</strong> — In Progress or Completed</li>
+      <li><strong>Hours Worked</strong> — e.g., 4.5</li>
+      <li><strong>Work Description</strong> — detailed description of what was done <em>(required)</em></li>
+      <li><strong>Additional Notes</strong> — materials used, follow-up observations, safety notes</li>
+      <li><strong>After Photos</strong> — upload up to 10 photos of the completed work (JPEG/PNG/WebP, max 5 MB each)</li>
+    </ul>
+  </div>
+</div>
+
+<div class="step-box">
+  <div class="step-num">4</div>
+  <div class="step-content">
+    <strong>Click "Save Log Entry"</strong>
+    The entry is saved. If the status is <em>Completed</em>, the visit status in the schedule JSON is automatically updated to <em>completed</em>.
+  </div>
+</div>
+
+<h2 class="section">13.4 Before &amp; After Photo Display</h2>
+<p>Once a log entry is saved, it displays a side-by-side comparison:</p>
+
+<table>
+  <tr>
+    <th style="background:#c62828; color:#fff;">BEFORE (red border)</th>
+    <th style="background:#2e7d32; color:#fff;">AFTER (green border)</th>
+  </tr>
+  <tr>
+    <td>Photos from the original PHAR finding — uploaded by the inspector during Phase 1 assessment, or added by the client on the report page.</td>
+    <td>Photos uploaded by the Technician/Inspector at the time of the maintenance visit using the Log Work form.</td>
+  </tr>
+</table>
+
+<div class="success"><strong>Tip:</strong> Always link each log entry to a specific finding when possible and upload multiple after-photos from different angles. This is your documented evidence of work completed.</div>
+
+<h2 class="section">13.5 Who Can Log Work</h2>
+<table>
+  <tr><th>Role</th><th>Can Log Work</th><th>Can View All Properties</th></tr>
+  <tr><td>Super Admin</td><td>✅ Yes</td><td>✅ Yes</td></tr>
+  <tr><td>Administrator</td><td>✅ Yes</td><td>✅ Yes</td></tr>
+  <tr><td>Project Manager</td><td>✅ Yes</td><td>✅ Yes</td></tr>
+  <tr><td>Inspector</td><td>✅ Yes (own assignments only)</td><td>⬜ Own assignments only</td></tr>
+  <tr><td>Technician</td><td>✅ Yes (own assignments only)</td><td>⬜ Own assignments only</td></tr>
+  <tr><td>Finance</td><td>⬜ No</td><td>⬜ No (view billing only)</td></tr>
+  <tr><td>Client</td><td>⬜ No (view only on report page)</td><td>N/A — Client Portal</td></tr>
+</table>
+
+</div>
+
+
+<!-- ═══════════════════════════════════════════
+     SECTION 14 – SIGNING ORDER REFERENCE
+     ═══════════════════════════════════════════ -->
+<div class="page">
+<h1 class="section">14 · Signing Order &amp; What Unlocks What</h1>
+
+<p>The entire workflow is gated by a sequential process. Nothing can be skipped. This table shows the exact order and what each action unlocks for the next step.</p>
+
+<table>
+  <tr>
+    <th>#</th>
+    <th>Action</th>
+    <th>Performed By</th>
+    <th>Unlocks</th>
+  </tr>
+  <tr>
+    <td>1</td>
+    <td>Client registers and verifies email</td>
+    <td><span class="role role-client">Client</span></td>
+    <td>Access to client portal, property registration</td>
+  </tr>
+  <tr>
+    <td>2</td>
+    <td>Client submits property</td>
+    <td><span class="role role-client">Client</span></td>
+    <td>Admin sees property in "Not Scheduled" queue</td>
+  </tr>
+  <tr>
+    <td>3</td>
+    <td>Admin approves property &amp; creates inspection</td>
+    <td><span class="role role-admin">Admin</span></td>
+    <td>Inspector assignment, inspection fee payment prompt to client</td>
+  </tr>
+  <tr>
+    <td>4</td>
+    <td>Client pays $299 inspection fee (Stripe)</td>
+    <td><span class="role role-client">Client</span></td>
+    <td>Inspector can begin PHAR assessment form</td>
+  </tr>
+  <tr>
+    <td>5</td>
+    <td>Inspector completes Phase 1 findings + Phase 2 PHAR data</td>
+    <td><span class="role role-insp">Inspector</span></td>
+    <td>Preview Report / Preview Agreement buttons</td>
+  </tr>
+  <tr>
+    <td>6</td>
+    <td>Admin / Inspector clicks "Complete Assessment"</td>
+    <td><span class="role role-insp">Inspector</span> / <span class="role role-admin">Admin</span></td>
+    <td>Pricing locked permanently; client report visible</td>
+  </tr>
+  <tr>
+    <td>7</td>
+    <td>Client views report and signs agreement (Step 1 of 3)</td>
+    <td><span class="role role-client">Client</span></td>
+    <td>Work payment button becomes active</td>
+  </tr>
+  <tr>
+    <td>8</td>
+    <td>Client pays for work — full or per-visit (Step 2 of 3)</td>
+    <td><span class="role role-client">Client</span></td>
+    <td>Admin countersign button becomes active</td>
+  </tr>
+  <tr>
+    <td>9</td>
+    <td>Admin countersigns agreement (Step 3 of 3)</td>
+    <td><span class="role role-admin">Admin</span></td>
+    <td>Work schedule form appears on admin page; maintenance log activated</td>
+  </tr>
+  <tr>
+    <td>10</td>
+    <td>Admin sets visit schedule (weekday dates)</td>
+    <td><span class="role role-admin">Admin</span> / <span class="role role-pm">PM</span></td>
+    <td>Visit dates visible on client report; visit log panels created</td>
+  </tr>
+  <tr>
+    <td>11</td>
+    <td>Team visits property and logs work + after-photos</td>
+    <td><span class="role role-insp">Inspector</span> / <span class="role role-tech">Technician</span></td>
+    <td>Visit status updates to Completed; before/after visible in log</td>
+  </tr>
+</table>
+
+</div>
+
+
+<!-- ═══════════════════════════════════════════
+     SECTION 15 – URL REFERENCE
+     ═══════════════════════════════════════════ -->
+<div class="page">
+<h1 class="section">15 · URL Reference &amp; Quick Links</h1>
+
+<h2 class="section">Client Portal URLs</h2>
+<table>
+  <tr><th>Page</th><th>URL</th><th>Who Uses It</th></tr>
+  <tr><td>Register (free)</td><td><span class="url">http://localhost/register</span></td><td>Client</td></tr>
+  <tr><td>Login</td><td><span class="url">http://localhost/login</span></td><td>Everyone</td></tr>
+  <tr><td>Client Dashboard</td><td><span class="url">http://localhost/dashboard</span></td><td>Client</td></tr>
+  <tr><td>Register a Property</td><td><span class="url">http://localhost/client/properties/create</span></td><td>Client</td></tr>
+  <tr><td>My Properties List</td><td><span class="url">http://localhost/client/properties</span></td><td>Client</td></tr>
+  <tr><td>My Inspections</td><td><span class="url">http://localhost/client/inspections</span></td><td>Client</td></tr>
+  <tr><td>Inspection Report</td><td><span class="url">http://localhost/client/inspections/{id}/report</span></td><td>Client</td></tr>
+  <tr><td>View Agreement</td><td><span class="url">http://localhost/client/inspections/{id}/agreement</span></td><td>Client</td></tr>
+  <tr><td>Work Payment</td><td><span class="url">http://localhost/client/inspections/{id}/work-payment</span></td><td>Client</td></tr>
+</table>
+
+<h2 class="section">Admin Portal URLs</h2>
+<table>
+  <tr><th>Page</th><th>URL</th><th>Who Uses It</th></tr>
+  <tr><td>Admin Dashboard</td><td><span class="url">http://localhost/dashboard</span></td><td>Admin / PM / Inspector / Technician</td></tr>
+  <tr><td>All Properties</td><td><span class="url">http://localhost/properties</span></td><td>Admin / PM</td></tr>
+  <tr><td>All Inspections</td><td><span class="url">http://localhost/inspections</span></td><td>Admin / Inspector / PM</td></tr>
+  <tr><td>Inspection Detail</td><td><span class="url">http://localhost/inspections/{id}</span></td><td>Admin / Inspector</td></tr>
+  <tr><td>PHAR Assessment Form</td><td><span class="url">http://localhost/inspections/{id}/phar-data</span></td><td>Inspector</td></tr>
+  <tr><td>Preview Report</td><td><span class="url">http://localhost/inspections/{id}/preview-report</span></td><td>Inspector / Admin</td></tr>
+  <tr><td>Preview Agreement</td><td><span class="url">http://localhost/inspections/{id}/preview-agreement</span></td><td>Inspector / Admin</td></tr>
+  <tr><td>Maintenance Visit Log (all)</td><td><span class="url">http://localhost/maintenance-visit-logs</span></td><td>Admin / PM / Inspector / Technician</td></tr>
+  <tr><td>Visit Log (one property)</td><td><span class="url">http://localhost/maintenance-visit-logs/{inspection_id}</span></td><td>Admin / PM / Inspector / Technician</td></tr>
+  <tr><td>User Management</td><td><span class="url">http://localhost/admin/users</span></td><td>Super Admin / Admin</td></tr>
+  <tr><td>CPI Pricing Settings</td><td><span class="url">http://localhost/admin/pricing-config</span></td><td>Super Admin / Admin</td></tr>
+  <tr><td>System Documentation</td><td><span class="url">http://localhost/docs/SYSTEM_WORKFLOW_DOCUMENT.html</span></td><td>Internal team</td></tr>
+</table>
+
+</div>
+
+
+<!-- ═══════════════════════════════════════════
+     SECTION 16 – STRIPE TEST CARDS
+     ═══════════════════════════════════════════ -->
+<div class="page">
+<h1 class="section">16 · Stripe Test Cards</h1>
+
+<p>When running in the test/sandbox environment, use the following card numbers to simulate different payment outcomes. <strong>Never use real card numbers in the test environment.</strong></p>
+
+<table>
+  <tr><th>Card Number</th><th>Result</th><th>Use Case</th></tr>
+  <tr>
+    <td><span class="cred">4242 4242 4242 4242</span></td>
+    <td>✅ Payment succeeds</td>
+    <td>Normal successful payment (inspection fee or work payment)</td>
+  </tr>
+  <tr>
+    <td><span class="cred">4000 0025 0000 3155</span></td>
+    <td>🔐 Requires 3D Secure</td>
+    <td>Test authentication challenges</td>
+  </tr>
+  <tr>
+    <td><span class="cred">4000 0000 0000 9995</span></td>
+    <td>❌ Insufficient funds</td>
+    <td>Test declined payment handling</td>
+  </tr>
+  <tr>
+    <td><span class="cred">4000 0000 0000 0002</span></td>
+    <td>❌ Card declined</td>
+    <td>Test generic card decline</td>
+  </tr>
+</table>
+
+<p><strong>For all test cards use:</strong></p>
+<ul>
+  <li>Expiry: any future date (e.g., <span class="cred">12/29</span>)</li>
+  <li>CVC: any 3 digits (e.g., <span class="cred">123</span>)</li>
+  <li>Name: any name (e.g., <span class="cred">Test Client</span>)</li>
+  <li>Billing address: any address</li>
+</ul>
+
+<div class="warn"><strong>Live / Production:</strong> When the app is switched to live Stripe keys, real card details are used and real charges are made. Ensure you switch <code>STRIPE_KEY</code> and <code>STRIPE_SECRET</code> in the <code>.env</code> file before going live.</div>
+
+<br><br>
+<div class="footer">
+  <strong>EMURIA Regenerative Property Care</strong> &nbsp;|&nbsp; User Guide v1.0 &nbsp;|&nbsp; April 2026<br>
+  Confidential — For internal and client use only. Do not distribute without authorisation.<br>
+  System built on Laravel · Stripe · Spatie Permissions · Livewire
+</div>
+
+</div>
+
+</body>
+</html>

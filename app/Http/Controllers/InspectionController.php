@@ -13,11 +13,21 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Barryvdh\DomPDF\Facade\Pdf;
 use App\Services\BDCCalculator;
+use App\Services\AgreementScheduleService;
+use App\Services\InspectionInvoiceSyncService;
 use App\Models\InspectionSystem;
 use App\Support\PharCatalog;
+use Illuminate\Support\Carbon;
 
 class InspectionController extends Controller
 {
+    public function __construct(
+        private readonly AgreementScheduleService $agreementScheduleService,
+        private readonly InspectionInvoiceSyncService $inspectionInvoiceSyncService,
+    )
+    {
+    }
+
     /**
      * Display a listing of inspections.
      */
@@ -89,6 +99,33 @@ class InspectionController extends Controller
             $query->whereIn('status', ['scheduled', 'in_progress']);
         }
 
+        // Project Scheduling view: countersigned but no visit schedule set yet
+        if ($request->get('view') === 'needs-schedule') {
+            $query = Inspection::with(['property.user', 'property.projectManager', 'inspector', 'assignedBy', 'project.manager'])
+                ->whereNotNull('property_id')
+                ->whereNotNull('etogo_signed_at')
+                ->where(function ($q) {
+                    $q->whereNull('work_schedule')->orWhere('work_schedule', '[]');
+                });
+
+            if ($user->hasRole('Inspector')) {
+                $query->where('inspector_id', $user->id);
+            }
+        }
+
+        // Pending Etogo signature: client signed + paid, waiting for Etogo countersign
+        if ($request->get('view') === 'pending-etogo') {
+            $query = Inspection::with(['property.user', 'property.projectManager', 'inspector', 'assignedBy', 'project.manager'])
+                ->whereNotNull('property_id')
+                ->whereNotNull('client_signature')
+                ->where('work_payment_status', 'paid')
+                ->whereNull('etogo_signed_at');
+
+            if ($user->hasRole('Inspector')) {
+                $query->where('inspector_id', $user->id);
+            }
+        }
+
         // If user is an inspector, only show inspections assigned to them
         if ($user->hasRole('Inspector')) {
             $query->where('inspector_id', $user->id);
@@ -115,7 +152,11 @@ class InspectionController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
-        return view('admin.inspections.index', compact('inspections', 'scheduledCount', 'inProgressCount', 'completedCount', 'inspectors', 'projectManagers'));
+        $technicians = \App\Models\User::role('Technician')
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        return view('admin.inspections.index', compact('inspections', 'scheduledCount', 'inProgressCount', 'completedCount', 'inspectors', 'projectManagers', 'technicians'));
     }
 
     /**
@@ -262,13 +303,6 @@ class InspectionController extends Controller
             'system_findings.*.phar_category'                  => 'nullable|string|max:255',
             'system_findings.*.phar_included_yn'               => 'nullable|boolean',
             'system_findings.*.phar_notes'                     => 'nullable|string',
-
-            // Travel BDC calibration
-            'bdc_distance_km'   => 'nullable|numeric|min:0',
-            'bdc_time_min'      => 'nullable|numeric|min:0',
-            'bdc_visits_year'   => 'nullable|numeric|min:0',
-            'bdc_rate_km'       => 'nullable|numeric|min:0',
-            'bdc_rate_min'      => 'nullable|numeric|min:0',
         ]);
 
         $property = Property::findOrFail($validated['property_id']);
@@ -587,8 +621,12 @@ class InspectionController extends Controller
      */
     public function show(string $id)
     {
-        $inspection = Inspection::with(['property.user', 'project', 'inspector', 'assignedBy'])
+        $inspection = Inspection::with(['property.user', 'project', 'inspector', 'assignedBy', 'etogoRepresentative', 'toolAssignments.toolSetting'])
             ->findOrFail($id);
+
+        if (($inspection->status ?? null) === 'completed') {
+            $inspection = $this->agreementScheduleService->refresh($inspection);
+        }
         
         // Load findings for this inspection with inspection relationship
         $findings = \App\Models\PHARFinding::with('inspection')
@@ -620,7 +658,9 @@ class InspectionController extends Controller
             }
         }
         
-        return view('admin.inspections.show', compact('inspection', 'findings', 'materials'));
+        $toolAssignments = $inspection->toolAssignments->where('quantity', '>', 0);
+
+        return view('admin.inspections.show', compact('inspection', 'findings', 'materials', 'toolAssignments'));
     }
 
     /**
@@ -656,6 +696,10 @@ class InspectionController extends Controller
     {
         $inspection = Inspection::with(['property.user', 'property.projectManager', 'project.manager', 'inspector', 'assignedBy'])
             ->findOrFail($id);
+
+        if (($inspection->status ?? null) === 'completed') {
+            $inspection = $this->agreementScheduleService->refresh($inspection);
+        }
         
         // Load findings for this inspection with inspection relationship
         $findings = \App\Models\PHARFinding::with('inspection')
@@ -790,6 +834,10 @@ class InspectionController extends Controller
                 'work_stripe_payment_intent_id' => $paymentIntent->id,
             ]);
 
+            $this->inspectionInvoiceSyncService->syncProjectInvoice($inspection->fresh(['property', 'project']));
+
+            $inspection = $this->agreementScheduleService->refresh($inspection);
+
             if ($inspection->project) {
                 $inspection->project->update([
                     'status' => 'in_progress',
@@ -816,6 +864,90 @@ class InspectionController extends Controller
                 'message' => 'Payment verification failed. Please try again.',
             ], 400);
         }
+    }
+
+    public function countersignAgreement(Request $request, Inspection $inspection)
+    {
+        $user = Auth::user();
+        if (!$user || !$user->hasAnyRole(['Super Admin', 'Admin', 'Project Manager'])) {
+            abort(403, 'You are not authorized to countersign this agreement.');
+        }
+
+        if (($inspection->status ?? null) !== 'completed') {
+            return back()->with('error', 'Agreement countersign is only available for completed inspections.');
+        }
+
+        if (!$inspection->approved_by_client || !$inspection->client_approved_at) {
+            return back()->with('error', 'Client must sign the agreement before Etogo countersign.');
+        }
+
+        if (($inspection->work_payment_status ?? 'pending') !== 'paid') {
+            return back()->with('error', 'Deposit/work payment must be confirmed before Etogo countersign.');
+        }
+
+        if ($inspection->etogo_signed_at) {
+            return back()->with('info', 'Agreement has already been countersigned by Etogo.');
+        }
+
+        $inspection->update([
+            'etogo_signed_by' => Auth::id(),
+            'etogo_signed_at' => now(),
+        ]);
+
+        $this->agreementScheduleService->refresh($inspection);
+
+        return back()->with('success', 'Agreement countersigned by ' . Auth::user()->name . '.');
+    }
+
+    /**
+     * Save (or replace) the work visit schedule for a fully-executed inspection.
+     * All dates must be weekdays (Mon–Fri). Work hours are 9 AM – 5 PM.
+     */
+    public function storeWorkSchedule(Request $request, Inspection $inspection)
+    {
+        $user = Auth::user();
+        if (!$user || !$user->hasAnyRole(['Super Admin', 'Admin', 'Project Manager'])) {
+            abort(403);
+        }
+
+        if (!$inspection->etogo_signed_at) {
+            return back()->with('error', 'The agreement must be countersigned by Etogo before scheduling work visits.');
+        }
+
+        $validated = $request->validate([
+            'visit_dates'   => 'required|array|min:1',
+            'visit_dates.*' => 'required|date',
+        ]);
+
+        $badDates = collect($validated['visit_dates'])->filter(function (string $date) {
+            $dow = Carbon::parse($date)->dayOfWeek;
+            return $dow === Carbon::SATURDAY || $dow === Carbon::SUNDAY;
+        })->values();
+
+        if ($badDates->isNotEmpty()) {
+            return back()->with('error', 'All visit dates must be weekdays (Monday – Friday). Invalid: ' . $badDates->implode(', '));
+        }
+
+        $schedule = collect($validated['visit_dates'])
+            ->map(fn($d) => Carbon::parse($d)->toDateString())
+            ->unique()
+            ->sort()
+            ->values()
+            ->map(fn($d) => ['date' => $d, 'status' => 'scheduled'])
+            ->all();
+
+        $updates = ['work_schedule' => $schedule];
+
+        if (!empty($schedule)) {
+            $dates = collect($schedule)->pluck('date');
+            $updates['planned_start_date']      = $dates->first();
+            $updates['target_completion_date']  = $dates->last();
+            $updates['schedule_blocked_reason'] = null;
+        }
+
+        $inspection->update($updates);
+
+        return back()->with('success', count($schedule) . ' visit(s) scheduled successfully.');
     }
 
     /**
@@ -1008,6 +1140,14 @@ class InspectionController extends Controller
         })->all();
 
         $inspection->findings = $mergedFindings;
+
+        // Auto-derive visits from total finding labour hours: 1 visit = 8 working hours
+        $totalLabourHoursFromFindings = collect($mergedFindings)
+            ->sum(fn(array $f) => (float) ($f['phar_labour_hours'] ?? 0));
+        $derivedVisits = max(1, (int) ceil($totalLabourHoursFromFindings / 8));
+        $inspection->bdc_visits_per_year      = $derivedVisits;
+        $inspection->estimated_task_hours     = $totalLabourHoursFromFindings ?: ($validated['estimated_task_hours'] ?? $inspection->estimated_task_hours);
+
         $inspection->save();
 
         // Draft: save and go back to Step 1 without running calculations
@@ -1035,6 +1175,7 @@ class InspectionController extends Controller
                 'labour_hours'  => $findingData['phar_labour_hours'] ?? 0,
                 'material_cost' => 0,
                 'notes'         => $findingData['phar_notes'] ?? null,
+                'photo_ids'     => !empty($findingData['finding_photos']) ? $findingData['finding_photos'] : null,
             ]);
 
             // Per-finding materials → InspectionMaterial records
@@ -1057,7 +1198,7 @@ class InspectionController extends Controller
             }
         }
 
-        // ==== CALCULATE FINAL PRICING (BDC + FRLC + FMC + TIERS) ====
+        // ==== CALCULATE PRICING PREVIEW (BDC + FRLC + FMC + TIERS) ====
         // Re-compute ASI now that tus_score is persisted
         $inspection->refresh();
         $this->computeASI($inspection);
@@ -1068,78 +1209,72 @@ class InspectionController extends Controller
         $results = $calculator->calculate($inspection);
         $calculator->saveToInspection($inspection, $results);
 
-        // Mark inspection as completed
+        // Do NOT mark as completed yet — send admin back to phar-data so they can
+        // preview the report and contract draft before finalising.
+        return redirect()->route('inspections.phar-data', $inspection->id)
+            ->with('success', 'Pricing calculated successfully! Review the preview below, then click Complete Assessment when ready.');
+    }
+
+    /**
+     * Finalise the assessment: mark as completed, sync schedule, generate invoice.
+     * Called only when admin is satisfied with the pricing preview.
+     */
+    public function completeAssessment(Inspection $inspection)
+    {
+        if (($inspection->bdc_annual ?? 0) <= 0) {
+            return redirect()->route('inspections.phar-data', $inspection->id)
+                ->with('error', 'Please save and preview pricing first before completing the assessment.');
+        }
+
+        if ($inspection->status === 'completed') {
+            return redirect()->route('inspections.show', $inspection->id)
+                ->with('info', 'This assessment has already been completed.');
+        }
+
         $inspection->update([
             'status'         => 'completed',
             'completed_date' => now(),
         ]);
 
+        $inspection = $this->agreementScheduleService->refresh($inspection);
         $this->ensureClientInvoiceFromInspection($inspection->fresh(['property', 'project']));
 
         return redirect()->route('inspections.show', $inspection->id)
-            ->with('success', 'PHAR data saved successfully! Final pricing calculated.');
+            ->with('success', 'Assessment completed successfully! The client has been notified.');
+    }
+
+    /**
+     * Admin preview of the client-facing inspection report (read-only, no auth check on ownership).
+     */
+    public function previewReport(Inspection $inspection)
+    {
+        $inspection = $this->agreementScheduleService->refresh($inspection);
+
+        $findings = \App\Models\PHARFinding::where('inspection_id', $inspection->id)
+            ->orderBy('id')
+            ->get();
+
+        $materials = \App\Models\InspectionMaterial::where('inspection_id', $inspection->id)
+            ->orderBy('id')
+            ->get();
+
+        return view('client.inspections.report', compact('inspection', 'findings', 'materials'))
+            ->with('adminPreview', true);
+    }
+
+    /**
+     * Admin preview of the client-facing agreement/contract (read-only, no auth check on ownership).
+     */
+    public function previewAgreement(Inspection $inspection)
+    {
+        $inspection = $this->agreementScheduleService->refresh($inspection);
+        return view('client.inspections.agreement', compact('inspection'))
+            ->with('adminPreview', true);
     }
 
     protected function ensureClientInvoiceFromInspection(Inspection $inspection): void
     {
-        if (!$inspection->project_id || !$inspection->property || !$inspection->property->user_id) {
-            return;
-        }
-
-        $userId = (int) $inspection->property->user_id;
-        $projectId = (int) $inspection->project_id;
-
-        $existingInvoice = \App\Models\Invoice::where('user_id', $userId)
-            ->where('project_id', $projectId)
-            ->where('type', 'project')
-            ->first();
-
-        if ($existingInvoice) {
-            return;
-        }
-
-        $monthlyAmount = (float) max(
-            (float) ($inspection->scientific_final_monthly ?? 0),
-            (float) ($inspection->arp_equivalent_final ?? 0),
-            (float) ($inspection->base_package_price_snapshot ?? 0),
-            (float) ($inspection->trc_monthly ?? 0)
-        );
-
-        if ($monthlyAmount <= 0) {
-            return;
-        }
-
-        $invoiceNumber = 'INV-' . now()->format('Ymd') . '-' . $inspection->id;
-        $counter = 1;
-        while (\App\Models\Invoice::where('invoice_number', $invoiceNumber)->exists()) {
-            $invoiceNumber = 'INV-' . now()->format('Ymd') . '-' . $inspection->id . '-' . $counter;
-            $counter++;
-        }
-
-        \App\Models\Invoice::create([
-            'invoice_number' => $invoiceNumber,
-            'project_id' => $projectId,
-            'user_id' => $userId,
-            'type' => 'project',
-            'subtotal' => $monthlyAmount,
-            'tax' => 0,
-            'total' => $monthlyAmount,
-            'paid_amount' => 0,
-            'balance' => $monthlyAmount,
-            'status' => 'sent',
-            'issue_date' => now()->toDateString(),
-            'due_date' => now()->addDays(14)->toDateString(),
-            'line_items' => [
-                [
-                    'description' => 'Inspection Service - ' . ($inspection->property?->property_name ?? 'Property'),
-                    'inspection_id' => $inspection->id,
-                    'quantity' => 1,
-                    'unit_price' => $monthlyAmount,
-                    'total' => $monthlyAmount,
-                ],
-            ],
-            'notes' => 'Auto-generated from completed inspection #' . $inspection->id,
-        ]);
+        $this->inspectionInvoiceSyncService->syncProjectInvoice($inspection);
     }
 
 }
