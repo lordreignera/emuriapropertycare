@@ -9,7 +9,7 @@ class PropertyTypesSeeder extends Seeder
 {
     public function run(): void
     {
-        DB::table('property_types')->insert([
+        $rows = [
             [
                 'type_code' => 'residential',
                 'type_name' => 'Residential',
@@ -37,6 +37,13 @@ class PropertyTypesSeeder extends Seeder
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
-        ]);
+        ];
+
+        foreach ($rows as $row) {
+            DB::table('property_types')->updateOrInsert(
+                ['type_code' => $row['type_code']],
+                $row
+            );
+        }
     }
 }

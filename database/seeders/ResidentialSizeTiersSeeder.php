@@ -9,7 +9,7 @@ class ResidentialSizeTiersSeeder extends Seeder
 {
     public function run(): void
     {
-        DB::table('residential_size_tiers')->insert([
+        $rows = [
             [
                 'tier_name' => '1-5 units',
                 'min_units' => 1,
@@ -54,6 +54,13 @@ class ResidentialSizeTiersSeeder extends Seeder
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
-        ]);
+        ];
+
+        foreach ($rows as $row) {
+            DB::table('residential_size_tiers')->updateOrInsert(
+                ['tier_name' => $row['tier_name']],
+                $row
+            );
+        }
     }
 }

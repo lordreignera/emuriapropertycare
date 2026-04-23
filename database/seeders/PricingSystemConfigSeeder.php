@@ -9,7 +9,7 @@ class PricingSystemConfigSeeder extends Seeder
 {
     public function run(): void
     {
-        DB::table('pricing_system_config')->insert([
+        $rows = [
             [
                 'config_key' => 'cpi_system_enabled',
                 'config_value' => 'true',
@@ -55,6 +55,13 @@ class PricingSystemConfigSeeder extends Seeder
                 'is_public' => false,
                 'updated_at' => now(),
             ],
-        ]);
+        ];
+
+        foreach ($rows as $row) {
+            DB::table('pricing_system_config')->updateOrInsert(
+                ['config_key' => $row['config_key']],
+                $row
+            );
+        }
     }
 }

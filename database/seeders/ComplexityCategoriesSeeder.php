@@ -9,7 +9,7 @@ class ComplexityCategoriesSeeder extends Seeder
 {
     public function run(): void
     {
-        DB::table('complexity_categories')->insert([
+        $rows = [
             [
                 'category_code' => 'low_density',
                 'category_name' => 'Low density / simple',
@@ -50,6 +50,13 @@ class ComplexityCategoriesSeeder extends Seeder
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
-        ]);
+        ];
+
+        foreach ($rows as $row) {
+            DB::table('complexity_categories')->updateOrInsert(
+                ['category_code' => $row['category_code']],
+                $row
+            );
+        }
     }
 }

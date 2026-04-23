@@ -9,7 +9,7 @@ class CommercialSizeSettingsSeeder extends Seeder
 {
     public function run(): void
     {
-        DB::table('commercial_size_settings')->insert([
+        $rows = [
             [
                 'setting_name' => 'base_sqft_divisor',
                 'setting_value' => 10000.00,
@@ -34,6 +34,13 @@ class CommercialSizeSettingsSeeder extends Seeder
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
-        ]);
+        ];
+
+        foreach ($rows as $row) {
+            DB::table('commercial_size_settings')->updateOrInsert(
+                ['setting_name' => $row['setting_name']],
+                $row
+            );
+        }
     }
 }

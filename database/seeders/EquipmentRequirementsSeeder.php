@@ -9,7 +9,7 @@ class EquipmentRequirementsSeeder extends Seeder
 {
     public function run(): void
     {
-        DB::table('equipment_requirements')->insert([
+        $rows = [
             [
                 'requirement_code' => 'standard_ladder',
                 'requirement_name' => 'Standard ladder only',
@@ -50,6 +50,13 @@ class EquipmentRequirementsSeeder extends Seeder
                 'created_at' => now(),
                 'updated_at' => now(),
             ],
-        ]);
+        ];
+
+        foreach ($rows as $row) {
+            DB::table('equipment_requirements')->updateOrInsert(
+                ['requirement_code' => $row['requirement_code']],
+                $row
+            );
+        }
     }
 }
