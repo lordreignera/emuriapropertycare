@@ -1,14 +1,24 @@
 @extends('admin.layout')
 
-@section('title', 'Dashboard')
+@section('title', 'Welcome')
 
-@section('header', 'Dashboard')
+@section('header')
+Welcome back, {{ auth()->user()->name }}
+@endsection
 
 @section('breadcrumbs')
-<li class="breadcrumb-item active" aria-current="page">Dashboard</li>
+<li class="breadcrumb-item active" aria-current="page">{{ now()->format('l, M d, Y') }}</li>
 @endsection
 
 @section('content')
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="alert alert-primary mb-0" role="alert" style="border-left:4px solid #0d6efd;">
+            <strong>You are doing great.</strong> Keep the momentum today and drive every project one step closer to completion.
+        </div>
+    </div>
+</div>
+
 <div class="row">
     {{-- Stats Cards --}}
     <div class="col-md-3 stretch-card grid-margin">
@@ -176,7 +186,7 @@
                             <tr>
                                 <td>{{ $activity->created_at->format('M d, Y') }}</td>
                                 <td>{{ $activity->description }}</td>
-                                <td>{{ $activity->property->name ?? 'N/A' }}</td>
+                                <td>{{ $activity->property->property_name ?? $activity->property->name ?? 'N/A' }}</td>
                                 <td>
                                     <span class="badge badge-{{ $activity->status_color }}">
                                         {{ $activity->status }}

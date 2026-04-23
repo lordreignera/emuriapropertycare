@@ -30,7 +30,28 @@ class DashboardController extends Controller
             $completedInspectionsCount = Inspection::where('status', 'completed')
                 ->distinct('property_id')
                 ->count('property_id');
-            $projectsCount = Project::where('status', 'active')->count();
+
+            // Active projects KPI should reflect ongoing maintenance work,
+            // not only project.status flag values.
+            $projectsCount = Inspection::query()
+                ->whereNotNull('etogo_signed_at')
+                ->whereNotNull('work_schedule')
+                ->where('work_schedule', '!=', '[]')
+                ->get()
+                ->filter(function (Inspection $inspection) {
+                    $schedule = collect($inspection->work_schedule ?? []);
+                    $totalVisits = $schedule->count();
+                    if ($totalVisits === 0) {
+                        return false;
+                    }
+
+                    $doneVisits = $schedule->where('status', 'completed')->count();
+                    $progressPct = (int) round(($doneVisits / $totalVisits) * 100);
+
+                    return $progressPct < 100;
+                })
+                ->count();
+
             $invoicesCount = Invoice::count();
             
             // Get active subscription
@@ -39,8 +60,75 @@ class DashboardController extends Controller
                 ->with('tier')
                 ->first();
 
-            // Get recent activities
-            $recentActivities = collect();
+            // Build recent activities from latest properties, inspections, and invoices.
+            $propertyActivities = Property::query()
+                ->latest('created_at')
+                ->take(5)
+                ->get()
+                ->map(function (Property $property) {
+                    return (object) [
+                        'created_at' => $property->created_at,
+                        'description' => 'Property registered',
+                        'property' => $property,
+                        'status' => ucfirst((string) ($property->status ?? 'submitted')),
+                        'status_color' => match ((string) ($property->status ?? '')) {
+                            'approved' => 'success',
+                            'pending_approval' => 'warning',
+                            'rejected' => 'danger',
+                            default => 'secondary',
+                        },
+                    ];
+                });
+
+            $inspectionActivities = Inspection::query()
+                ->with('property')
+                ->latest('created_at')
+                ->take(5)
+                ->get()
+                ->map(function (Inspection $inspection) {
+                    return (object) [
+                        'created_at' => $inspection->created_at,
+                        'description' => 'Inspection ' . ucfirst(str_replace('_', ' ', (string) ($inspection->status ?? 'scheduled'))),
+                        'property' => $inspection->property,
+                        'status' => ucfirst(str_replace('_', ' ', (string) ($inspection->status ?? 'scheduled'))),
+                        'status_color' => match ((string) ($inspection->status ?? '')) {
+                            'completed' => 'success',
+                            'in_progress' => 'info',
+                            'scheduled' => 'warning',
+                            'cancelled' => 'danger',
+                            default => 'secondary',
+                        },
+                    ];
+                });
+
+            $invoiceActivities = Invoice::query()
+                ->with(['project.property'])
+                ->latest('created_at')
+                ->take(5)
+                ->get()
+                ->map(function (Invoice $invoice) {
+                    $property = $invoice->project?->property;
+                    return (object) [
+                        'created_at' => $invoice->created_at,
+                        'description' => 'Invoice ' . strtoupper((string) ($invoice->invoice_number ?? ('#' . $invoice->id))),
+                        'property' => $property,
+                        'status' => ucfirst(str_replace('_', ' ', (string) ($invoice->status ?? 'sent'))),
+                        'status_color' => match ((string) ($invoice->status ?? '')) {
+                            'paid' => 'success',
+                            'partial' => 'warning',
+                            'sent' => 'info',
+                            'pending', 'overdue' => 'danger',
+                            default => 'secondary',
+                        },
+                    ];
+                });
+
+            $recentActivities = $propertyActivities
+                ->concat($inspectionActivities)
+                ->concat($invoiceActivities)
+                ->sortByDesc('created_at')
+                ->take(10)
+                ->values();
 
             return view('admin.index', compact(
                 'propertiesCount',

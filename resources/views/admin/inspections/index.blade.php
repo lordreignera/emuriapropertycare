@@ -82,13 +82,10 @@
                         <table id="inspectionsTable" class="table table-hover table-striped">
                             <thead>
                                 <tr>
-                                    <th>Property Code</th>
-                                    <th>Property Name</th>
+                                    <th>Property</th>
                                     <th>Location</th>
                                     <th>Owner</th>
-                                    <th>Inspector</th>
-                                    <th>Technician</th>
-                                    <th>Project Manager</th>
+                                    <th>Team</th>
                                     <th>Scheduled Date</th>
                                     <th>Payment Status</th>
                                     <th>Actions</th>
@@ -97,8 +94,8 @@
                             <tbody>
                                 @forelse($inspections as $inspection)
                                 <tr>
-                                    <td><code>{{ $inspection->property->property_code }}</code></td>
                                     <td>
+                                        <code>{{ $inspection->property->property_code }}</code><br>
                                         <strong>{{ $inspection->property->property_name }}</strong>
                                         @if($inspection->property->property_brand)
                                         <br><small class="text-muted">{{ $inspection->property->property_brand }}</small>
@@ -113,24 +110,6 @@
                                         <small class="text-muted">{{ $inspection->property->user->email }}</small>
                                     </td>
                                     <td>
-                                        @if($inspection->inspector)
-                                        <span class="badge badge-info">
-                                            <i class="mdi mdi-account-check"></i> {{ $inspection->inspector->name }}
-                                        </span>
-                                        @else
-                                        <span class="badge badge-warning">Not assigned</span>
-                                        @endif
-                                    </td>
-                                    <td>
-                                        @if($inspection->technician)
-                                        <span class="badge badge-secondary">
-                                            <i class="mdi mdi-tools"></i> {{ $inspection->technician->name }}
-                                        </span>
-                                        @else
-                                        <span class="text-muted small">—</span>
-                                        @endif
-                                    </td>
-                                    <td>
                                         @php
                                             $projectManager = null;
                                             if ($inspection->project && $inspection->project->manager) {
@@ -139,13 +118,23 @@
                                                 $projectManager = $inspection->property->projectManager;
                                             }
                                         @endphp
-                                        @if($projectManager)
-                                        <span class="badge badge-primary">
-                                            <i class="mdi mdi-account-hard-hat"></i> {{ $projectManager->name }}
-                                        </span>
-                                        @else
-                                        <span class="badge badge-warning">Not assigned</span>
-                                        @endif
+                                        <div class="small">
+                                            <div class="mb-1">
+                                                <i class="mdi mdi-account-check text-info me-1"></i>
+                                                <strong>Inspector:</strong>
+                                                {{ $inspection->inspector?->name ?? 'Not assigned' }}
+                                            </div>
+                                            <div class="mb-1">
+                                                <i class="mdi mdi-tools text-secondary me-1"></i>
+                                                <strong>Technician:</strong>
+                                                {{ $inspection->technician?->name ?? 'Not assigned' }}
+                                            </div>
+                                            <div>
+                                                <i class="mdi mdi-account-hard-hat text-primary me-1"></i>
+                                                <strong>Project Manager:</strong>
+                                                {{ $projectManager?->name ?? 'Not assigned' }}
+                                            </div>
+                                        </div>
                                     </td>
                                     <td>
                                         @if($inspection->scheduled_date)
@@ -192,6 +181,9 @@
                                         @endif
                                     </td>
                                     <td>
+                                        @php
+                                            $compactCompletedView = request('status') == 'completed';
+                                        @endphp
                                         <div class="btn-group" role="group">
                                             <a href="{{ route('properties.show', $inspection->property_id) }}" 
                                                class="btn btn-sm btn-info" title="View Property">
@@ -201,17 +193,26 @@
                                             <a href="{{ route('inspections.show', $inspection->id) }}" 
                                                class="btn btn-sm btn-success" 
                                                title="View Full Inspection Report">
-                                                <i class="mdi mdi-file-document-outline"></i> Report
+                                                <i class="mdi mdi-file-document-outline"></i>
+                                                @if(!$compactCompletedView)
+                                                    <span class="ms-1">Report</span>
+                                                @endif
                                             </a>
                                             @if(($inspection->work_payment_status ?? 'pending') !== 'paid')
                                             <a href="{{ route('inspections.work-payment', $inspection->id) }}"
                                                class="btn btn-sm btn-warning"
                                                title="Pay to Start Work">
-                                                <i class="mdi mdi-credit-card"></i> Pay
+                                                <i class="mdi mdi-credit-card"></i>
+                                                @if(!$compactCompletedView)
+                                                    <span class="ms-1">Pay</span>
+                                                @endif
                                             </a>
                                             @else
                                             <span class="btn btn-sm btn-outline-success disabled" title="Work Payment Completed">
-                                                <i class="mdi mdi-check-circle"></i> Paid
+                                                <i class="mdi mdi-check-circle"></i>
+                                                @if(!$compactCompletedView)
+                                                    <span class="ms-1">Paid</span>
+                                                @endif
                                             </span>
                                             @endif
                                             @endif
@@ -225,7 +226,9 @@
                                                     onclick="assignInspector({{ $inspection->id }}, {{ $inspection->property_id }}, '{{ addslashes($inspection->property?->property_name ?? 'Property') }}', {{ $resolvedPm ?? 'null' }}, {{ $inspection->inspector_id ?? 'null' }}, {{ $inspection->technician_id ?? 'null' }})"
                                                     title="{{ $teamFullyAssigned ? 'Edit Team / Add Technician' : 'Assign Inspector, Technician & Project Manager' }}">
                                                 <i class="mdi mdi-account-{{ $teamFullyAssigned ? 'edit' : 'plus' }} me-1"></i>
-                                                {{ $teamFullyAssigned ? 'Edit Team' : 'Assign Team' }}
+                                                @if(!$compactCompletedView)
+                                                    {{ $teamFullyAssigned ? 'Edit Team' : 'Assign Team' }}
+                                                @endif
                                             </button>
                                             @if($inspection->status !== 'completed')
                                             @php
@@ -294,7 +297,7 @@
                                 </tr>
                                 @empty
                                 <tr>
-                                    <td colspan="10" class="text-center py-4">
+                                    <td colspan="7" class="text-center py-4">
                                         <i class="mdi mdi-clipboard-check-outline" style="font-size: 3rem; color: #ddd;"></i>
                                         <p class="text-muted mt-2">
                                             @if(request('view') === 'pending-etogo')
@@ -577,14 +580,14 @@ $(document).ready(function() {
     $('#inspectionsTable').DataTable({
         "pageLength": 15,
         "lengthMenu": [[15, 25, 50, -1], [15, 25, 50, "All"]],
-        "order": [[6, "asc"]],
+        "order": [[4, "asc"]],
         "language": {
             "search": "Search:",
             "lengthMenu": "Show _MENU_ inspections",
             "info": "Showing _START_ to _END_ of _TOTAL_ inspections"
         },
         "columnDefs": [
-            { "orderable": false, "targets": [9] }  // Actions column is now index 9
+            { "orderable": false, "targets": [6] }  // Actions column index after Property+Team merge
         ]
     });
     @endif

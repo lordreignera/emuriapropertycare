@@ -85,8 +85,7 @@
                         <table id="propertiesTable" class="table table-hover table-striped">
                             <thead>
                                 <tr>
-                                    <th>Property Code</th>
-                                    <th>Property Name</th>
+                                    <th>Property</th>
                                     <th>Owner</th>
                                     <th>Location</th>
                                     <th>Type</th>
@@ -98,8 +97,8 @@
                             <tbody>
                                 @forelse($properties as $property)
                                 <tr>
-                                    <td><code>{{ $property->property_code }}</code></td>
                                     <td>
+                                        <code>{{ $property->property_code }}</code><br>
                                         <strong>{{ $property->property_name }}</strong>
                                         @if($property->property_brand)
                                         <br><small class="text-muted">Brand: {{ $property->property_brand }}</small>
@@ -254,7 +253,7 @@
                                 </tr>
                                 @empty
                                 <tr>
-                                    <td colspan="8" class="text-center py-4">
+                                    <td colspan="7" class="text-center py-4">
                                         <i class="mdi mdi-home-outline" style="font-size: 3rem; color: #ddd;"></i>
                                         <p class="text-muted mt-2">No properties found</p>
                                     </td>
@@ -427,14 +426,14 @@ $(document).ready(function() {
     $('#propertiesTable').DataTable({
         "pageLength": 15,
         "lengthMenu": [[15, 25, 50, -1], [15, 25, 50, "All"]],
-        "order": [[6, "desc"]],
+        "order": [[5, "desc"]],
         "language": {
             "search": "Search:",
             "lengthMenu": "Show _MENU_ properties",
             "info": "Showing _START_ to _END_ of _TOTAL_ properties"
         },
         "columnDefs": [
-            { "orderable": false, "targets": [7] }
+            { "orderable": false, "targets": [6] }
         ]
     });
     @endif

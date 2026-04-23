@@ -49,8 +49,7 @@
                     <table id="propertiesTable" class="table table-hover align-middle">
                         <thead class="bg-light">
                             <tr>
-                                <th class="border-0 text-uppercase small fw-semibold py-3">Property Code</th>
-                                <th class="border-0 text-uppercase small fw-semibold py-3">Name</th>
+                                <th class="border-0 text-uppercase small fw-semibold py-3">Property</th>
                                 <th class="border-0 text-uppercase small fw-semibold py-3">Type</th>
                                 <th class="border-0 text-uppercase small fw-semibold py-3">Location</th>
                                 <th class="border-0 text-uppercase small fw-semibold py-3">Status</th>
@@ -67,11 +66,9 @@
                             @endphp
                             <tr>
                                 <td>
-                                    <span class="text-dark fw-semibold">
-                                        {{ $property->property_code }}
-                                    </span>
-                                </td>
-                                <td>
+                                    <div class="text-dark fw-semibold small mb-1">
+                                        <code>{{ $property->property_code }}</code>
+                                    </div>
                                     <div class="d-flex align-items-center">
                                         <div class="rounded-circle bg-primary bg-opacity-10 p-2 me-3">
                                             <i class="mdi mdi-home text-primary"></i>
@@ -313,7 +310,7 @@ $(document).ready(function() {
             }
         },
         "columnDefs": [
-            { "orderable": false, "targets": [5, 6] } // Disable sorting for Photos and Actions columns
+            { "orderable": false, "targets": [4, 5] } // Disable sorting for Photos and Actions columns
         ],
         "drawCallback": function() {
             // Re-init tooltips after DataTable redraws
