@@ -17,6 +17,7 @@
                     <div class="d-flex gap-2 flex-wrap">
                         <a href="{{ route('invoices.index') }}" class="btn btn-sm {{ request()->has('status') ? 'btn-outline-primary' : 'btn-primary' }}">All <span class="badge bg-light text-dark ms-1">{{ $summary['total'] ?? 0 }}</span></a>
                         <a href="{{ route('invoices.index', ['status' => 'pending']) }}" class="btn btn-sm {{ request('status') === 'pending' ? 'btn-warning' : 'btn-outline-warning' }}">Pending <span class="badge bg-light text-dark ms-1">{{ $summary['pending'] ?? 0 }}</span></a>
+                        <a href="{{ route('invoices.index', ['status' => 'partial']) }}" class="btn btn-sm {{ request('status') === 'partial' ? 'btn-info' : 'btn-outline-info' }}">Partial <span class="badge bg-light text-dark ms-1">{{ $summary['partial'] ?? 0 }}</span></a>
                         <a href="{{ route('invoices.index', ['status' => 'paid']) }}" class="btn btn-sm {{ request('status') === 'paid' ? 'btn-success' : 'btn-outline-success' }}">Paid <span class="badge bg-light text-dark ms-1">{{ $summary['paid'] ?? 0 }}</span></a>
                         <a href="{{ route('invoices.index', ['status' => 'overdue']) }}" class="btn btn-sm {{ request('status') === 'overdue' ? 'btn-danger' : 'btn-outline-danger' }}">Overdue <span class="badge bg-light text-dark ms-1">{{ $summary['overdue'] ?? 0 }}</span></a>
                     </div>
@@ -43,6 +44,8 @@
                                 <th>Property</th>
                                 <th>Type</th>
                                 <th>Total</th>
+                                <th>Paid</th>
+                                <th>Balance</th>
                                 <th>Issue Date</th>
                                 <th>Due Date</th>
                                 <th>Status</th>
@@ -63,15 +66,29 @@
                                     </td>
                                     <td>{{ ucfirst((string) ($invoice->type ?? 'general')) }}</td>
                                     <td><strong>${{ number_format((float) ($invoice->total ?? 0), 2) }}</strong></td>
+                                    <td>
+                                        @php $paid = (float) ($invoice->paid_amount ?? 0); @endphp
+                                        <strong class="text-success">${{ number_format($paid, 2) }}</strong>
+                                    </td>
+                                    <td>
+                                        @php $bal = (float) ($invoice->balance ?? max(0, ((float) ($invoice->total ?? 0) - (float) ($invoice->paid_amount ?? 0)))); @endphp
+                                        <strong class="{{ $bal > 0 ? 'text-danger' : 'text-success' }}">${{ number_format($bal, 2) }}</strong>
+                                    </td>
                                     <td>{{ optional($invoice->issue_date)->format('M d, Y') ?? '-' }}</td>
                                     <td>{{ optional($invoice->due_date)->format('M d, Y') ?? '-' }}</td>
                                     <td>
-                                        @php $status = strtolower((string) ($invoice->status ?? 'pending')); @endphp
+                                        @php
+                                            $status = strtolower((string) ($invoice->status ?? 'pending'));
+                                            $total = (float) ($invoice->total ?? 0);
+                                            $paidPct = $total > 0 ? (int) round(((float)($invoice->paid_amount ?? 0) / $total) * 100) : 0;
+                                        @endphp
                                         @if($status === 'paid')
                                             <span class="badge bg-success">Paid</span>
+                                        @elseif($status === 'partial')
+                                            <span class="badge bg-info text-dark">Partial ({{ $paidPct }}%)</span>
                                         @elseif($status === 'overdue')
                                             <span class="badge bg-danger">Overdue</span>
-                                        @elseif(in_array($status, ['draft', 'sent', 'partial', 'pending'], true))
+                                        @elseif(in_array($status, ['draft', 'sent', 'pending'], true))
                                             <span class="badge bg-warning text-dark">Pending</span>
                                         @else
                                             <span class="badge bg-secondary">{{ ucfirst($status) }}</span>
@@ -85,7 +102,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="9" class="text-center text-muted py-4">No invoices found.</td>
+                                    <td colspan="11" class="text-center text-muted py-4">No invoices found.</td>
                                 </tr>
                             @endforelse
                         </tbody>

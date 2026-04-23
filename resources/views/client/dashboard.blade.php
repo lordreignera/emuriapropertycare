@@ -232,7 +232,7 @@
                 <h4 class="fw-bold mb-4">Quick Actions</h4>
                 <div class="d-flex flex-column gap-3">
                     <a href="{{ route('client.properties.create') }}" class="text-decoration-none">
-                        <div class="d-flex align-items-center p-3 rounded-3 border border-2 hover-shadow transition">
+                        <div class="d-flex align-items-center p-3 rounded-3 border-2 hover-shadow transition">
                             <div class="rounded-3 p-3 me-3" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
                                 <i class="mdi mdi-home-plus text-white" style="font-size: 1.75rem;"></i>
                             </div>
@@ -245,7 +245,7 @@
                     </a>
                     
                     <a href="{{ route('client.inspections.index') }}" class="text-decoration-none">
-                        <div class="d-flex align-items-center p-3 rounded-3 border border-2 hover-shadow transition">
+                        <div class="d-flex align-items-center p-3 rounded-3 border-2 hover-shadow transition">
                             <div class="rounded-3 p-3 me-3" style="background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);">
                                 <i class="mdi mdi-clipboard-check text-white" style="font-size: 1.75rem;"></i>
                             </div>
@@ -258,7 +258,7 @@
                     </a>
                     
                     <a href="{{ route('client.invoices.index') }}" class="text-decoration-none">
-                        <div class="d-flex align-items-center p-3 rounded-3 border border-2 hover-shadow transition">
+                        <div class="d-flex align-items-center p-3 rounded-3 border-2 hover-shadow transition">
                             <div class="rounded-3 p-3 me-3" style="background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);">
                                 <i class="mdi mdi-file-document text-white" style="font-size: 1.75rem;"></i>
                             </div>
@@ -271,7 +271,7 @@
                     </a>
                     
                     <a href="{{ route('client.support') }}" class="text-decoration-none">
-                        <div class="d-flex align-items-center p-3 rounded-3 border border-2 hover-shadow transition">
+                        <div class="d-flex align-items-center p-3 rounded-3 border-2 hover-shadow transition">
                             <div class="rounded-3 p-3 me-3" style="background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);">
                                 <i class="mdi mdi-help-circle text-white" style="font-size: 1.75rem;"></i>
                             </div>
@@ -287,6 +287,75 @@
         </div>
     </div>
 </div>
+
+@if(isset($quotationReadyInspections) && $quotationReadyInspections->count() > 0)
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card shadow-sm border-start border-primary border-4">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <h4 class="fw-bold mb-1">Quotation &amp; Finalization Status</h4>
+                        <p class="text-muted mb-0 small">Review and approve your quotation. Once approved, admin will finalize your assessment — your report and agreement will then appear here.</p>
+                    </div>
+                    <a href="{{ route('client.inspections.index') }}" class="btn btn-outline-primary btn-sm">View All</a>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead class="bg-light">
+                            <tr>
+                                <th>Property</th>
+                                <th>Quotation Status</th>
+                                <th>Shared</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($quotationReadyInspections as $inspection)
+                                <tr>
+                                    <td>
+                                        <div class="fw-semibold">{{ $inspection->property?->property_name ?? 'N/A' }}</div>
+                                        <small class="text-muted">{{ $inspection->property?->property_code ?? '' }}</small>
+                                    </td>
+                                    <td>
+                                        @php $quotationStatus = (string) ($inspection->quotation_status ?? 'shared'); @endphp
+                                        @if($quotationStatus === 'approved')
+                                            <span class="badge bg-success">Approved</span>
+                                        @elseif($quotationStatus === 'client_reviewing')
+                                            <span class="badge bg-info text-dark">In Review</span>
+                                        @else
+                                            <span class="badge bg-primary">Awaiting Approval</span>
+                                        @endif
+                                    </td>
+                                    <td>{{ optional($inspection->quotation_shared_at)->format('M d, Y') ?? '-' }}</td>
+                                    <td class="text-end">
+                                        @if($quotationStatus === 'approved')
+                                            <div class="d-flex flex-column align-items-end gap-1">
+                                                <span class="badge bg-warning text-dark fs-6 px-3 py-2">
+                                                    <i class="mdi mdi-clock-outline me-1"></i>Awaiting Admin Finalization
+                                                </span>
+                                                <a href="{{ route('client.inspections.quotation', $inspection->id) }}" class="btn btn-sm btn-link text-muted p-0">
+                                                    <small>View approved quotation</small>
+                                                </a>
+                                            </div>
+                                        @else
+                                            <a href="{{ route('client.inspections.quotation', $inspection->id) }}" class="btn btn-sm btn-primary">
+                                                <i class="mdi mdi-file-check-outline"></i>
+                                                Review Quotation
+                                            </a>
+                                        @endif
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
 
 @if(isset($completedInspections) && $completedInspections->count() > 0)
 <div class="row mt-4">
@@ -356,7 +425,7 @@
 @if($unpaidInvoices > 0 || $pendingInspections > 0)
 <div class="row mt-4">
     <div class="col-12">
-        <div class="card border-0 shadow-sm border-start border-warning border-4">
+        <div class="card shadow-sm border-start border-warning border-4">
             <div class="card-body">
                 <h5 class="fw-bold mb-3">
                     <i class="mdi mdi-bell-ring text-warning me-2"></i> Action Required

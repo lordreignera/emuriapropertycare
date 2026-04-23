@@ -23,15 +23,21 @@
                         Pay Per Visit<br>
                         <small>${{ number_format($perVisit, 2) }}/visit &times; {{ $totalVisits }}</small>
                     </a>
+                    <a href="{{ route('client.inspections.work-payment', ['inspection' => $inspection->id, 'plan' => 'installment']) }}"
+                       class="btn {{ $plan === 'installment' ? 'btn-warning text-dark' : 'btn-outline-warning' }} px-4">
+                        <i class="mdi mdi-percent me-1"></i>
+                        Pay 50% Deposit<br>
+                        <small>${{ number_format($depositAmount, 2) }} now + later</small>
+                    </a>
                 </div>
             </div>
         </div>
 
         <div class="card">
-            <div class="card-header {{ $plan === 'full' ? 'bg-success' : 'bg-primary' }} text-white">
+            <div class="card-header {{ $plan === 'full' ? 'bg-success' : ($plan === 'per_visit' ? 'bg-primary' : 'bg-warning text-dark') }} text-white">
                 <h5 class="mb-0">
                     <i class="mdi mdi-lock me-2"></i>
-                    {{ $plan === 'full' ? 'Pay in Full' : 'Per-Visit Payment Plan' }}
+                    {{ $plan === 'full' ? 'Pay in Full' : ($plan === 'per_visit' ? 'Per-Visit Payment Plan' : '50% Deposit Plan') }}
                 </h5>
             </div>
             <div class="card-body">
@@ -42,10 +48,14 @@
                     @if($plan === 'full')
                         <strong>Amount due now:</strong> <span class="fs-5 text-success">${{ number_format($chargeAmount, 2) }}</span>
                         <br><small class="text-muted">Full cost settled in one payment. Work starts immediately.</small>
-                    @else
+                    @elseif($plan === 'per_visit')
                         <strong>Cost per visit (visit 1 of {{ $totalVisits }}):</strong>
                         <span class="fs-5 text-primary">${{ number_format($chargeAmount, 2) }}</span>
                         <br><small class="text-muted">Pay ${{ number_format($perVisit, 2) }} before each visit &times; {{ $totalVisits }} visits. Work starts after this first payment.</small>
+                    @else
+                        <strong>Deposit due now (50%):</strong>
+                        <span class="fs-5 text-warning">${{ number_format($chargeAmount, 2) }}</span>
+                        <br><small class="text-muted">Remaining 50% is due as the second installment. This option is available even when there is only one visit.</small>
                     @endif
                 </div>
 
@@ -65,10 +75,14 @@
 
                     <div class="d-flex justify-content-between">
                         <a href="{{ route('client.inspections.report', $inspection->id) }}" class="btn btn-secondary">Back</a>
-                        <button type="submit" id="submit-button" class="btn {{ $plan === 'full' ? 'btn-success' : 'btn-primary' }}">
+                        <button type="submit" id="submit-button" class="btn {{ $plan === 'full' ? 'btn-success' : ($plan === 'per_visit' ? 'btn-primary' : 'btn-warning text-dark') }}">
                             <span id="button-text">
                                 <i class="mdi mdi-lock me-1"></i>
-                                {{ $plan === 'full' ? 'Pay $'.number_format($chargeAmount, 2).' & Start Work' : 'Pay $'.number_format($chargeAmount, 2).' (Visit 1 of '.$totalVisits.')' }}
+                                {{ $plan === 'full'
+                                    ? 'Pay $'.number_format($chargeAmount, 2).' & Start Work'
+                                    : ($plan === 'per_visit'
+                                        ? 'Pay $'.number_format($chargeAmount, 2).' (Visit 1 of '.$totalVisits.')'
+                                        : 'Pay $'.number_format($chargeAmount, 2).' (50% Deposit)') }}
                             </span>
                             <span id="spinner" class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
                         </button>

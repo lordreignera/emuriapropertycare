@@ -17,235 +17,8 @@ class DashboardController extends Controller
     public function index()
     {
         $user = auth()->user();
-        
-        // Technician Dashboard
-        if ($user->hasRole('Technician')) {
-            // Get projects assigned to this technician
-            $assignedProjects = Project::where('assigned_to', $user->id)
-                ->with(['property', 'property.user'])
-                ->get();
-            
-            // Count projects by status
-            $activeProjectsCount = Project::where('assigned_to', $user->id)
-                ->where('status', 'active')
-                ->count();
-            
-            $completedProjectsCount = Project::where('assigned_to', $user->id)
-                ->where('status', 'completed')
-                ->count();
-            
-            $pendingProjectsCount = Project::where('assigned_to', $user->id)
-                ->where('status', 'pending')
-                ->count();
-            
-            $onHoldProjectsCount = Project::where('assigned_to', $user->id)
-                ->where('status', 'on_hold')
-                ->count();
-            
-            // Get work logs for today
-            $todayWorkLogs = \App\Models\WorkLog::whereHas('project', function($query) use ($user) {
-                $query->where('assigned_to', $user->id);
-            })->whereDate('created_at', today())->count();
-            
-            // Get upcoming projects
-            $upcomingProjects = Project::where('assigned_to', $user->id)
-                ->where('status', 'pending')
-                ->with(['property', 'property.user'])
-                ->orderBy('start_date', 'asc')
-                ->take(5)
-                ->get();
-
-            return view('admin.technician-dashboard', compact(
-                'assignedProjects',
-                'activeProjectsCount',
-                'completedProjectsCount',
-                'pendingProjectsCount',
-                'onHoldProjectsCount',
-                'todayWorkLogs',
-                'upcomingProjects'
-            ));
-        }
-        
-        // Finance Dashboard
-        if ($user->hasRole('Finance')) {
-            // Get invoice statistics
-            $totalInvoices = Invoice::count();
-            $paidInvoices = Invoice::paid()->count();
-            $pendingInvoices = Invoice::pending()->count();
-            $overdueInvoices = Invoice::where('status', 'overdue')->count();
-            
-            // Calculate revenue
-            $totalRevenue = Invoice::sum('paid_amount');
-            $pendingRevenue = Invoice::pending()->sum('balance');
-            $monthlyRevenue = Invoice::whereNotNull('paid_at')
-                ->whereMonth('paid_at', now()->month)
-                ->sum('paid_amount');
-            
-            // Get recent invoices
-            $recentInvoices = Invoice::with(['user'])
-                ->latest()
-                ->take(10)
-                ->get();
-            
-            // Get overdue invoices
-            $overdueInvoicesList = Invoice::where('status', 'overdue')
-                ->with(['user'])
-                ->orderBy('due_date', 'asc')
-                ->take(5)
-                ->get();
-            
-            // Get active subscriptions
-            $activeSubscriptions = Subscription::where('status', 'active')->count();
-            
-            // Get subscription revenue
-            $subscriptionRevenue = Subscription::where('status', 'active')
-                ->with('tier')
-                ->get()
-                ->sum(function($sub) {
-                    return $sub->tier->price ?? 0;
-                });
-
-            return view('admin.finance-dashboard', compact(
-                'totalInvoices',
-                'paidInvoices',
-                'pendingInvoices',
-                'overdueInvoices',
-                'totalRevenue',
-                'pendingRevenue',
-                'monthlyRevenue',
-                'recentInvoices',
-                'overdueInvoicesList',
-                'activeSubscriptions',
-                'subscriptionRevenue'
-            ));
-        }
-        
-        // Inspector Dashboard
-        if ($user->hasRole('Inspector')) {
-            // Get properties assigned to this inspector (supports both property-level and inspection-level assignment)
-            $assignedProperties = Property::where('status', 'awaiting_inspection')
-                ->where(function ($query) use ($user) {
-                    $query->where('inspector_id', $user->id)
-                        ->orWhereHas('inspections', function ($inspectionQuery) use ($user) {
-                            $inspectionQuery->where('inspector_id', $user->id)
-                                ->whereIn('status', ['scheduled', 'in_progress']);
-                        });
-                })
-                ->with([
-                    'user',
-                    'projectManager',
-                    'inspections' => function ($inspectionQuery) use ($user) {
-                        $inspectionQuery->where('inspector_id', $user->id)
-                            ->whereIn('status', ['scheduled', 'in_progress'])
-                            ->orderByDesc('scheduled_date')
-                            ->orderByDesc('id');
-                    },
-                ])
-                ->get();
-
-            $assignedProperties = $assignedProperties->map(function ($property) {
-                $latestAssignedInspection = $property->inspections->first();
-
-                if (!$property->inspection_scheduled_at && $latestAssignedInspection?->scheduled_date) {
-                    $property->inspection_scheduled_at = $latestAssignedInspection->scheduled_date;
-                }
-
-                if (!$property->assigned_at) {
-                    $property->assigned_at = $latestAssignedInspection?->created_at ?? $property->updated_at;
-                }
-
-                return $property;
-            });
-            
-            // Count inspections assigned to this inspector
-            $assignedCount = $assignedProperties->count();
-            
-            // Count scheduled inspections
-            $scheduledCount = $assignedProperties->filter(function ($property) {
-                return !is_null($property->inspection_scheduled_at);
-            })->count();
-            
-            // Count unscheduled inspections
-            $unscheduledCount = $assignedProperties->filter(function ($property) {
-                return is_null($property->inspection_scheduled_at);
-            })->count();
-            
-            // Count completed inspections
-            $completedCount = Inspection::where('inspector_id', $user->id)
-                ->where('status', 'completed')
-                ->distinct('property_id')
-                ->count('property_id');
-            
-            // Get upcoming inspections
-            $upcomingInspections = $assignedProperties
-                ->filter(function ($property) {
-                    return $property->inspection_scheduled_at && $property->inspection_scheduled_at >= now();
-                })
-                ->sortBy('inspection_scheduled_at')
-                ->take(5)
-                ->values();
-
-            return view('admin.inspector-dashboard', compact(
-                'assignedProperties',
-                'assignedCount',
-                'scheduledCount',
-                'unscheduledCount',
-                'completedCount',
-                'upcomingInspections'
-            ));
-        }
-        
-        // Project Manager Dashboard
-        if ($user->hasRole('Project Manager')) {
-            // Get properties assigned to this PM
-            $assignedProperties = Property::where('project_manager_id', $user->id)
-                ->where('status', 'awaiting_inspection')
-                ->with(['user', 'inspector'])
-                ->get();
-            
-            // Count properties assigned
-            $assignedCount = $assignedProperties->count();
-            
-            // Count scheduled inspections
-            $scheduledCount = Property::where('project_manager_id', $user->id)
-                ->where('status', 'awaiting_inspection')
-                ->whereNotNull('inspection_scheduled_at')
-                ->count();
-            
-            // Count unscheduled inspections
-            $unscheduledCount = Property::where('project_manager_id', $user->id)
-                ->where('status', 'awaiting_inspection')
-                ->whereNull('inspection_scheduled_at')
-                ->count();
-            
-            // Count active projects
-            $activeProjectsCount = Project::whereHas('property', function($query) use ($user) {
-                $query->where('project_manager_id', $user->id);
-            })->where('status', 'active')->count();
-            
-            // Get upcoming inspections
-            $upcomingInspections = Property::where('project_manager_id', $user->id)
-                ->where('status', 'awaiting_inspection')
-                ->whereNotNull('inspection_scheduled_at')
-                ->where('inspection_scheduled_at', '>=', now())
-                ->orderBy('inspection_scheduled_at', 'asc')
-                ->with(['user', 'inspector'])
-                ->take(5)
-                ->get();
-
-            return view('admin.pm-dashboard', compact(
-                'assignedProperties',
-                'assignedCount',
-                'scheduledCount',
-                'unscheduledCount',
-                'activeProjectsCount',
-                'upcomingInspections'
-            ));
-        }
-        
-        // Check if user has Super Admin or Administrator role
-        if ($user->hasRole(['Super Admin', 'Administrator'])) {
-            // Admins see all data
+ 
+        if ($user->isStaff()) {
             $propertiesCount = Property::count();
             $inspectionsCount = Inspection::where('status', '!=', 'cancelled')
                 ->distinct('property_id')
@@ -279,7 +52,7 @@ class DashboardController extends Controller
                 'subscription',
                 'recentActivities'
             ));
-        } 
+        }
         
         // Client Dashboard
         if ($user->hasRole('Client')) {
@@ -381,6 +154,16 @@ class DashboardController extends Controller
                 ->take(5)
                 ->get();
 
+            $quotationReadyInspections = Inspection::with(['property', 'project'])
+                ->whereIn('property_id', $propertyIds)
+                ->where('status', '!=', 'completed')
+                ->whereNotNull('active_quotation_id')
+                ->whereIn('quotation_status', ['shared', 'client_reviewing', 'approved'])
+                ->orderByDesc('quotation_shared_at')
+                ->orderByDesc('id')
+                ->take(5)
+                ->get();
+
             return view('client.dashboard', compact(
                 'propertiesCount',
                 'inspectionsCount',
@@ -398,7 +181,8 @@ class DashboardController extends Controller
                 'pendingInspections',
                 'subscription',
                 'recentProperties',
-                'completedInspections'
+                'completedInspections',
+                'quotationReadyInspections'
             ));
         }
         

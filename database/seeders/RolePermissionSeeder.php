@@ -179,6 +179,18 @@ class RolePermissionSeeder extends Seeder
             'manage-schedules', 'assign-technicians', 'view-schedules',
         ]);
 
+        // 3b. Store Manager - Tool assignment/return and project visibility
+        $storeManager = Role::firstOrCreate(['name' => 'Store Manager']);
+        $storeManager->givePermissionTo([
+            'view-all-properties',
+            'view-all-projects',
+            'view-inspections',
+            'view-schedules',
+            'view-work-logs',
+            'view-communications',
+            'create-communications',
+        ]);
+
         // 4. Inspector - Inspection Focused
         $inspector = Role::firstOrCreate(['name' => 'Inspector']);
         $inspector->givePermissionTo([

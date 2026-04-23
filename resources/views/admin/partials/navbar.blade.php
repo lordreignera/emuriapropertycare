@@ -1,4 +1,10 @@
 {{-- Top Navbar --}}
+@php
+  $unreadNotificationsCount = auth()->user()->unreadNotifications->count();
+  $unreadNotificationsLabel = $unreadNotificationsCount > 99 ? '99+' : (string) $unreadNotificationsCount;
+  $notificationsIndexRoute = auth()->user()->hasRole('Client') ? route('client.notifications.index') : route('notifications.index');
+  $notificationsOpenRouteName = auth()->user()->hasRole('Client') ? 'client.notifications.open' : 'notifications.open';
+@endphp
 <nav class="navbar p-0 fixed-top d-flex flex-row">
   <div class="navbar-brand-wrapper d-flex d-lg-none align-items-center justify-content-center">
     <a class="navbar-brand brand-logo-mini" href="{{ route('dashboard') }}">
@@ -78,15 +84,19 @@
 
       {{-- Notifications --}}
       <li class="nav-item dropdown border-left">
-        <a class="nav-link count-indicator dropdown-toggle" id="notificationDropdown" href="#" data-bs-toggle="dropdown">
-          <i class="mdi mdi-bell"></i>
-          <span class="count bg-danger">{{ auth()->user()->unreadNotifications->count() }}</span>
+        <a class="nav-link count-indicator dropdown-toggle notification-attention {{ $unreadNotificationsCount > 0 ? 'has-unread' : '' }}" id="notificationDropdown" href="#" data-bs-toggle="dropdown" aria-label="Notifications">
+          <span class="notification-bell-wrap">
+            <i class="mdi mdi-bell notification-bell-icon"></i>
+            @if($unreadNotificationsCount > 0)
+              <span class="notification-count-pill">{{ $unreadNotificationsLabel }}</span>
+            @endif
+          </span>
         </a>
         <div class="dropdown-menu dropdown-menu-right navbar-dropdown preview-list" aria-labelledby="notificationDropdown">
           <h6 class="p-3 mb-0">Notifications</h6>
           <div class="dropdown-divider"></div>
           @forelse(auth()->user()->unreadNotifications->take(5) as $notification)
-          <a href="#" class="dropdown-item preview-item">
+          <a href="{{ route($notificationsOpenRouteName, $notification->id) }}" class="dropdown-item preview-item">
             <div class="preview-thumbnail">
               <div class="preview-icon bg-dark rounded-circle">
                 <i class="mdi mdi-bell text-info"></i>
@@ -101,9 +111,7 @@
           @empty
           <p class="p-3 mb-0 text-center text-muted">No new notifications</p>
           @endforelse
-          @if(auth()->user()->unreadNotifications->count() > 0)
-          <a href="{{ route('notifications.index') }}" class="p-3 mb-0 text-center d-block">See all notifications</a>
-          @endif
+          <a href="{{ $notificationsIndexRoute }}" class="p-3 mb-0 text-center d-block">See all notifications</a>
         </div>
       </li>
 
@@ -143,19 +151,54 @@
           </form>
         </div>
       </li>
-      
-      {{-- Direct Logout Button (Alternative) --}}
-      <li class="nav-item d-none d-lg-block">
-        <form method="POST" action="{{ route('logout') }}" style="margin: 0;">
-          @csrf
-          <button type="submit" class="btn btn-sm btn-outline-danger" style="padding: 0.5rem 1rem; font-weight: 500;">
-            <i class="mdi mdi-logout"></i> Logout
-          </button>
-        </form>
-      </li>
     </ul>
     <button class="navbar-toggler navbar-toggler-right d-lg-none align-self-center" type="button" data-toggle="offcanvas" aria-label="Toggle navigation">
       <span class="mdi mdi-menu" style="font-size:1.5rem;"></span>
     </button>
   </div>
 </nav>
+
+<style>
+.notification-attention {
+  padding: 0.7rem 0.9rem !important;
+}
+
+.notification-bell-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notification-bell-icon {
+  font-size: 1.7rem !important;
+  color: #ef4444 !important;
+  filter: drop-shadow(0 3px 8px rgba(239, 68, 68, 0.35));
+}
+
+.notification-attention.has-unread .notification-bell-icon {
+  animation: notificationPulse 1.8s ease-in-out infinite;
+}
+
+.notification-count-pill {
+  position: absolute;
+  top: -0.55rem;
+  right: -0.95rem;
+  min-width: 1.55rem;
+  height: 1.55rem;
+  padding: 0 0.35rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #ef4444, #b91c1c);
+  color: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 800;
+  line-height: 1.55rem;
+  text-align: center;
+  box-shadow: 0 6px 16px rgba(185, 28, 28, 0.35);
+}
+
+@keyframes notificationPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.12); }
+}
+</style>

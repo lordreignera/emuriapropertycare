@@ -35,7 +35,15 @@
                 <div class="alert alert-info">
                     <strong>Agreement Workflow</strong><br>
                     1. Client sign: {!! $inspection->approved_by_client ? '<span class="badge bg-success">Completed</span>' : '<span class="badge bg-warning text-dark">Pending</span>' !!}<br>
-                    2. Deposit confirmation: {!! ($inspection->work_payment_status ?? 'pending') === 'paid' ? '<span class="badge bg-success">Completed</span>' : '<span class="badge bg-warning text-dark">Pending</span>' !!}<br>
+                    2. Deposit confirmation:
+                    @if(($inspection->payment_plan ?? 'full') === 'installment' && ($inspection->work_payment_status ?? 'pending') === 'paid')
+                        <span class="badge bg-success">Completed - 50% Paid</span>
+                    @elseif(($inspection->work_payment_status ?? 'pending') === 'paid')
+                        <span class="badge bg-success">Completed - Payment Confirmed</span>
+                    @else
+                        <span class="badge bg-warning text-dark">Pending</span>
+                    @endif
+                    <br>
                     3. Etogo countersign: {!! $inspection->etogo_signed_at ? '<span class="badge bg-success">Completed</span>' : '<span class="badge bg-secondary">Awaiting</span>' !!}
                     @if(!empty($inspection->schedule_blocked_reason))
                         <div class="mt-2 mb-0"><small>{{ $inspection->schedule_blocked_reason }}</small></div>

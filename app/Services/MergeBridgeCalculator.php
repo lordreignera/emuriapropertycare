@@ -6,6 +6,7 @@ use App\Models\Inspection;
 use App\Models\Property;
 use App\Models\PHARFinding;
 use App\Models\BDCSetting;
+use App\Models\InspectionQuotation;
 
 class MergeBridgeCalculator
 {
@@ -52,10 +53,39 @@ class MergeBridgeCalculator
         $bdcMonthly       = $bdcResult['bdc_monthly'];
         $labourHourlyRate = $inspection->labour_hourly_rate ?? ($bdcResult['loaded_hourly_rate'] ?? 0);
 
-        // Step 2: FRLC & FMC from findings and materials
-        $findings        = PHARFinding::where('inspection_id', $inspection->id)->get();
-        $frlcCalculation = $this->calculateFRLC($findings, $labourHourlyRate);
-        $fmcCalculation  = $this->calculateFMC($inspection);
+        // Step 2: FRLC & FMC from findings/materials OR locked quotation totals.
+        // When quotation is approved, keep all downstream "live" pricing aligned
+        // to the approved selection instead of re-deriving from full findings/materials.
+        $approvedQuotation = null;
+        if (($inspection->quotation_status ?? null) === 'approved' && !empty($inspection->active_quotation_id)) {
+            $approvedQuotation = InspectionQuotation::query()
+                ->where('id', $inspection->active_quotation_id)
+                ->where('inspection_id', $inspection->id)
+                ->first();
+        }
+
+        if ($approvedQuotation) {
+            $approvedIds = collect($approvedQuotation->approved_finding_ids ?? [])->map(fn ($id) => (int) $id);
+            $snapshot = collect($approvedQuotation->findings_snapshot ?? [])->values();
+            $approvedSnapshotFindings = $snapshot->filter(
+                fn ($f) => $approvedIds->contains((int) ($f['id'] ?? 0))
+            );
+
+            $frlcCalculation = [
+                'total_hours' => (float) $approvedSnapshotFindings->sum(fn ($f) => (float) ($f['labour_hours'] ?? 0)),
+                'annual' => (float) ($approvedQuotation->approved_labour_cost ?? 0),
+                'monthly' => (float) ($approvedQuotation->approved_labour_cost ?? 0),
+            ];
+
+            $fmcCalculation = [
+                'annual' => (float) ($approvedQuotation->approved_material_cost ?? 0),
+                'monthly' => (float) ($approvedQuotation->approved_material_cost ?? 0),
+            ];
+        } else {
+            $findings        = PHARFinding::where('inspection_id', $inspection->id)->get();
+            $frlcCalculation = $this->calculateFRLC($findings, $labourHourlyRate);
+            $fmcCalculation  = $this->calculateFMC($inspection);
+        }
 
         // Step 3: TRC (Total Remediation Cost)
         $trcAnnual   = $bdcAnnual + $frlcCalculation['annual'] + $fmcCalculation['annual'];

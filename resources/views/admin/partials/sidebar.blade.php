@@ -4,6 +4,7 @@
     $roleLabel = match (true) {
         $user->hasRole('Super Admin') => 'Super Admin',
         $user->hasRole('Administrator') => 'Administrator',
+        $user->hasRole('Store Manager') => 'Store Manager',
         $user->hasRole('Inspector') => 'Inspector',
         $user->hasRole('Project Manager') => 'Project Manager',
         $user->hasRole('Technician') => 'Technician',
@@ -11,9 +12,7 @@
         default => 'Member',
     };
 
-    $propertiesOpen = request()->routeIs('properties.*');
-    $inspectionsOpen = request()->routeIs('inspections.*');
-    $maintenanceOpen = request()->routeIs('maintenance-visit-logs.*');
+    $inspectionsOpen = request()->routeIs('inspections.*') || request()->routeIs('properties.*');
     $projectsOpen = request()->routeIs('projects.*') || request()->routeIs('milestones.*') || request()->routeIs('change-orders.*') || request()->routeIs('maintenance-visit-logs.*');
     $billingOpen = request()->routeIs('invoices.*') || request()->routeIs('budgets.*');
     $reportsOpen = request()->routeIs('reports.*') || request()->routeIs('savings.*');
@@ -33,22 +32,9 @@
         || request()->routeIs('admin.subsystems.*')
         || request()->routeIs('admin.settings.bdc*');
 
-    $scheduledPaidCount = 0;
-    $unscheduledCount = 0;
-    if ($user->can('view-all-properties')) {
-        $scheduledPaidCount = \App\Models\Inspection::where('inspection_fee_status', 'paid')
-            ->where('status', 'scheduled')
-            ->whereNull('inspector_id')
-            ->count();
-
-        $unscheduledCount = \App\Models\Property::where('status', 'active')
-            ->whereDoesntHave('inspections')
-            ->count();
-    }
-
     $scheduledInspectionsCount = 0;
     $unscheduledInspectionsCount = 0;
-    $inProgressInspectionsCount = 0;
+    $awaitingQuotationCount = 0;
 
     if ($user->hasRole(['Super Admin', 'Administrator'])) {
         $propertyIds = \App\Models\Property::where('status', 'approved')->pluck('id');
@@ -58,8 +44,12 @@
             ->where('status', 'scheduled')
             ->count();
 
-        $inProgressInspectionsCount = \App\Models\Inspection::whereIn('project_id', $projectIds)
-            ->where('status', 'in_progress')
+        $awaitingQuotationCount = \App\Models\Inspection::whereIn('project_id', $projectIds)
+            ->where('status', '!=', 'completed')
+            ->where(function ($q) {
+                $q->where('status', 'in_progress')
+                    ->orWhereIn('quotation_status', ['shared', 'client_reviewing', 'client_responded']);
+            })
             ->count();
     } elseif ($user->hasRole('Inspector')) {
         $scheduledInspectionsCount = \App\Models\Property::where('inspector_id', $user->id)
@@ -83,8 +73,6 @@
             ->count();
     }
 
-    $projectsWithScopeCount = \App\Models\Project::whereHas('scopeOfWorks')->count();
-
     // Stage 1: Client has signed + paid, waiting for Etogo to countersign
     $pendingEtogoCount = \App\Models\Inspection::whereNotNull('client_signature')
         ->where('work_payment_status', 'paid')
@@ -97,14 +85,116 @@
         ->count();
 
     // Stage 3: Active — schedule is set, work is underway
-    $activeWorkCount = \App\Models\Inspection::whereNotNull('etogo_signed_at')
-        ->whereNotNull('work_schedule')
-        ->where('work_schedule', '!=', '[]')
-        ->count();
+        // Stage 3/4: Classify maintenance projects by computed progress.
+        // A project is completed at 100% based on schedule/log progress (same rule as maintenance dashboard).
+        $activeWorkCount = 0;
+        $completedWorkCount = 0;
 
-    $activeProjectsCount = $user->hasRole('Technician')
-        ? \App\Models\Project::where('assigned_to', $user->id)->where('status', 'active')->count()
-        : \App\Models\Project::where('status', 'active')->count();
+        $workInspections = \App\Models\Inspection::with(['maintenanceVisitLogs', 'pharFindings'])
+            ->whereNotNull('etogo_signed_at')
+            ->whereNotNull('work_schedule')
+            ->where('work_schedule', '!=', '[]')
+            ->get();
+
+        $approvedQuotationsByInspection = \App\Models\InspectionQuotation::query()
+            ->whereIn('inspection_id', $workInspections->pluck('id'))
+            ->where('status', 'approved')
+            ->orderBy('id', 'asc')
+            ->get()
+            ->groupBy('inspection_id')
+            ->map(fn($rows) => $rows->last());
+
+        $makeFindingKey = function ($issueOrTask, $category) {
+            $left = strtolower(trim((string) $issueOrTask));
+            $right = strtolower(trim((string) $category));
+            return $left . '|' . $right;
+        };
+
+        foreach ($workInspections as $workInspection) {
+            $activeQuotationForScope = null;
+
+            if (!empty($workInspection->active_quotation_id)) {
+                $aq = \App\Models\InspectionQuotation::query()
+                    ->where('id', $workInspection->active_quotation_id)
+                    ->where('inspection_id', $workInspection->id)
+                    ->first();
+                if (($aq?->status ?? null) === 'approved') {
+                    $activeQuotationForScope = $aq;
+                }
+            }
+
+            if (!$activeQuotationForScope) {
+                $activeQuotationForScope = $approvedQuotationsByInspection->get($workInspection->id);
+            }
+
+            $scopedFindings = collect($workInspection->pharFindings ?? [])->values();
+            if (($activeQuotationForScope?->status ?? null) === 'approved') {
+                $approvedIds = collect($activeQuotationForScope->approved_finding_ids ?? [])
+                    ->map(fn($id) => (int) $id)
+                    ->filter(fn($id) => $id > 0)
+                    ->values();
+
+                if ($approvedIds->isNotEmpty()) {
+                    $filteredById = $scopedFindings
+                        ->filter(fn($f) => $approvedIds->contains((int) ($f->id ?? 0)))
+                        ->values();
+
+                    if ($filteredById->isNotEmpty()) {
+                        $scopedFindings = $filteredById;
+                    } else {
+                        $snapshot = collect($activeQuotationForScope->findings_snapshot ?? [])->values();
+                        $approvedScopeKeys = $snapshot
+                            ->filter(fn($f) => $approvedIds->contains((int) ($f['id'] ?? 0)))
+                            ->map(fn($f) => $makeFindingKey(
+                                $f['task_question'] ?? ($f['issue'] ?? ''),
+                                $f['category'] ?? ''
+                            ))
+                            ->filter(fn($k) => $k !== '|')
+                            ->unique()
+                            ->values();
+
+                        $scopedFindings = $scopedFindings
+                            ->filter(function ($f) use ($approvedScopeKeys, $makeFindingKey) {
+                                $key = $makeFindingKey(
+                                    $f->task_question ?? ($f->issue ?? ''),
+                                    $f->category ?? ''
+                                );
+                                return $approvedScopeKeys->contains($key);
+                            })
+                            ->values();
+                    }
+                }
+            }
+
+            $schedule = collect($workInspection->work_schedule ?? []);
+            $totalVisits = $schedule->count();
+            $doneVisits = $schedule->where('status', 'completed')->count();
+            $scheduleProgressPct = $totalVisits > 0
+                ? (int) round(($doneVisits / $totalVisits) * 100)
+                : 0;
+
+            $totalScopedFindings = $scopedFindings->count();
+            $resolvedScopedFindings = $scopedFindings
+                ->filter(function ($finding) use ($workInspection) {
+                    return collect($workInspection->maintenanceVisitLogs ?? [])
+                        ->where('finding_id', (int) $finding->id)
+                        ->where('status', 'completed')
+                        ->isNotEmpty();
+                })
+                ->count();
+
+            $findingProgressPct = $totalScopedFindings > 0
+                ? (int) round(($resolvedScopedFindings / $totalScopedFindings) * 100)
+                : 0;
+
+            $progressPct = max($scheduleProgressPct, $findingProgressPct);
+
+            if ($progressPct >= 100) {
+                $completedWorkCount++;
+            } else {
+                $activeWorkCount++;
+            }
+        }
 
     $unpaidInvoicesCount = \App\Models\Invoice::pending()->count();
 
@@ -129,46 +219,16 @@
 
         <div class="admin-client-section-title">Main Navigation</div>
         <a class="admin-client-link {{ request()->routeIs('dashboard') ? 'is-active' : '' }}" href="{{ route('dashboard') }}">
-            <i class="mdi mdi-view-dashboard"></i>
+            <i class="mdi mdi-view-dashboard admin-client-icon admin-client-icon-dashboard"></i>
             <span>Dashboard</span>
         </a>
-
-        @can('view-all-properties')
-            <div class="admin-client-section-title">Property Management</div>
-            <details class="admin-client-group" {{ $propertiesOpen ? 'open' : '' }}>
-                <summary class="admin-client-link {{ $propertiesOpen ? 'is-active' : '' }}">
-                    <span class="admin-client-summary-left">
-                        <i class="mdi mdi-home-city"></i>
-                        <span>Property Management</span>
-                    </span>
-                    <span class="admin-client-arrow">▾</span>
-                </summary>
-                <div class="admin-client-submenu">
-                    <a class="admin-client-sublink {{ request()->get('status') == 'awaiting_inspection' ? 'is-active' : '' }}" href="{{ route('properties.index') }}?status=awaiting_inspection">
-                        <span class="admin-client-sublabel">Scheduled &amp; Paid</span>
-                        @if($scheduledPaidCount > 0)
-                            <span class="admin-client-badge">{{ $scheduledPaidCount }}</span>
-                        @endif
-                    </a>
-                    <a class="admin-client-sublink {{ request()->get('status') == 'active' ? 'is-active' : '' }}" href="{{ route('properties.index') }}?status=active">
-                        <span class="admin-client-sublabel">Not Scheduled</span>
-                        @if($unscheduledCount > 0)
-                            <span class="admin-client-badge">{{ $unscheduledCount }}</span>
-                        @endif
-                    </a>
-                    <a class="admin-client-sublink {{ !request()->has('status') ? 'is-active' : '' }}" href="{{ route('properties.index') }}">
-                        <span class="admin-client-sublabel">All Properties</span>
-                    </a>
-                </div>
-            </details>
-        @endcan
 
         @if($user->hasRole(['Inspector', 'Project Manager', 'Super Admin', 'Administrator']) || $user->can('view-inspections'))
             <div class="admin-client-section-title">Services</div>
             <details class="admin-client-group" {{ $inspectionsOpen ? 'open' : '' }}>
                 <summary class="admin-client-link {{ $inspectionsOpen ? 'is-active' : '' }}">
                     <span class="admin-client-summary-left">
-                        <i class="mdi mdi-clipboard-check"></i>
+                        <i class="mdi mdi-clipboard-check admin-client-icon admin-client-icon-services"></i>
                         <span>PHAR Assessment Workflow</span>
                     </span>
                     <span class="admin-client-arrow">▾</span>
@@ -176,22 +236,22 @@
                 <div class="admin-client-submenu">
                     @if($user->hasRole(['Super Admin', 'Administrator']))
                         <a class="admin-client-sublink {{ request()->get('status') == 'scheduled' ? 'is-active' : '' }}" href="{{ route('inspections.index') }}?status=scheduled">
-                            <span class="admin-client-sublabel">Awaiting assessment</span>
+                            <span class="admin-client-sublabel">Awaiting Assessment</span>
                             @if($scheduledInspectionsCount > 0)
                                 <span class="admin-client-badge">{{ $scheduledInspectionsCount }}</span>
                             @endif
                         </a>
-                        <a class="admin-client-sublink {{ request()->get('status') == 'in_progress' ? 'is-active' : '' }}" href="{{ route('inspections.index') }}?status=in_progress">
-                            <span class="admin-client-sublabel">In Progress</span>
-                            @if($inProgressInspectionsCount > 0)
-                                <span class="admin-client-badge">{{ $inProgressInspectionsCount }}</span>
+                        <a class="admin-client-sublink {{ request()->routeIs('inspections.*') && request()->get('view') == 'awaiting-quotation' ? 'is-active' : '' }}" href="{{ route('inspections.index') }}?view=awaiting-quotation">
+                            <span class="admin-client-sublabel">Pre-assessed properties</span>
+                            @if($awaitingQuotationCount > 0)
+                                <span class="admin-client-badge">{{ $awaitingQuotationCount }}</span>
                             @endif
                         </a>
                         <a class="admin-client-sublink {{ request()->get('status') == 'completed' ? 'is-active' : '' }}" href="{{ route('inspections.index') }}?status=completed">
                             <span class="admin-client-sublabel">Completed</span>
                         </a>
-                        <a class="admin-client-sublink {{ !request()->has('status') ? 'is-active' : '' }}" href="{{ route('inspections.index') }}">
-                            <span class="admin-client-sublabel">All Inspections</span>
+                        <a class="admin-client-sublink {{ request()->routeIs('properties.*') && request()->get('status') == 'inspected_completed' ? 'is-active' : '' }}" href="{{ route('properties.index') }}?status=inspected_completed">
+                            <span class="admin-client-sublabel">All Assessed Properties</span>
                         </a>
                     @else
                         <a class="admin-client-sublink {{ request()->get('status') == 'scheduled' ? 'is-active' : '' }}" href="{{ route('inspections.index') }}?status=scheduled">
@@ -218,7 +278,7 @@
             <details class="admin-client-group" {{ $projectsOpen ? 'open' : '' }}>
                 <summary class="admin-client-link {{ $projectsOpen ? 'is-active' : '' }}">
                     <span class="admin-client-summary-left">
-                        <i class="mdi mdi-briefcase"></i>
+                        <i class="mdi mdi-briefcase admin-client-icon admin-client-icon-projects"></i>
                         <span>Project Management</span>
                     </span>
                     <span class="admin-client-arrow">▾</span>
@@ -246,23 +306,34 @@
 
                     @endif
 
-                    {{-- Stage 3: Active projects — schedule set, work happening --}}
-                    <a class="admin-client-sublink {{ request()->routeIs('maintenance-visit-logs.*') ? 'is-active' : '' }}"
-                       href="{{ route('maintenance-visit-logs.index') }}">
+                    {{-- Stage 3: Active projects (< 100% progress) --}}
+                    <a class="admin-client-sublink {{ request()->routeIs('maintenance-visit-logs.*') && request()->get('progress_filter', 'active') !== 'completed' ? 'is-active' : '' }}"
+                       href="{{ route('maintenance-visit-logs.index') }}?progress_filter=active">
                         <span class="admin-client-sublabel">Active Projects</span>
                         @if($activeWorkCount > 0)
                             <span class="admin-client-badge">{{ $activeWorkCount }}</span>
                         @endif
                     </a>
 
-                    {{-- Tool Return & Assignment --}}
-                    <a class="admin-client-sublink {{ request()->routeIs('tool-assignments.index') ? 'is-active' : '' }}"
-                       href="{{ route('tool-assignments.index') }}">
-                        <span class="admin-client-sublabel">Tool Return &amp; Assignment</span>
-                        @if($unreturnedToolCount > 0)
-                            <span class="admin-client-badge">{{ $unreturnedToolCount }}</span>
+                    {{-- Stage 4: Completed projects (100% progress) --}}
+                    <a class="admin-client-sublink {{ request()->routeIs('maintenance-visit-logs.*') && request()->get('progress_filter') === 'completed' ? 'is-active' : '' }}"
+                       href="{{ route('maintenance-visit-logs.index') }}?progress_filter=completed">
+                        <span class="admin-client-sublabel">Completed Projects</span>
+                        @if($completedWorkCount > 0)
+                            <span class="admin-client-badge">{{ $completedWorkCount }}</span>
                         @endif
                     </a>
+
+                    @if($user->hasRole(['Super Admin', 'Store Manager']))
+                        {{-- Tool Return & Assignment --}}
+                        <a class="admin-client-sublink {{ request()->routeIs('tool-assignments.index') ? 'is-active' : '' }}"
+                           href="{{ route('tool-assignments.index') }}">
+                            <span class="admin-client-sublabel">Tool Return &amp; Assignment</span>
+                            @if($unreturnedToolCount > 0)
+                                <span class="admin-client-badge">{{ $unreturnedToolCount }}</span>
+                            @endif
+                        </a>
+                    @endif
 
                     @if($user->hasRole(['Project Manager', 'Super Admin', 'Administrator']) || $user->can('view-all-projects'))
                         <a class="admin-client-sublink {{ request()->routeIs('milestones.*') ? 'is-active' : '' }}" href="{{ route('milestones.index') }}">
@@ -281,7 +352,7 @@
             <details class="admin-client-group" {{ $billingOpen ? 'open' : '' }}>
                 <summary class="admin-client-link {{ $billingOpen ? 'is-active' : '' }}">
                     <span class="admin-client-summary-left">
-                        <i class="mdi mdi-cash-multiple"></i>
+                        <i class="mdi mdi-cash-multiple admin-client-icon admin-client-icon-billing"></i>
                         <span>Billing &amp; Finance</span>
                     </span>
                     <span class="admin-client-arrow">▾</span>
@@ -307,7 +378,7 @@
             <details class="admin-client-group" {{ $reportsOpen ? 'open' : '' }}>
                 <summary class="admin-client-link {{ $reportsOpen ? 'is-active' : '' }}">
                     <span class="admin-client-summary-left">
-                        <i class="mdi mdi-chart-areaspline"></i>
+                        <i class="mdi mdi-chart-areaspline admin-client-icon admin-client-icon-reports"></i>
                         <span>Reports &amp; Savings</span>
                     </span>
                     <span class="admin-client-arrow">▾</span>
@@ -328,7 +399,7 @@
             <details class="admin-client-group" {{ $accessControlOpen ? 'open' : '' }}>
                 <summary class="admin-client-link {{ $accessControlOpen ? 'is-active' : '' }}">
                     <span class="admin-client-summary-left">
-                        <i class="mdi mdi-shield-account"></i>
+                        <i class="mdi mdi-shield-account admin-client-icon admin-client-icon-access"></i>
                         <span>Access Control</span>
                     </span>
                     <span class="admin-client-arrow">▾</span>
@@ -343,7 +414,7 @@
             <details class="admin-client-group" {{ $cpiOpen ? 'open' : '' }}>
                 <summary class="admin-client-link {{ $cpiOpen ? 'is-active' : '' }}">
                     <span class="admin-client-summary-left">
-                        <i class="mdi mdi-calculator"></i>
+                        <i class="mdi mdi-calculator admin-client-icon admin-client-icon-settings"></i>
                         <span>System settings</span>
                     </span>
                     <span class="admin-client-arrow">▾</span>
@@ -452,6 +523,49 @@ body.light-theme .admin-client-sidebar {
     font-size: 1rem;
     width: 20px;
     text-align: center;
+}
+
+.admin-client-sidebar .admin-client-icon {
+    width: 32px !important;
+    height: 32px;
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    border-radius: 10px;
+    font-size: 1rem;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 8px 18px rgba(5, 10, 30, 0.18) !important;
+}
+
+.admin-client-sidebar .admin-client-icon-dashboard {
+    background: linear-gradient(135deg, #ffb347, #ff7a18) !important;
+}
+
+.admin-client-sidebar .admin-client-icon-property {
+    background: linear-gradient(135deg, #4dd0e1, #1e88e5) !important;
+}
+
+.admin-client-sidebar .admin-client-icon-services {
+    background: linear-gradient(135deg, #81c784, #2e7d32) !important;
+}
+
+.admin-client-sidebar .admin-client-icon-projects {
+    background: linear-gradient(135deg, #f48fb1, #d81b60) !important;
+}
+
+.admin-client-sidebar .admin-client-icon-billing {
+    background: linear-gradient(135deg, #ffd54f, #fb8c00) !important;
+}
+
+.admin-client-sidebar .admin-client-icon-reports {
+    background: linear-gradient(135deg, #9575cd, #5e35b1) !important;
+}
+
+.admin-client-sidebar .admin-client-icon-access {
+    background: linear-gradient(135deg, #90a4ae, #546e7a) !important;
+}
+
+.admin-client-sidebar .admin-client-icon-settings {
+    background: linear-gradient(135deg, #aed581, #7cb342) !important;
 }
 
 .admin-client-sidebar .admin-client-link span,

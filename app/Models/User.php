@@ -168,6 +168,7 @@ class User extends Authenticatable
         return $this->account_type === 'staff' || $this->hasAnyRole([
             'Super Admin',
             'Administrator',
+            'Store Manager',
             'Project Manager',
             'Inspector',
             'Technician',

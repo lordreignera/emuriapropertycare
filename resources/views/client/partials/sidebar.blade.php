@@ -36,7 +36,7 @@
 
         <div class="client-section-title">Main Navigation</div>
         <a class="client-link {{ request()->routeIs('dashboard') ? 'is-active' : '' }}" href="{{ route('dashboard') }}">
-            <i class="mdi mdi-view-dashboard"></i>
+            <i class="mdi mdi-view-dashboard icon-success"></i>
             <span>Dashboard</span>
         </a>
 
@@ -44,7 +44,7 @@
         <details class="client-group" {{ $propertyOpen ? 'open' : '' }}>
             <summary class="client-link {{ $propertyOpen ? 'is-active' : '' }}">
                 <span class="client-summary-left">
-                    <i class="mdi mdi-home-city"></i>
+                    <i class="mdi mdi-home-city icon-primary"></i>
                     <span>Properties</span>
                 </span>
                 <span class="client-arrow">▾</span>
@@ -60,7 +60,7 @@
         <details class="client-group" {{ $servicesOpen ? 'open' : '' }}>
             <summary class="client-link {{ $servicesOpen ? 'is-active' : '' }}">
                 <span class="client-summary-left">
-                    <i class="mdi mdi-clipboard-check"></i>
+                    <i class="mdi mdi-clipboard-check icon-info"></i>
                     <span>Inspection Services</span>
                 </span>
                 <span class="client-arrow">▾</span>
@@ -85,7 +85,7 @@
         <details class="client-group" {{ $billingOpen ? 'open' : '' }}>
             <summary class="client-link {{ $billingOpen ? 'is-active' : '' }}">
                 <span class="client-summary-left">
-                    <i class="mdi mdi-cash-multiple"></i>
+                    <i class="mdi mdi-cash-multiple icon-warning"></i>
                     <span>Billing & Finance</span>
                 </span>
                 <span class="client-arrow">▾</span>
@@ -105,7 +105,7 @@
         <details class="client-group" {{ $supportOpen ? 'open' : '' }}>
             <summary class="client-link {{ $supportOpen ? 'is-active' : '' }}">
                 <span class="client-summary-left">
-                    <i class="mdi mdi-lifebuoy"></i>
+                    <i class="mdi mdi-lifebuoy icon-danger"></i>
                     <span>Help & Support</span>
                 </span>
                 <span class="client-arrow">▾</span>
@@ -294,4 +294,66 @@ body.light-theme .client-clean-sidebar {
 .client-clean-sidebar .client-sublink:focus {
     background: transparent !important;
 }
+
+/* Color-coded icon chips */
+.client-clean-sidebar .icon-success {
+    background: rgba(40, 167, 69, 0.2) !important;
+    color: #28a745 !important;
+    border-radius: 0.35rem;
+    padding: 0.4rem 0.45rem !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px !important;
+    height: 30px !important;
+}
+
+.client-clean-sidebar .icon-primary {
+    background: rgba(0, 123, 255, 0.2) !important;
+    color: #007bff !important;
+    border-radius: 0.35rem;
+    padding: 0.4rem 0.45rem !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px !important;
+    height: 30px !important;
+}
+
+.client-clean-sidebar .icon-info {
+    background: rgba(17, 182, 214, 0.2) !important;
+    color: #11b6d6 !important;
+    border-radius: 0.35rem;
+    padding: 0.4rem 0.45rem !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px !important;
+    height: 30px !important;
+}
+
+.client-clean-sidebar .icon-warning {
+    background: rgba(255, 193, 7, 0.2) !important;
+    color: #ffc107 !important;
+    border-radius: 0.35rem;
+    padding: 0.4rem 0.45rem !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px !important;
+    height: 30px !important;
+}
+
+.client-clean-sidebar .icon-danger {
+    background: rgba(220, 53, 69, 0.2) !important;
+    color: #dc3545 !important;
+    border-radius: 0.35rem;
+    padding: 0.4rem 0.45rem !important;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px !important;
+    height: 30px !important;
+}
+
 </style>

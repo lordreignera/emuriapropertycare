@@ -298,8 +298,7 @@
                                             $isCompleted = $svStatus === 'completed';
                                         @endphp
                                         <option value="{{ $svDate }}"
-                                            {{ old('visit_date') === $svDate ? 'selected' : '' }}
-                                            {{ $isCompleted ? 'disabled' : '' }}>
+                                            {{ old('visit_date') === $svDate ? 'selected' : '' }}>
                                             {{ $svLabel }}{{ $isCompleted ? ' ✓ done' : '' }}
                                         </option>
                                     @endforeach
@@ -400,7 +399,7 @@
                                     </div>
                                     <div class="d-flex flex-wrap gap-2">
                                         @foreach($afterPhotos as $apIdx => $ap)
-                                            @php $apUrl = Storage::url($ap); @endphp
+                                            @php $apUrl = $inspection->getStorageUrl($ap); @endphp
                                             <img src="{{ $apUrl }}"
                                                  class="photo-thumb"
                                                  data-src="{{ $apUrl }}"
@@ -469,7 +468,7 @@
                             </div>
                             <div class="d-flex flex-wrap gap-2">
                                 @foreach($afterPhotos as $apIdx => $ap)
-                                    @php $apUrl = Storage::url($ap); @endphp
+                                    @php $apUrl = $inspection->getStorageUrl($ap); @endphp
                                     <img src="{{ $apUrl }}"
                                          class="photo-thumb"
                                          data-src="{{ $apUrl }}"

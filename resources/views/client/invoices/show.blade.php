@@ -31,7 +31,7 @@
                             && (($inspection->work_payment_status ?? 'pending') !== 'paid');
                         $canPayInstallment = $isProjectInvoice
                             && $inspection
-                            && (($inspection->payment_plan ?? 'full') === 'per_visit')
+                            && in_array(($inspection->payment_plan ?? 'full'), ['per_visit', 'installment'], true)
                             && (($inspection->work_payment_status ?? 'pending') === 'paid')
                             && ((int) ($inspection->installments_paid ?? 0) < (int) ($inspection->installment_months ?? 1));
                     @endphp
@@ -47,7 +47,7 @@
                             @endif
                             @if($canPayInstallment)
                                 <a href="{{ route('client.inspections.pay-installment', $inspection) }}" class="btn btn-sm btn-primary">
-                                    <i class="mdi mdi-calendar-check me-1"></i>Pay Next Visit
+                                    <i class="mdi mdi-calendar-check me-1"></i>{{ (($inspection->payment_plan ?? 'full') === 'per_visit') ? 'Pay Next Visit' : 'Pay Remaining Balance' }}
                                 </a>
                             @endif
                             <a href="{{ route('client.invoices.download', $invoice) }}" class="btn btn-sm btn-light">

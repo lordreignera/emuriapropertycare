@@ -18,15 +18,61 @@
                             Track quantities deployed and returned.
                         </p>
                     </div>
-                    @if($unreturnedCount > 0)
-                        <span class="badge bg-danger" style="font-size:0.9rem;padding:0.45em 0.85em;">
-                            {{ $unreturnedCount }} Tool{{ $unreturnedCount !== 1 ? 's' : '' }} Still Out
-                        </span>
-                    @else
-                        <span class="badge bg-success" style="font-size:0.9rem;padding:0.45em 0.85em;">
-                            All Tools Returned
-                        </span>
-                    @endif
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#manualAssignModal">
+                            <i class="mdi mdi-plus me-1"></i>Manual Assign Tool
+                        </button>
+                        @if($unreturnedCount > 0)
+                            <span class="badge bg-danger" style="font-size:0.9rem;padding:0.45em 0.85em;">
+                                {{ $unreturnedCount }} Tool{{ $unreturnedCount !== 1 ? 's' : '' }} Still Out
+                            </span>
+                        @else
+                            <span class="badge bg-success" style="font-size:0.9rem;padding:0.45em 0.85em;">
+                                All Tools Returned
+                            </span>
+                        @endif
+                    </div>
+                </div>
+
+                {{-- Search + KPI cards --}}
+                <div class="row g-2 mb-3">
+                    <div class="col-lg-6">
+                        <form method="GET" action="{{ route('tool-assignments.index') }}" class="d-flex gap-2">
+                            <input type="text"
+                                   name="q"
+                                   class="form-control"
+                                   value="{{ $search ?? '' }}"
+                                   placeholder="Search by project, property name, property code, or tool...">
+                            <button type="submit" class="btn btn-outline-primary">
+                                <i class="mdi mdi-magnify me-1"></i>Search
+                            </button>
+                            @if(!empty($search))
+                                <a href="{{ route('tool-assignments.index') }}" class="btn btn-outline-secondary">Clear</a>
+                            @endif
+                        </form>
+                    </div>
+                    <div class="col-lg-6">
+                        <div class="row g-2">
+                            <div class="col-4">
+                                <div class="border rounded p-2 h-100" style="background:#fff7ed;">
+                                    <div class="small text-muted">Tools Out</div>
+                                    <div class="fw-bold text-warning">{{ (int) ($toolsOutUnits ?? 0) }}</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="border rounded p-2 h-100" style="background:#ecfdf3;">
+                                    <div class="small text-muted">Returned</div>
+                                    <div class="fw-bold text-success">{{ (int) ($toolsReturnedUnits ?? 0) }}</div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="border rounded p-2 h-100" style="background:#eff6ff;">
+                                    <div class="small text-muted">In Store</div>
+                                    <div class="fw-bold text-primary">{{ (int) ($toolsInStoreUnits ?? 0) }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 {{-- Flash messages --}}
@@ -44,24 +90,25 @@
                 @if($assignments->isEmpty())
                     <div class="text-center py-5 text-muted">
                         <i class="mdi mdi-toolbox-outline" style="font-size:3rem;opacity:.4;"></i>
-                        <div class="mt-2">No tool assignments found.</div>
+                        <div class="mt-2">No tool assignments found{{ !empty($search) ? ' for your search.' : '.' }}</div>
                         <div class="small mt-1">
-                            Tools appear here once both the client and Etogo manager have signed the agreement
-                            and the PHAR assessment is complete.
+                            Use <strong>Manual Assign Tool</strong> to assign tools to scheduled projects.
                         </div>
                     </div>
                 @else
 
                 @php
                     $grouped = $assignments->groupBy(function($a) {
-                        return optional($a->inspection)->property_name ?? 'Unknown Property';
+                        return (int) ($a->inspection_id ?? 0);
                     });
                 @endphp
 
-                @foreach($grouped as $propertyName => $propertyAssignments)
+                @foreach($grouped as $inspectionId => $propertyAssignments)
                     @php
                         $inspection    = $propertyAssignments->first()->inspection;
                         $property      = $inspection?->property;
+                        $project       = $inspection?->project;
+                        $propertyName  = $property?->property_name ?? $inspection?->property_name ?? ('Inspection #' . $inspectionId);
                         $allReturned   = $propertyAssignments->every(fn($a) => $a->isReturned());
                         $outstanding   = $propertyAssignments->where('returned_at', null)->where('quantity', '>', 0)->count();
                         $anyAssigned   = $propertyAssignments->where('quantity', '>', 0)->count() > 0;
@@ -76,6 +123,13 @@
                                     <span class="text-muted small">{{ $property->property_address }}</span>
                                 @endif
                                 @if($inspection)
+                                    <div class="small text-muted mt-1">
+                                        <i class="mdi mdi-identifier me-1"></i>
+                                        Inspection #{{ $inspection->id }}
+                                        @if(!empty($project?->project_number))
+                                            &nbsp;|&nbsp;<i class="mdi mdi-briefcase-outline me-1"></i>{{ $project->project_number }}
+                                        @endif
+                                    </div>
                                     <div class="small text-muted mt-1">
                                         <i class="mdi mdi-file-sign me-1"></i>
                                         Signed: {{ $inspection->etogo_signed_at?->format('d M Y') ?? '&mdash;' }}
@@ -105,6 +159,7 @@
                                         <th>Tool</th>
                                         <th class="text-center">Stock Total</th>
                                         <th class="text-center">Remaining</th>
+                                        <th class="text-center">Available Now</th>
                                         <th class="text-center">Assigned Qty</th>
                                         <th class="text-center">Ownership</th>
                                         <th>Last Updated</th>
@@ -122,6 +177,7 @@
                                             $deployed   = $ts ? (int)($deployedByTool[$ts->id] ?? 0) : 0;
                                             $remaining  = max(0, $stockTotal - $deployed);
                                             $maxForRow  = $remaining + (int)$assignment->quantity;
+                                            $effectiveAssigned = $assignment->isReturned() ? 0 : (int) $assignment->quantity;
                                         @endphp
                                         <tr class="{{ $assignment->isReturned() ? 'table-success' : ($assignment->quantity > 0 ? '' : 'table-light') }}">
                                             <td><strong>{{ $assignment->tool_name }}</strong></td>
@@ -136,8 +192,19 @@
                                                 @endif
                                             </td>
                                             <td class="text-center">
-                                                @if($assignment->quantity > 0)
-                                                    <span class="badge bg-primary">{{ $assignment->quantity }}</span>
+                                                @if($ts)
+                                                    <span class="fw-semibold {{ $remaining <= 0 ? 'text-danger' : 'text-success' }}">{{ $remaining }}</span>
+                                                    <div class="text-muted" style="font-size:0.75rem;">in store now</div>
+                                                @else
+                                                    <span class="text-muted">&mdash;</span>
+                                                @endif
+                                            </td>
+                                            <td class="text-center">
+                                                @if($assignment->isReturned())
+                                                    <span class="badge bg-success">0</span>
+                                                    <div class="text-muted" style="font-size:0.75rem;">Returned {{ $assignment->quantity }}</div>
+                                                @elseif($effectiveAssigned > 0)
+                                                    <span class="badge bg-primary">{{ $effectiveAssigned }}</span>
                                                 @else
                                                     <span class="text-muted small">Not assigned</span>
                                                 @endif
@@ -199,6 +266,79 @@
     </div>
 </div>
 
+{{-- Manual Assignment Modal --}}
+<div class="modal fade" id="manualAssignModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content bg-white text-dark">
+            <form action="{{ route('tool-assignments.manual') }}" method="POST">
+                @csrf
+                <div class="modal-header bg-white text-dark border-bottom">
+                    <h5 class="modal-title text-dark">
+                        <i class="mdi mdi-plus-box me-2 text-primary"></i>
+                        Manual Tool Assignment
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body bg-white text-dark">
+                    @if($eligibleInspections->isEmpty())
+                        <div class="alert alert-warning mb-0">
+                            No scheduled/signed projects are currently eligible for manual assignment.
+                        </div>
+                    @else
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Project / Property</label>
+                            <select name="inspection_id" class="form-select" required>
+                                <option value="">Select project...</option>
+                                @foreach($eligibleInspections as $insp)
+                                    <option value="{{ $insp->id }}">
+                                        {{ optional($insp->property)->property_name ?? $insp->property_name ?? ('Inspection #' . $insp->id) }}
+                                        | Inspection #{{ $insp->id }}
+                                        @if(optional($insp->project)->project_number)
+                                            | {{ optional($insp->project)->project_number }}
+                                        @endif
+                                        @if(optional($insp->property)->property_address)
+                                            - {{ optional($insp->property)->property_address }}
+                                        @endif
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Tool</label>
+                            <select name="tool_setting_id" class="form-select" required>
+                                <option value="">Select tool...</option>
+                                @foreach($activeTools as $tool)
+                                    @php
+                                        $dep = (int) ($deployedByTool[$tool->id] ?? 0);
+                                        $rem = max(0, (int) $tool->quantity - $dep);
+                                    @endphp
+                                    <option value="{{ $tool->id }}">
+                                        {{ $tool->tool_name }} ({{ $rem }} available / {{ (int) $tool->quantity }} total)
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Quantity</label>
+                            <input type="number" name="quantity" class="form-control" min="1" value="1" required onwheel="this.blur()">
+                        </div>
+                        <div class="mb-1">
+                            <label class="form-label fw-semibold">Assignment Notes <span class="text-muted fw-normal">(optional)</span></label>
+                            <textarea name="assign_notes" class="form-control" rows="3" placeholder="Reason/tool condition/usage context..."></textarea>
+                        </div>
+                    @endif
+                </div>
+                <div class="modal-footer bg-white border-top">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary btn-sm" {{ $eligibleInspections->isEmpty() ? 'disabled' : '' }}>
+                        <i class="mdi mdi-check me-1"></i>Assign Tool
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 {{-- ===== MODALS ===== --}}
 @foreach($assignments as $assignment)
     @php
@@ -225,7 +365,13 @@
                     <div class="modal-body bg-white text-dark">
                         <div class="alert alert-light border mb-3">
                             <div class="fw-semibold">{{ $assignment->tool_name }}</div>
-                            <div class="text-muted small">Project: <strong>{{ optional($assignment->inspection)->property_name ?? '&mdash;' }}</strong></div>
+                            <div class="text-muted small">
+                                Project: <strong>{{ optional(optional($assignment->inspection)->property)->property_name ?? optional($assignment->inspection)->property_name ?? '&mdash;' }}</strong>
+                                | Inspection #{{ $assignment->inspection_id }}
+                                @if(optional(optional($assignment->inspection)->project)->project_number)
+                                    | {{ optional(optional($assignment->inspection)->project)->project_number }}
+                                @endif
+                            </div>
                         </div>
                         <div class="row g-2 mb-3 text-center">
                             <div class="col-4">
@@ -295,7 +441,11 @@
                         <div class="alert alert-light border mb-3">
                             <strong>{{ $assignment->tool_name }}</strong>
                             <div class="text-muted small">
-                                {{ optional($assignment->inspection)->property_name ?? '&mdash;' }}
+                                {{ optional(optional($assignment->inspection)->property)->property_name ?? optional($assignment->inspection)->property_name ?? '&mdash;' }}
+                                | Inspection #{{ $assignment->inspection_id }}
+                                @if(optional(optional($assignment->inspection)->project)->project_number)
+                                    | {{ optional(optional($assignment->inspection)->project)->project_number }}
+                                @endif
                                 &mdash; Qty assigned: <strong>{{ $assignment->quantity }}</strong>
                             </div>
                         </div>

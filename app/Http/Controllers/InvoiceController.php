@@ -24,6 +24,8 @@ class InvoiceController extends Controller
                 $query->pending();
             } elseif ($status === 'paid') {
                 $query->paid();
+            } elseif ($status === 'partial') {
+                $query->where('status', 'partial');
             } elseif ($status === 'overdue') {
                 $query->where('status', 'overdue');
             } else {
@@ -52,6 +54,7 @@ class InvoiceController extends Controller
         $summary = [
             'total' => Invoice::count(),
             'paid' => Invoice::paid()->count(),
+            'partial' => Invoice::where('status', 'partial')->count(),
             'pending' => Invoice::pending()->count(),
             'overdue' => Invoice::where('status', 'overdue')->count(),
         ];

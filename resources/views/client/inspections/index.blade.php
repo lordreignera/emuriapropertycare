@@ -132,9 +132,27 @@
                                                     </a>
                                                 @endif
                                             </div>
+                                        @elseif(!empty($inspection->active_quotation_id) && in_array(($inspection->quotation_status ?? ''), ['shared', 'client_reviewing', 'approved'], true))
+                                            <div class="d-flex flex-wrap gap-1">
+                                                @if(($inspection->quotation_status ?? null) === 'approved')
+                                                    <div class="d-flex flex-column gap-1">
+                                                        <span class="badge bg-warning text-dark px-2 py-2">
+                                                            <i class="mdi mdi-clock-outline me-1"></i>Awaiting Admin Finalization
+                                                        </span>
+                                                        <a href="{{ route('client.inspections.quotation', $inspection->id) }}" class="btn btn-sm btn-link text-muted p-0">
+                                                            <small>View approved quotation</small>
+                                                        </a>
+                                                    </div>
+                                                @else
+                                                    <a href="{{ route('client.inspections.quotation', $inspection->id) }}" class="btn btn-sm btn-primary">
+                                                        <i class="mdi mdi-file-check-outline"></i>
+                                                        Review Quotation
+                                                    </a>
+                                                @endif
+                                            </div>
                                         @else
                                             <button class="btn btn-sm btn-secondary text-white border-0" style="opacity: 1; cursor: not-allowed;" disabled>
-                                                Awaiting report
+                                                Awaiting quotation/report
                                             </button>
                                         @endif
                                     </td>

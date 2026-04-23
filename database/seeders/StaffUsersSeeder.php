@@ -54,9 +54,25 @@ class StaffUsersSeeder extends Seeder
             $technician->syncRoles([$techRole]);
         }
 
+        // Store Manager
+        $storeManager = User::updateOrCreate(
+            ['email' => 'storemanager@emuria.com'],
+            [
+                'name' => 'Store Manager User',
+                'password' => Hash::make('P@ssw0rd123!'),
+                'email_verified_at' => now(),
+            ]
+        );
+
+        $storeManagerRole = Role::where('name', 'Store Manager')->first();
+        if ($storeManagerRole) {
+            $storeManager->syncRoles([$storeManagerRole]);
+        }
+
         $this->command->info('Staff users seeded successfully!');
         $this->command->info('Project Manager: pm@emuria.com / P@ssw0rd123!');
         $this->command->info('Inspector: inspector@emuria.com / P@ssw0rd123!');
         $this->command->info('Technician: technician@emuria.com / P@ssw0rd123!');
+        $this->command->info('Store Manager: storemanager@emuria.com / P@ssw0rd123!');
     }
 }

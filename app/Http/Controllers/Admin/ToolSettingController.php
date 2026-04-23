@@ -202,6 +202,10 @@ class ToolSettingController extends Controller
 
     public function markReturned(InspectionToolAssignment $assignment, Request $request)
     {
+        if (!auth()->user()?->hasRole(['Super Admin', 'Store Manager'])) {
+            abort(403);
+        }
+
         if ($assignment->returned_at) {
             return back()->with('error', 'This assignment is already marked as returned.');
         }
@@ -216,16 +220,18 @@ class ToolSettingController extends Controller
             'return_notes' => $validated['return_notes'] ?? null,
         ]);
 
-        // If no more unreturned assignments, flip tool back to available
+        // If no more unreturned active assignments, flip tool back to available
         $stillOut = InspectionToolAssignment::where('tool_setting_id', $assignment->tool_setting_id)
-            ->whereNull('returned_at')->exists();
+            ->whereNull('returned_at')
+            ->where('quantity', '>', 0)
+            ->exists();
 
         if (!$stillOut) {
             ToolSetting::where('id', $assignment->tool_setting_id)
                 ->update(['availability_status' => 'available']);
         }
 
-        return back()->with('success', 'Tool marked as returned.');
+        return back()->with('success', 'Tool marked as returned. Stock updated.');
     }
 
     private function validateScopeConsistency(array $validated): void

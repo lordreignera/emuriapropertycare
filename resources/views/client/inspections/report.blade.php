@@ -44,6 +44,60 @@
                     <div class="alert alert-danger no-print">{{ session('error') }}</div>
                 @endif
 
+                @if(!($adminPreview ?? false) && in_array(($inspection->quotation_status ?? ''), ['shared', 'client_reviewing', 'client_responded'], true))
+                    <div class="alert alert-info d-flex flex-wrap justify-content-between align-items-center gap-2 no-print">
+                        <div>
+                            <strong>Your quotation is ready for review.</strong>
+                            Select the findings you want approved before assessment completion.
+                        </div>
+                        <a href="{{ route('client.inspections.quotation', $inspection->id) }}" class="btn btn-primary btn-sm">
+                            <i class="mdi mdi-file-check-outline me-1"></i>Review Quotation
+                        </a>
+                    </div>
+                @endif
+
+                @php
+                    $quotationSnapshot = collect($activeQuotation->findings_snapshot ?? []);
+                    $quotationApprovedIds = collect($activeQuotation->approved_finding_ids ?? [])->map(fn($id) => (int) $id);
+                    $quotationDeferredIds = collect($activeQuotation->deferred_finding_ids ?? [])->map(fn($id) => (int) $id);
+                    $quotationDeferredFindings = $quotationSnapshot
+                        ->filter(fn($f) => $quotationDeferredIds->contains((int) ($f['id'] ?? 0)))
+                        ->values();
+                @endphp
+
+                @if(!($adminPreview ?? false) && $activeQuotation && ($inspection->quotation_status ?? null) === 'approved')
+                    <div class="card mb-4 border-success no-print">
+                        <div class="card-header bg-success text-white">
+                            <h5 class="mb-0"><i class="mdi mdi-check-decagram-outline me-2"></i>Approved Quotation Summary</h5>
+                        </div>
+                        <div class="card-body">
+                            <p class="mb-2">
+                                Quote <strong>{{ $activeQuotation->quote_number }}</strong> approved with
+                                <strong>{{ $quotationApprovedIds->count() }}</strong> selected finding(s).
+                            </p>
+                            <p class="mb-2 text-muted">
+                                Deferred finding(s): <strong>{{ $quotationDeferredIds->count() }}</strong>
+                            </p>
+
+                            @if($quotationDeferredFindings->isNotEmpty())
+                                <div class="alert alert-warning py-2 mb-0">
+                                    <strong>Deferred findings kept for future quotation:</strong>
+                                    <ul class="mb-0 mt-1 ps-3">
+                                        @foreach($quotationDeferredFindings as $df)
+                                            <li>
+                                                {{ $df['task_question'] ?? 'Untitled finding' }}
+                                                @if(!empty($df['category']))
+                                                    <span class="text-muted">({{ $df['category'] }})</span>
+                                                @endif
+                                            </li>
+                                        @endforeach
+                                    </ul>
+                                </div>
+                            @endif
+                        </div>
+                    </div>
+                @endif
+
                 <!-- Property & Inspection Summary -->
                 <div class="card mb-4">
                     <div class="card-header bg-primary text-white">
@@ -115,7 +169,14 @@
                                         <th>Work Payment:</th>
                                         <td>
                                             @if(($inspection->work_payment_status ?? 'pending') === 'paid')
-                                                <span class="badge bg-success">Paid ({{ $inspection->work_payment_cadence === 'per_visit' ? 'Per Visit' : 'In Full' }})</span>
+                                                @php
+                                                    $paymentLabel = match ($inspection->payment_plan ?? 'full') {
+                                                        'per_visit' => 'Per Visit',
+                                                        'installment' => '50% Deposit Plan',
+                                                        default => 'In Full',
+                                                    };
+                                                @endphp
+                                                <span class="badge bg-success">Paid ({{ $paymentLabel }})</span>
                                             @else
                                                 <span class="badge bg-warning text-dark">Pending</span>
                                             @endif
@@ -150,6 +211,58 @@
                     $inlineFindingsRaw = is_array($inspection->findings)
                         ? $inspection->findings
                         : (json_decode($inspection->getRawOriginal('findings') ?? '[]', true) ?? []);
+
+                    $makeFindingKey = function ($issueOrTask, $category) {
+                        $left = strtolower(trim((string) $issueOrTask));
+                        $right = strtolower(trim((string) $category));
+                        return $left . '|' . $right;
+                    };
+
+                    // Show only approved scope when:
+                    // (a) the inspection quotation_status is 'approved', OR
+                    // (b) a re-share is pending (quotation_status='shared') but the controller
+                    //     resolved activeQuotation to the most recent approved quotation.
+                    $showApprovedScopeOnly =
+                        !empty($activeQuotation) &&
+                        (($activeQuotation->status ?? null) === 'approved') &&
+                        (
+                            (($inspection->quotation_status ?? null) === 'approved') ||
+                            (($inspection->quotation_status ?? null) === 'shared')
+                        );
+
+                    if ($showApprovedScopeOnly) {
+                        $allInline = collect($inlineFindingsRaw)->values();
+                        $approvedIdMap = $quotationApprovedIds->flip();
+
+                        $filteredById = $allInline
+                            ->filter(fn ($f) => $approvedIdMap->has((int) ($f['id'] ?? 0)))
+                            ->values();
+
+                        if ($filteredById->isNotEmpty()) {
+                            $inlineFindingsRaw = $filteredById->all();
+                        } else {
+                            $approvedScopeKeys = $quotationSnapshot
+                                ->filter(fn($f) => $quotationApprovedIds->contains((int) ($f['id'] ?? 0)))
+                                ->map(fn($f) => $makeFindingKey(
+                                    $f['task_question'] ?? ($f['issue'] ?? ''),
+                                    $f['category'] ?? ''
+                                ))
+                                ->filter(fn($k) => $k !== '|')
+                                ->unique()
+                                ->values();
+
+                            $inlineFindingsRaw = $allInline
+                                ->filter(function ($f) use ($approvedScopeKeys, $makeFindingKey) {
+                                    $key = $makeFindingKey(
+                                        $f['task_question'] ?? ($f['issue'] ?? ''),
+                                        $f['phar_category'] ?? ($f['category'] ?? '')
+                                    );
+                                    return $approvedScopeKeys->contains($key);
+                                })
+                                ->values()
+                                ->all();
+                        }
+                    }
 
                     $severityOrder = ['critical','high','noi_protection','medium','low'];
                     $severityMeta  = [
@@ -394,7 +507,7 @@
                                         <div class="card-body">
                                             <h6 class="text-muted mb-1">Findings Remediation Labour (FRLC)</h6>
                                             <div class="fs-4">${{ number_format($inspection->frlc_annual ?? 0, 2) }}</div>
-                                            <small class="text-muted">{{ number_format($findings->sum('labour_hours'), 1) }} hrs @ ${{ number_format($inspection->labour_hourly_rate ?? 165, 2) }}/hr</small>
+                                            <small class="text-muted">{{ number_format($totalLabourHrs, 1) }} hrs @ ${{ number_format($inspection->labour_hourly_rate ?? 165, 2) }}/hr</small>
                                         </div>
                                     </div>
                                 </div>
@@ -618,6 +731,9 @@
                             <a href="{{ route('client.inspections.work-payment', ['inspection' => $inspection->id, 'plan' => 'per_visit']) }}" class="btn btn-outline-primary">
                                 <i class="mdi mdi-calendar-check me-1"></i>Pay Per Visit (${{ number_format($rptPerVisit, 2) }}/visit &times; {{ $rptVisits }})
                             </a>
+                            <a href="{{ route('client.inspections.work-payment', ['inspection' => $inspection->id, 'plan' => 'installment']) }}" class="btn btn-outline-warning">
+                                <i class="mdi mdi-percent me-1"></i>Pay 50% Deposit (${{ number_format($rptFullAmt * 0.5, 2) }} now)
+                            </a>
                         </div>
                     </div>
                 </div>
@@ -626,10 +742,11 @@
                 {{-- Per-visit payment progress tracker (shown after work starts on per_visit plan) --}}
                 @if(
                     ($inspection->work_payment_status ?? 'pending') === 'paid'
-                    && ($inspection->payment_plan ?? 'full') === 'per_visit'
+                    && in_array(($inspection->payment_plan ?? 'full'), ['per_visit', 'installment'], true)
                     && !$inspection->arp_fully_paid_at
                 )
                 @php
+                    $isPerVisitPlan = ($inspection->payment_plan ?? 'full') === 'per_visit';
                     $instPaid   = (int) ($inspection->installments_paid ?? 0);
                     $instTotal  = (int) ($inspection->installment_months ?? 1);
                     $instAmt    = (float) ($inspection->installment_amount ?? 0);
@@ -640,11 +757,11 @@
                 @endphp
                 <div class="card mb-4 border-primary">
                     <div class="card-header bg-primary text-white">
-                        <h5 class="mb-0"><i class="mdi mdi-calendar-clock me-2"></i>Visit Payment Progress</h5>
+                        <h5 class="mb-0"><i class="mdi mdi-calendar-clock me-2"></i>{{ $isPerVisitPlan ? 'Visit Payment Progress' : 'Installment Payment Progress' }}</h5>
                     </div>
                     <div class="card-body">
                         <div class="d-flex justify-content-between small text-muted mb-1">
-                            <span>{{ $instPaid }} of {{ $instTotal }} visits paid</span>
+                            <span>{{ $instPaid }} of {{ $instTotal }} {{ $isPerVisitPlan ? 'visits' : 'installments' }} paid</span>
                             <span>${{ number_format($instPaidAmt, 2) }} of ${{ number_format($instArpTot, 2) }}</span>
                         </div>
                         <div class="progress mb-3" style="height:12px;">
@@ -657,7 +774,7 @@
                             </div>
                             <div class="col-4">
                                 <div class="fw-bold text-primary">${{ number_format($instAmt, 2) }}</div>
-                                <small class="text-muted">Per visit</small>
+                                <small class="text-muted">{{ $isPerVisitPlan ? 'Per visit' : 'Per installment' }}</small>
                             </div>
                             <div class="col-4">
                                 <div class="fw-bold text-danger">${{ number_format($instRemaining, 2) }}</div>
@@ -667,7 +784,7 @@
                         <div class="no-print">
                             <a href="{{ route('client.inspections.pay-installment', $inspection->id) }}" class="btn btn-primary">
                                 <i class="mdi mdi-credit-card me-1"></i>
-                                Pay Visit {{ $instPaid + 1 }} of {{ $instTotal }} (${{ number_format($instAmt, 2) }})
+                                {{ $isPerVisitPlan ? 'Pay Visit' : 'Pay Installment' }} {{ $instPaid + 1 }} of {{ $instTotal }} (${{ number_format($instAmt, 2) }})
                             </a>
                         </div>
                     </div>
@@ -734,15 +851,6 @@
                     <strong>Visit Schedule Pending</strong> — Your work visit dates are being finalised by the Etogo team. You will see them here once confirmed.
                 </div>
                 @endif
-
-                <div class="card mb-4">
-                    <div class="card-header bg-dark text-white">
-                        <h5 class="mb-0"><i class="mdi mdi-file-document-outline me-2"></i>Client Job Approval &amp; Service Agreement</h5>
-                    </div>
-                    <div class="card-body">
-                        @include('shared.inspection-job-approval-agreement', ['inspection' => $inspection])
-                    </div>
-                </div>
 
             </div>
         </div>

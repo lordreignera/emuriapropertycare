@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\Inspection;
-use App\Models\InspectionToolAssignment;
 use App\Models\ToolSetting;
 use Illuminate\Support\Carbon;
 
@@ -40,7 +39,6 @@ class AgreementScheduleService
             : (json_decode($inspection->getRawOriginal('findings') ?? '[]', true) ?? []);
 
         $requiredTools = $this->resolveRequiredTools($findings);
-        $this->syncToolAssignments($inspection, $requiredTools, $findings);
 
         $labourHours = collect($findings)->sum(static fn(array $f) => (float) ($f['phar_labour_hours'] ?? 0));
 
@@ -116,62 +114,6 @@ class AgreementScheduleService
                 ? $systemIds->contains((int) $tool->system_id)
                 : false;
         })->values();
-    }
-
-    private function syncToolAssignments(Inspection $inspection, $requiredTools, array $findings): void
-    {
-        $requiredToolRows = collect($requiredTools)->map(function (ToolSetting $tool) use ($inspection, $findings) {
-            $matchingCount = collect($findings)->filter(function (array $finding) use ($tool) {
-                if (!is_null($tool->subsystem_id)) {
-                    return (int) ($finding['subsystem_id'] ?? 0) === (int) $tool->subsystem_id;
-                }
-
-                if (!is_null($tool->system_id)) {
-                    return (int) ($finding['system_id'] ?? 0) === (int) $tool->system_id;
-                }
-
-                return true;
-            })->count();
-
-            return [
-                'inspection_id'       => $inspection->id,
-                'property_id'         => $inspection->property_id,
-                'tool_setting_id'     => $tool->id,
-                'system_id'           => $tool->system_id,
-                'subsystem_id'        => $tool->subsystem_id,
-                'tool_name'           => trim((string) $tool->tool_name),
-                'ownership_status'    => $tool->ownership_status,
-                'availability_status' => $tool->availability_status,
-                'finding_count'       => $matchingCount,
-            ];
-        })->filter(static fn(array $row) => $row['tool_name'] !== '')->values();
-
-        $validToolNames = $requiredToolRows->pluck('tool_name')->all();
-
-        InspectionToolAssignment::query()
-            ->where('inspection_id', $inspection->id)
-            ->where('quantity', 0)          // never auto-delete a tool that was manually deployed
-            ->when(!empty($validToolNames), function ($query) use ($validToolNames) {
-                $query->whereNotIn('tool_name', $validToolNames);
-            }, function ($query) {
-                $query->whereRaw('1=1');
-            })
-            ->delete();
-
-        foreach ($requiredToolRows as $row) {
-            $existing = InspectionToolAssignment::where([
-                'inspection_id' => $row['inspection_id'],
-                'tool_name'     => $row['tool_name'],
-            ])->first();
-
-            if ($existing) {
-                // Preserve admin-set quantity — only refresh metadata
-                $existing->update(array_diff_key($row, array_flip(['inspection_id', 'tool_name', 'quantity'])));
-            } else {
-                // New record: quantity defaults to 0 until admin/PM manually assigns
-                InspectionToolAssignment::create(array_merge($row, ['quantity' => 0]));
-            }
-        }
     }
 
     private function nextBusinessDate(string $fromDate): Carbon

@@ -15,12 +15,18 @@
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h4 class="card-title mb-0">Invoice {{ $invoice->invoice_number ?? ('INV-' . $invoice->id) }}</h4>
-                    @php $status = strtolower((string) ($invoice->status ?? 'pending')); @endphp
+                    @php
+                        $status = strtolower((string) ($invoice->status ?? 'pending'));
+                        $total = (float) ($invoice->total ?? 0);
+                        $paidPct = $total > 0 ? (int) round(((float)($invoice->paid_amount ?? 0) / $total) * 100) : 0;
+                    @endphp
                     @if($status === 'paid')
                         <span class="badge bg-success">Paid</span>
+                    @elseif($status === 'partial')
+                        <span class="badge bg-info text-dark">Partial ({{ $paidPct }}%)</span>
                     @elseif($status === 'overdue')
                         <span class="badge bg-danger">Overdue</span>
-                    @elseif(in_array($status, ['draft', 'sent', 'partial', 'pending'], true))
+                    @elseif(in_array($status, ['draft', 'sent', 'pending'], true))
                         <span class="badge bg-warning text-dark">Pending</span>
                     @else
                         <span class="badge bg-secondary">{{ ucfirst($status) }}</span>

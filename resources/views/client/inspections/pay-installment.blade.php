@@ -1,6 +1,11 @@
 @extends('client.layout')
 
-@section('title', 'Pay for Visit {{ $installmentNumber }}')
+@php
+    $isPerVisitPlan = ($paymentPlan ?? 'per_visit') === 'per_visit';
+    $pageTitle = ($isPerVisitPlan ? 'Pay for Visit ' : 'Pay Installment ') . $installmentNumber;
+@endphp
+
+@section('title', $pageTitle)
 
 @section('content')
 <div class="row justify-content-center">
@@ -9,18 +14,18 @@
             <div class="card-header bg-primary text-white">
                 <h5 class="mb-0">
                     <i class="mdi mdi-lock me-2"></i>
-                    Visit {{ $installmentNumber }} of {{ $totalInstallments }} — Payment
+                    {{ $isPerVisitPlan ? 'Visit' : 'Installment' }} {{ $installmentNumber }} of {{ $totalInstallments }} — Payment
                 </h5>
             </div>
             <div class="card-body">
 
-                {{-- Visit Progress Bar --}}
+                {{-- Payment Progress Bar --}}
                 @php
                     $progressPct = round((($installmentNumber - 1) / $totalInstallments) * 100);
                 @endphp
                 <div class="mb-4">
                     <div class="d-flex justify-content-between small text-muted mb-1">
-                        <span>{{ $installmentNumber - 1 }} of {{ $totalInstallments }} visits paid</span>
+                        <span>{{ $installmentNumber - 1 }} of {{ $totalInstallments }} {{ $isPerVisitPlan ? 'visits' : 'installments' }} paid</span>
                         <span>${{ number_format($amountPaidSoFar, 2) }} / ${{ number_format($arpTotal, 2) }}</span>
                     </div>
                     <div class="progress" style="height:10px;">
@@ -31,12 +36,12 @@
                 <div class="alert alert-info">
                     <strong>Property:</strong> {{ $inspection->property?->property_name }}<br>
                     <strong>Total Project Cost:</strong> ${{ number_format($arpTotal, 2) }}<br>
-                    <strong>This visit (#{{ $installmentNumber }}) cost:</strong>
+                    <strong>This {{ $isPerVisitPlan ? 'visit' : 'installment' }} (#{{ $installmentNumber }}) cost:</strong>
                     <span class="fs-5 text-primary">${{ number_format($installAmount, 2) }}</span><br>
                     <small class="text-muted">
                         Remaining after this payment:
                         ${{ number_format(max(0, $arpTotal - $amountPaidSoFar - $installAmount), 2) }}
-                        ({{ $totalInstallments - $installmentNumber }} visit(s) left)
+                        ({{ $totalInstallments - $installmentNumber }} {{ $isPerVisitPlan ? 'visit(s)' : 'installment(s)' }} left)
                     </small>
                 </div>
 
@@ -59,7 +64,7 @@
                         <button type="submit" id="submit-button" class="btn btn-primary">
                             <span id="button-text">
                                 <i class="mdi mdi-lock me-1"></i>
-                                Pay ${{ number_format($installAmount, 2) }} (Visit {{ $installmentNumber }})
+                                Pay ${{ number_format($installAmount, 2) }} ({{ $isPerVisitPlan ? 'Visit' : 'Installment' }} {{ $installmentNumber }})
                             </span>
                             <span id="spinner" class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
                         </button>

@@ -159,13 +159,38 @@
                                         <div class="btn-group" role="group">
                                             @php
                                                 $completedInspection = $property->inspections->firstWhere('status', 'completed');
+                                                $projectInvoice = null;
+                                                if ($completedInspection?->project_id) {
+                                                    $projectInvoice = \App\Models\Invoice::where('project_id', $completedInspection->project_id)
+                                                        ->latest('id')
+                                                        ->first();
+                                                }
+                                                $agreementFullySigned = $completedInspection
+                                                    && !empty($completedInspection->client_signature)
+                                                    && !empty($completedInspection->etogo_signed_at);
                                             @endphp
 
                                             @if($completedInspection)
                                                 <a href="{{ route('inspections.show', $completedInspection->id) }}"
-                                                   class="btn btn-sm btn-success" title="View Full Inspection Report">
+                                                   class="btn btn-sm btn-success" title="View Assessment Record">
+                                                    <i class="mdi mdi-clipboard-text-outline"></i>
+                                                </a>
+                                                <a href="{{ route('inspections.preview-report', $completedInspection->id) }}"
+                                                   class="btn btn-sm btn-outline-success" title="View Report" target="_blank">
                                                     <i class="mdi mdi-file-document-outline"></i>
                                                 </a>
+                                                <a href="{{ route('inspections.preview-agreement', $completedInspection->id) }}"
+                                                   class="btn btn-sm {{ $agreementFullySigned ? 'btn-outline-primary' : 'btn-outline-secondary' }}"
+                                                   title="{{ $agreementFullySigned ? 'View Signed Agreement' : 'View Agreement' }}"
+                                                   target="_blank">
+                                                    <i class="mdi mdi-file-certificate-outline"></i>
+                                                </a>
+                                                @if($projectInvoice)
+                                                    <a href="{{ route('invoices.show', $projectInvoice->id) }}"
+                                                       class="btn btn-sm btn-outline-warning" title="View Invoice">
+                                                        <i class="mdi mdi-receipt-text-outline"></i>
+                                                    </a>
+                                                @endif
                                             @endif
 
                                             <a href="{{ route('properties.show', $property->id) }}" 

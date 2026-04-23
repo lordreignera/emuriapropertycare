@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Property;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -35,27 +36,7 @@ class PropertyController extends Controller
 
             // Inspector status filtering
             if ($request->filled('status')) {
-                $status = $request->status;
-
-                if ($status === 'awaiting_inspection') {
-                    $query->whereHas('inspections', function ($inspectionQuery) {
-                        $inspectionQuery->where('inspection_fee_status', 'paid')
-                            ->where('status', 'scheduled');
-                    })
-                    ->whereDoesntHave('inspections', function ($inspectionQuery) {
-                        $inspectionQuery->where('status', 'completed');
-                    });
-                } elseif ($status === 'not_inspected' || $status === 'active') {
-                    $query->whereDoesntHave('inspections', function ($inspectionQuery) {
-                        $inspectionQuery->where('status', 'completed');
-                    });
-                } elseif ($status === 'inspected_completed') {
-                    $query->whereHas('inspections', function ($inspectionQuery) {
-                        $inspectionQuery->where('status', 'completed');
-                    });
-                } else {
-                    $query->where('status', $status);
-                }
+                $this->applyPropertyStatusFilter($query, (string) $request->status);
             }
         } elseif ($user->hasRole('Project Manager')) {
             // Project Managers only see properties assigned to them
@@ -64,38 +45,15 @@ class PropertyController extends Controller
         } elseif ($user->hasRole('Technician')) {
             // Technicians only see properties with projects assigned to them
             $query->whereHas('projects', function($q) use ($user) {
-                $q->where('assigned_to', $user->id);
+                $q->whereHas('inspections', function ($inspectionQuery) use ($user) {
+                    $inspectionQuery->where('technician_id', $user->id);
+                });
             });
         } else {
             // Admins see all properties with status filter
             // Filter by status
             if ($request->filled('status')) {
-                $status = $request->status;
-                
-                if ($status === 'awaiting_inspection') {
-                    // Properties with scheduled and paid inspections
-                    $query->whereHas('inspections', function ($inspectionQuery) {
-                        $inspectionQuery->where('inspection_fee_status', 'paid')
-                            ->where('status', 'scheduled');
-                    })
-                    ->whereDoesntHave('inspections', function ($inspectionQuery) {
-                        $inspectionQuery->where('status', 'completed');
-                    });
-                } elseif ($status === 'not_inspected' || $status === 'active') {
-                    // Backward compatible: old "active" maps to "not inspected"
-                    // Not inspected = no completed inspection yet
-                    $query->whereDoesntHave('inspections', function ($inspectionQuery) {
-                        $inspectionQuery->where('status', 'completed');
-                    });
-                } elseif ($status === 'inspected_completed') {
-                    // Has at least one completed inspection
-                    $query->whereHas('inspections', function ($inspectionQuery) {
-                        $inspectionQuery->where('status', 'completed');
-                    });
-                } else {
-                    // Other status filters
-                    $query->where('status', $status);
-                }
+                $this->applyPropertyStatusFilter($query, (string) $request->status);
             }
         }
 
@@ -113,6 +71,39 @@ class PropertyController extends Controller
         $properties = $query->orderBy('created_at', 'desc')->paginate(15);
 
         return view('admin.properties.index', compact('properties'));
+    }
+
+    private function applyPropertyStatusFilter(Builder $query, string $status): void
+    {
+        if ($status === 'awaiting_inspection') {
+            $query->whereHas('inspections', function ($inspectionQuery) {
+                $inspectionQuery->where('inspection_fee_status', 'paid')
+                    ->where('status', 'scheduled');
+            })->whereDoesntHave('inspections', function ($inspectionQuery) {
+                $inspectionQuery->where('status', 'completed');
+            });
+
+            return;
+        }
+
+        if ($status === 'not_inspected' || $status === 'active') {
+            // Backward compatible: old "active" maps to "not inspected".
+            $query->whereDoesntHave('inspections', function ($inspectionQuery) {
+                $inspectionQuery->where('status', 'completed');
+            });
+
+            return;
+        }
+
+        if ($status === 'inspected_completed') {
+            $query->whereHas('inspections', function ($inspectionQuery) {
+                $inspectionQuery->where('status', 'completed');
+            });
+
+            return;
+        }
+
+        $query->where('status', $status);
     }
 
     /**

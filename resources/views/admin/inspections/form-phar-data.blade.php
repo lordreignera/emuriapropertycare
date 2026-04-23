@@ -113,11 +113,39 @@
                 $sevLabels2 = ['critical'=>'Safety & Health','high'=>'Urgency','noi_protection'=>'NOI Protection','medium'=>'Value Depreciation','low'=>'Non-Urgent'];
                 $prioMap2   = ['critical'=>1,'high'=>1,'noi_protection'=>2,'medium'=>2,'low'=>3];
                 $loadedRate = (float)($bdcSettings['loaded_hourly_rate'] ?? 165);
+
+                $isApprovedScopeLocked = (($inspection->quotation_status ?? null) === 'approved')
+                    && !empty($activeQuotation)
+                    && (($activeQuotation->status ?? null) === 'approved');
+
+                $scopeKey2 = function ($taskOrIssue, $category) {
+                    $left = strtolower(trim((string) $taskOrIssue));
+                    $right = strtolower(trim((string) $category));
+                    return $left . '|' . $right;
+                };
+
+                $approvedIds2 = collect($activeQuotation->approved_finding_ids ?? [])->map(fn($id) => (int) $id)->values();
+                $approvedScopeKeys2 = collect($activeQuotation->findings_snapshot ?? [])
+                    ->filter(fn($f) => $approvedIds2->contains((int) ($f['id'] ?? 0)))
+                    ->map(fn($f) => $scopeKey2($f['task_question'] ?? ($f['issue'] ?? ''), $f['category'] ?? ''))
+                    ->filter(fn($k) => $k !== '|')
+                    ->unique()
+                    ->values();
+
+                $scopedFindings2 = collect($sortedFindings)->values()->map(function ($f) use ($isApprovedScopeLocked, $approvedIds2, $approvedScopeKeys2, $scopeKey2) {
+                    $id = (int) ($f['id'] ?? 0);
+                    $idMatch = $approvedIds2->contains($id);
+                    $key = $scopeKey2($f['issue'] ?? ($f['task_question'] ?? ''), $f['phar_category'] ?? ($f['category'] ?? ''));
+                    $keyMatch = $approvedScopeKeys2->contains($key);
+                    $f['__approved_scope'] = !$isApprovedScopeLocked || $idMatch || $keyMatch;
+                    return $f;
+                })->values();
+
+                $approvedFindings2 = $scopedFindings2->filter(fn($f) => !empty($f['__approved_scope']))->values();
+                $deferredFindings2 = $scopedFindings2->reject(fn($f) => !empty($f['__approved_scope']))->values();
+
                 $totalLabourHrs2 = 0; $totalFRLC2 = 0; $totalMatCost2 = 0; $totalMatItems2 = 0;
-                $sevCount2 = ['critical'=>0,'high'=>0,'noi_protection'=>0,'medium'=>0,'low'=>0];
-                foreach ($sortedFindings as $sf2) {
-                    $sv2 = $sf2['severity'] ?? 'low';
-                    if (isset($sevCount2[$sv2])) $sevCount2[$sv2]++; else $sevCount2['low']++;
+                foreach ($scopedFindings2 as $sf2) {
                     $hrs2 = (float)($sf2['phar_labour_hours'] ?? 0);
                     $totalLabourHrs2 += $hrs2;
                     $totalFRLC2 += $hrs2 * $loadedRate;
@@ -126,6 +154,26 @@
                         $totalMatCost2 += (float)($m2['line_total'] ?? 0);
                     }
                 }
+
+                $approvedLabourHrs2 = round((float) $approvedFindings2->sum(fn($f) => (float) ($f['phar_labour_hours'] ?? 0)), 2);
+                $approvedFRLC2 = round((float) ($approvedLabourHrs2 * $loadedRate), 2);
+                $approvedMatItems2 = (int) $approvedFindings2->sum(fn($f) => count($f['phar_materials'] ?? []));
+                $approvedMatCost2 = round((float) $approvedFindings2->sum(fn($f) => collect($f['phar_materials'] ?? [])->sum(fn($m) => (float) ($m['line_total'] ?? 0))), 2);
+
+                $sevCount2 = ['critical'=>0,'high'=>0,'noi_protection'=>0,'medium'=>0,'low'=>0];
+                $sevApprovedCount2 = ['critical'=>0,'high'=>0,'noi_protection'=>0,'medium'=>0,'low'=>0];
+                foreach ($scopedFindings2 as $sf2) {
+                    $sv2 = $sf2['severity'] ?? 'low';
+                    if (!isset($sevCount2[$sv2])) {
+                        $sv2 = 'low';
+                    }
+                    $sevCount2[$sv2]++;
+                    if (!empty($sf2['__approved_scope'])) {
+                        $sevApprovedCount2[$sv2]++;
+                    }
+                }
+
+                $summaryLabourHrs2 = $isApprovedScopeLocked ? $approvedLabourHrs2 : $totalLabourHrs2;
             @endphp
 
             {{-- Progress / stage banner --}}
@@ -155,50 +203,90 @@
 
             {{-- ── Findings Stats Panel ──────────────────────────────────── --}}
             <div class="mb-3 rounded" style="background:#1e293b;color:#fff;padding:1rem 1.5rem;">
+                @if($isApprovedScopeLocked)
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                    <span class="badge" style="background:#0d6efd;">Proposed Scope</span>
+                    <span class="badge" style="background:#198754;">Approved by Client</span>
+                    <span class="badge" style="background:#fd7e14;color:#212529;">Deferred by Client</span>
+                </div>
+                @endif
+
                 <div class="row text-center mb-3 pb-3" style="border-bottom:1px solid rgba(255,255,255,.15);">
                     <div class="col">
                         <div class="small fw-semibold mb-1" style="color:#fc8181;">&#x1F534; Safety &amp; Health</div>
-                        <div class="fw-bold" style="font-size:1.75rem;color:#fc8181;line-height:1.1;">{{ $sevCount2['critical'] }}</div>
+                        <div class="fw-bold" style="font-size:1.5rem;color:#fc8181;line-height:1.1;">{{ $sevCount2['critical'] }}</div>
+                        @if($isApprovedScopeLocked)
+                            <div class="small" style="color:#86efac;">approved: {{ $sevApprovedCount2['critical'] }}</div>
+                        @endif
                     </div>
                     <div class="col">
                         <div class="small fw-semibold mb-1" style="color:#fbd38d;">&#x1F7E0; Urgency</div>
-                        <div class="fw-bold" style="font-size:1.75rem;color:#fbd38d;line-height:1.1;">{{ $sevCount2['high'] }}</div>
+                        <div class="fw-bold" style="font-size:1.5rem;color:#fbd38d;line-height:1.1;">{{ $sevCount2['high'] }}</div>
+                        @if($isApprovedScopeLocked)
+                            <div class="small" style="color:#86efac;">approved: {{ $sevApprovedCount2['high'] }}</div>
+                        @endif
                     </div>
                     <div class="col">
                         <div class="small fw-semibold mb-1" style="color:#d6bcfa;">&#x1F7E3; NOI Protection</div>
-                        <div class="fw-bold" style="font-size:1.75rem;color:#d6bcfa;line-height:1.1;">{{ $sevCount2['noi_protection'] }}</div>
+                        <div class="fw-bold" style="font-size:1.5rem;color:#d6bcfa;line-height:1.1;">{{ $sevCount2['noi_protection'] }}</div>
+                        @if($isApprovedScopeLocked)
+                            <div class="small" style="color:#86efac;">approved: {{ $sevApprovedCount2['noi_protection'] }}</div>
+                        @endif
                     </div>
                     <div class="col">
                         <div class="small fw-semibold mb-1" style="color:#fef08a;">&#x1F7E1; Value Depreciation</div>
-                        <div class="fw-bold" style="font-size:1.75rem;color:#fef08a;line-height:1.1;">{{ $sevCount2['medium'] }}</div>
+                        <div class="fw-bold" style="font-size:1.5rem;color:#fef08a;line-height:1.1;">{{ $sevCount2['medium'] }}</div>
+                        @if($isApprovedScopeLocked)
+                            <div class="small" style="color:#86efac;">approved: {{ $sevApprovedCount2['medium'] }}</div>
+                        @endif
                     </div>
                     <div class="col">
                         <div class="small fw-semibold mb-1" style="color:#86efac;">&#x1F7E2; Non-Urgent</div>
-                        <div class="fw-bold" style="font-size:1.75rem;color:#86efac;line-height:1.1;">{{ $sevCount2['low'] }}</div>
+                        <div class="fw-bold" style="font-size:1.5rem;color:#86efac;line-height:1.1;">{{ $sevCount2['low'] }}</div>
+                        @if($isApprovedScopeLocked)
+                            <div class="small" style="color:#86efac;">approved: {{ $sevApprovedCount2['low'] }}</div>
+                        @endif
                     </div>
                 </div>
+
                 <div class="row text-center mb-2 pb-2" style="border-bottom:1px solid rgba(255,255,255,.12);">
                     <div class="col-md-4">
                         <div class="small fw-semibold mb-1" style="color:#cbd5e1;">TOTAL FINDINGS</div>
-                        <div class="fw-bold" style="font-size:1.75rem;color:#93c5fd;line-height:1.1;">{{ count($sortedFindings) }}</div>
+                        <div class="fw-bold" style="font-size:1.5rem;color:#93c5fd;line-height:1.1;">{{ $scopedFindings2->count() }}</div>
+                        @if($isApprovedScopeLocked)
+                            <div class="small" style="color:#86efac;">approved: {{ $approvedFindings2->count() }} | deferred: {{ $deferredFindings2->count() }}</div>
+                        @endif
                     </div>
                     <div class="col-md-4">
                         <div class="small fw-semibold mb-1" style="color:#cbd5e1;">TOTAL LABOUR HOURS</div>
-                        <div class="fw-bold" style="font-size:1.75rem;color:#67e8f9;line-height:1.1;">{{ number_format($totalLabourHrs2, 1) }}</div>
+                        <div class="fw-bold" style="font-size:1.5rem;color:#67e8f9;line-height:1.1;">{{ number_format($totalLabourHrs2, 1) }}</div>
+                        @if($isApprovedScopeLocked)
+                            <div class="small" style="color:#86efac;">approved: {{ number_format($approvedLabourHrs2, 1) }} hrs</div>
+                        @endif
                     </div>
                     <div class="col-md-4">
                         <div class="small fw-semibold mb-1" style="color:#cbd5e1;">TOTAL FR LABOUR COST (FRLC)</div>
-                        <div class="fw-bold" style="font-size:1.75rem;color:#fcd34d;line-height:1.1;">${{ number_format($totalFRLC2, 2) }}</div>
+                        <div class="fw-bold" style="font-size:1.5rem;color:#fcd34d;line-height:1.1;">${{ number_format($totalFRLC2, 2) }}</div>
+                        @if($isApprovedScopeLocked)
+                            <div class="small" style="color:#86efac;">approved: ${{ number_format($approvedFRLC2, 2) }}</div>
+                        @endif
                     </div>
                 </div>
+
                 <div class="row text-center pt-1">
                     <div class="col-md-6">
                         <div class="small fw-semibold mb-1" style="color:#cbd5e1;">TOTAL MATERIAL ITEMS</div>
-                        <div class="fw-bold" style="font-size:1.75rem;color:#67e8f9;line-height:1.1;">{{ $totalMatItems2 }}</div>
+                        <div class="fw-bold" style="font-size:1.5rem;color:#67e8f9;line-height:1.1;">{{ $totalMatItems2 }}</div>
+                        @if($isApprovedScopeLocked)
+                            <div class="small" style="color:#86efac;">approved: {{ $approvedMatItems2 }}</div>
+                        @endif
                     </div>
                     <div class="col-md-6">
                         <div class="small fw-semibold mb-1" style="color:#cbd5e1;">TOTAL MATERIAL COST (FMC)</div>
-                        <div class="fw-bold" style="font-size:1.75rem;color:#4ade80;line-height:1.1;">${{ number_format($totalMatCost2, 2) }}</div>
+                        <div class="fw-bold" style="font-size:1.5rem;color:#4ade80;line-height:1.1;">${{ number_format($totalMatCost2, 2) }}</div>
+                        @if($isApprovedScopeLocked)
+                            <div class="small" style="color:#86efac;">approved: ${{ number_format($approvedMatCost2, 2) }}</div>
+                        @endif
                     </div>
                 </div>
             </div>
@@ -247,11 +335,11 @@
                                             <label>Visits Required <span class="badge bg-info text-dark ms-1" style="font-size:.7rem;">Auto-computed</span></label>
                                             <div class="input-group">
                                                 <input type="number" id="bdcVisitsPerYear" class="form-control bg-light text-muted"
-                                                       value="{{ $inspection->bdc_visits_per_year ?? max(1, (int)ceil($totalLabourHrs2/11)) }}"
+                                                       value="{{ $inspection->bdc_visits_per_year ?? max(1, (int)ceil($summaryLabourHrs2/11)) }}"
                                                        step="1" min="1" disabled />
-                                                <span class="input-group-text" id="visitsFormula" title="ceil(total labour hours / 11)">= &lceil; <span id="totalHrsDisplay">{{ number_format($totalLabourHrs2, 1) }}</span> hrs &divide; 11 &rceil;</span>
+                                                <span class="input-group-text" id="visitsFormula" title="ceil(total labour hours / 11)">= &lceil; <span id="totalHrsDisplay">{{ number_format($summaryLabourHrs2, 1) }}</span> hrs &divide; 11 &rceil;</span>
                                             </div>
-                                            <small class="text-muted">Derived from total finding labour hours &divide; 11 hrs/day (Mon&ndash;Sat)</small>
+                                            <small class="text-muted">{{ $isApprovedScopeLocked ? 'Derived from approved labour hours selected by the client' : 'Derived from total finding labour hours' }} &divide; 11 hrs/day (Mon&ndash;Sat)</small>
                                         </div>
                                     </div>
                                 </div>
@@ -261,9 +349,9 @@
                                         <div class="form-group">
                                             <label>Total Estimated Hours <span class="badge bg-info text-dark ms-1" style="font-size:.7rem;">Auto-computed</span></label>
                                             <input type="number" id="hoursPerVisit" class="form-control bg-light text-muted" 
-                                                   value="{{ $totalLabourHrs2 ?: ($inspection->estimated_task_hours ?? '') }}" 
+                                                   value="{{ $summaryLabourHrs2 ?: ($inspection->estimated_task_hours ?? '') }}" 
                                                    placeholder="0.0" step="0.1" min="0" disabled />
-                                            <small class="text-muted">Sum of all finding labour hours &mdash; updates as you fill in findings below</small>
+                                            <small class="text-muted">{{ $isApprovedScopeLocked ? 'Approved labour hours selected in quotation' : 'Sum of all finding labour hours' }} &mdash; updates as you fill in findings below</small>
                                         </div>
                                     </div>
                                     <div class="col-md-6">
@@ -351,7 +439,12 @@
                         <div class="card mb-4" style="border:1px solid #dee2e6;box-shadow:0 2px 8px rgba(0,0,0,.06);">
                             <div class="card-header d-flex justify-content-between align-items-center" style="background:#2d3a5e;color:white;">
                                 <h5 class="mb-0"><i class="mdi mdi-clipboard-list-outline me-2"></i>Findings Summary <small class="opacity-75 fw-normal">(from Step 1)</small></h5>
-                                <span class="badge bg-light text-dark">{{ count($sortedFindings) }} finding(s)</span>
+                                <span class="badge bg-light text-dark">
+                                    {{ $scopedFindings2->count() }} proposed
+                                    @if($isApprovedScopeLocked)
+                                        | {{ $approvedFindings2->count() }} approved
+                                    @endif
+                                </span>
                             </div>
                             <div class="card-body p-0">
                                 @if(count($sortedFindings) === 0)
@@ -384,8 +477,9 @@
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                @foreach($sortedFindings as $fi => $finding)
+                                                @foreach($scopedFindings2 as $fi => $finding)
                                                     @php
+                                                        $isApprovedRow2 = !empty($finding['__approved_scope']);
                                                         $sev2      = $finding['severity'] ?? 'low';
                                                         $color2    = $sevColors2[$sev2] ?? '#6c757d';
                                                         $label2    = $sevLabels2[$sev2] ?? ucfirst($sev2);
@@ -397,7 +491,7 @@
                                                                         ? $finding['recommendations']
                                                                         : array_filter(array_map('trim', explode('|', (string)($finding['recommendations'] ?? ''))));
                                                     @endphp
-                                                    <tr style="border-left:4px solid {{ $color2 }};">
+                                                    <tr style="border-left:4px solid {{ $color2 }};{{ $isApprovedScopeLocked && !$isApprovedRow2 ? 'opacity:.62;background:#fff7ed;' : '' }}">
                                                         <td class="text-center text-muted fw-semibold">{{ $fi + 1 }}</td>
                                                         <td>
                                                             <span class="badge" style="background:{{ $color2 }};{{ $sev2==='medium'?'color:#212529;':'' }}font-size:.72rem;">{{ $label2 }}</span>
@@ -405,6 +499,15 @@
                                                         <td class="fw-semibold">{{ $finding['system'] ?? '—' }}</td>
                                                         <td class="text-muted">{{ $finding['subsystem'] ?? '—' }}</td>
                                                         <td>
+                                                            @if($isApprovedScopeLocked)
+                                                                <div class="mt-1">
+                                                                    @if($isApprovedRow2)
+                                                                        <span class="badge" style="background:#198754;">Approved in quotation</span>
+                                                                    @else
+                                                                        <span class="badge" style="background:#fd7e14;color:#212529;">Deferred by client</span>
+                                                                    @endif
+                                                                </div>
+                                                            @endif
                                                             <div class="fw-semibold">{{ $finding['issue'] ?? '—' }}</div>
                                                             @if(!empty($finding['location']) || !empty($finding['spot']))
                                                                 <div class="text-muted" style="font-size:.78rem;">
@@ -615,7 +718,76 @@
                         </div>
                         @endif {{-- end hidden CPI/ASI/TUS --}}
 
-                        {{-- ── Panel B: Live Cost Preview (JS-updated) ─────────────────── --}}
+                        {{-- ── Panel B: Live Cost Preview (JS-updated) or Approved-Pricing Lock ── --}}
+                        @if(($inspection->quotation_status ?? null) === 'approved' && $activeQuotation && $activeQuotation->status === 'approved')
+                        {{-- ── Quotation approved — show locked pricing, hide the live JS preview ── --}}
+                        @php
+                            $lockedLabour   = (float) $activeQuotation->approved_labour_cost;
+                            $lockedMaterial = (float) $activeQuotation->approved_material_cost;
+                            $lockedBdc      = (float) ($activeQuotation->approved_bdc_cost ?? $inspection->bdc_annual ?? 0);
+                            $lockedTotal    = round((float) ($activeQuotation->approved_total ?? ($lockedLabour + $lockedMaterial + $lockedBdc)), 2);
+                            $lockedVisits   = max(1, (int) ($inspection->bdc_visits_per_year ?? 1));
+                        @endphp
+                        <div class="card mb-4" style="border:2px solid #198754;">
+                            <div class="card-header text-white d-flex justify-content-between align-items-center" style="background:linear-gradient(135deg,#198754,#146c43);">
+                                <h5 class="mb-0"><i class="mdi mdi-lock-check me-2"></i>Approved Pricing — Locked to Client Selection</h5>
+                                <span class="badge bg-warning text-dark fs-6 px-3"><i class="mdi mdi-check-circle me-1"></i>Client Approved</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="alert alert-warning mb-3">
+                                    <i class="mdi mdi-lock me-2"></i>
+                                    <strong>Pricing is locked.</strong> The client approved a subset of findings.
+                                    The amounts below reflect <em>only the approved scope</em> and will be used when you complete the assessment.
+                                    "Save &amp; Preview Pricing" is disabled while the quotation is approved.
+                                </div>
+                                <div class="row g-3 mb-3">
+                                    <div class="col-md-3">
+                                        <div class="p-3 rounded text-center" style="background:#e8f4fd;border:1px solid #0d6efd;">
+                                            <div class="text-muted small fw-semibold">Base Deployment Cost</div>
+                                            <div class="fw-bold fs-5 text-primary">${{ number_format($lockedBdc, 2) }}</div>
+                                            <div class="text-muted" style="font-size:.75rem;">as per stored BDC rate</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="p-3 rounded text-center" style="background:#fff3e0;border:1px solid #fd7e14;">
+                                            <div class="text-muted small fw-semibold">Approved Labour Cost</div>
+                                            <div class="fw-bold fs-5 text-warning">${{ number_format($lockedLabour, 2) }}</div>
+                                            <div class="text-muted" style="font-size:.75rem;">approved findings only</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="p-3 rounded text-center" style="background:#e8f8f0;border:1px solid #198754;">
+                                            <div class="text-muted small fw-semibold">Approved Material Cost</div>
+                                            <div class="fw-bold fs-5 text-success">${{ number_format($lockedMaterial, 2) }}</div>
+                                            <div class="text-muted" style="font-size:.75rem;">approved findings only</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="p-3 rounded text-center" style="background:#f0e8ff;border:2px solid #7c3aed;">
+                                            <div class="text-muted small fw-semibold">Total Approved Cost</div>
+                                            <div class="fw-bold fs-5" style="color:#7c3aed;">${{ number_format($lockedTotal, 2) }}</div>
+                                            <div class="text-muted" style="font-size:.75rem;">BDC + Labour + Material</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row g-3">
+                                    <div class="col-md-6">
+                                        <div class="p-3 rounded text-center" style="background:#fff8e1;border:2px solid #ffc107;">
+                                            <div class="text-muted small fw-semibold">ARP (Approved Total)</div>
+                                            <div class="fw-bold" style="font-size:1.8rem;color:#856404;">${{ number_format($lockedTotal, 2) }}</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="p-3 rounded text-center" style="background:#fef3c7;border:2px solid #d97706;">
+                                            <div class="text-muted small fw-semibold">Cost / Visit</div>
+                                            <div class="fw-bold" style="font-size:1.4rem;color:#92400e;">${{ number_format($lockedTotal / $lockedVisits, 2) }}</div>
+                                            <div class="text-muted" style="font-size:.75rem;">= ${{ number_format($lockedTotal, 2) }} ÷ {{ $lockedVisits }} visits</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        @else
                         <div class="card mb-4 border-dark">
                             <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
                                 <h5 class="mb-0"><i class="mdi mdi-calculator-variant me-2"></i>Live Cost Preview</h5>
@@ -683,6 +855,7 @@
                                 </div>
                             </div>
                         </div>
+                        @endif
 
                         {{-- ── Panel C: Final Calculated PHAR Dashboard (post-submission) ─ --}}
                         @if(($inspection->bdc_annual ?? 0) > 0)
@@ -777,6 +950,18 @@
                         <!-- Form Actions -->
                         <div class="card mb-4">
                             <div class="card-body">
+                                @if(($inspection->quotation_status ?? null) === 'approved' && $activeQuotation && $activeQuotation->status === 'approved')
+                                <p class="text-muted small mb-3">
+                                    <i class="mdi mdi-lock me-1"></i>
+                                    Pricing and scope are <strong>locked to the approved quotation</strong>.
+                                    Editing findings is disabled after client approval.
+                                    Click <strong>Complete Assessment</strong> below to generate the invoice using the approved amounts.
+                                </p>
+                                <div class="alert alert-warning mb-0">
+                                    <i class="mdi mdi-alert-outline me-1"></i>
+                                    No further edits are allowed after client approval.
+                                </div>
+                                @else
                                 <p class="text-muted small mb-3">
                                     <i class="mdi mdi-information-outline me-1"></i>
                                     <strong>Save Draft &amp; Back</strong> returns you to Step 1 to review findings.
@@ -784,13 +969,14 @@
                                     Once you are satisfied, click <strong>Complete Assessment</strong> to lock it in.
                                 </p>
                                 <div class="d-flex justify-content-between align-items-center gap-2">
-                                    <button type="submit" name="action" value="save_draft_back" class="btn btn-secondary">
+                                    <button type="submit" name="action" value="save_draft_back" class="btn btn-secondary" formnovalidate>
                                         <i class="mdi mdi-content-save me-1"></i>Save Draft &amp; Back to Step 1
                                     </button>
                                     <button type="submit" name="action" value="save_preview" class="btn btn-primary btn-lg">
                                         <i class="mdi mdi-calculator me-1"></i>Save &amp; Preview Pricing
                                     </button>
                                 </div>
+                                @endif
                             </div>
                         </div>
                     </form>
@@ -802,42 +988,61 @@
                             <strong><i class="mdi mdi-check-decagram me-1"></i>Pricing Ready — Preview Before Completing</strong>
                         </div>
                         <div class="card-body">
+                            @php
+                                $previewTotal = (float) ($inspection->trc_annual ?? ($inspection->bdc_annual ?? 0));
+                                $previewVisits = max(1, (int) ($inspection->bdc_visits_per_year ?? 1));
+                                $previewHours = (float) ($inspection->estimated_task_hours ?? 0);
+
+                                if (($inspection->quotation_status ?? null) === 'approved' && $activeQuotation && $activeQuotation->status === 'approved') {
+                                    $snapshotForHours = collect($activeQuotation->findings_snapshot ?? []);
+                                    $approvedIdsForHours = collect($activeQuotation->approved_finding_ids ?? [])->map(fn($id) => (int) $id);
+                                    $approvedHoursFromSnapshot = (float) $snapshotForHours
+                                        ->filter(fn($f) => $approvedIdsForHours->contains((int) ($f['id'] ?? 0)))
+                                        ->sum(fn($f) => (float) ($f['labour_hours'] ?? 0));
+
+                                    if ($approvedHoursFromSnapshot > 0) {
+                                        $previewHours = $approvedHoursFromSnapshot;
+                                    }
+                                }
+
+                                $previewPerVisit = round($previewTotal / $previewVisits, 2);
+                            @endphp
                             {{-- Pricing summary --}}
                             <div class="row text-center mb-3">
                                 <div class="col-md-3">
                                     <div class="border rounded p-2">
                                         <small class="text-muted d-block">Total Project Cost</small>
-                                        <strong class="fs-5 text-success">${{ number_format($inspection->trc_annual ?? ($inspection->bdc_annual ?? 0), 2) }}</strong>
+                                        <strong class="fs-5 text-success">${{ number_format($previewTotal, 2) }}</strong>
                                     </div>
                                 </div>
                                 <div class="col-md-3">
                                     <div class="border rounded p-2">
                                         <small class="text-muted d-block">Visits Required</small>
-                                        <strong class="fs-5">{{ $inspection->bdc_visits_per_year ?? 1 }}</strong>
+                                        <strong class="fs-5">{{ $previewVisits }}</strong>
                                     </div>
                                 </div>
                                 <div class="col-md-3">
                                     <div class="border rounded p-2">
                                         <small class="text-muted d-block">Cost per Visit</small>
-                                        @php
-                                            $prevVisits = max(1, (int)($inspection->bdc_visits_per_year ?? 1));
-                                            $prevTotal  = (float)($inspection->trc_annual ?? ($inspection->bdc_annual ?? 0));
-                                            $prevPerVisit = $prevVisits > 0 ? round($prevTotal / $prevVisits, 2) : 0;
-                                        @endphp
-                                        <strong class="fs-5 text-primary">${{ number_format($prevPerVisit, 2) }}</strong>
+                                        <strong class="fs-5 text-primary">${{ number_format($previewPerVisit, 2) }}</strong>
                                     </div>
                                 </div>
                                 <div class="col-md-3">
                                     <div class="border rounded p-2">
                                         <small class="text-muted d-block">Total Hours</small>
-                                        <strong class="fs-5">{{ number_format($inspection->estimated_task_hours ?? 0, 1) }} hrs</strong>
+                                        <strong class="fs-5">{{ number_format($previewHours, 1) }} hrs</strong>
                                     </div>
                                 </div>
                             </div>
 
                             {{-- Preview actions --}}
+                            @php
+                                $quotationStatus = $inspection->quotation_status;
+                                $isQuotationApproved = $quotationStatus === 'approved';
+                                $isQuotationShared = in_array($quotationStatus, ['shared', 'client_reviewing', 'client_responded'], true);
+                            @endphp
                             <p class="text-muted small mb-3">
-                                Preview the report and contract draft exactly as the client will see them, then complete to lock in the assessment.
+                                Preview the report and contract draft exactly as the client will see them. Then share quotation with the client. Complete Assessment unlocks after quotation approval.
                             </p>
                             <div class="d-flex flex-wrap gap-2 mb-3">
                                 <a href="{{ route('inspections.preview-report', $inspection->id) }}" target="_blank"
@@ -848,15 +1053,85 @@
                                    class="btn btn-outline-secondary">
                                     <i class="mdi mdi-file-document-outline me-1"></i>Preview Contract Draft
                                 </a>
+                                <form method="POST" action="{{ route('inspections.share-quotation', $inspection->id) }}" class="d-inline">
+                                    @csrf
+                                    <button type="submit" class="btn btn-outline-primary">
+                                        <i class="mdi mdi-send-outline me-1"></i>
+                                        {{ $isQuotationShared ? 'Re-share Quotation' : 'Share Quotation' }}
+                                    </button>
+                                </form>
                             </div>
+
+                            <div class="alert {{ $isQuotationApproved ? 'alert-success' : ($isQuotationShared ? 'alert-warning' : 'alert-info') }} py-2 mb-3">
+                                @if($isQuotationApproved)
+                                    <strong>Quotation approved.</strong> You can now complete this assessment.
+                                @elseif($isQuotationShared)
+                                    <strong>Quotation shared.</strong> Waiting for client response before completion.
+                                @else
+                                    <strong>Quotation not shared yet.</strong> Share quotation to start client review.
+                                @endif
+                            </div>
+
+                            @php
+                                $quotationSnapshot = collect($activeQuotation->findings_snapshot ?? []);
+                                $approvedIds = collect($activeQuotation->approved_finding_ids ?? [])->map(fn($id) => (int) $id);
+                                $deferredIds = collect($activeQuotation->deferred_finding_ids ?? [])->map(fn($id) => (int) $id);
+                                $deferredFindings = $quotationSnapshot
+                                    ->filter(fn($f) => $deferredIds->contains((int)($f['id'] ?? 0)))
+                                    ->values();
+                            @endphp
+
+                            @if($activeQuotation)
+                                <div class="border rounded p-3 bg-light mb-3">
+                                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
+                                        <div>
+                                            <strong>Quotation Record:</strong> {{ $activeQuotation->quote_number }}
+                                            <span class="badge bg-dark ms-2 text-uppercase">{{ str_replace('_', ' ', $activeQuotation->status ?? 'draft') }}</span>
+                                        </div>
+                                        <div class="small text-muted">
+                                            Approved: <strong>{{ $approvedIds->count() }}</strong> &bull;
+                                            Deferred: <strong>{{ $deferredIds->count() }}</strong>
+                                        </div>
+                                    </div>
+
+                                    @if($deferredFindings->isNotEmpty())
+                                        <div class="small text-muted mb-1"><strong>Deferred Findings (kept for future quotation):</strong></div>
+                                        <ul class="mb-0 small ps-3">
+                                            @foreach($deferredFindings as $df)
+                                                <li>
+                                                    {{ $df['task_question'] ?? 'Untitled finding' }}
+                                                    @if(!empty($df['category']))
+                                                        <span class="text-muted">({{ $df['category'] }})</span>
+                                                    @endif
+                                                </li>
+                                            @endforeach
+                                        </ul>
+
+                                        @if(($activeQuotation->status ?? null) === 'approved' && $inspection->status !== 'completed')
+                                            <form method="POST" action="{{ route('inspections.share-followup-quotation', $inspection->id) }}" class="mt-2">
+                                                @csrf
+                                                <button type="submit" class="btn btn-outline-dark btn-sm">
+                                                    <i class="mdi mdi-refresh-circle me-1"></i>Create Follow-up Quotation from Deferred Findings
+                                                </button>
+                                            </form>
+                                        @endif
+                                    @endif
+                                </div>
+                            @endif
 
                             {{-- Complete button --}}
                             <hr class="my-2">
                             <div class="d-flex justify-content-between align-items-center">
-                                <small class="text-muted">Satisfied with the pricing and contract? Complete to notify the client.</small>
+                                <small class="text-muted">
+                                    @if($isQuotationApproved)
+                                        Satisfied with the pricing and contract? Complete to notify the client.
+                                    @else
+                                        Complete Assessment is locked until quotation is approved by the client.
+                                    @endif
+                                </small>
                                 <form method="POST" action="{{ route('inspections.complete-assessment', $inspection->id) }}" class="d-inline">
                                     @csrf
-                                    <button type="submit" class="btn btn-success btn-lg">
+                                    <button type="submit" class="btn btn-success btn-lg" {{ $isQuotationApproved ? '' : 'disabled' }}>
                                         <i class="mdi mdi-flag-checkered me-1"></i>Complete Assessment
                                     </button>
                                 </form>
@@ -952,9 +1227,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const hoursPerVisitInput = document.getElementById('hoursPerVisit');
 
     // Server-side pre-computed totals from Step 1 findings
-    const SERVER_FRLC        = {{ $totalFRLC2 }};
-    const SERVER_FMC         = {{ $totalMatCost2 }};
-    const SERVER_LABOUR_HRS  = {{ $totalLabourHrs2 }};
+    const SERVER_FRLC        = {{ $isApprovedScopeLocked ? $approvedFRLC2 : $totalFRLC2 }};
+    const SERVER_FMC         = {{ $isApprovedScopeLocked ? $approvedMatCost2 : $totalMatCost2 }};
+    const SERVER_LABOUR_HRS  = {{ $summaryLabourHrs2 }};
     const HOURS_PER_DAY      = 11;
 
     // Keep visits + total hours fields in sync with live labour hours inputs

@@ -27,6 +27,10 @@ class Inspection extends Model
         'client_signature',
         'client_full_name',
         'client_acknowledgment',
+        'active_quotation_id',
+        'quotation_status',
+        'quotation_shared_at',
+        'quotation_approved_at',
         'etogo_signed_by',
         'etogo_signed_at',
         'planned_start_date',
@@ -119,6 +123,9 @@ class Inspection extends Model
         'photos'          => 'array',
         'approved_by_client' => 'boolean',
         'client_approved_at' => 'datetime',
+        'active_quotation_id' => 'integer',
+        'quotation_shared_at' => 'datetime',
+        'quotation_approved_at' => 'datetime',
         'etogo_signed_by' => 'integer',
         'etogo_signed_at' => 'datetime',
         'planned_start_date' => 'date',
@@ -227,6 +234,16 @@ class Inspection extends Model
         return $this->hasMany(MaintenanceVisitLog::class);
     }
 
+    public function quotations(): HasMany
+    {
+        return $this->hasMany(InspectionQuotation::class);
+    }
+
+    public function activeQuotation(): BelongsTo
+    {
+        return $this->belongsTo(InspectionQuotation::class, 'active_quotation_id');
+    }
+
     public function materials(): HasMany
     {
         return $this->hasMany(InspectionMaterial::class);
@@ -272,6 +289,20 @@ class Inspection extends Model
     {
         $disk = config('filesystems.default', 'public');
         $storage = Storage::disk($disk);
+
+        // Backward compatibility: some historical uploads were stored on the
+        // local public disk; prefer default disk, but transparently fallback.
+        if ($disk !== 'public') {
+            try {
+                if (!$storage->exists($path) && Storage::disk('public')->exists($path)) {
+                    $disk = 'public';
+                    $storage = Storage::disk($disk);
+                }
+            } catch (\Throwable $e) {
+                // If existence checks fail, continue with configured default disk.
+            }
+        }
+
         $driver = config("filesystems.disks.{$disk}.driver");
 
         if ($driver !== 'local' && method_exists($storage, 'temporaryUrl')) {

@@ -16,6 +16,12 @@ use App\Services\BDCCalculator;
 use App\Services\AgreementScheduleService;
 use App\Services\InspectionInvoiceSyncService;
 use App\Models\InspectionSystem;
+use App\Models\InspectionQuotation;
+use App\Models\PHARFinding;
+use App\Notifications\AssessmentCompletedNotification;
+use App\Notifications\AssessmentScheduleUpdatedNotification;
+use App\Notifications\QuotationSharedNotification;
+use App\Notifications\WorkSchedulePublishedNotification;
 use App\Support\PharCatalog;
 use Illuminate\Support\Carbon;
 
@@ -68,10 +74,12 @@ class InspectionController extends Controller
             ->where('status', 'completed')
             ->whereIn('id', $latestCompletedByProperty)
             ->count();
+
+        $inspectionListQuery = static fn () => Inspection::with(['property.user', 'property.projectManager', 'inspector', 'assignedBy', 'project.manager'])
+            ->whereNotNull('property_id');
         
         // Base query for inspections
-        $query = Inspection::with(['property.user', 'property.projectManager', 'inspector', 'assignedBy', 'project.manager'])
-            ->whereNotNull('property_id');
+        $query = $inspectionListQuery();
 
         // Filter by status if provided
         if ($request->filled('status')) {
@@ -101,8 +109,7 @@ class InspectionController extends Controller
 
         // Project Scheduling view: countersigned but no visit schedule set yet
         if ($request->get('view') === 'needs-schedule') {
-            $query = Inspection::with(['property.user', 'property.projectManager', 'inspector', 'assignedBy', 'project.manager'])
-                ->whereNotNull('property_id')
+            $query = $inspectionListQuery()
                 ->whereNotNull('etogo_signed_at')
                 ->where(function ($q) {
                     $q->whereNull('work_schedule')->orWhere('work_schedule', '[]');
@@ -113,10 +120,24 @@ class InspectionController extends Controller
             }
         }
 
+        // Pre-assessment view: quotation shared and waiting for client approval/response
+        if ($request->get('view') === 'awaiting-quotation') {
+            $query = $inspectionListQuery()
+                ->where('status', '!=', 'completed');
+
+            $query->where(function ($q) {
+                $q->where('status', 'in_progress')
+                    ->orWhereIn('quotation_status', ['shared', 'client_reviewing', 'client_responded']);
+            });
+
+            if ($user->hasRole('Inspector')) {
+                $query->where('inspector_id', $user->id);
+            }
+        }
+
         // Pending Etogo signature: client signed + paid, waiting for Etogo countersign
         if ($request->get('view') === 'pending-etogo') {
-            $query = Inspection::with(['property.user', 'property.projectManager', 'inspector', 'assignedBy', 'project.manager'])
-                ->whereNotNull('property_id')
+            $query = $inspectionListQuery()
                 ->whereNotNull('client_signature')
                 ->where('work_payment_status', 'paid')
                 ->whereNull('etogo_signed_at');
@@ -243,6 +264,38 @@ class InspectionController extends Controller
             'fmcMaterialSettings',
             'pharCategories'
         ));
+    }
+
+    public function updateAssessmentSchedule(Request $request, Inspection $inspection)
+    {
+        $validated = $request->validate([
+            'scheduled_date' => 'required|date',
+        ]);
+
+        $scheduledAt = Carbon::parse($validated['scheduled_date']);
+
+        $inspection->update([
+            'scheduled_date' => $scheduledAt,
+        ]);
+
+        if ($inspection->property) {
+            $inspection->property->update([
+                'inspection_scheduled_at' => $scheduledAt,
+            ]);
+        }
+
+        $clientUser = $inspection->property?->user;
+        if ($clientUser) {
+            $clientUser->notify(new AssessmentScheduleUpdatedNotification(
+                inspectionId: (int) $inspection->id,
+                propertyId: (int) ($inspection->property_id ?? 0),
+                propertyName: (string) ($inspection->property?->property_name ?? 'your property'),
+                scheduledAt: $scheduledAt->format('M d, Y h:i A'),
+                scheduledByName: (string) (Auth::user()?->name ?? 'Admin')
+            ));
+        }
+
+        return back()->with('success', 'Assessment schedule updated and client has been notified.');
     }
 
     /**
@@ -702,7 +755,32 @@ class InspectionController extends Controller
         
         $toolAssignments = $inspection->toolAssignments->where('quantity', '>', 0);
 
-        return view('admin.inspections.show', compact('inspection', 'findings', 'materials', 'toolAssignments'));
+        $activeQuotation = null;
+        if (!empty($inspection->active_quotation_id)) {
+            $activeQuotation = InspectionQuotation::query()
+                ->where('id', $inspection->active_quotation_id)
+                ->where('inspection_id', $inspection->id)
+                ->first();
+        }
+
+        if (($activeQuotation?->status ?? null) !== 'approved') {
+            $approvedQuotation = InspectionQuotation::query()
+                ->where('inspection_id', $inspection->id)
+                ->where('status', 'approved')
+                ->orderBy('id', 'desc')
+                ->first();
+            if ($approvedQuotation) {
+                $activeQuotation = $approvedQuotation;
+            }
+        }
+
+        $hasMaintenanceLogs = $inspection->maintenanceVisitLogs()->exists();
+        $scheduleHasProgress = collect($inspection->work_schedule ?? [])->contains(function ($visit) {
+            return in_array((string) ($visit['status'] ?? 'scheduled'), ['in_progress', 'completed'], true);
+        });
+        $scheduleLocked = $hasMaintenanceLogs || $scheduleHasProgress;
+
+        return view('admin.inspections.show', compact('inspection', 'findings', 'materials', 'toolAssignments', 'activeQuotation', 'scheduleLocked'));
     }
 
     /**
@@ -985,6 +1063,15 @@ class InspectionController extends Controller
             return back()->with('error', 'The agreement must be countersigned by Etogo before scheduling work visits.');
         }
 
+        $hasMaintenanceLogs = $inspection->maintenanceVisitLogs()->exists();
+        $scheduleHasProgress = collect($inspection->work_schedule ?? [])->contains(function ($visit) {
+            return in_array((string) ($visit['status'] ?? 'scheduled'), ['in_progress', 'completed'], true);
+        });
+
+        if ($hasMaintenanceLogs || $scheduleHasProgress) {
+            return back()->with('error', 'Visit schedule is locked because maintenance work has already started.');
+        }
+
         $validated = $request->validate([
             'visit_dates'   => 'required|array|min:1',
             'visit_dates.*' => 'required|date',
@@ -1017,6 +1104,7 @@ class InspectionController extends Controller
         }
 
         $inspection->update($updates);
+        $this->notifyClientWorkSchedulePublished($inspection->fresh(['property.user']), collect($schedule)->pluck('date')->all());
 
         return back()->with('success', count($schedule) . ' visit(s) scheduled successfully.');
     }
@@ -1028,6 +1116,21 @@ class InspectionController extends Controller
     {
         $inspection = Inspection::with(['property', 'pharFindings'])->findOrFail($id);
         $property = $inspection->property;
+        $activeQuotation = null;
+        if (!empty($inspection->active_quotation_id)) {
+            $activeQuotation = \App\Models\InspectionQuotation::query()
+                ->where('id', $inspection->active_quotation_id)
+                ->where('inspection_id', $inspection->id)
+                ->first();
+        }
+
+        // Total FMC from InspectionMaterial — used in locked pricing panel and completion.
+        // Materials are stored at inspection level (no per-finding link), so the full sum
+        // is used regardless of which findings were approved.
+        $inspectionMaterialTotal = round(
+            (float) \App\Models\InspectionMaterial::where('inspection_id', $inspection->id)->sum('line_total'),
+            2
+        );
 
         // Sort Phase 1 findings by severity: critical → high → noi_protection → medium → low
         $severityOrder  = ['critical' => 0, 'high' => 1, 'noi_protection' => 2, 'medium' => 3, 'low' => 4];
@@ -1098,9 +1201,18 @@ class InspectionController extends Controller
         // Only writes to the DB when the stored value actually differs.
         $this->syncBdcAndTrc($inspection, onlyIfChanged: true);
 
+        // If client already approved the active quotation, ensure both quotation totals
+        // and inspection pricing fields are aligned to the locked approved scope.
+        $inspection = $this->reconcileApprovedQuotationPricing($inspection->fresh(), $activeQuotation);
+        if ($activeQuotation) {
+            $activeQuotation = $activeQuotation->fresh();
+        }
+
         return view('admin.inspections.form-phar-data', compact(
             'inspection',
             'property',
+            'activeQuotation',
+            'inspectionMaterialTotal',
             'bdcSettings',
             'pharCategories',
             'materialUnits',
@@ -1121,6 +1233,30 @@ class InspectionController extends Controller
         $inspection = Inspection::findOrFail($id);
         $property = $inspection->property;
         $isDraft = $request->input('action') === 'save_draft_back';
+
+        // If the quotation is already approved by the client, the pricing and scope are locked.
+        // No more edits (including draft saves) are allowed on this screen.
+        if (($inspection->quotation_status ?? null) === 'approved') {
+            return redirect()->route('inspections.phar-data', $inspection->id)
+            ->with('info', 'This quotation is already approved and locked. Editing findings or recalculating pricing is disabled. Complete the assessment or create a follow-up quotation from deferred findings.');
+        }
+
+        // Preview requires complete PHAR + BDC inputs. Draft mode can stay partial.
+        if (!$isDraft) {
+            $request->validate([
+                'property_size_psf'      => 'required|numeric|min:0.01',
+                'minimum_required_hours' => 'required|numeric|min:0.1',
+                'tus_score'              => 'required|numeric|min:0|max:100',
+                'bdc_distance_km'        => 'required|numeric|min:0.01',
+                'bdc_time_min'           => 'required|numeric|min:1',
+            ], [
+                'property_size_psf.required' => 'Property size is required before saving preview pricing.',
+                'minimum_required_hours.required' => 'Minimum required hours is required before saving preview pricing.',
+                'tus_score.required' => 'Tenant Underwriting Score (TUS) is required before saving preview pricing.',
+                'bdc_distance_km.required' => 'BDC distance (km) is required before saving preview pricing.',
+                'bdc_time_min.required' => 'BDC travel time (minutes) is required before saving preview pricing.',
+            ]);
+        }
 
         $validated = $request->validate([
             // PHAR Inputs
@@ -1235,6 +1371,19 @@ class InspectionController extends Controller
                 ->with('success', 'Step 2 progress saved. You can review or add more findings in Step 1 and return here at any time.');
         }
 
+        $computedInspection = $inspection->fresh();
+        $computedFindings = collect($computedInspection->findings ?? [])->values();
+        $computedLabourHours = (float) $computedFindings->sum(fn(array $f) => (float) ($f['phar_labour_hours'] ?? 0));
+
+        if ($computedFindings->isEmpty() ||
+            $computedLabourHours <= 0 ||
+            (float) ($computedInspection->bdc_annual ?? 0) <= 0 ||
+            (float) ($computedInspection->trc_annual ?? 0) <= 0) {
+            return redirect()->back()->withInput()->withErrors([
+                'save_preview' => 'Pricing preview cannot be saved yet. Please complete all required PHAR inputs and ensure BDC, labour hours, and totals are fully computed.',
+            ]);
+        }
+
         // ==== FINAL SAVE: process into relational tables ====
         $inspection->pharFindings()->delete();
         $inspection->materials()->delete();
@@ -1252,7 +1401,7 @@ class InspectionController extends Controller
                 'priority'      => $findingData['priority'] ?? 3,
                 'included_yn'   => $findingData['phar_included_yn'] ?? true,
                 'labour_hours'  => $findingData['phar_labour_hours'] ?? 0,
-                'material_cost' => 0,
+                'material_cost' => collect($findingData['phar_materials'] ?? [])->sum(fn($m) => (float) ($m['line_total'] ?? 0)),
                 'notes'         => $findingData['phar_notes'] ?? null,
                 'photo_ids'     => !empty($findingData['finding_photos']) ? $findingData['finding_photos'] : null,
             ]);
@@ -1298,11 +1447,266 @@ class InspectionController extends Controller
      * Finalise the assessment: mark as completed, sync schedule, generate invoice.
      * Called only when admin is satisfied with the pricing preview.
      */
+    public function shareQuotation(Inspection $inspection)
+    {
+        if (($inspection->bdc_annual ?? 0) <= 0) {
+            return redirect()->route('inspections.phar-data', $inspection->id)
+                ->with('error', 'Please save and preview pricing first before sharing the quotation.');
+        }
+
+        if ($inspection->status === 'completed') {
+            return redirect()->route('inspections.show', $inspection->id)
+                ->with('info', 'This assessment is already completed and cannot be re-shared.');
+        }
+
+        $findings = PHARFinding::where('inspection_id', $inspection->id)
+            ->orderBy('id')
+            ->get();
+
+        if ($findings->isEmpty()) {
+            return redirect()->route('inspections.phar-data', $inspection->id)
+                ->with('error', 'No findings found. Please add findings before sharing the quotation.');
+        }
+
+        $hourlyRate = (float) ($inspection->labour_hourly_rate ?? 165);
+        $inspectionFindings = collect($inspection->findings ?? [])->values();
+
+        $findingsSnapshot = $findings->values()->map(function (PHARFinding $finding, int $index) use ($hourlyRate, $inspectionFindings) {
+            $labourHours = (float) ($finding->labour_hours ?? 0);
+            $materialCost = (float) ($finding->material_cost ?? 0);
+
+            // Backward-compatibility: for legacy rows where PHARFinding.material_cost was
+            // persisted as 0, recover from inspection findings JSON materials by index.
+            if ($materialCost <= 0) {
+                $jsonFinding = $inspectionFindings->get($index, []);
+                $materialCost = (float) collect($jsonFinding['phar_materials'] ?? [])
+                    ->sum(fn($m) => (float) ($m['line_total'] ?? 0));
+            }
+
+            return [
+                'id' => (int) $finding->id,
+                'task_question' => $finding->task_question,
+                'category' => $finding->category,
+                'priority' => $finding->priority,
+                'included_yn' => (bool) $finding->included_yn,
+                'labour_hours' => round($labourHours, 2),
+                'labour_cost' => round($labourHours * $hourlyRate, 2),
+                'material_cost' => round($materialCost, 2),
+                'notes' => $finding->notes,
+                'photo_ids' => is_array($finding->photo_ids) ? array_values($finding->photo_ids) : [],
+            ];
+        })->values()->all();
+
+        $quotation = $this->createSharedQuotation($inspection, $findingsSnapshot);
+        $this->activateSharedQuotation($inspection, $quotation, resetApprovalAt: true);
+        $this->notifyClientQuotationShared($inspection, $quotation);
+
+        return redirect()->route('inspections.phar-data', $inspection->id)
+            ->with('success', 'Quotation shared successfully. Waiting for client selection before completing assessment.');
+    }
+
+    /**
+     * Create and share a follow-up quotation using only deferred findings
+     * from the current active quotation.
+     */
+    public function shareFollowupQuotation(Inspection $inspection)
+    {
+        if ($inspection->status === 'completed') {
+            return redirect()->route('inspections.show', $inspection->id)
+                ->with('info', 'This assessment is already completed. Follow-up quotation cannot be created here.');
+        }
+
+        $activeQuotation = InspectionQuotation::query()
+            ->where('id', $inspection->active_quotation_id)
+            ->where('inspection_id', $inspection->id)
+            ->first();
+
+        if (!$activeQuotation) {
+            return redirect()->route('inspections.phar-data', $inspection->id)
+                ->with('error', 'No active quotation found to build follow-up from.');
+        }
+
+        if (($activeQuotation->status ?? null) !== 'approved') {
+            return redirect()->route('inspections.phar-data', $inspection->id)
+                ->with('error', 'Follow-up quotation is available only after quotation approval.');
+        }
+
+        $snapshot = collect($activeQuotation->findings_snapshot ?? [])->values();
+        $deferredIds = collect($activeQuotation->deferred_finding_ids ?? [])->map(fn ($id) => (int) $id)->values();
+
+        if ($deferredIds->isEmpty()) {
+            return redirect()->route('inspections.phar-data', $inspection->id)
+                ->with('error', 'There are no deferred findings to create a follow-up quotation.');
+        }
+
+        $followupSnapshot = $snapshot
+            ->filter(fn ($f) => $deferredIds->contains((int) ($f['id'] ?? 0)))
+            ->values()
+            ->all();
+
+        if (empty($followupSnapshot)) {
+            return redirect()->route('inspections.phar-data', $inspection->id)
+                ->with('error', 'Deferred findings could not be resolved from snapshot data.');
+        }
+
+        $quotation = $this->createSharedQuotation($inspection, $followupSnapshot);
+        $this->activateSharedQuotation($inspection, $quotation, resetApprovalAt: true);
+        $this->notifyClientQuotationShared($inspection, $quotation);
+
+        return redirect()->route('inspections.phar-data', $inspection->id)
+            ->with('success', 'Follow-up quotation shared from deferred findings.');
+    }
+
+    private function generateUniqueQuoteNumber(int $inspectionId): string
+    {
+        $quoteNumber = null;
+
+        do {
+            $candidate = 'IQ-' . now()->format('Ymd') . '-I' . $inspectionId . '-' . strtoupper(Str::random(4));
+            $exists = InspectionQuotation::where('quote_number', $candidate)->exists();
+            if (!$exists) {
+                $quoteNumber = $candidate;
+            }
+        } while ($quoteNumber === null);
+
+        return $quoteNumber;
+    }
+
+    /**
+     * Create a shared quotation record with default totals and validity.
+     *
+     * @param  array<int, array<string, mixed>>  $findingsSnapshot
+     */
+    private function createSharedQuotation(Inspection $inspection, array $findingsSnapshot): InspectionQuotation
+    {
+        $quoteNumber = $this->generateUniqueQuoteNumber($inspection->id);
+
+        return DB::transaction(function () use ($inspection, $findingsSnapshot, $quoteNumber) {
+            $now = now();
+            $expiresAt = $now->copy()->addDays(14);
+
+            return InspectionQuotation::create([
+                'inspection_id' => $inspection->id,
+                'property_id' => $inspection->property_id,
+                'project_id' => $inspection->project_id,
+                'created_by' => Auth::id(),
+                'quote_number' => $quoteNumber,
+                'status' => 'shared',
+                'findings_snapshot' => $findingsSnapshot,
+                'approved_finding_ids' => [],
+                'deferred_finding_ids' => [],
+                'approved_labour_cost' => 0,
+                'approved_material_cost' => 0,
+                'approved_bdc_cost' => 0,
+                'approved_total' => 0,
+                'shared_at' => $now,
+                'expires_at' => $expiresAt,
+                'valid_until' => $expiresAt->toDateString(),
+            ]);
+        });
+    }
+
+    private function activateSharedQuotation(Inspection $inspection, InspectionQuotation $quotation, bool $resetApprovalAt = false): void
+    {
+        $previousActiveQuotationId = (int) ($inspection->active_quotation_id ?? 0);
+
+        if ($previousActiveQuotationId > 0 && $previousActiveQuotationId !== (int) $quotation->id) {
+            InspectionQuotation::query()
+                ->where('id', $previousActiveQuotationId)
+                ->where('inspection_id', $inspection->id)
+                ->whereIn('status', ['shared', 'client_reviewing', 'client_responded'])
+                ->update([
+                    'status' => 'expired',
+                    'expires_at' => now(),
+                    'updated_at' => now(),
+                ]);
+        }
+
+        $updates = [
+            'active_quotation_id' => $quotation->id,
+            'quotation_status' => 'shared',
+            'quotation_shared_at' => now(),
+        ];
+
+        if ($resetApprovalAt) {
+            $updates['quotation_approved_at'] = null;
+        }
+
+        $inspection->update($updates);
+    }
+
+    private function notifyClientQuotationShared(Inspection $inspection, InspectionQuotation $quotation): void
+    {
+        $clientUser = $this->resolveInspectionClientUser($inspection);
+
+        if (!$clientUser) {
+            return;
+        }
+
+        $clientUser->notify(new QuotationSharedNotification(
+            inspectionId: (int) $inspection->id,
+            propertyId: $inspection->property_id ? (int) $inspection->property_id : null,
+            propertyName: (string) ($inspection->property?->property_name ?? 'your property'),
+            quoteNumber: (string) ($quotation->quote_number ?? 'N/A'),
+        ));
+    }
+
+    /**
+     * @param  array<int, string>  $visitDates
+     */
+    private function notifyClientWorkSchedulePublished(Inspection $inspection, array $visitDates): void
+    {
+        $clientUser = $this->resolveInspectionClientUser($inspection);
+
+        if (!$clientUser || empty($visitDates)) {
+            return;
+        }
+
+        $formattedDates = collect($visitDates)
+            ->map(fn (string $date) => Carbon::parse($date)->format('M d, Y'))
+            ->values()
+            ->all();
+
+        $clientUser->notify(new WorkSchedulePublishedNotification(
+            inspectionId: (int) $inspection->id,
+            propertyId: $inspection->property_id ? (int) $inspection->property_id : null,
+            propertyName: (string) ($inspection->property?->property_name ?? 'your property'),
+            visitDates: $formattedDates,
+        ));
+    }
+
+    private function notifyClientAssessmentCompleted(Inspection $inspection): void
+    {
+        $clientUser = $this->resolveInspectionClientUser($inspection);
+
+        if (!$clientUser) {
+            return;
+        }
+
+        $clientUser->notify(new AssessmentCompletedNotification(
+            inspectionId: (int) $inspection->id,
+            propertyId: $inspection->property_id ? (int) $inspection->property_id : null,
+            propertyName: (string) ($inspection->property?->property_name ?? 'your property'),
+        ));
+    }
+
+    private function resolveInspectionClientUser(Inspection $inspection)
+    {
+        $inspection->loadMissing('property.user');
+
+        return $inspection->property?->user;
+    }
+
     public function completeAssessment(Inspection $inspection)
     {
         if (($inspection->bdc_annual ?? 0) <= 0) {
             return redirect()->route('inspections.phar-data', $inspection->id)
                 ->with('error', 'Please save and preview pricing first before completing the assessment.');
+        }
+
+        if (($inspection->quotation_status ?? null) !== 'approved') {
+            return redirect()->route('inspections.phar-data', $inspection->id)
+                ->with('error', 'Please share the quotation and wait for client approval before completing the assessment.');
         }
 
         if ($inspection->status === 'completed') {
@@ -1315,8 +1719,13 @@ class InspectionController extends Controller
             'completed_date' => now(),
         ]);
 
+        // Re-lock pricing from approved quotation + authoritative material total.
+        $inspection = $this->reconcileApprovedQuotationPricing($inspection->fresh());
+
         $inspection = $this->agreementScheduleService->refresh($inspection);
-        $this->ensureClientInvoiceFromInspection($inspection->fresh(['property', 'project']));
+        $inspection = $inspection->fresh(['property.user', 'project']);
+        $this->ensureClientInvoiceFromInspection($inspection);
+        $this->notifyClientAssessmentCompleted($inspection);
 
         return redirect()->route('inspections.show', $inspection->id)
             ->with('success', 'Assessment completed successfully! The client has been notified.');
@@ -1366,6 +1775,28 @@ class InspectionController extends Controller
     {
         $inspection = $this->agreementScheduleService->refresh($inspection);
 
+        $activeQuotation = null;
+        if (!empty($inspection->active_quotation_id)) {
+            $activeQuotation = InspectionQuotation::query()
+                ->where('id', $inspection->active_quotation_id)
+                ->where('inspection_id', $inspection->id)
+                ->first();
+        }
+
+        // If active quotation is not yet approved (e.g. a follow-up re-share pending),
+        // fall back to the most recently approved quotation so the report scope filter
+        // correctly shows only previously-approved findings instead of all findings.
+        if (($activeQuotation?->status ?? null) !== 'approved') {
+            $approvedQuotation = InspectionQuotation::query()
+                ->where('inspection_id', $inspection->id)
+                ->where('status', 'approved')
+                ->orderBy('id', 'desc')
+                ->first();
+            if ($approvedQuotation) {
+                $activeQuotation = $approvedQuotation;
+            }
+        }
+
         $findings = \App\Models\PHARFinding::where('inspection_id', $inspection->id)
             ->orderBy('id')
             ->get();
@@ -1376,7 +1807,7 @@ class InspectionController extends Controller
 
         $adminPreview = true;
 
-        return view('client.inspections.report', compact('inspection', 'findings', 'materials', 'adminPreview'));
+        return view('client.inspections.report', compact('inspection', 'findings', 'materials', 'adminPreview', 'activeQuotation'));
     }
 
     /**
@@ -1392,6 +1823,123 @@ class InspectionController extends Controller
     protected function ensureClientInvoiceFromInspection(Inspection $inspection): void
     {
         $this->inspectionInvoiceSyncService->syncProjectInvoice($inspection);
+    }
+
+    /**
+     * Keep approved quotation pricing and inspection pricing fields in sync.
+     *
+     * Labour is derived from approved findings in quotation snapshot.
+     * Material is derived from inspection_materials (authoritative source).
+     */
+    private function reconcileApprovedQuotationPricing(Inspection $inspection, ?InspectionQuotation $activeQuotation = null): Inspection
+    {
+        if (($inspection->quotation_status ?? null) !== 'approved') {
+            return $inspection;
+        }
+
+        $quotation = $activeQuotation;
+        if (!$quotation && !empty($inspection->active_quotation_id)) {
+            $quotation = InspectionQuotation::query()
+                ->where('id', $inspection->active_quotation_id)
+                ->where('inspection_id', $inspection->id)
+                ->first();
+        }
+
+        if (!$quotation || ($quotation->status ?? null) !== 'approved') {
+            return $inspection;
+        }
+
+        $approvedIds = collect($quotation->approved_finding_ids ?? [])
+            ->map(fn($id) => (int) $id)
+            ->filter(fn($id) => $id > 0)
+            ->values();
+
+        $snapshot = collect($quotation->findings_snapshot ?? [])->values();
+
+        // Repair legacy snapshot material values (saved as 0 in older records)
+        // so approved pricing remains scoped to approved findings.
+        if ($snapshot->sum(fn($f) => (float) ($f['material_cost'] ?? 0)) <= 0) {
+            $pharMaterialById = $inspection->pharFindings()
+                ->get(['id', 'material_cost'])
+                ->mapWithKeys(fn($f) => [(int) $f->id => (float) ($f->material_cost ?? 0)]);
+
+            $inspectionFindings = collect($inspection->findings ?? [])->values();
+
+            $snapshot = $snapshot->values()->map(function ($finding, $index) use ($pharMaterialById, $inspectionFindings) {
+                $materialCost = (float) ($finding['material_cost'] ?? 0);
+
+                if ($materialCost <= 0) {
+                    $findingId = (int) ($finding['id'] ?? 0);
+                    $materialCost = (float) ($pharMaterialById->get($findingId, 0));
+                }
+
+                if ($materialCost <= 0) {
+                    $jsonFinding = $inspectionFindings->get($index, []);
+                    $materialCost = (float) collect($jsonFinding['phar_materials'] ?? [])
+                        ->sum(fn($m) => (float) ($m['line_total'] ?? 0));
+                }
+
+                $finding['material_cost'] = round($materialCost, 2);
+                return $finding;
+            })->values();
+        }
+
+        $approvedFindings = $snapshot->filter(fn($f) => $approvedIds->contains((int) ($f['id'] ?? 0)))->values();
+        $approvedLabour = round((float) $approvedFindings->sum(fn($f) => (float) ($f['labour_cost'] ?? 0)), 2);
+        $approvedMaterial = round((float) $approvedFindings->sum(fn($f) => (float) ($f['material_cost'] ?? 0)), 2);
+
+        // Fallback for legacy quotations where snapshot values may be incomplete.
+        if ($approvedLabour <= 0) {
+            $approvedLabour = round((float) ($quotation->approved_labour_cost ?? 0), 2);
+        }
+        if ($approvedMaterial <= 0 && (float) ($quotation->approved_material_cost ?? 0) > 0) {
+            $approvedMaterial = round((float) $quotation->approved_material_cost, 2);
+        }
+
+        // Recalculate visits and BDC from approved labour hours (1 visit = 11 working hours)
+        // This ensures approved scope BDC matches the actual approved labour hours, not all-findings hours.
+        $approvedLabourHours = round((float) $approvedFindings->sum(fn($f) => (float) ($f['labour_hours'] ?? 0)), 2);
+        if ($approvedLabourHours <= 0) {
+            $approvedLabourHours = round((float) ($approvedLabour / (float) ($inspection->labour_hourly_rate ?? 165)), 2);
+        }
+        $approvedVisits = max(1, (int) ceil($approvedLabourHours / 11));
+
+        $bdcCalc = new BDCCalculator();
+        $bdcResult = $bdcCalc->calculateWithParams([
+            'travel_distance_km'  => (float) ($inspection->bdc_distance_km ?? null),
+            'travel_time_minutes' => (float) ($inspection->bdc_time_minutes ?? null),
+            'visits_per_year'     => (float) $approvedVisits,
+            'rate_per_km'         => (float) ($inspection->bdc_rate_per_km ?? 1.50),
+            'rate_per_minute'     => (float) ($inspection->bdc_rate_per_minute ?? 1.65),
+        ]);
+        $approvedBdc = round((float) ($bdcResult['bdc_annual'] ?? 0), 2);
+
+        $approvedTotal = round($approvedLabour + $approvedMaterial + $approvedBdc, 2);
+
+        $quotation->update([
+            'approved_labour_cost' => $approvedLabour,
+            'approved_material_cost' => $approvedMaterial,
+            'approved_bdc_cost' => $approvedBdc,
+            'approved_total' => $approvedTotal,
+        ]);
+
+        $inspection->update([
+            'frlc_annual' => $approvedLabour,
+            'fmc_annual' => $approvedMaterial,
+            'bdc_annual' => $approvedBdc,
+            'bdc_visits_per_year' => $approvedVisits,
+            'estimated_task_hours' => $approvedLabourHours,
+            'trc_annual' => $approvedTotal,
+            'trc_monthly' => $approvedTotal,
+            'trc_per_visit' => round($approvedTotal / $approvedVisits, 2),
+            'arp_monthly' => $approvedTotal,
+            'scientific_final_monthly' => $approvedTotal,
+            'scientific_final_annual' => $approvedTotal,
+            'arp_equivalent_final' => $approvedTotal,
+            'base_package_price_snapshot' => $approvedTotal,
+        ]);
+
+        return $inspection->fresh();
     }
 
     /**
@@ -1415,9 +1963,11 @@ class InspectionController extends Controller
                 'rate_per_minute'     => (float) ($inspection->bdc_rate_per_minute ?? 1.65),
             ]);
         } else {
+            // NOTE: hours_per_visit intentionally omitted so the BDCCalculator uses
+            // the system-configured default (e.g. 4.5 h). estimated_task_hours is
+            // the total remediation labour, NOT the duration of a single BDC visit.
             $result = $calc->calculateWithParams([
                 'visits_per_year' => (float) ($inspection->bdc_visits_per_year ?? 1),
-                'hours_per_visit' => (float) ($inspection->estimated_task_hours ?? 5),
             ]);
         }
 

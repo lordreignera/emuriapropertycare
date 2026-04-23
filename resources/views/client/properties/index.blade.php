@@ -101,7 +101,9 @@
                                             <div class="small mt-1 text-success">
                                                 <i class="mdi mdi-check-circle-outline me-1"></i>
                                                 Work Payment: Paid
-                                                @if(($completedInspection->work_payment_cadence ?? '') === 'per_visit')
+                                                @if(($completedInspection->payment_plan ?? '') === 'installment')
+                                                    (50% Deposit Plan)
+                                                @elseif(($completedInspection->work_payment_cadence ?? '') === 'per_visit')
                                                     (Per Visit)
                                                 @elseif(($completedInspection->work_payment_cadence ?? '') === 'full')
                                                     (In Full)
@@ -181,6 +183,14 @@
                                                                 <i class="mdi mdi-calendar-sync me-2 text-success"></i>
                                                                 <strong>Pay Per Visit</strong>
                                                                 <div class="text-muted small">Split across {{ $completedInspection->bdc_visits_per_year ?? '—' }} visits</div>
+                                                            </a>
+                                                        </li>
+                                                        <li>
+                                                            <a class="dropdown-item"
+                                                               href="{{ route('client.inspections.work-payment', ['inspection' => $completedInspection->id, 'plan' => 'installment']) }}">
+                                                                <i class="mdi mdi-percent me-2 text-warning"></i>
+                                                                <strong>Pay 50% Deposit</strong>
+                                                                <div class="text-muted small">Pay half now and half later (works for single-visit jobs)</div>
                                                             </a>
                                                         </li>
                                                         <li><hr class="dropdown-divider"></li>

@@ -155,27 +155,33 @@
                         </div>
                     @endif
 
-                    <form method="POST" action="{{ route('inspections.work-schedule.store', $inspection->id) }}">
-                        @csrf
-                        <p class="text-muted small mb-2">Set or update the {{ $totalVisits }} work visit date(s). Monday – Saturday are accepted (no Sundays).</p>
-                        <div class="row g-2" id="visitDatesContainer">
-                            @for($i = 0; $i < $totalVisits; $i++)
-                            <div class="col-md-3 col-sm-4 col-6">
-                                <label class="form-label small mb-1">Visit {{ $i + 1 }}</label>
-                                <input type="date"
-                                       name="visit_dates[]"
-                                       class="form-control form-control-sm"
-                                       value="{{ $suggestedDates[$i] ?? '' }}"
-                                       required>
+                    @if(!($scheduleLocked ?? false))
+                        <form method="POST" action="{{ route('inspections.work-schedule.store', $inspection->id) }}">
+                            @csrf
+                            <p class="text-muted small mb-2">Set or update the {{ $totalVisits }} work visit date(s). Monday – Saturday are accepted (no Sundays).</p>
+                            <div class="row g-2" id="visitDatesContainer">
+                                @for($i = 0; $i < $totalVisits; $i++)
+                                <div class="col-md-3 col-sm-4 col-6">
+                                    <label class="form-label small mb-1">Visit {{ $i + 1 }}</label>
+                                    <input type="date"
+                                           name="visit_dates[]"
+                                           class="form-control form-control-sm"
+                                           value="{{ $suggestedDates[$i] ?? '' }}"
+                                           required>
+                                </div>
+                                @endfor
                             </div>
-                            @endfor
+                            <div class="mt-3">
+                                <button type="submit" class="btn btn-success btn-sm">
+                                    <i class="mdi mdi-content-save me-1"></i>Save Visit Schedule
+                                </button>
+                            </div>
+                        </form>
+                    @else
+                        <div class="alert alert-warning mb-0">
+                            Visit schedule is locked because maintenance work has already started.
                         </div>
-                        <div class="mt-3">
-                            <button type="submit" class="btn btn-success btn-sm">
-                                <i class="mdi mdi-content-save me-1"></i>Save Visit Schedule
-                            </button>
-                        </div>
-                    </form>
+                    @endif
                 </div>
             </div>
             @endif
@@ -322,6 +328,56 @@
                 $inlineFindingsRaw = is_array($inspection->findings)
                     ? $inspection->findings
                     : (json_decode($inspection->getRawOriginal('findings') ?? '[]', true) ?? []);
+
+                $quotationSnapshot = collect($activeQuotation->findings_snapshot ?? [])->values();
+                $quotationApprovedIds = collect($activeQuotation->approved_finding_ids ?? [])->map(fn($id) => (int) $id);
+                $makeFindingKey = function ($issueOrTask, $category) {
+                    $left = strtolower(trim((string) $issueOrTask));
+                    $right = strtolower(trim((string) $category));
+                    return $left . '|' . $right;
+                };
+
+                $showApprovedScopeOnly =
+                    !empty($activeQuotation) &&
+                    (($activeQuotation->status ?? null) === 'approved') &&
+                    (
+                        (($inspection->quotation_status ?? null) === 'approved') ||
+                        (($inspection->quotation_status ?? null) === 'shared')
+                    );
+
+                if ($showApprovedScopeOnly) {
+                    $allInline = collect($inlineFindingsRaw)->values();
+                    $approvedIdMap = $quotationApprovedIds->flip();
+
+                    $filteredById = $allInline
+                        ->filter(fn ($f) => $approvedIdMap->has((int) ($f['id'] ?? 0)))
+                        ->values();
+
+                    if ($filteredById->isNotEmpty()) {
+                        $inlineFindingsRaw = $filteredById->all();
+                    } else {
+                        $approvedScopeKeys = $quotationSnapshot
+                            ->filter(fn($f) => $quotationApprovedIds->contains((int) ($f['id'] ?? 0)))
+                            ->map(fn($f) => $makeFindingKey(
+                                $f['task_question'] ?? ($f['issue'] ?? ''),
+                                $f['category'] ?? ''
+                            ))
+                            ->filter(fn($k) => $k !== '|')
+                            ->unique()
+                            ->values();
+
+                        $inlineFindingsRaw = $allInline
+                            ->filter(function ($f) use ($approvedScopeKeys, $makeFindingKey) {
+                                $key = $makeFindingKey(
+                                    $f['task_question'] ?? ($f['issue'] ?? ''),
+                                    $f['phar_category'] ?? ($f['category'] ?? '')
+                                );
+                                return $approvedScopeKeys->contains($key);
+                            })
+                            ->values()
+                            ->all();
+                    }
+                }
 
                 $severityOrder = ['critical','high','noi_protection','medium','low'];
                 $severityMeta  = [

@@ -5,12 +5,17 @@ namespace App\Http\Controllers\Client;
 use App\Http\Controllers\Controller;
 use App\Models\Property;
 use App\Models\Inspection;
+use App\Models\InspectionQuotation;
+use App\Models\User;
+use App\Notifications\ClientQuotationApprovedNotification;
 use App\Services\AgreementScheduleService;
+use App\Services\BDCCalculator;
 use App\Services\InspectionInvoiceSyncService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Str;
 
 class InspectionController extends Controller
@@ -72,16 +77,32 @@ class InspectionController extends Controller
     public function report(Inspection $inspection)
     {
         $this->authorizeInspection($inspection);
+        $activeQuotation = null;
 
-        if (($inspection->status ?? null) === 'completed') {
-            $inspection = $this->agreementScheduleService->refresh($inspection);
+        if (!empty($inspection->active_quotation_id)) {
+            $activeQuotation = InspectionQuotation::query()
+                ->where('id', $inspection->active_quotation_id)
+                ->where('inspection_id', $inspection->id)
+                ->first();
         }
+
+        if (($inspection->status ?? null) !== 'completed') {
+            if ($activeQuotation) {
+                return redirect()->route('client.inspections.quotation', $inspection->id)
+                    ->with('info', 'Review the quotation first. The report and agreement become available after approval and assessment completion.');
+            }
+
+            return redirect()->route('client.inspections.index')
+                ->with('info', 'The report is not available yet. It will appear after assessment completion.');
+        }
+
+        $inspection = $this->agreementScheduleService->refresh($inspection);
 
         $findings = \App\Models\PHARFinding::where('inspection_id', $inspection->id)
             ->orderBy('id')
             ->get();
 
-        return view('client.inspections.report', compact('inspection', 'findings'));
+        return view('client.inspections.report', compact('inspection', 'findings', 'activeQuotation'));
     }
 
     public function agreement(Inspection $inspection)
@@ -193,9 +214,260 @@ class InspectionController extends Controller
     }
 
     /**
+     * Show client quotation review page (pre-completion flow).
+     */
+    public function quotation(Inspection $inspection)
+    {
+        $this->authorizeInspection($inspection);
+
+        $quotation = InspectionQuotation::query()
+            ->where('inspection_id', $inspection->id)
+            ->where('id', $inspection->active_quotation_id)
+            ->first();
+
+        if (!$quotation) {
+            if (($inspection->status ?? null) === 'completed') {
+                return redirect()->route('client.inspections.report', $inspection->id)
+                    ->with('error', 'No active quotation is available for this completed assessment.');
+            }
+
+            return redirect()->route('client.inspections.index')
+                ->with('error', 'No active quotation is available yet.');
+        }
+
+        if (($quotation->status ?? null) === 'expired') {
+            return redirect()->route('client.inspections.index')
+                ->with('error', 'This quotation has expired. Please contact support.');
+        }
+
+        if (($quotation->status ?? null) === 'shared') {
+            $quotation->update(['status' => 'client_reviewing']);
+            $inspection->update(['quotation_status' => 'client_reviewing']);
+        }
+
+        $snapshotFindings = collect($quotation->findings_snapshot ?? [])->values();
+
+        // Backward-compatibility for legacy quotations where snapshot material_cost was
+        // saved as 0. Recover from PHARFinding first, then from inspection findings JSON.
+        if ($snapshotFindings->sum(fn($f) => (float) ($f['material_cost'] ?? 0)) <= 0) {
+            $pharMaterialById = $inspection->pharFindings()
+                ->get(['id', 'material_cost'])
+                ->mapWithKeys(fn($f) => [(int) $f->id => (float) ($f->material_cost ?? 0)]);
+
+            $inspectionFindings = collect($inspection->findings ?? [])->values();
+
+            $snapshotFindings = $snapshotFindings->values()->map(function ($finding, $index) use ($pharMaterialById, $inspectionFindings) {
+                $materialCost = (float) ($finding['material_cost'] ?? 0);
+
+                if ($materialCost <= 0) {
+                    $findingId = (int) ($finding['id'] ?? 0);
+                    $materialCost = (float) ($pharMaterialById->get($findingId, 0));
+                }
+
+                if ($materialCost <= 0) {
+                    $jsonFinding = $inspectionFindings->get($index, []);
+                    $materialCost = (float) collect($jsonFinding['phar_materials'] ?? [])
+                        ->sum(fn($m) => (float) ($m['line_total'] ?? 0));
+                }
+
+                $finding['material_cost'] = round($materialCost, 2);
+                return $finding;
+            })->values();
+        }
+
+        $approvedIds = collect($quotation->approved_finding_ids ?? [])->map(fn ($id) => (int) $id)->all();
+        $isLocked = ($quotation->fresh()->status ?? null) === 'approved';
+
+        return view('client.inspections.quotation', [
+            'inspection' => $inspection,
+            'quotation' => $quotation->fresh(),
+            'snapshotFindings' => $snapshotFindings,
+            'approvedIds' => $approvedIds,
+            'isLocked' => $isLocked,
+        ]);
+    }
+
+    /**
+     * Save client quotation response and recalculate inspection totals from selected findings.
+     */
+    public function respondQuotation(Request $request, Inspection $inspection)
+    {
+        $this->authorizeInspection($inspection);
+
+        $quotation = InspectionQuotation::query()
+            ->where('inspection_id', $inspection->id)
+            ->where('id', $inspection->active_quotation_id)
+            ->first();
+
+        if (!$quotation) {
+            return redirect()->route('client.inspections.index')
+                ->with('error', 'No active quotation is available to respond to.');
+        }
+
+        if (($quotation->status ?? null) === 'approved') {
+            return redirect()->route('client.inspections.index')
+                ->with('info', 'This quotation has already been approved. Wait for the updated report and agreement from admin.');
+        }
+
+        $validated = $request->validate([
+            'approved_finding_ids' => 'nullable|array',
+            'approved_finding_ids.*' => 'integer',
+            'client_notes' => 'nullable|string|max:3000',
+        ]);
+
+        $allFindings = collect($quotation->findings_snapshot ?? [])->values();
+
+        // Repair legacy snapshot material values (saved as 0 in older records)
+        // so approval math stays scoped to the selected findings.
+        if ($allFindings->sum(fn ($f) => (float) ($f['material_cost'] ?? 0)) <= 0) {
+            $pharMaterialById = $inspection->pharFindings()
+                ->get(['id', 'material_cost'])
+                ->mapWithKeys(fn ($f) => [(int) $f->id => (float) ($f->material_cost ?? 0)]);
+
+            $inspectionFindings = collect($inspection->findings ?? [])->values();
+
+            $allFindings = $allFindings->values()->map(function ($finding, $index) use ($pharMaterialById, $inspectionFindings) {
+                $materialCost = (float) ($finding['material_cost'] ?? 0);
+
+                if ($materialCost <= 0) {
+                    $findingId = (int) ($finding['id'] ?? 0);
+                    $materialCost = (float) ($pharMaterialById->get($findingId, 0));
+                }
+
+                if ($materialCost <= 0) {
+                    $jsonFinding = $inspectionFindings->get($index, []);
+                    $materialCost = (float) collect($jsonFinding['phar_materials'] ?? [])
+                        ->sum(fn($m) => (float) ($m['line_total'] ?? 0));
+                }
+
+                $finding['material_cost'] = round($materialCost, 2);
+                return $finding;
+            })->values();
+        }
+
+        $snapshotIds = $allFindings
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->values();
+
+        $submittedApprovedIds = collect($validated['approved_finding_ids'] ?? [])
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        $approvedIds = $submittedApprovedIds
+            ->filter(fn ($id) => $snapshotIds->contains($id))
+            ->values();
+
+        if ($approvedIds->isEmpty()) {
+            return redirect()->route('client.inspections.quotation', $inspection->id)
+                ->with('error', 'Please select at least one finding. Unselected findings are stored as deferred when you submit.');
+        }
+
+        $deferredIds = $snapshotIds->diff($approvedIds)->values();
+        $approvedFindings = $allFindings->filter(fn ($f) => $approvedIds->contains((int) ($f['id'] ?? 0)))->values();
+
+        $approvedLabour = round((float) $approvedFindings->sum(fn ($f) => (float) ($f['labour_cost'] ?? 0)), 2);
+        $approvedMaterial = round((float) $approvedFindings->sum(fn ($f) => (float) ($f['material_cost'] ?? 0)), 2);
+        
+        // Recalculate visits from approved labour hours (1 visit = 11 working hours)
+        // This ensures BDC is derived from approved findings scope, not original all-findings scope.
+        $approvedLabourHours = round((float) $approvedFindings->sum(fn ($f) => (float) ($f['labour_hours'] ?? 0)), 2);
+        if ($approvedLabourHours <= 0) {
+            $approvedLabourHours = round((float) ($approvedLabour / (float) ($inspection->labour_hourly_rate ?? 165)), 2);
+        }
+        $approvedVisits = max(1, (int) ceil($approvedLabourHours / 11));
+        
+        // Recalculate BDC using approved visits and stored travel parameters
+        $bdcCalc = new BDCCalculator();
+        $bdcResult = $bdcCalc->calculateWithParams([
+            'travel_distance_km'  => (float) ($inspection->bdc_distance_km ?? null),
+            'travel_time_minutes' => (float) ($inspection->bdc_time_minutes ?? null),
+            'visits_per_year'     => (float) $approvedVisits,
+            'rate_per_km'         => (float) ($inspection->bdc_rate_per_km ?? 1.50),
+            'rate_per_minute'     => (float) ($inspection->bdc_rate_per_minute ?? 1.65),
+        ]);
+        $approvedBdc = round((float) ($bdcResult['bdc_annual'] ?? 0), 2);
+        
+        $approvedTotal = round($approvedLabour + $approvedMaterial + $approvedBdc, 2);
+
+        $quotationStatus = 'approved';
+        $inspectionQuotationStatus = 'approved';
+
+        DB::transaction(function () use (
+            $quotation,
+            $validated,
+            $approvedIds,
+            $deferredIds,
+            $approvedLabour,
+            $approvedMaterial,
+            $approvedBdc,
+            $approvedTotal,
+            $quotationStatus,
+            $inspection,
+            $inspectionQuotationStatus,
+            $approvedVisits,
+            $approvedLabourHours
+        ) {
+            $quotation->update([
+                'status' => $quotationStatus,
+                'approved_finding_ids' => $approvedIds->all(),
+                'deferred_finding_ids' => $deferredIds->all(),
+                'approved_labour_cost' => $approvedLabour,
+                'approved_material_cost' => $approvedMaterial,
+                'approved_bdc_cost' => $approvedBdc,
+                'approved_total' => $approvedTotal,
+                'client_notes' => $validated['client_notes'] ?? null,
+                'client_responded_at' => now(),
+            ]);
+
+            $trcPerVisit = round($approvedTotal / $approvedVisits, 2);
+
+            $inspection->update([
+                'frlc_annual' => $approvedLabour,
+                'fmc_annual' => $approvedMaterial,
+                'bdc_annual' => $approvedBdc,
+                'trc_annual' => $approvedTotal,
+                'trc_monthly' => $approvedTotal,
+                'trc_per_visit' => $trcPerVisit,
+                'bdc_visits_per_year' => $approvedVisits,
+                'estimated_task_hours' => $approvedLabourHours,
+                'arp_monthly' => $approvedTotal,
+                'scientific_final_monthly' => $approvedTotal,
+                'scientific_final_annual' => $approvedTotal,
+                'arp_equivalent_final' => $approvedTotal,
+                'base_package_price_snapshot' => $approvedTotal,
+                'quotation_status' => $inspectionQuotationStatus,
+                'quotation_approved_at' => now(),
+            ]);
+        });
+
+        $propertyName = (string) ($inspection->property?->property_name ?? 'Property');
+        $adminRecipients = User::role(['Super Admin', 'Administrator'])
+            ->get()
+            ->unique('id')
+            ->values();
+
+        if ($adminRecipients->isNotEmpty()) {
+            Notification::send($adminRecipients, new ClientQuotationApprovedNotification(
+                inspectionId: (int) $inspection->id,
+                propertyId: $inspection->property_id ? (int) $inspection->property_id : null,
+                propertyName: $propertyName,
+                quoteNumber: (string) ($quotation->quote_number ?? 'N/A'),
+                approvedFindings: (int) $approvedIds->count(),
+            ));
+        }
+
+        return redirect()->route('client.inspections.index')
+            ->with('success', 'Quotation submitted successfully. Admin will now finalize the report and agreement based on your approved findings.');
+    }
+
+    /**
      * Show Stripe payment page for starting work.
-     * plan=full  → charge full ARP total at once
-     * plan=installment → charge ARP/12 monthly starting now
+     * plan=full        → charge full ARP total at once
+     * plan=per_visit   → charge visit 1 amount (TRC / visits)
+     * plan=installment → charge 50% deposit now, remaining 50% later
      */
     public function workPayment(Request $request, Inspection $inspection)
     {
@@ -212,14 +484,19 @@ class InspectionController extends Controller
         }
 
         $plan = $request->query('plan', 'full');
-        if (!in_array($plan, ['full', 'per_visit'], true)) {
+        if (!in_array($plan, ['full', 'per_visit', 'installment'], true)) {
             $plan = 'full';
         }
 
         $arpTotal    = (float) ($inspection->trc_annual ?? ($this->resolveMonthlyBase($inspection) * 12));
         $totalVisits = max(1, (int) ($inspection->bdc_visits_per_year ?? 1));
         $perVisit    = round($arpTotal / $totalVisits, 2);
-        $chargeAmount = $plan === 'full' ? round($arpTotal, 2) : $perVisit;
+        $depositAmount = round($arpTotal * 0.5, 2);
+        $chargeAmount = match ($plan) {
+            'per_visit' => $perVisit,
+            'installment' => $depositAmount,
+            default => round($arpTotal, 2),
+        };
 
         if ($chargeAmount <= 0) {
             return redirect()->route('client.inspections.report', $inspection->id)
@@ -246,6 +523,7 @@ class InspectionController extends Controller
             'arpTotal'       => round($arpTotal, 2),
             'totalVisits'    => $totalVisits,
             'perVisit'       => $perVisit,
+            'depositAmount'  => $depositAmount,
             'chargeAmount'   => $chargeAmount,
             'clientSecret'   => $paymentIntent->client_secret,
             'stripeKey'      => config('cashier.key'),
@@ -261,7 +539,7 @@ class InspectionController extends Controller
 
         $validated = $request->validate([
             'payment_intent_id' => 'required|string',
-            'plan'              => 'required|in:full,per_visit',
+            'plan'              => 'required|in:full,per_visit,installment',
         ]);
 
         DB::beginTransaction();
@@ -277,18 +555,19 @@ class InspectionController extends Controller
             $arpTotal    = (float) ($inspection->trc_annual ?? ($this->resolveMonthlyBase($inspection) * 12));
             $totalVisits = max(1, (int) ($inspection->bdc_visits_per_year ?? 1));
             $perVisit    = round($arpTotal / $totalVisits, 2);
+            $depositAmount = round($arpTotal * 0.5, 2);
 
             $fields = [
                 'work_payment_status'          => 'paid',
                 'work_payment_paid_at'         => now(),
                 'work_payment_amount'          => ((float) $paymentIntent->amount_received) / 100,
-                'work_payment_cadence'         => $plan,
+                'work_payment_cadence'         => $plan === 'installment' ? 'monthly' : $plan,
                 'work_stripe_payment_intent_id'=> $paymentIntent->id,
                 'payment_plan'                 => $plan,
-                'installment_months'           => $plan === 'per_visit' ? $totalVisits : 1,
+                'installment_months'           => $plan === 'per_visit' ? $totalVisits : ($plan === 'installment' ? 2 : 1),
                 'installments_paid'            => 1,
                 'arp_total_locked'             => round($arpTotal, 2),
-                'installment_amount'           => $plan === 'per_visit' ? $perVisit : round($arpTotal, 2),
+                'installment_amount'           => $plan === 'per_visit' ? $perVisit : ($plan === 'installment' ? $depositAmount : round($arpTotal, 2)),
                 'arp_fully_paid_at'            => $plan === 'full' ? now() : null,
                 'next_installment_due_date'    => null,
             ];
@@ -337,7 +616,8 @@ class InspectionController extends Controller
                 ->with('error', 'Work has not been started yet.');
         }
 
-        if (($inspection->payment_plan ?? 'full') !== 'per_visit') {
+        $paymentPlan = (string) ($inspection->payment_plan ?? 'full');
+        if (!in_array($paymentPlan, ['per_visit', 'installment'], true)) {
             return redirect()->route('client.inspections.report', $inspection->id)
                 ->with('info', 'This inspection is on a full-payment plan.');
         }
@@ -362,6 +642,7 @@ class InspectionController extends Controller
                 'property_id'        => $inspection->property_id,
                 'payment_type'       => 'per_visit',
                 'visit_number'       => $installmentNumber,
+                'payment_plan'       => $paymentPlan,
                 'client_user_id'     => Auth::id(),
             ],
         ]);
@@ -373,6 +654,7 @@ class InspectionController extends Controller
             'totalInstallments' => $total,
             'arpTotal'          => (float) ($inspection->arp_total_locked ?? 0),
             'amountPaidSoFar'   => round($installAmount * $paid, 2),
+            'paymentPlan'       => $paymentPlan,
             'clientSecret'      => $paymentIntent->client_secret,
             'stripeKey'         => config('cashier.key'),
         ]);
@@ -385,8 +667,8 @@ class InspectionController extends Controller
     {
         $this->authorizeInspection($inspection);
 
-        if (($inspection->payment_plan ?? 'full') !== 'per_visit') {
-            abort(403, 'This inspection is not on a per-visit payment plan.');
+        if (!in_array(($inspection->payment_plan ?? 'full'), ['per_visit', 'installment'], true)) {
+            abort(403, 'This inspection is not on an installment-based payment plan.');
         }
 
         $validated = $request->validate([
@@ -417,9 +699,12 @@ class InspectionController extends Controller
             DB::commit();
 
             $remaining = $total - $paid;
+            $isPerVisitPlan = ($inspection->payment_plan ?? 'full') === 'per_visit';
             $message   = $paid >= $total
-                ? 'Final visit payment received — project cost fully settled!'
-                : "Visit {$paid} of {$total} paid. {$remaining} visit(s) remaining.";
+                ? 'Final payment received — project cost fully settled!'
+                : ($isPerVisitPlan
+                    ? "Visit {$paid} of {$total} paid. {$remaining} visit(s) remaining."
+                    : "Installment {$paid} of {$total} paid. {$remaining} installment(s) remaining.");
 
             return response()->json([
                 'success'  => true,

@@ -16,6 +16,9 @@
                             @elseif(request('view') === 'needs-schedule')
                                 <h4 class="card-title mb-0"><i class="mdi mdi-calendar-clock me-2 text-primary"></i>Project Scheduling</h4>
                                 <p class="text-muted small mb-0">Agreement countersigned — visit dates not yet set</p>
+                            @elseif(request('view') === 'awaiting-quotation')
+                                <h4 class="card-title mb-0"><i class="mdi mdi-timer-sand me-2 text-info"></i>Pre-assessed Properties</h4>
+                                <p class="text-muted small mb-0">Includes saved draft assessments (in progress) and quotations waiting for client approval response</p>
                             @else
                                 <h4 class="card-title mb-0">Inspections Management</h4>
                                 <p class="text-muted small mb-0">Scheduled and paid inspections</p>
@@ -242,6 +245,27 @@
                                                 <i class="mdi {{ $isInProgress ? 'mdi-play-circle-outline' : 'mdi-clipboard-check' }} me-1"></i>
                                                 {{ $isInProgress ? 'Continue Inspection' : 'Start Inspection' }}
                                             </a>
+
+                                            @if(request('view') === 'awaiting-quotation' && ($inspection->quotation_status ?? null) === 'approved')
+                                            <a href="{{ route('inspections.phar-data', $inspection->id) }}"
+                                               class="btn btn-primary fw-bold px-3"
+                                               title="Open PHAR and complete assessment">
+                                                <i class="mdi mdi-check-decagram me-1"></i> Open PHAR &amp; Complete
+                                            </a>
+                                            @endif
+
+                                            @if($inspection->status === 'scheduled' && !$inspection->scheduled_date)
+                                            <button type="button"
+                                                    class="btn btn-outline-secondary"
+                                                    onclick="openAssessmentScheduleModal(
+                                                        {{ $inspection->id }},
+                                                        '{{ addslashes($inspection->property?->property_name ?? '') }}',
+                                                        '{{ optional($inspection->scheduled_date)->format('Y-m-d\\TH:i') }}'
+                                                    )"
+                                                    title="Set assessment date">
+                                                <i class="mdi mdi-calendar-edit me-1"></i> Set Date
+                                            </button>
+                                            @endif
                                             @endif
                                             @if(request('view') === 'pending-etogo' && !$inspection->etogo_signed_at)
                                             <form method="POST" action="{{ route('inspections.agreement.countersign', $inspection) }}" class="d-inline"
@@ -277,6 +301,8 @@
                                                 No properties awaiting Etogo countersignature
                                             @elseif(request('view') === 'needs-schedule')
                                                 No properties awaiting project scheduling
+                                            @elseif(request('view') === 'awaiting-quotation')
+                                                No pre-assessed properties found (no draft/in-progress or awaiting quotation response)
                                             @elseif(request('status') == 'scheduled')
                                                 No scheduled inspections found
                                             @elseif(request('status') == 'in_progress')
@@ -317,11 +343,11 @@
             </div>
             <form id="scheduleForm" method="POST">
                 @csrf
-                @method('PUT')
                 <div class="modal-body" style="background-color: #ffffff !important; color: #000000 !important;">
+                    <p class="small text-muted mb-2">Property: <strong id="schedulePropertyName">-</strong></p>
                     <div class="form-group">
-                        <label for="inspection_scheduled_at" style="color: #000000 !important;">Inspection Date & Time <span class="text-danger">*</span></label>
-                        <input type="datetime-local" name="inspection_scheduled_at" id="inspection_scheduled_at" 
+                        <label for="scheduled_date" style="color: #000000 !important;">Inspection Date & Time <span class="text-danger">*</span></label>
+                        <input type="datetime-local" name="scheduled_date" id="scheduled_date" 
                                class="form-control" required min="{{ date('Y-m-d\TH:i') }}"
                                style="background-color: #ffffff !important; color: #000000 !important;">
                     </div>
@@ -532,6 +558,18 @@ function assignInspector(inspectionId, propertyId, propertyName, projectManagerI
 
     const modal = new bootstrap.Modal(document.getElementById('assignTeamModal'));
     modal.show();
+}
+
+function openAssessmentScheduleModal(inspectionId, propertyName, currentDateTime) {
+    const form = document.getElementById('scheduleForm');
+    const propertyNameNode = document.getElementById('schedulePropertyName');
+    const dateInput = document.getElementById('scheduled_date');
+
+    form.action = '/inspections/' + inspectionId + '/assessment-schedule';
+    propertyNameNode.textContent = propertyName || 'Property';
+    dateInput.value = currentDateTime || '';
+
+    new bootstrap.Modal(document.getElementById('scheduleModal')).show();
 }
 
 $(document).ready(function() {

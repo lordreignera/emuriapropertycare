@@ -259,19 +259,50 @@
                                 </a>
                             @endif
 
-                            {{-- Report + Property --}}
+                            {{-- Quotation/Report + Property --}}
                             <div class="d-flex gap-2">
-                                @if($insp)
+                                @if($insp && ($insp->status ?? null) === 'completed')
                                     <a href="{{ route('client.inspections.report', $insp->id) }}"
                                        class="btn btn-sm btn-outline-primary flex-grow-1">
                                         <i class="mdi mdi-eye me-1"></i> View Report
                                     </a>
+                                @elseif($insp && !empty($insp->active_quotation_id) && in_array(($insp->quotation_status ?? ''), ['shared', 'client_reviewing', 'approved'], true))
+                                    @if(($insp->quotation_status ?? null) === 'approved')
+                                        <div class="d-flex flex-column gap-1 flex-grow-1">
+                                            <span class="badge bg-warning text-dark px-2 py-2 text-wrap">
+                                                <i class="mdi mdi-clock-outline me-1"></i>Awaiting Admin Finalization
+                                            </span>
+                                            <a href="{{ route('client.inspections.quotation', $insp->id) }}"
+                                               class="btn btn-sm btn-link text-muted p-0">
+                                                <small>View approved quotation</small>
+                                            </a>
+                                        </div>
+                                    @else
+                                        <a href="{{ route('client.inspections.quotation', $insp->id) }}"
+                                           class="btn btn-sm btn-outline-primary flex-grow-1">
+                                            <i class="mdi mdi-file-check-outline me-1"></i>
+                                            Review Quotation
+                                        </a>
+                                    @endif
                                 @endif
                                 <a href="{{ route('client.properties.show', $project->property_id) }}"
                                    class="btn btn-sm btn-outline-secondary">
                                     <i class="mdi mdi-home"></i>
                                 </a>
                             </div>
+
+                            @php
+                                $completedLogCount = ($insp && $insp->relationLoaded('maintenanceVisitLogs'))
+                                    ? $insp->maintenanceVisitLogs->where('status', 'completed')->count()
+                                    : 0;
+                            @endphp
+                            @if($insp && ($insp->status ?? null) === 'completed' && $completedLogCount > 0)
+                                <a href="{{ route('client.projects.log-sheet', [$project->id, $insp->id]) }}"
+                                   class="btn btn-sm btn-outline-success w-100">
+                                    <i class="mdi mdi-clipboard-check-outline me-1"></i>
+                                    View Completed Log Sheet ({{ $completedLogCount }})
+                                </a>
+                            @endif
                         </div>
                     </div>
                 </div>

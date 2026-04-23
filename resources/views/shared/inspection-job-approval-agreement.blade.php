@@ -18,17 +18,85 @@
         ? $agreementInspection->completed_date->format('Y-m-d')
         : '______________________________';
 
-    // Resolve actual costs from this inspection's findings first (property-specific),
-    // then fallback to persisted annual snapshots where needed.
-    $agreementFindings = is_array($agreementInspection->findings)
+    // Resolve findings scope. When an approved quotation exists, show only the
+    // approved findings/tasks in the contract (ID-first, then key fallback).
+    $agreementFindings = collect(is_array($agreementInspection->findings)
         ? $agreementInspection->findings
-        : (json_decode($agreementInspection->getRawOriginal('findings') ?? '[]', true) ?? []);
+        : (json_decode($agreementInspection->getRawOriginal('findings') ?? '[]', true) ?? []))
+        ->values();
 
-    $agreementLabourHours = collect($agreementFindings)->sum(function ($finding) {
+    $agreementQuotation = null;
+    if (!empty($agreementInspection->active_quotation_id)) {
+        $agreementQuotation = \App\Models\InspectionQuotation::query()
+            ->where('id', $agreementInspection->active_quotation_id)
+            ->where('inspection_id', $agreementInspection->id)
+            ->first();
+    }
+
+    if (($agreementQuotation->status ?? null) !== 'approved') {
+        $latestApprovedQuotation = \App\Models\InspectionQuotation::query()
+            ->where('inspection_id', $agreementInspection->id)
+            ->where('status', 'approved')
+            ->orderBy('id', 'desc')
+            ->first();
+        if ($latestApprovedQuotation) {
+            $agreementQuotation = $latestApprovedQuotation;
+        }
+    }
+
+    $makeAgreementFindingKey = function ($issueOrTask, $category) {
+        $left = strtolower(trim((string) $issueOrTask));
+        $right = strtolower(trim((string) $category));
+        return $left . '|' . $right;
+    };
+
+    $agreementApprovedIds = collect($agreementQuotation->approved_finding_ids ?? [])
+        ->map(fn($id) => (int) $id)
+        ->filter(fn($id) => $id > 0)
+        ->values();
+
+    $showApprovedScopeOnly =
+        !empty($agreementQuotation) &&
+        (($agreementQuotation->status ?? null) === 'approved') &&
+        $agreementApprovedIds->isNotEmpty();
+
+    if ($showApprovedScopeOnly) {
+        $approvedIdMap = $agreementApprovedIds->flip();
+        $filteredById = $agreementFindings
+            ->filter(fn($f) => $approvedIdMap->has((int) ($f['id'] ?? 0)))
+            ->values();
+
+        if ($filteredById->isNotEmpty()) {
+            $agreementFindings = $filteredById;
+        } else {
+            $agreementSnapshot = collect($agreementQuotation->findings_snapshot ?? [])->values();
+            $approvedScopeKeys = $agreementSnapshot
+                ->filter(fn($f) => $agreementApprovedIds->contains((int) ($f['id'] ?? 0)))
+                ->map(fn($f) => $makeAgreementFindingKey(
+                    $f['task_question'] ?? ($f['issue'] ?? ''),
+                    $f['category'] ?? ''
+                ))
+                ->filter(fn($k) => $k !== '|')
+                ->unique()
+                ->values();
+
+            $agreementFindings = $agreementFindings
+                ->filter(function ($f) use ($approvedScopeKeys, $makeAgreementFindingKey) {
+                    $key = $makeAgreementFindingKey(
+                        $f['task_question'] ?? ($f['issue'] ?? ''),
+                        $f['phar_category'] ?? ($f['category'] ?? '')
+                    );
+                    return $approvedScopeKeys->contains($key);
+                })
+                ->values();
+        }
+    }
+
+    $agreementLabourHours = $agreementFindings->sum(function ($finding) {
         return (float) ($finding['phar_labour_hours'] ?? 0);
     });
 
-    $agreementMaterialsFromFindings = collect($agreementFindings)->sum(function ($finding) {
+    $agreementMaterialsFromFindings = $agreementFindings->sum(function ($finding) {
         return collect($finding['phar_materials'] ?? [])->sum(function ($material) {
             return (float) ($material['line_total'] ?? 0);
         });
@@ -57,6 +125,12 @@
     $agreementDeposit  = round($agreementTotal * 0.5,  2);
     $agreementProgress = round($agreementTotal * 0.25, 2);
     $agreementFinal    = max(round($agreementTotal - $agreementDeposit - $agreementProgress, 2), 0);
+    $agreementPaymentPlan = (string) ($agreementInspection->payment_plan ?? 'full');
+    $agreementWorkPaymentStatus = (string) ($agreementInspection->work_payment_status ?? 'pending');
+    $agreementWorkPaymentAmount = (float) ($agreementInspection->work_payment_amount ?? 0);
+    $agreementWorkPaymentPaidAt = $agreementInspection->work_payment_paid_at
+        ? $agreementInspection->work_payment_paid_at->format('Y-m-d h:i A')
+        : null;
 
     $agreementStartDate = $agreementInspection->planned_start_date
         ? $agreementInspection->planned_start_date->format('Y-m-d')
@@ -91,6 +165,36 @@
     <div>• Client-requested specific scope</div>
     <div>• Site inspection findings</div>
     <div style="margin-top:6px;">Included Services: findings → remediation actions (as listed in this report).</div>
+    
+    @php
+        $scopeFindings = $agreementFindings->filter(function ($f) {
+            return !empty($f['issue'] ?? null) || !empty($f['task_question'] ?? null);
+        })->values();
+    @endphp
+    
+    @if($scopeFindings->isNotEmpty())
+        <div style="margin-top:8px;"><strong>Detailed Findings List:</strong></div>
+        <ol style="margin:4px 0 6px 16px; font-size:{{ !empty($pdfMode) ? '10px' : '13px' }};">
+        @foreach($scopeFindings as $idx => $finding)
+            <li style="margin-bottom:3px;">
+                <strong>{{ $finding['issue'] ?? ($finding['task_question'] ?? 'Finding') }}</strong>
+                @if(!empty($finding['system']))
+                    <span style="color:#666;">({{ $finding['system'] }}{{ !empty($finding['subsystem']) ? ' › '.$finding['subsystem'] : '' }})</span>
+                @endif
+                @if(!empty($finding['phar_labour_hours']))
+                    <br><span style="color:#666; font-size:0.9em;">Labour: {{ number_format((float)$finding['phar_labour_hours'], 1) }} hrs</span>
+                @endif
+                @php
+                    $findingMatCost = collect($finding['phar_materials'] ?? [])->sum(fn($m) => (float)($m['line_total'] ?? 0));
+                @endphp
+                @if($findingMatCost > 0)
+                    <br><span style="color:#666; font-size:0.9em;">Materials: ${{ number_format($findingMatCost, 2) }}</span>
+                @endif
+            </li>
+        @endforeach
+        </ol>
+    @endif
+    
     <p style="margin-top:6px;">Locked Scope Clause: The scope of work is fixed upon execution of this Agreement. Etogo is only responsible for the tasks explicitly listed above. Any additional work, discovery of hidden defects, or requested modifications must follow the formal Change Order Process (Section 5).</p>
 
     <h4 style="margin:10px 0 4px 0;">3. PROJECT TIMELINE &amp; WORK SCHEDULE</h4>
@@ -138,8 +242,28 @@
     <div>• TOTAL PROJECT COST: ${{ number_format($agreementTotal, 2) }}</div>
     <div style="margin-top:6px;"><strong>B. Payment Structure:</strong></div>
     <div>1. Deposit (50%): ${{ number_format($agreementDeposit, 2) }} (Required to schedule and mobilize)</div>
-    <div>2. Progress Payment: ${{ number_format($agreementProgress, 2) }} (Due upon: ____________________)</div>
+    <div>2. Progress Payment: ${{ number_format($agreementProgress, 2) }} (Due at agreed milestone or before final close-out)</div>
     <div>3. Final Payment: ${{ number_format($agreementFinal, 2) }} (Due immediately upon completion)</div>
+    @if($agreementPaymentPlan === 'installment' && $agreementWorkPaymentStatus === 'paid')
+        <div style="margin-top:6px; color:#166534;"><strong>Deposit Status:</strong> 50% deposit paid by client
+            @if($agreementWorkPaymentAmount > 0)
+                (Received: ${{ number_format($agreementWorkPaymentAmount, 2) }})
+            @endif
+            @if(!empty($agreementWorkPaymentPaidAt))
+                on {{ $agreementWorkPaymentPaidAt }}
+            @endif
+            .</div>
+    @elseif($agreementWorkPaymentStatus === 'paid')
+        <div style="margin-top:6px; color:#166534;"><strong>Payment Status:</strong> Client payment confirmed
+            @if($agreementWorkPaymentAmount > 0)
+                (Received: ${{ number_format($agreementWorkPaymentAmount, 2) }})
+            @endif
+            @if(!empty($agreementWorkPaymentPaidAt))
+                on {{ $agreementWorkPaymentPaidAt }}
+            @endif
+            .</div>
+    @endif
+    <p style="margin:6px 0 0 0;"><em>Single-visit jobs may also use a two-part structure: 50% deposit before mobilization and 50% balance payment after service completion.</em></p>
     <p style="margin-top:6px;">Payment Clause: Work will not commence, and the project will not be placed on the Etogo master schedule, until the required deposit is received in cleared funds. Etogo reserves the right to withhold final deliverables, reports, or warranties until full payment is settled.</p>
 
     <h4 style="margin:10px 0 4px 0;">5. CHANGE ORDER PROCESS</h4>
