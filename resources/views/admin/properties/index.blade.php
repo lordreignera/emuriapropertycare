@@ -171,32 +171,30 @@
                                             @endphp
 
                                             @if($completedInspection)
-                                                <a href="{{ route('inspections.show', $completedInspection->id) }}"
-                                                   class="btn btn-sm btn-success" title="View Assessment Record">
-                                                    <i class="mdi mdi-clipboard-text-outline"></i>
-                                                </a>
                                                 <a href="{{ route('inspections.preview-report', $completedInspection->id) }}"
-                                                   class="btn btn-sm btn-outline-success" title="View Report" target="_blank">
-                                                    <i class="mdi mdi-file-document-outline"></i>
+                                                   class="btn btn-sm btn-success" title="Open Report">
+                                                    <i class="mdi mdi-file-document-outline me-1"></i>Report
                                                 </a>
                                                 <a href="{{ route('inspections.preview-agreement', $completedInspection->id) }}"
-                                                   class="btn btn-sm {{ $agreementFullySigned ? 'btn-outline-primary' : 'btn-outline-secondary' }}"
+                                                   class="btn btn-sm btn-primary"
                                                    title="{{ $agreementFullySigned ? 'View Signed Agreement' : 'View Agreement' }}"
                                                    target="_blank">
-                                                    <i class="mdi mdi-file-certificate-outline"></i>
+                                                    <i class="mdi mdi-file-sign me-1"></i>Agreement
                                                 </a>
                                                 @if($projectInvoice)
                                                     <a href="{{ route('invoices.show', $projectInvoice->id) }}"
-                                                       class="btn btn-sm btn-outline-warning" title="View Invoice">
-                                                        <i class="mdi mdi-receipt-text-outline"></i>
+                                                       class="btn btn-sm btn-warning text-dark" title="View Invoice">
+                                                        <i class="mdi mdi-receipt me-1"></i>Invoice
                                                     </a>
                                                 @endif
                                             @endif
 
-                                            <a href="{{ route('properties.show', $property->id) }}" 
-                                               class="btn btn-sm btn-info" title="View Details">
-                                                <i class="mdi mdi-eye"></i>
-                                            </a>
+                                            @if(!$completedInspection)
+                                                <a href="{{ route('properties.show', $property->id) }}" 
+                                                   class="btn btn-sm btn-info" title="View Details">
+                                                    <i class="mdi mdi-eye"></i>
+                                                </a>
+                                            @endif
                                             
                                             @php
                                                 $paidInspection = $property->inspections()
@@ -239,7 +237,7 @@
                                                 </button>
                                             @endif
                                             
-                                            @if(!auth()->user()->hasRole('Inspector'))
+                                            @if(!auth()->user()->hasRole('Inspector') && !$completedInspection)
                                                 <form action="{{ route('properties.destroy', $property->id) }}" 
                                                       method="POST" 
                                                       onsubmit="return confirm('Are you sure you want to delete this property?');"

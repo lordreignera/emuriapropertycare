@@ -119,6 +119,7 @@ class MaintenanceVisitLogController extends Controller
     public function store(Request $request, Inspection $inspection)
     {
         $user = Auth::user();
+        $dailyHourCap = 11.0;
 
         if ($user->hasRole('Inspector') && $inspection->inspector_id !== $user->id) {
             abort(403);
@@ -134,6 +135,29 @@ class MaintenanceVisitLogController extends Controller
             'after_photos'     => 'nullable|array|max:10',
             'after_photos.*'   => 'image|mimes:jpeg,jpg,png,webp|max:5120',
         ]);
+
+        $visitDate = (string) $validated['visit_date'];
+        $newHours = (float) ($validated['hours_worked'] ?? 0);
+
+        $existingHoursForDate = (float) MaintenanceVisitLog::query()
+            ->where('inspection_id', $inspection->id)
+            ->whereDate('visit_date', $visitDate)
+            ->sum('hours_worked');
+
+        if ($existingHoursForDate >= $dailyHourCap) {
+            return back()
+                ->withInput()
+                ->with('error', 'This visit date has already reached the 11-hour limit and cannot be used for more logs.');
+        }
+
+        if (($existingHoursForDate + $newHours) > $dailyHourCap) {
+            $remaining = max(0, $dailyHourCap - $existingHoursForDate);
+            return back()
+                ->withInput()
+                ->withErrors([
+                    'hours_worked' => 'Hours exceed the 11-hour cap for this visit date. Remaining allowed: ' . rtrim(rtrim(number_format($remaining, 2, '.', ''), '0'), '.') . 'h.',
+                ]);
+        }
 
         $afterPaths = [];
         $uploadDisk = config('filesystems.default', 'public');
@@ -158,7 +182,6 @@ class MaintenanceVisitLogController extends Controller
 
         // Update the visit status in work_schedule without prematurely closing the day.
         // A visit date becomes completed only when every finding has a completed log on that date.
-        $visitDate = (string) $validated['visit_date'];
         $scopedFindings = $this->resolveScopedFindings($inspection, $inspection->pharFindings()->get());
         $allFindingIds = $scopedFindings->pluck('id')->map(fn($id) => (int) $id)->values();
 

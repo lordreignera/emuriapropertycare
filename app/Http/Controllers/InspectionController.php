@@ -817,6 +817,25 @@ class InspectionController extends Controller
         $inspection = Inspection::with(['property.user', 'property.projectManager', 'project.manager', 'inspector', 'assignedBy'])
             ->findOrFail($id);
 
+        $activeQuotation = null;
+        if (!empty($inspection->active_quotation_id)) {
+            $activeQuotation = InspectionQuotation::query()
+                ->where('id', $inspection->active_quotation_id)
+                ->where('inspection_id', $inspection->id)
+                ->first();
+        }
+
+        if (($activeQuotation?->status ?? null) !== 'approved') {
+            $approvedQuotation = InspectionQuotation::query()
+                ->where('inspection_id', $inspection->id)
+                ->where('status', 'approved')
+                ->orderBy('id', 'desc')
+                ->first();
+            if ($approvedQuotation) {
+                $activeQuotation = $approvedQuotation;
+            }
+        }
+
         if (($inspection->status ?? null) === 'completed') {
             $inspection = $this->agreementScheduleService->refresh($inspection);
         }
@@ -862,7 +881,7 @@ class InspectionController extends Controller
 
         // Generate PDF
         $isRemote = ($driver !== 'local');
-        $pdf = Pdf::loadView('admin.inspections.invoice-pdf', compact('inspection', 'findings', 'materials', 'photoUrls', 'findingPhotoUrls'))
+        $pdf = Pdf::loadView('admin.inspections.invoice-pdf', compact('inspection', 'findings', 'materials', 'photoUrls', 'findingPhotoUrls', 'activeQuotation'))
             ->setPaper('a4', 'landscape')
             ->setOption('margin-top', 10)
             ->setOption('margin-right', 10)

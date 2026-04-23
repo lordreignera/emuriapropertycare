@@ -287,6 +287,27 @@ class Inspection extends Model
      */
     public function getStorageUrl(string $path): string
     {
+        $path = trim((string) $path);
+        if ($path === '') {
+            return '#';
+        }
+
+        // Already a complete URL (or data URI) — return as-is.
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://') || str_starts_with($path, '//') || str_starts_with($path, 'data:')) {
+            return $path;
+        }
+
+        // Legacy local-storage path formats.
+        if (str_starts_with($path, '/storage/')) {
+            return url($path);
+        }
+        if (str_starts_with($path, 'storage/')) {
+            return url('/' . $path);
+        }
+        if (str_starts_with($path, 'public/')) {
+            $path = ltrim(substr($path, 7), '/');
+        }
+
         $disk = config('filesystems.default', 'public');
         $storage = Storage::disk($disk);
 
@@ -306,7 +327,11 @@ class Inspection extends Model
         $driver = config("filesystems.disks.{$disk}.driver");
 
         if ($driver !== 'local' && method_exists($storage, 'temporaryUrl')) {
-            return $storage->temporaryUrl($path, now()->addMinutes(30));
+            try {
+                return $storage->temporaryUrl($path, now()->addMinutes(30));
+            } catch (\Throwable $e) {
+                // If temporary URL generation fails, fall back to plain storage URL.
+            }
         }
 
         return $storage->url($path);

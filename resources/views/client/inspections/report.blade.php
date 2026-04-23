@@ -23,9 +23,20 @@
                     </div>
                     <div>
                         @if(isset($adminPreview) && $adminPreview)
-                            <a href="{{ route('inspections.phar-data', $inspection->id) }}" class="btn btn-light btn-sm no-print">
-                                <i class="mdi mdi-arrow-left me-1"></i>Back to PHAR Dashboard
-                            </a>
+                            @if(($inspection->status ?? null) === 'completed')
+                                <a href="{{ route('inspections.show', $inspection->id) }}" class="btn btn-light btn-sm no-print">
+                                    <i class="mdi mdi-arrow-left me-1"></i>Back to Inspection Record
+                                </a>
+                            @else
+                                <a href="{{ route('inspections.phar-data', $inspection->id) }}" class="btn btn-light btn-sm no-print">
+                                    <i class="mdi mdi-arrow-left me-1"></i>Back to PHAR Dashboard
+                                </a>
+                            @endif
+                            @if(($inspection->status ?? null) === 'completed')
+                                <a href="{{ route('inspections.download-invoice', $inspection->id) }}" class="btn btn-success btn-sm no-print" title="Download Final Report PDF">
+                                    <i class="mdi mdi-download me-1"></i>Download PDF
+                                </a>
+                            @endif
                         @else
                             <a href="{{ route('client.inspections.index') }}" class="btn btn-light btn-sm no-print">
                                 <i class="mdi mdi-arrow-left me-1"></i>Back to Inspections

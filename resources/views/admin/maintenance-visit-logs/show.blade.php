@@ -5,6 +5,10 @@
     $property       = $inspection->property;
     $logsByFinding  = $inspection->maintenanceVisitLogs->groupBy('finding_id');
     $generalLogs    = $logsByFinding->get(null, collect())->sortByDesc('created_at');
+    $dailyHourCap   = 11.0;
+    $hoursByVisitDate = $inspection->maintenanceVisitLogs
+        ->groupBy(fn($log) => $log->visit_date->toDateString())
+        ->map(fn($logs) => (float) $logs->sum(fn($log) => (float) ($log->hours_worked ?? 0)));
 
     // JSON findings on inspection (may carry finding_photos)
     $inspFindingsJson = is_array($inspection->findings)
@@ -296,14 +300,19 @@
                                             $svStatus = $sv['status'] ?? 'scheduled';
                                             $svLabel  = \Carbon\Carbon::parse($svDate)->format('D, d M Y');
                                             $isCompleted = $svStatus === 'completed';
+                                            $usedHours = (float) ($hoursByVisitDate->get($svDate, 0));
+                                            $remainingHours = max(0, $dailyHourCap - $usedHours);
+                                            $isHourLimitReached = $usedHours >= $dailyHourCap;
+                                            $isOldSelected = old('visit_date') === $svDate;
                                         @endphp
                                         <option value="{{ $svDate }}"
+                                            {{ $isHourLimitReached && !$isOldSelected ? 'disabled' : '' }}
                                             {{ old('visit_date') === $svDate ? 'selected' : '' }}>
-                                            {{ $svLabel }}{{ $isCompleted ? ' ✓ done' : '' }}
+                                            {{ $svLabel }}{{ $isCompleted ? ' ✓ done' : '' }}{{ $isHourLimitReached ? ' — 11h full' : ' — '.rtrim(rtrim(number_format($remainingHours, 2, '.', ''), '0'), '.').'h left' }}
                                         </option>
                                     @endforeach
                                 </select>
-                                <div class="form-text">Dates are from the scheduled work plan.</div>
+                                <div class="form-text">Dates are from the scheduled work plan. Any date that has reached 11 total logged hours is locked.</div>
                                 @else
                                 <input type="date" name="visit_date" class="form-control" required
                                        value="{{ old('visit_date', date('Y-m-d')) }}">
@@ -321,7 +330,8 @@
                             <div class="col-md-2">
                                 <label class="form-label fw-semibold">Actual Hours Worked</label>
                                 <input type="number" name="hours_worked" class="form-control"
-                                       step="0.5" min="0" max="24" placeholder="e.g. 3">
+                                       step="0.5" min="0" max="11" placeholder="e.g. 3">
+                                <div class="form-text">Per visit date total cannot exceed 11 hours.</div>
                             </div>
                             <div class="col-12">
                                 <label class="form-label fw-semibold">

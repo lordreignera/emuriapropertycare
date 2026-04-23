@@ -158,6 +158,57 @@
         ? $inspection->findings
         : (json_decode($inspection->getRawOriginal('findings') ?? '[]', true) ?? []);
 
+    $quotationSnapshot = collect($activeQuotation->findings_snapshot ?? [])->values();
+    $quotationApprovedIds = collect($activeQuotation->approved_finding_ids ?? [])->map(fn($id) => (int) $id);
+
+    $makeFindingKey = function ($issueOrTask, $category) {
+        $left = strtolower(trim((string) $issueOrTask));
+        $right = strtolower(trim((string) $category));
+        return $left . '|' . $right;
+    };
+
+    $showApprovedScopeOnly =
+        !empty($activeQuotation) &&
+        (($activeQuotation->status ?? null) === 'approved') &&
+        (
+            (($inspection->quotation_status ?? null) === 'approved') ||
+            (($inspection->quotation_status ?? null) === 'shared')
+        );
+
+    if ($showApprovedScopeOnly) {
+        $allInline = collect($inlineFindingsRaw)->values();
+        $approvedIdMap = $quotationApprovedIds->flip();
+
+        $filteredById = $allInline
+            ->filter(fn ($f) => $approvedIdMap->has((int) ($f['id'] ?? 0)))
+            ->values();
+
+        if ($filteredById->isNotEmpty()) {
+            $inlineFindingsRaw = $filteredById->all();
+        } else {
+            $approvedScopeKeys = $quotationSnapshot
+                ->filter(fn($f) => $quotationApprovedIds->contains((int) ($f['id'] ?? 0)))
+                ->map(fn($f) => $makeFindingKey(
+                    $f['task_question'] ?? ($f['issue'] ?? ''),
+                    $f['category'] ?? ''
+                ))
+                ->filter(fn($k) => $k !== '|')
+                ->unique()
+                ->values();
+
+            $inlineFindingsRaw = $allInline
+                ->filter(function ($f) use ($approvedScopeKeys, $makeFindingKey) {
+                    $key = $makeFindingKey(
+                        $f['task_question'] ?? ($f['issue'] ?? ''),
+                        $f['phar_category'] ?? ($f['category'] ?? '')
+                    );
+                    return $approvedScopeKeys->contains($key);
+                })
+                ->values()
+                ->all();
+        }
+    }
+
     $severityOrder = ['critical','high','noi_protection','medium','low'];
     $severityMeta  = [
         'critical'       => ['label' => 'Urgent — Safety Critical', 'color' => '#dc3545'],
