@@ -18,13 +18,15 @@ class MaintenanceVisitLog extends Model
         'status',
         'notes',
         'tools_used',
+        'accomplished_tasks',
     ];
 
     protected $casts = [
-        'visit_date'   => 'date',
-        'after_photos' => 'array',
-        'tools_used'   => 'array',
-        'hours_worked' => 'decimal:2',
+        'visit_date'         => 'date',
+        'after_photos'       => 'array',
+        'tools_used'         => 'array',
+        'hours_worked'       => 'decimal:2',
+        'accomplished_tasks' => 'array',
     ];
 
     public function inspection(): BelongsTo

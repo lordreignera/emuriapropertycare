@@ -16,10 +16,10 @@
             <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
                 <h5 class="mb-0"><i class="mdi mdi-file-document-outline me-2"></i>Client Job Approval & Service Agreement</h5>
                 <div class="d-flex gap-2">
-                    <a href="{{ route('client.inspections.agreement.download', $inspection->id) }}" class="btn btn-outline-light btn-sm">
+                    <a href="{{ ($adminPreview ?? false) ? route('inspections.agreement.download', $inspection->id) : route('client.inspections.agreement.download', $inspection->id) }}" class="btn btn-outline-light btn-sm">
                         <i class="mdi mdi-download me-1"></i>Download PDF
                     </a>
-                    <a href="{{ route('client.inspections.index') }}" class="btn btn-light btn-sm">
+                    <a href="{{ ($adminPreview ?? false) ? (($forCountersign ?? false) ? route('inspections.index', ['view' => 'pending-etogo']) : route('inspections.show', $inspection->id)) : route('client.inspections.index') }}" class="btn btn-light btn-sm">
                         <i class="mdi mdi-arrow-left me-1"></i>Back to Inspections
                     </a>
                 </div>
@@ -30,6 +30,15 @@
                 @endif
                 @if(session('error'))
                     <div class="alert alert-danger">{{ session('error') }}</div>
+                @endif
+                @if($errors->any())
+                    <div class="alert alert-danger">
+                        <ul class="mb-0 ps-3">
+                            @foreach($errors->all() as $error)
+                                <li>{{ $error }}</li>
+                            @endforeach
+                        </ul>
+                    </div>
                 @endif
 
                 <div class="alert alert-info">
@@ -60,30 +69,128 @@
                             <strong>Etogo Staff Signature Completed</strong><br>
                             Signed by staff user ID: {{ $inspection->etogo_signed_by ?? '-' }}<br>
                             Date: {{ optional($inspection->etogo_signed_at)->format('M d, Y h:i A') ?: '-' }}
+                            @if($inspection->etogo_signature_image_path)
+                                <div class="mt-2 border rounded bg-white p-2 d-inline-block">
+                                    <img src="{{ \Illuminate\Support\Facades\Storage::disk(config('filesystems.default','public'))->url($inspection->etogo_signature_image_path) }}"
+                                         alt="Etogo Signature"
+                                         style="max-height:60px;max-width:220px;object-fit:contain;">
+                                </div>
+                            @endif
                         </div>
                     @elseif(!$inspection->approved_by_client)
                         <div class="alert alert-info mb-0">
                             <strong>Awaiting Client Signature</strong><br>
                             Etogo staff can sign only after the client has signed this agreement.
                         </div>
+                    @elseif(($forCountersign ?? false) && (($inspection->work_payment_status ?? 'pending') !== 'paid'))
+                        <div class="alert alert-warning mb-0">
+                            <strong>Work Payment Pending</strong><br>
+                            Deposit/work payment must be confirmed before Etogo countersign.
+                        </div>
+                    @elseif($forCountersign ?? false)
+                        <div class="card border-warning mb-0">
+                            <div class="card-header bg-warning text-dark fw-semibold">
+                                <i class="mdi mdi-draw me-1"></i>Etogo Countersign Agreement
+                            </div>
+                            <div class="card-body">
+                                <p class="small text-muted mb-3">
+                                    Review this contract carefully, then countersign below to authorize work start.
+                                </p>
+                                @php $adminSignatureUrl = auth()->user()->signature_url; @endphp
+                                @if($adminSignatureUrl)
+                                <div class="mb-3">
+                                    <label class="form-label fw-semibold small">Your Saved Signature</label>
+                                    <div class="border rounded p-2 bg-white text-center d-inline-block w-100">
+                                        <img src="{{ $adminSignatureUrl }}"
+                                             alt="Staff Signature"
+                                             style="max-height:70px;max-width:280px;object-fit:contain;">
+                                    </div>
+                                    <small class="text-muted d-block mt-1">
+                                        <i class="mdi mdi-check-circle text-success me-1"></i>
+                                        This signature image will be attached as the Etogo countersignature.
+                                        <a href="{{ route('profile.settings') }}" target="_blank" class="ms-1">Change</a>
+                                    </small>
+                                </div>
+                                @else
+                                <div class="alert alert-light border small mb-3">
+                                    <i class="mdi mdi-information-outline me-1"></i>
+                                    No signature uploaded to your profile.
+                                    <a href="{{ route('profile.settings') }}" target="_blank" class="fw-semibold">Upload your signature</a>
+                                    to attach it here.
+                                </div>
+                                @endif
+                                <form method="POST" action="{{ route('inspections.agreement.countersign', $inspection->id) }}">
+                                    @csrf
+                                    <div class="mb-3">
+                                        <label class="form-label fw-semibold">Full Name (Digital Signature)</label>
+                                        <input type="text" name="staff_full_name" class="form-control @error('staff_full_name') is-invalid @enderror" value="{{ old('staff_full_name', auth()->user()->name ?? '') }}" required>
+                                        @error('staff_full_name')
+                                            <div class="invalid-feedback">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input @error('staff_acknowledgment') is-invalid @enderror" type="checkbox" value="1" id="staff_acknowledgment" name="staff_acknowledgment" required>
+                                        <label class="form-check-label" for="staff_acknowledgment">
+                                            I confirm that I have reviewed this client-signed agreement and I countersign on behalf of Etogo.
+                                        </label>
+                                        @error('staff_acknowledgment')
+                                            <div class="invalid-feedback d-block">{{ $message }}</div>
+                                        @enderror
+                                    </div>
+
+                                    <button type="submit" class="btn btn-warning fw-semibold"
+                                            onclick="return confirm('Countersign this agreement and authorize work start?');">
+                                        <i class="mdi mdi-check-decagram-outline me-1"></i>Review Complete &amp; Countersign
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
                     @else
-                        <form method="POST" action="{{ route('inspections.agreement.staff-sign', $inspection->id) }}">
-                            @csrf
-                            <button type="submit" class="btn btn-primary">
-                                <i class="mdi mdi-pen me-1"></i>Sign as Etogo Staff
-                            </button>
-                            <div class="text-muted small mt-2">Business rule: staff can sign only after client signature.</div>
-                        </form>
+                        <div class="alert alert-secondary mb-0">
+                            <strong>Preview Only</strong><br>
+                            To countersign from operations queue, open Pending Etogo and click <em>Review &amp; Countersign</em>.
+                        </div>
                     @endif
                 @elseif($inspection->approved_by_client)
                     <div class="alert alert-success mb-0">
                         <strong>Agreement Signed</strong><br>
                         Signed by: {{ $inspection->client_full_name ?: 'Client' }}<br>
                         Date: {{ optional($inspection->client_approved_at)->format('M d, Y h:i A') ?: '-' }}
+                        @if($inspection->client_signature_image_path)
+                            <div class="mt-2 border rounded bg-white p-2 d-inline-block">
+                                <img src="{{ \Illuminate\Support\Facades\Storage::disk(config('filesystems.default','public'))->url($inspection->client_signature_image_path) }}"
+                                     alt="Client Signature"
+                                     style="max-height:60px;max-width:220px;object-fit:contain;">
+                            </div>
+                        @endif
                     </div>
                 @else
+                    @php $mySignatureUrl = auth()->user()->signature_url; @endphp
                     <form method="POST" action="{{ route('client.inspections.agreement.sign', $inspection->id) }}">
                         @csrf
+                        @if($mySignatureUrl)
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold small">Your Saved Signature</label>
+                            <div class="border rounded p-2 bg-white text-center d-inline-block w-100">
+                                <img src="{{ $mySignatureUrl }}"
+                                     alt="My Signature"
+                                     style="max-height:70px;max-width:280px;object-fit:contain;">
+                            </div>
+                            <small class="text-muted d-block mt-1">
+                                <i class="mdi mdi-check-circle text-success me-1"></i>
+                                This signature image will be attached to the agreement.
+                                <a href="{{ route('profile.settings') }}" target="_blank" class="ms-1">Change</a>
+                            </small>
+                        </div>
+                        @else
+                        <div class="alert alert-light border small mb-3">
+                            <i class="mdi mdi-information-outline me-1"></i>
+                            No signature image on file.
+                            <a href="{{ route('profile.settings') }}" target="_blank" class="fw-semibold">Upload your signature</a>
+                            to attach it here. Your typed name below will still serve as your digital signature.
+                        </div>
+                        @endif
                         <div class="mb-3">
                             <label class="form-label fw-semibold">Full Name (Digital Signature)</label>
                             <input type="text" name="client_full_name" class="form-control @error('client_full_name') is-invalid @enderror" value="{{ old('client_full_name', auth()->user()->name ?? '') }}" required>

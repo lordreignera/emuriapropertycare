@@ -5,9 +5,11 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\Property;
 use App\Models\Inspection;
+use App\Models\InspectionToolAssignment;
 use App\Models\Project;
 use App\Models\Invoice;
 use App\Models\Subscription;
+use App\Models\ToolSetting;
 
 class DashboardController extends Controller
 {
@@ -17,7 +19,51 @@ class DashboardController extends Controller
     public function index()
     {
         $user = auth()->user();
- 
+
+        // ── Store Manager dashboard ──────────────────────────────────────────
+        if ($user->hasRole('Store Manager')) {
+            // KPI cards
+            $totalTools       = ToolSetting::where('is_active', true)->count();
+            $toolsInUse       = InspectionToolAssignment::whereNull('returned_at')
+                                    ->where('quantity', '>', 0)
+                                    ->sum('quantity');
+            $toolsHired       = ToolSetting::where('is_active', true)
+                                    ->where('ownership_status', 'hired')->count();
+            $toolsOwned       = ToolSetting::where('is_active', true)
+                                    ->where('ownership_status', 'owned')->count();
+
+            // System overview stats
+            $pendingToolAssignment = Inspection::whereNotNull('client_signature')
+                ->where('work_payment_status', 'paid')
+                ->whereNull('etogo_signed_at')
+                ->whereDoesntHave('toolAssignments', function ($q) {
+                    $q->whereNull('returned_at')->where('quantity', '>', 0);
+                })->count();
+
+            $unreturnedRecords = InspectionToolAssignment::whereNull('returned_at')
+                ->where('quantity', '>', 0)
+                ->count();
+
+            $availableTools = ToolSetting::where('is_active', true)
+                ->where('availability_status', 'available')->count();
+
+            // Recent activity: latest 10 tool assignments
+            $recentAssignments = InspectionToolAssignment::with([
+                    'inspection.property:id,property_name,property_code',
+                    'toolSetting:id,tool_name',
+                ])
+                ->latest()
+                ->take(10)
+                ->get();
+
+            return view('admin.index', compact(
+                'totalTools', 'toolsInUse', 'toolsHired', 'toolsOwned',
+                'pendingToolAssignment', 'unreturnedRecords', 'availableTools',
+                'recentAssignments'
+            ));
+        }
+
+        // ── Generic staff dashboard ──────────────────────────────────────────
         if ($user->isStaff()) {
             $propertiesCount = Property::count();
             $inspectionsCount = Inspection::where('status', '!=', 'cancelled')
@@ -252,6 +298,17 @@ class DashboardController extends Controller
                 ->take(5)
                 ->get();
 
+            // Completed projects with outstanding balance (work done, payment pending)
+            $completedWithBalance = Inspection::with('property')
+                ->whereIn('property_id', $propertyIds)
+                ->whereNotNull('completed_finding_ids')
+                ->where('completed_finding_ids', '!=', '[]')
+                ->where('work_payment_status', 'paid')
+                ->whereNull('arp_fully_paid_at')
+                ->get()
+                ->filter(fn($i) => !empty($i->completed_finding_ids))
+                ->values();
+
             return view('client.dashboard', compact(
                 'propertiesCount',
                 'inspectionsCount',
@@ -270,7 +327,8 @@ class DashboardController extends Controller
                 'subscription',
                 'recentProperties',
                 'completedInspections',
-                'quotationReadyInspections'
+                'quotationReadyInspections',
+                'completedWithBalance'
             ));
         }
         

@@ -3,6 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Inspection;
+use App\Models\FindingTemplateSetting;
+use App\Models\InspectionSystem;
+use App\Models\InspectionSubsystem;
 use App\Models\InspectionToolAssignment;
 use App\Models\ToolSetting;
 use Illuminate\Http\Request;
@@ -21,7 +24,7 @@ class ToolAssignmentController extends Controller
 
         $search = trim((string) request('q', ''));
 
-        // Load all inspections that both parties have signed (client + etogo)
+        // Load all assignments for projects where the client has signed and payment is confirmed.
         $assignmentsQuery = InspectionToolAssignment::with([
                 'inspection.property',
                 'inspection.project',
@@ -30,7 +33,7 @@ class ToolAssignmentController extends Controller
             ])
             ->whereHas('inspection', fn($q) => $q
                 ->whereNotNull('client_signature')
-                ->whereNotNull('etogo_signed_at')
+            ->where('work_payment_status', 'paid')
             );
 
         if ($search !== '') {
@@ -71,18 +74,126 @@ class ToolAssignmentController extends Controller
             ->with([
                 'property:id,property_name,property_address',
                 'project:id,project_number,title',
+                'pharFindings:id,inspection_id,task_question,category,included_yn',
             ])
             ->whereNotNull('client_signature')
-            ->whereNotNull('etogo_signed_at')
-            ->whereNotNull('work_schedule')
-            ->where('work_schedule', '<>', '[]')
+            ->where('work_payment_status', 'paid')
+            ->whereNull('etogo_signed_at')
             ->orderByDesc('updated_at')
             ->get(['id', 'project_id', 'property_id', 'property_name', 'status', 'work_schedule', 'updated_at']);
 
         $activeTools = ToolSetting::query()
             ->where('is_active', true)
             ->orderBy('tool_name')
-            ->get(['id', 'tool_name', 'quantity', 'ownership_status', 'availability_status']);
+            ->get(['id', 'tool_name', 'quantity', 'ownership_status', 'availability_status', 'system_id', 'subsystem_id', 'finding_template_setting_id']);
+
+        // Build recommendation map: inspection_id => [tool_setting_id, ...]
+        //
+        // Three match paths (most specific → broadest):
+        //   Path 1 — task_question exact match → FindingTemplateSetting.id → ToolSetting.finding_template_setting_id
+        //   Path 2 — phar_finding.category → FindingTemplateSetting.category → system/subsystem → ToolSetting
+        //   Path 3 — phar_finding.category name-compared to systems.name / subsystems.name → ToolSetting
+        $toolRecommendationsByInspection = [];
+
+        // Collect all unique questions and categories across eligible inspections (for batch DB queries)
+        $allIncludedFindings = $eligibleInspections
+            ->flatMap(fn($insp) => $insp->pharFindings->where('included_yn', true));
+
+        $allQuestions = $allIncludedFindings
+            ->pluck('task_question')
+            ->filter(fn($q) => trim((string) $q) !== '')
+            ->map(fn($q) => trim((string) $q))
+            ->unique()
+            ->values();
+
+        $allCategories = $allIncludedFindings
+            ->pluck('category')
+            ->filter(fn($c) => trim((string) $c) !== '')
+            ->map(fn($c) => trim((string) $c))
+            ->unique()
+            ->values();
+
+        // Path 1 + 2: Look up templates by task_question and by category in one pass
+        $templatesByQuestion = FindingTemplateSetting::query()
+            ->when($allQuestions->isNotEmpty(), fn($q) => $q->whereIn('task_question', $allQuestions))
+            ->when($allQuestions->isEmpty(), fn($q) => $q->whereRaw('1=0'))
+            ->get(['id', 'task_question', 'category', 'system_id', 'subsystem_id'])
+            ->groupBy(fn($tpl) => trim((string) $tpl->task_question));
+
+        $templatesByCategory = FindingTemplateSetting::query()
+            ->when($allCategories->isNotEmpty(), fn($q) => $q->whereIn('category', $allCategories))
+            ->when($allCategories->isEmpty(), fn($q) => $q->whereRaw('1=0'))
+            ->get(['id', 'category', 'system_id', 'subsystem_id'])
+            ->groupBy(fn($tpl) => trim((string) $tpl->category));
+
+        // Path 3: Match category names directly against systems/subsystems names
+        $systemsByName = InspectionSystem::query()
+            ->when($allCategories->isNotEmpty(), fn($q) => $q->whereIn('name', $allCategories))
+            ->when($allCategories->isEmpty(), fn($q) => $q->whereRaw('1=0'))
+            ->get(['id', 'name'])
+            ->keyBy(fn($s) => trim((string) $s->name));
+
+        $subsystemsByName = InspectionSubsystem::query()
+            ->when($allCategories->isNotEmpty(), fn($q) => $q->whereIn('name', $allCategories))
+            ->when($allCategories->isEmpty(), fn($q) => $q->whereRaw('1=0'))
+            ->get(['id', 'name', 'system_id'])
+            ->keyBy(fn($s) => trim((string) $s->name));
+
+        foreach ($eligibleInspections as $inspection) {
+            $includedFindings = $inspection->pharFindings->where('included_yn', true);
+
+            $inspectionQuestions = $includedFindings
+                ->pluck('task_question')
+                ->filter(fn($q) => trim((string) $q) !== '')
+                ->map(fn($q) => trim((string) $q))
+                ->unique();
+
+            $inspectionCategories = $includedFindings
+                ->pluck('category')
+                ->filter(fn($c) => trim((string) $c) !== '')
+                ->map(fn($c) => trim((string) $c))
+                ->unique();
+
+            // Path 1: templates matched by exact task_question
+            $questionTemplates = $inspectionQuestions
+                ->flatMap(fn($q) => $templatesByQuestion->get($q, collect()))
+                ->unique('id')
+                ->values();
+
+            // Path 2: templates matched by category
+            $categoryTemplates = $inspectionCategories
+                ->flatMap(fn($c) => $templatesByCategory->get($c, collect()))
+                ->unique('id')
+                ->values();
+
+            // Merge template-derived system/subsystem ids (paths 1 + 2)
+            $allMatchedTemplates = $questionTemplates->merge($categoryTemplates)->unique('id');
+            $templateIds  = $allMatchedTemplates->pluck('id')->filter()->map(fn($v) => (int) $v)->unique();
+            $systemIds    = $allMatchedTemplates->pluck('system_id')->filter()->map(fn($v) => (int) $v)->unique();
+            $subsystemIds = $allMatchedTemplates->pluck('subsystem_id')->filter()->map(fn($v) => (int) $v)->unique();
+
+            // Path 3: category name ↔ system/subsystem name
+            $nameSystemIds    = $inspectionCategories->map(fn($c) => optional($systemsByName->get($c))->id)->filter()->map(fn($v) => (int) $v)->unique();
+            $nameSubsystemIds = $inspectionCategories->map(fn($c) => optional($subsystemsByName->get($c))->id)->filter()->map(fn($v) => (int) $v)->unique();
+
+            $systemIds    = $systemIds->merge($nameSystemIds)->unique();
+            $subsystemIds = $subsystemIds->merge($nameSubsystemIds)->unique();
+
+            $recommendedToolIds = $activeTools
+                ->filter(function ($tool) use ($templateIds, $systemIds, $subsystemIds) {
+                    $templateMatch  = !empty($tool->finding_template_setting_id) && $templateIds->contains((int) $tool->finding_template_setting_id);
+                    $subsystemMatch = !empty($tool->subsystem_id) && $subsystemIds->contains((int) $tool->subsystem_id);
+                    $systemMatch    = !empty($tool->system_id) && $systemIds->contains((int) $tool->system_id);
+
+                    return $templateMatch || $subsystemMatch || $systemMatch;
+                })
+                ->pluck('id')
+                ->map(fn($id) => (int) $id)
+                ->values()
+                ->all();
+
+            $toolRecommendationsByInspection[(int) $inspection->id] = $recommendedToolIds;
+        }
 
         $toolsOutUnits = (int) $assignments->whereNull('returned_at')->where('quantity', '>', 0)->sum('quantity');
         $toolsReturnedUnits = (int) $assignments->whereNotNull('returned_at')->sum('quantity');
@@ -96,6 +207,7 @@ class ToolAssignmentController extends Controller
             'deployedByTool',
             'eligibleInspections',
             'activeTools',
+            'toolRecommendationsByInspection',
             'toolsOutUnits',
             'toolsReturnedUnits',
             'toolsInStoreUnits'
@@ -122,9 +234,8 @@ class ToolAssignmentController extends Controller
         $inspection = Inspection::query()
             ->where('id', (int) $validated['inspection_id'])
             ->whereNotNull('client_signature')
-            ->whereNotNull('etogo_signed_at')
-            ->whereNotNull('work_schedule')
-            ->where('work_schedule', '<>', '[]')
+            ->where('work_payment_status', 'paid')
+            ->whereNull('etogo_signed_at')
             ->first();
 
         if (! $inspection) {

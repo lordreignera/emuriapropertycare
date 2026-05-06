@@ -13,7 +13,7 @@
     };
 
     $inspectionsOpen = request()->routeIs('inspections.*') || request()->routeIs('properties.*');
-    $projectsOpen = request()->routeIs('projects.*') || request()->routeIs('milestones.*') || request()->routeIs('change-orders.*') || request()->routeIs('maintenance-visit-logs.*');
+    $projectsOpen = request()->routeIs('projects.*') || request()->routeIs('milestones.*') || request()->routeIs('change-orders.*') || request()->routeIs('maintenance-visit-logs.*') || request()->routeIs('admin.service-requests.*') || request()->routeIs('tool-assignments.*');
     $billingOpen = request()->routeIs('invoices.*') || request()->routeIs('budgets.*');
     $reportsOpen = request()->routeIs('reports.*') || request()->routeIs('savings.*');
     $accessControlOpen = request()->routeIs('admin.users.*') || request()->routeIs('admin.roles.*') || request()->routeIs('admin.permissions.*');
@@ -73,15 +73,39 @@
             ->count();
     }
 
-    // Stage 1: Client has signed + paid, waiting for Etogo to countersign
+    // Store Manager: properties awaiting tool assignment (signed + paid + no tools yet)
+    $awaitingToolAssignmentCount = $user->hasRole('Store Manager')
+        ? \App\Models\Inspection::whereNotNull('client_signature')
+            ->where('work_payment_status', 'paid')
+            ->whereNull('etogo_signed_at')
+            ->whereDoesntHave('toolAssignments', function ($tq) {
+                $tq->whereNull('returned_at')->where('quantity', '>', 0);
+            })
+            ->count()
+        : 0;
+
+    // Stage 1: Client signed + paid, but setup is incomplete (tools and/or schedule missing)
     $pendingEtogoCount = \App\Models\Inspection::whereNotNull('client_signature')
         ->where('work_payment_status', 'paid')
         ->whereNull('etogo_signed_at')
+        ->where(function ($q) {
+            $q->whereDoesntHave('toolAssignments', function ($tq) {
+                $tq->whereNull('returned_at')->where('quantity', '>', 0);
+            })
+            ->orWhereNull('work_schedule')
+            ->orWhere('work_schedule', '[]');
+        })
         ->count();
 
-    // Stage 2: Etogo countersigned but no visit schedule set yet
-    $awaitingScheduleCount = \App\Models\Inspection::whereNotNull('etogo_signed_at')
-        ->where(function($q) { $q->whereNull('work_schedule')->orWhere('work_schedule', '[]'); })
+    // Stage 2: Ready for countersign (tools + schedule done, Etogo not signed yet)
+    $awaitingScheduleCount = \App\Models\Inspection::whereNotNull('client_signature')
+        ->where('work_payment_status', 'paid')
+        ->whereNull('etogo_signed_at')
+        ->whereHas('toolAssignments', function ($q) {
+            $q->whereNull('returned_at')->where('quantity', '>', 0);
+        })
+        ->whereNotNull('work_schedule')
+        ->where('work_schedule', '<>', '[]')
         ->count();
 
     // Stage 3: Active — schedule is set, work is underway
@@ -201,6 +225,9 @@
     $unreturnedToolCount = \App\Models\InspectionToolAssignment::whereNull('returned_at')
         ->whereHas('inspection', fn($q) => $q->whereNotNull('etogo_signed_at'))
         ->count();
+
+    $openServiceRequestsCount = \App\Models\ServiceRequest::whereIn('status', ['submitted', 'triaged', 'awaiting_assessment'])
+        ->count();
 @endphp
 
 <nav class="sidebar sidebar-offcanvas admin-client-sidebar" id="sidebar">
@@ -223,7 +250,7 @@
             <span>Dashboard</span>
         </a>
 
-        @if($user->hasRole(['Inspector', 'Project Manager', 'Super Admin', 'Administrator']) || $user->can('view-inspections'))
+        @if(($user->hasRole(['Inspector', 'Project Manager', 'Super Admin', 'Administrator']) || $user->can('view-inspections')) && !$user->hasRole('Store Manager'))
             <div class="admin-client-section-title">Services</div>
             <details class="admin-client-group" {{ $inspectionsOpen ? 'open' : '' }}>
                 <summary class="admin-client-link {{ $inspectionsOpen ? 'is-active' : '' }}">
@@ -274,38 +301,55 @@
             </details>
         @endif
 
-        @if($user->hasRole(['Technician', 'Project Manager', 'Super Admin', 'Administrator']) || $user->can('view-all-projects'))
+        @if($user->hasRole(['Technician', 'Project Manager', 'Super Admin', 'Administrator', 'Store Manager']) || $user->can('view-all-projects'))
+            @if($user->hasRole('Store Manager'))
+                <div class="admin-client-section-title">Tool Operations</div>
+            @else
+                {{-- section title handled per-role by JS-free plain div --}}
+            @endif
             <details class="admin-client-group" {{ $projectsOpen ? 'open' : '' }}>
                 <summary class="admin-client-link {{ $projectsOpen ? 'is-active' : '' }}">
                     <span class="admin-client-summary-left">
                         <i class="mdi mdi-briefcase admin-client-icon admin-client-icon-projects"></i>
-                        <span>Project Management</span>
+                        <span>{{ $user->hasRole('Store Manager') ? 'Tool Operations' : 'Project Management' }}</span>
                     </span>
                     <span class="admin-client-arrow">▾</span>
                 </summary>
                 <div class="admin-client-submenu">
                     @if($user->hasRole(['Project Manager', 'Super Admin', 'Administrator']) || $user->can('view-all-projects'))
 
-                        {{-- Stage 1: Client signed + paid, pending Etogo countersign --}}
+                        {{-- Stage 1: tools + scheduling setup before countersign --}}
                         <a class="admin-client-sublink {{ request()->routeIs('inspections.index') && request()->get('view') == 'pending-etogo' ? 'is-active' : '' }}"
                            href="{{ route('inspections.index') }}?view=pending-etogo">
-                            <span class="admin-client-sublabel">Pending Etogo Signature</span>
+                            <span class="admin-client-sublabel">Pre-Sign Setup</span>
                             @if($pendingEtogoCount > 0)
                                 <span class="admin-client-badge">{{ $pendingEtogoCount }}</span>
                             @endif
                         </a>
 
-                        {{-- Stage 2: Etogo signed, no visit dates set yet --}}
+                        {{-- Stage 2: tools + schedule done — ready for Etogo countersign --}}
                         <a class="admin-client-sublink {{ request()->routeIs('inspections.index') && request()->get('view') == 'needs-schedule' ? 'is-active' : '' }}"
                            href="{{ route('inspections.index') }}?view=needs-schedule">
-                            <span class="admin-client-sublabel">Project Scheduling</span>
+                            <span class="admin-client-sublabel">Ready to Countersign</span>
                             @if($awaitingScheduleCount > 0)
-                                <span class="admin-client-badge">{{ $awaitingScheduleCount }}</span>
+                                <span class="admin-client-badge bg-warning text-dark">{{ $awaitingScheduleCount }}</span>
+                            @endif
+                        </a>
+
+                    @elseif($user->hasRole('Store Manager'))
+
+                        {{-- Store Manager: show properties awaiting tool assignment --}}
+                        <a class="admin-client-sublink {{ request()->routeIs('inspections.index') && request()->get('view') == 'pending-etogo' ? 'is-active' : '' }}"
+                           href="{{ route('inspections.index') }}?view=pending-etogo">
+                            <span class="admin-client-sublabel">Awaiting Tool Assignment</span>
+                            @if($awaitingToolAssignmentCount > 0)
+                                <span class="admin-client-badge">{{ $awaitingToolAssignmentCount }}</span>
                             @endif
                         </a>
 
                     @endif
 
+                    @if(!$user->hasRole('Store Manager'))
                     {{-- Stage 3: Active projects (< 100% progress) --}}
                     <a class="admin-client-sublink {{ request()->routeIs('maintenance-visit-logs.*') && request()->get('progress_filter', 'active') !== 'completed' ? 'is-active' : '' }}"
                        href="{{ route('maintenance-visit-logs.index') }}?progress_filter=active">
@@ -323,6 +367,7 @@
                             <span class="admin-client-badge">{{ $completedWorkCount }}</span>
                         @endif
                     </a>
+                    @endif
 
                     @if($user->hasRole(['Super Admin', 'Store Manager']))
                         {{-- Tool Return & Assignment --}}
@@ -338,6 +383,12 @@
                     @if($user->hasRole(['Project Manager', 'Super Admin', 'Administrator']) || $user->can('view-all-projects'))
                         <a class="admin-client-sublink {{ request()->routeIs('milestones.*') ? 'is-active' : '' }}" href="{{ route('milestones.index') }}">
                             <span class="admin-client-sublabel">Milestones &amp; Budget</span>
+                        </a>
+                        <a class="admin-client-sublink {{ request()->routeIs('admin.service-requests.*') ? 'is-active' : '' }}" href="{{ route('admin.service-requests.index') }}">
+                            <span class="admin-client-sublabel">Service Requests Queue</span>
+                            @if($openServiceRequestsCount > 0)
+                                <span class="admin-client-badge">{{ $openServiceRequestsCount }}</span>
+                            @endif
                         </a>
                         <a class="admin-client-sublink {{ request()->routeIs('change-orders.*') ? 'is-active' : '' }}" href="{{ route('change-orders.index') }}">
                             <span class="admin-client-sublabel">Change Orders</span>
@@ -432,6 +483,24 @@
             </details>
 
            
+        @endrole
+
+        @role('Store Manager')
+            <div class="admin-client-section-title">Store</div>
+            <details class="admin-client-group" {{ request()->routeIs('admin.tool-settings.*') ? 'open' : '' }}>
+                <summary class="admin-client-link {{ request()->routeIs('admin.tool-settings.*') ? 'is-active' : '' }}">
+                    <span class="admin-client-summary-left">
+                        <i class="mdi mdi-toolbox admin-client-icon admin-client-icon-settings"></i>
+                        <span>Tool Management</span>
+                    </span>
+                    <span class="admin-client-arrow">▾</span>
+                </summary>
+                <div class="admin-client-submenu">
+                    <a class="admin-client-sublink {{ request()->routeIs('admin.tool-settings.*') ? 'is-active' : '' }}" href="{{ route('admin.tool-settings.index') }}">
+                        <span class="admin-client-sublabel">Tool Settings</span>
+                    </a>
+                </div>
+            </details>
         @endrole
     </div>
 </nav>

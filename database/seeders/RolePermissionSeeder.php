@@ -132,6 +132,18 @@ class RolePermissionSeeder extends Seeder
             'manage-schedules',
             'assign-technicians',
             'view-schedules',
+            'schedule-visits',
+
+            // Tool Management
+            'view-tool-settings',
+            'manage-tool-settings',
+            'view-tool-assignments',
+            'assign-tools',
+            'return-tools',
+
+            // Agreement Workflow
+            'countersign-agreements',
+            'staff-sign-agreements',
         ];
 
         foreach ($permissions as $permission) {
@@ -142,7 +154,7 @@ class RolePermissionSeeder extends Seeder
 
         // 1. Super Admin - Full Access
         $superAdmin = Role::firstOrCreate(['name' => 'Super Admin']);
-        $superAdmin->givePermissionTo(Permission::all());
+        $superAdmin->syncPermissions(Permission::all());
 
         // 2. Administrator - Almost Full Access (except role management)
         $admin = Role::firstOrCreate(['name' => 'Administrator']);
@@ -176,7 +188,9 @@ class RolePermissionSeeder extends Seeder
             'view-budgets', 'manage-budgets',
             'view-change-orders', 'approve-change-orders',
             'view-communications', 'create-communications',
-            'manage-schedules', 'assign-technicians', 'view-schedules',
+            'manage-schedules', 'assign-technicians', 'view-schedules', 'schedule-visits',
+            'countersign-agreements', 'staff-sign-agreements',
+            'view-tool-assignments',
         ]);
 
         // 3b. Store Manager - Tool assignment/return and project visibility
@@ -189,6 +203,11 @@ class RolePermissionSeeder extends Seeder
             'view-work-logs',
             'view-communications',
             'create-communications',
+            'view-tool-settings',
+            'manage-tool-settings',
+            'view-tool-assignments',
+            'assign-tools',
+            'return-tools',
         ]);
 
         // 4. Inspector - Inspection Focused

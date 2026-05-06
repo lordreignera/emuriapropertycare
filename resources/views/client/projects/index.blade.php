@@ -18,9 +18,14 @@
                         <h3 class="fw-bold mb-1">My Projects</h3>
                         <p class="mb-0 opacity-75">Track all active and completed care projects</p>
                     </div>
-                    <span class="badge bg-white text-primary fs-6 px-3 py-2">
-                        {{ $projects->count() }} {{ Str::plural('Project', $projects->count()) }}
-                    </span>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="badge bg-white text-primary fs-6 px-3 py-2">
+                            {{ $projects->count() }} {{ Str::plural('Project', $projects->count()) }}
+                        </span>
+                        <a href="{{ route('client.service-requests.create') }}" class="btn btn-light btn-sm">
+                            <i class="mdi mdi-alert-circle me-1"></i> Report Issue
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
@@ -46,7 +51,35 @@
     <div class="row">
         @foreach($projects as $project)
             @php
-                $status = $project->status ?? 'pending';
+                $insp = $project->inspections->sortByDesc('completed_date')->first();
+
+                // Agreement signing state
+                $clientSigned       = $insp && $insp->approved_by_client;
+                $etogoCountersigned = $insp && $insp->etogo_signed_at;
+                $fullySigned        = $clientSigned && $etogoCountersigned;
+
+                // Dates ONLY from the fully-signed contract (work schedule first/last visit)
+                // planned_start_date and target_completion_date are set from the work schedule
+                // which is locked once the agreement is countersigned — these ARE the contract dates.
+                $startDate = $fullySigned && $insp->planned_start_date
+                    ? $insp->planned_start_date
+                    : null;
+                $endDate   = $fullySigned && $insp->target_completion_date
+                    ? $insp->target_completion_date
+                    : null;
+
+                // Effective status — use inspection progress as source-of-truth
+                // (project DB status may lag behind if completeProject was called on an older record)
+                $progDoneCheck = !empty($insp?->completed_finding_ids);
+                $effectiveStatus = match(true) {
+                    $progDoneCheck                        => 'completed',
+                    $project->status === 'completed'      => 'completed',
+                    $project->status === 'on_hold'        => 'on_hold',
+                    $project->status === 'cancelled'      => 'cancelled',
+                    $project->status === 'active'         => 'active',
+                    default                               => $project->status ?? 'pending',
+                };
+                $status = $effectiveStatus;
                 $statusClass = match($status) {
                     'active'    => 'success',
                     'completed' => 'info',
@@ -55,29 +88,20 @@
                     default     => 'secondary',
                 };
 
-                $insp = $project->inspections->sortByDesc('completed_date')->first();
-
-                // Dates: prefer inspection schedule dates over project dates
-                $startDate = optional($insp?->planned_start_date ?? $project->start_date);
-                $endDate   = optional($insp?->target_completion_date ?? $project->end_date);
-
-                // Agreement status
-                $inspCompleted   = $insp && $insp->status === 'completed';
-                $clientSigned    = $insp && $insp->approved_by_client;
-                $etogoCountersigned = $insp && $insp->etogo_signed_at;
-
-                // Payment display
-                $cadence = $insp?->work_payment_cadence;
-                $payLabel = match($cadence) {
-                    'per_visit' => 'Per Visit',
-                    'monthly'   => 'Monthly',
-                    'annual'    => 'Annual',
-                    'full'      => 'Full Payment',
-                    default     => 'Per Visit',
+                // Payment display — use payment_plan as primary source of truth
+                $payPlan  = $insp?->payment_plan ?? null;
+                $cadence  = $insp?->work_payment_cadence;
+                $payLabel = match($payPlan ?? $cadence) {
+                    'per_visit'   => 'Per Visit',
+                    'installment' => 'Installment',
+                    'full'        => 'Full Payment',
+                    'monthly'     => 'Monthly',
+                    'annual'      => 'Annual',
+                    default       => 'Per Visit',
                 };
                 $payAmount = $insp?->work_payment_amount > 0
                     ? $insp->work_payment_amount
-                    : ($cadence === 'per_visit'
+                    : (in_array($payPlan ?? $cadence, ['per_visit'])
                         ? ($insp?->trc_per_visit ?? $insp?->scientific_final_monthly ?? 0)
                         : ($insp?->scientific_final_monthly ?? 0));
                 $hasPayment = $payAmount > 0;
@@ -89,9 +113,17 @@
                 $installmentsPaid = (int) ($insp?->installments_paid ?? 0);
                 $installmentTotal = (int) ($insp?->installment_months ?? 0);
                 $nextDue          = $insp?->next_installment_due_date;
-                $paymentPlan      = $insp?->payment_plan ?? 'full';
+                $paymentPlan      = $payPlan ?? 'full';
                 $installAmt       = $insp?->installment_amount > 0 ? $insp->installment_amount : $payAmount;
-                $canPay           = $clientSigned && !$isPaid && $hasPayment;
+
+                // Show Pay button whenever there is an outstanding balance (not when fully paid)
+                $canPay = $clientSigned && $hasPayment && !$isFullyPaid;
+
+                // Payment totals from controller-computed attributes
+                $totalProjectCost = (float) ($insp?->payment_total_cost ?? 0);
+                $paidSoFar        = (float) ($insp?->payment_paid_so_far ?? 0);
+                $balance          = (float) ($insp?->payment_balance ?? 0);
+                $hasBalance       = (bool)  ($insp?->payment_has_balance ?? false);
             @endphp
             <div class="col-md-6 col-xl-4 mb-4">
                 <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid var(--bs-{{ $statusClass }}) !important;">
@@ -117,7 +149,7 @@
                                 <div class="bg-light rounded p-2 text-center">
                                     <div class="small text-muted">Start Date</div>
                                     <div class="fw-semibold small">
-                                        {{ $startDate->format('M d, Y') ?? '—' }}
+                                        {{ $startDate ? $startDate->format('M d, Y') : '—' }}
                                     </div>
                                 </div>
                             </div>
@@ -125,7 +157,7 @@
                                 <div class="bg-light rounded p-2 text-center">
                                     <div class="small text-muted">End Date</div>
                                     <div class="fw-semibold small">
-                                        {{ $endDate->format('M d, Y') ?? '—' }}
+                                        {{ $endDate ? $endDate->format('M d, Y') : '—' }}
                                     </div>
                                 </div>
                             </div>
@@ -141,13 +173,38 @@
 
                         {{-- Payment --}}
                         @if($hasPayment)
-                            <div class="d-flex align-items-center mb-2">
+                            <div class="d-flex align-items-center mb-1">
                                 <i class="mdi mdi-currency-usd text-success me-2"></i>
                                 <small>
                                     <span class="text-muted">{{ $payLabel }}:</span>
                                     <strong class="text-success">${{ number_format($payAmount, 2) }}</strong>
                                 </small>
                             </div>
+                            @if($totalProjectCost > 0)
+                            <div class="mb-2 ps-4">
+                                <div class="d-flex justify-content-between align-items-center" style="font-size:.78rem;">
+                                    <span class="text-muted">
+                                        Paid:
+                                        <strong class="text-success">${{ number_format($paidSoFar, 2) }}</strong>
+                                        / ${{ number_format($totalProjectCost, 2) }}
+                                    </span>
+                                    @if($hasBalance)
+                                        <span class="badge bg-warning text-dark">
+                                            ${{ number_format($balance, 2) }} due
+                                        </span>
+                                    @else
+                                        <span class="badge bg-success">Settled</span>
+                                    @endif
+                                </div>
+                                @if($totalProjectCost > 0)
+                                @php $paidPct = min(100, round($paidSoFar / $totalProjectCost * 100)); @endphp
+                                <div class="progress mt-1" style="height:4px;">
+                                    <div class="progress-bar bg-{{ $hasBalance ? 'warning' : 'success' }}"
+                                         style="width:{{ $paidPct }}%"></div>
+                                </div>
+                                @endif
+                            </div>
+                            @endif
                         @else
                             <div class="d-flex align-items-center mb-2">
                                 <i class="mdi mdi-currency-usd text-muted me-2"></i>
@@ -198,9 +255,57 @@
                             </div>
                         @endif
 
+                        {{-- Project Progress --}}
+                        @if($insp && $insp->pharFindings->isNotEmpty())
+                            @php
+                                $progPct      = $insp->progress_pct ?? 0;
+                                $progResolved = $insp->progress_resolved ?? 0;
+                                $progTotal    = $insp->progress_total ?? 0;
+                                $progDone     = $insp->progress_done ?? false;
+                                $progColor    = $progDone ? 'success' : ($progPct >= 50 ? 'primary' : ($progPct > 0 ? 'warning' : 'secondary'));
+                            @endphp
+                            <div class="mt-3">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <small class="fw-semibold text-muted">
+                                        <i class="mdi mdi-progress-check me-1"></i>Project Progress
+                                    </small>
+                                    <small class="fw-bold text-{{ $progColor }}">{{ $progPct }}%</small>
+                                </div>
+                                <div class="progress" style="height:7px;">
+                                    <div class="progress-bar bg-{{ $progColor }}" style="width:{{ $progPct }}%"></div>
+                                </div>
+                                <div class="d-flex justify-content-between mt-1">
+                                    <small class="text-muted">
+                                        {{ $progResolved }} / {{ $progTotal }} issues resolved
+                                    </small>
+                                    @if($progDone)
+                                        <small class="text-success fw-semibold">
+                                            <i class="mdi mdi-check-circle me-1"></i>Complete
+                                        </small>
+                                    @endif
+                                </div>
+                            </div>
+                            {{-- Balance warning when project is complete but payment outstanding --}}
+                            @if($progDone && $hasBalance)
+                            <div class="alert alert-warning border-warning border py-2 px-3 mb-0 mt-2 small d-flex align-items-start gap-2">
+                                <i class="mdi mdi-alert-circle text-warning mt-1 flex-shrink-0"></i>
+                                <div>
+                                    <strong>Outstanding Balance</strong> — Your project is complete but
+                                    <strong>${{ number_format($balance, 2) }}</strong> remains unpaid.
+                                    @if($canPay)
+                                        <a href="{{ route('client.inspections.pay-installment', $insp->id) }}"
+                                           class="d-block mt-1 fw-semibold text-warning">
+                                            <i class="mdi mdi-credit-card me-1"></i>Pay now →
+                                        </a>
+                                    @endif
+                                </div>
+                            </div>
+                            @endif
+                        @endif
+
                         {{-- Agreement Status Banner --}}
                         @if($insp)
-                            @if(!$inspCompleted)
+                            @if(!$progDoneCheck)
                                 <div class="alert alert-light border py-2 px-3 mb-0 mt-2 small">
                                     <i class="mdi mdi-clock-outline me-1 text-warning"></i>
                                     Awaiting inspection completion
@@ -242,7 +347,7 @@
                                 </a>
                             @endif
                             {{-- Agreement action --}}
-                            @if($insp && $inspCompleted && !$clientSigned)
+                            @if($insp && $progDoneCheck && !$clientSigned)
                                 <a href="{{ route('client.inspections.agreement', $insp->id) }}"
                                    class="btn btn-sm btn-warning w-100">
                                     <i class="mdi mdi-pen me-1"></i> Sign Agreement
@@ -292,15 +397,15 @@
                             </div>
 
                             @php
-                                $completedLogCount = ($insp && $insp->relationLoaded('maintenanceVisitLogs'))
-                                    ? $insp->maintenanceVisitLogs->where('status', 'completed')->count()
+                                $totalLogCount = ($insp && $insp->relationLoaded('maintenanceVisitLogs'))
+                                    ? $insp->maintenanceVisitLogs->count()
                                     : 0;
                             @endphp
-                            @if($insp && ($insp->status ?? null) === 'completed' && $completedLogCount > 0)
+                            @if($insp && $totalLogCount > 0)
                                 <a href="{{ route('client.projects.log-sheet', [$project->id, $insp->id]) }}"
                                    class="btn btn-sm btn-outline-success w-100">
                                     <i class="mdi mdi-clipboard-check-outline me-1"></i>
-                                    View Completed Log Sheet ({{ $completedLogCount }})
+                                    View Work Progress ({{ $totalLogCount }} {{ Str::plural('log', $totalLogCount) }})
                                 </a>
                             @endif
                         </div>

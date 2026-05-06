@@ -11,6 +11,211 @@ Welcome back, {{ auth()->user()->name }}
 @endsection
 
 @section('content')
+
+@if(auth()->user()->hasRole('Store Manager'))
+{{-- ═══════════════════════════════════════════════════════════
+     STORE MANAGER DASHBOARD
+════════════════════════════════════════════════════════════════ --}}
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="alert alert-primary mb-0" role="alert" style="border-left:4px solid #0d6efd;">
+            <strong>Tools overview.</strong> Manage tool stock, assignments and returns from here.
+        </div>
+    </div>
+</div>
+
+{{-- KPI Cards --}}
+<div class="row">
+    <div class="col-md-3 stretch-card grid-margin">
+        <div class="card bg-gradient-danger text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="font-weight-normal mb-2">Total Tools</h6>
+                        <h2 class="mb-0">{{ $totalTools ?? 0 }}</h2>
+                        <p class="text-white-50 mb-0 mt-2 small">Active tool records</p>
+                    </div>
+                    <i class="mdi mdi-toolbox mdi-48px opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3 stretch-card grid-margin">
+        <div class="card bg-gradient-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="font-weight-normal mb-2">Tools In Use</h6>
+                        <h2 class="mb-0">{{ $toolsInUse ?? 0 }}</h2>
+                        <p class="text-white-50 mb-0 mt-2 small">Units currently deployed</p>
+                    </div>
+                    <i class="mdi mdi-wrench mdi-48px opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3 stretch-card grid-margin">
+        <div class="card bg-gradient-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="font-weight-normal mb-2">Tools Owned</h6>
+                        <h2 class="mb-0">{{ $toolsOwned ?? 0 }}</h2>
+                        <p class="text-white-50 mb-0 mt-2 small">Company-owned tools</p>
+                    </div>
+                    <i class="mdi mdi-check-decagram mdi-48px opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3 stretch-card grid-margin">
+        <div class="card bg-gradient-warning text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="font-weight-normal mb-2">Tools Hired</h6>
+                        <h2 class="mb-0">{{ $toolsHired ?? 0 }}</h2>
+                        <p class="text-white-50 mb-0 mt-2 small">Hired / rented tools</p>
+                    </div>
+                    <i class="mdi mdi-handshake mdi-48px opacity-50"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    {{-- System Overview --}}
+    <div class="col-md-6 grid-margin stretch-card">
+        <div class="card">
+            <div class="card-body">
+                <h4 class="card-title mb-3">System Overview</h4>
+                <div class="system-stats">
+                    <a href="{{ route('tool-assignments.index') }}" class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom text-decoration-none text-dark">
+                        <div class="d-flex align-items-center">
+                            <i class="mdi mdi-clock-alert text-warning mdi-24px me-2"></i>
+                            <span>Pending Tool Assignment</span>
+                        </div>
+                        <span class="badge badge-warning">{{ $pendingToolAssignment ?? 0 }}</span>
+                    </a>
+                    <a href="{{ route('admin.tool-settings.index') }}" class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom text-decoration-none text-dark">
+                        <div class="d-flex align-items-center">
+                            <i class="mdi mdi-toolbox text-primary mdi-24px me-2"></i>
+                            <span>Total Active Tools</span>
+                        </div>
+                        <span class="badge badge-primary">{{ $totalTools ?? 0 }}</span>
+                    </a>
+                    <a href="{{ route('admin.tool-settings.index') }}?availability_status=available" class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom text-decoration-none text-dark">
+                        <div class="d-flex align-items-center">
+                            <i class="mdi mdi-check-circle text-success mdi-24px me-2"></i>
+                            <span>Available Tools</span>
+                        </div>
+                        <span class="badge badge-success">{{ $availableTools ?? 0 }}</span>
+                    </a>
+                    <a href="{{ route('tool-assignments.index') }}" class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom text-decoration-none text-dark">
+                        <div class="d-flex align-items-center">
+                            <i class="mdi mdi-swap-horizontal text-info mdi-24px me-2"></i>
+                            <span>Unreturned Assignments</span>
+                        </div>
+                        <span class="badge badge-info">{{ $unreturnedRecords ?? 0 }}</span>
+                    </a>
+                    <a href="{{ route('admin.tool-settings.index') }}?ownership_status=hired" class="d-flex justify-content-between align-items-center text-decoration-none text-dark">
+                        <div class="d-flex align-items-center">
+                            <i class="mdi mdi-handshake text-danger mdi-24px me-2"></i>
+                            <span>Hired Tools</span>
+                        </div>
+                        <span class="badge badge-danger">{{ $toolsHired ?? 0 }}</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{-- Quick Actions --}}
+    <div class="col-md-6 grid-margin stretch-card">
+        <div class="card">
+            <div class="card-body">
+                <h4 class="card-title mb-3">Quick Actions</h4>
+                <div class="d-grid gap-2">
+                    <a href="{{ route('tool-assignments.index') }}" class="btn btn-outline-warning btn-icon-text">
+                        <i class="mdi mdi-toolbox btn-icon-prepend"></i> Assign / Return Tools
+                    </a>
+                    <a href="{{ route('admin.tool-settings.index') }}" class="btn btn-outline-primary btn-icon-text">
+                        <i class="mdi mdi-cog btn-icon-prepend"></i> Manage Tool Settings
+                    </a>
+                    <a href="{{ route('admin.tool-settings.create') }}" class="btn btn-outline-success btn-icon-text">
+                        <i class="mdi mdi-plus btn-icon-prepend"></i> Add New Tool
+                    </a>
+                    <a href="{{ route('inspections.index') }}?view=pending-etogo" class="btn btn-outline-info btn-icon-text">
+                        <i class="mdi mdi-format-list-checks btn-icon-prepend"></i> View Awaiting Assignment
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{-- Recent Tool Assignments --}}
+<div class="row">
+    <div class="col-md-12 grid-margin stretch-card">
+        <div class="card">
+            <div class="card-body">
+                <h4 class="card-title mb-3">Recent Tool Assignments</h4>
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Tool</th>
+                                <th>Property</th>
+                                <th>Qty</th>
+                                <th>Type</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @forelse($recentAssignments ?? [] as $assignment)
+                            <tr>
+                                <td>{{ $assignment->created_at->format('M d, Y') }}</td>
+                                <td>{{ $assignment->tool_name ?? $assignment->toolSetting?->tool_name ?? 'N/A' }}</td>
+                                <td>{{ $assignment->inspection?->property?->property_name ?? $assignment->inspection?->property?->property_code ?? 'N/A' }}</td>
+                                <td>{{ $assignment->quantity }}</td>
+                                <td>
+                                    <span class="badge badge-{{ $assignment->ownership_status === 'hired' ? 'warning' : 'primary' }}">
+                                        {{ ucfirst($assignment->ownership_status ?? 'owned') }}
+                                    </span>
+                                </td>
+                                <td>
+                                    @if($assignment->returned_at)
+                                        <span class="badge badge-success">Returned</span>
+                                    @else
+                                        <span class="badge badge-info">In Use</span>
+                                    @endif
+                                </td>
+                            </tr>
+                            @empty
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-4">
+                                    No tool assignments yet.
+                                </td>
+                            </tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@else
+{{-- ═══════════════════════════════════════════════════════════
+     GENERIC STAFF DASHBOARD (non-Store Manager)
+════════════════════════════════════════════════════════════════ --}}
+
 <div class="row mb-3">
     <div class="col-12">
         <div class="alert alert-primary mb-0" role="alert" style="border-left:4px solid #0d6efd;">
@@ -279,4 +484,7 @@ body.light-theme .badge {
     color: #ffffff !important;
 }
 </style>
+
+@endif {{-- end @if(Store Manager) / @else --}}
+
 @endsection

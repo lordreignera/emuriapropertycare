@@ -4,6 +4,21 @@
 
 EMURIA PropertyCare is a comprehensive property management system with role-based access control and a structured workflow for managing properties, inspections, projects, and payments.
 
+### Post-Registration Issue And Change Requests
+
+For existing clients who already registered a property, any newly reported issue, emergency, or requested change should enter the system as a service request tied to the property and, when applicable, the active project.
+
+If pricing is required, admin converts that request into a linked assessment.
+In that linked assessment:
+
+- the client-reported issues become the initial findings list
+- admin validates and refines those findings into the normal assessment structure
+- materials and estimated labour are attached to those particular findings
+- BDC and the rest of the normal pricing calculations are computed from those assessed findings
+- the result then continues through the normal quotation, approval, maintenance, and invoice workflow
+
+This keeps the quoted work directly traceable to what the client originally reported while still using the platform's standard pricing and approval flow.
+
 ---
 
 ## 👥 User Roles & Responsibilities

@@ -92,6 +92,55 @@
         }
     }
 
+    // Backfill descriptive fields from approved quotation snapshot for legacy
+    // findings where issue/recommendation descriptions are missing inline.
+    $agreementSnapshotAll = collect($agreementQuotation->findings_snapshot ?? [])->values();
+    $agreementSnapshotById = $agreementSnapshotAll
+        ->filter(fn($f) => !empty($f['id']))
+        ->mapWithKeys(fn($f) => [(int) $f['id'] => $f]);
+
+    $agreementSnapshotByKey = $agreementSnapshotAll
+        ->mapWithKeys(function ($f) use ($makeAgreementFindingKey) {
+            $key = $makeAgreementFindingKey(
+                $f['task_question'] ?? ($f['issue'] ?? ''),
+                $f['category'] ?? ''
+            );
+            return $key !== '|' ? [$key => $f] : [];
+        });
+
+    $agreementFindings = $agreementFindings
+        ->map(function ($finding) use ($agreementSnapshotById, $agreementSnapshotByKey, $makeAgreementFindingKey) {
+            $snapshotFinding = null;
+            $findingId = (int) ($finding['id'] ?? 0);
+
+            if ($findingId > 0 && $agreementSnapshotById->has($findingId)) {
+                $snapshotFinding = $agreementSnapshotById->get($findingId);
+            } else {
+                $key = $makeAgreementFindingKey(
+                    $finding['task_question'] ?? ($finding['issue'] ?? ''),
+                    $finding['phar_category'] ?? ($finding['category'] ?? '')
+                );
+                $snapshotFinding = $agreementSnapshotByKey->get($key);
+            }
+
+            if (!$snapshotFinding) {
+                return $finding;
+            }
+
+            if (empty($finding['issue_description']) && !empty($snapshotFinding['issue_description'])) {
+                $finding['issue_description'] = $snapshotFinding['issue_description'];
+            }
+            if (empty($finding['recommendation_details']) && !empty($snapshotFinding['recommendation_details'])) {
+                $finding['recommendation_details'] = $snapshotFinding['recommendation_details'];
+            }
+            if (empty($finding['recommendations']) && !empty($snapshotFinding['recommendations']) && is_array($snapshotFinding['recommendations'])) {
+                $finding['recommendations'] = $snapshotFinding['recommendations'];
+            }
+
+            return $finding;
+        })
+        ->values();
+
     $agreementLabourHours = $agreementFindings->sum(function ($finding) {
         return (float) ($finding['phar_labour_hours'] ?? 0);
     });
@@ -115,11 +164,14 @@
         ? $agreementMaterialsFromFindings
         : (float) ($agreementInspection->fmc_annual ?? 0);
 
-    $agreementTools = (float) ($agreementInspection->bdc_annual ?? 0);
-    $agreementTotal = (float) ($agreementInspection->trc_annual ?? 0);
+    $agreementTotal = round($agreementLabour + $agreementMaterials, 2);
 
     if ($agreementTotal <= 0) {
-        $agreementTotal = $agreementLabour + $agreementMaterials + $agreementTools;
+        $agreementTotal = round((float) ($agreementInspection->frlc_annual ?? 0) + (float) ($agreementInspection->fmc_annual ?? 0), 2);
+    }
+
+    if ($agreementTotal <= 0) {
+        $agreementTotal = (float) ($agreementInspection->trc_annual ?? 0);
     }
 
     $agreementDeposit  = round($agreementTotal * 0.5,  2);
@@ -132,15 +184,53 @@
         ? $agreementInspection->work_payment_paid_at->format('Y-m-d h:i A')
         : null;
 
-    $agreementStartDate = $agreementInspection->planned_start_date
-        ? $agreementInspection->planned_start_date->format('Y-m-d')
-        : 'Pending stage completion';
-    $agreementCompletionDate = $agreementInspection->target_completion_date
-        ? $agreementInspection->target_completion_date->format('Y-m-d')
-        : 'Pending stage completion';
-    $agreementDuration = $agreementInspection->estimated_duration_days
-        ? ($agreementInspection->estimated_duration_days . ' day(s)')
-        : 'To be calculated';
+    // Derive completion date and duration from work_schedule deliverable days
+    // The last deliverable date across all visits is the real end date
+    $agreementWorkSchedule = $agreementInspection->work_schedule ?? [];
+    $allScheduledDates = [];
+    foreach ($agreementWorkSchedule as $visit) {
+        if (!empty($visit['date'])) {
+            $allScheduledDates[] = $visit['date'];
+        }
+        foreach ($visit['deliverables'] ?? [] as $dl) {
+            if (!empty($dl['date'])) {
+                $allScheduledDates[] = $dl['date'];
+            }
+        }
+    }
+    $allScheduledDates = array_unique(array_filter($allScheduledDates));
+    sort($allScheduledDates);
+
+    $schedFirstDate = !empty($allScheduledDates) ? reset($allScheduledDates) : null;
+    $schedLastDate  = !empty($allScheduledDates) ? end($allScheduledDates)   : null;
+
+    // Start date: prefer first scheduled date, fallback to DB column
+    if ($schedFirstDate) {
+        $agreementStartDate = \Carbon\Carbon::parse($schedFirstDate)->format('Y-m-d');
+    } elseif ($agreementInspection->planned_start_date) {
+        $agreementStartDate = $agreementInspection->planned_start_date->format('Y-m-d');
+    } else {
+        $agreementStartDate = 'Pending stage completion';
+    }
+
+    if ($schedLastDate) {
+        $agreementCompletionDate = \Carbon\Carbon::parse($schedLastDate)->format('Y-m-d');
+    } elseif ($agreementInspection->target_completion_date) {
+        $agreementCompletionDate = $agreementInspection->target_completion_date->format('Y-m-d');
+    } else {
+        $agreementCompletionDate = 'Pending stage completion';
+    }
+
+    if ($schedFirstDate && $schedLastDate && $schedFirstDate !== $schedLastDate) {
+        $durationDays = \Carbon\Carbon::parse($schedFirstDate)->diffInDays(\Carbon\Carbon::parse($schedLastDate)) + 1;
+        $agreementDuration = $durationDays . ' day(s)';
+    } elseif ($agreementInspection->estimated_duration_days) {
+        $agreementDuration = $agreementInspection->estimated_duration_days . ' day(s)';
+    } elseif (count($allScheduledDates) === 1) {
+        $agreementDuration = '1 day(s)';
+    } else {
+        $agreementDuration = 'To be calculated';
+    }
 
     $assignedTools = $agreementInspection->toolAssignments()
         ->orderBy('tool_name')
@@ -182,13 +272,33 @@
                     <span style="color:#666;">({{ $finding['system'] }}{{ !empty($finding['subsystem']) ? ' › '.$finding['subsystem'] : '' }})</span>
                 @endif
                 @if(!empty($finding['phar_labour_hours']))
-                    <br><span style="color:#666; font-size:0.9em;">Labour: {{ number_format((float)$finding['phar_labour_hours'], 1) }} hrs</span>
+                    <br><span style="color:#666; font-size:0.9em;">Labour: {{ number_format((float)$finding['phar_labour_hours'], 1) }} hrs @ ${{ number_format((float) ($agreementInspection->labour_hourly_rate ?? 165), 2) }}/hr = ${{ number_format(((float)$finding['phar_labour_hours']) * (float)($agreementInspection->labour_hourly_rate ?? 165), 2) }}</span>
                 @endif
                 @php
+                    $findingMats = collect($finding['phar_materials'] ?? [])->filter(fn($m) => !empty($m['material_name']))->values();
                     $findingMatCost = collect($finding['phar_materials'] ?? [])->sum(fn($m) => (float)($m['line_total'] ?? 0));
                 @endphp
                 @if($findingMatCost > 0)
                     <br><span style="color:#666; font-size:0.9em;">Materials: ${{ number_format($findingMatCost, 2) }}</span>
+                @endif
+                @if($findingMats->isNotEmpty())
+                    <ul style="margin:4px 0 0 14px; padding:0; color:#555; font-size:0.88em;">
+                        @foreach($findingMats as $mat)
+                            <li>{{ $mat['material_name'] ?? 'Material' }}: {{ number_format((float) ($mat['quantity'] ?? 0), 2) }} {{ $mat['unit'] ?? 'ea' }} @ ${{ number_format((float) ($mat['unit_cost'] ?? 0), 2) }} = ${{ number_format((float) ($mat['line_total'] ?? 0), 2) }}</li>
+                        @endforeach
+                    </ul>
+                @endif
+                @if(!empty($finding['issue_description']))
+                    <div style="color:#444; font-size:0.88em; margin-top:2px;"><em>Issue detail:</em> {{ $finding['issue_description'] }}</div>
+                @endif
+                @if(!empty($finding['recommendations']) && is_array($finding['recommendations']))
+                    <div style="color:#666; font-size:0.88em; margin-top:2px;"><em>Recommendation:</em> {{ implode('; ', array_filter($finding['recommendations'])) }}</div>
+                @endif
+                @if(!empty($finding['recommendation_details']))
+                    <div style="color:#444; font-size:0.88em; margin-top:2px;"><em>Recommendation detail:</em> {{ $finding['recommendation_details'] }}</div>
+                @endif
+                @if(!empty($finding['phar_notes']) || !empty($finding['notes']))
+                    <div style="color:#666; font-size:0.88em; margin-top:2px;"><em>Notes:</em> {{ $finding['phar_notes'] ?? $finding['notes'] }}</div>
                 @endif
             </li>
         @endforeach
@@ -207,25 +317,88 @@
         $agreementScheduledVisits = collect($agreementInspection->work_schedule ?? [])
             ->sortBy('date')
             ->values();
+
+        // Count total individual work days across all deliverables
+        $totalWorkDays = 0;
+        foreach ($agreementScheduledVisits as $v) {
+            $dlCount = count($v['deliverables'] ?? []);
+            $totalWorkDays += $dlCount > 0 ? $dlCount : 1;
+        }
     @endphp
+    @if($totalWorkDays > 0)
+        <div>• Total Scheduled Work Days: {{ $totalWorkDays }}</div>
+    @endif
     @if($agreementScheduledVisits->isNotEmpty())
-        <div style="margin-top:6px;"><strong>Confirmed Visit Dates:</strong></div>
+        <div style="margin-top:8px;"><strong>Confirmed Work Schedule:</strong></div>
         <table style="width:100%; border-collapse:collapse; margin:4px 0 6px 0; font-size:{{ !empty($pdfMode) ? '10px' : '13px' }};">
-            <tr style="background:#f4f4f4;">
-                <th style="padding:3px 8px; text-align:left; border:1px solid #ddd;">Visit #</th>
-                <th style="padding:3px 8px; text-align:left; border:1px solid #ddd;">Date</th>
-                <th style="padding:3px 8px; text-align:left; border:1px solid #ddd;">Day</th>
-                <th style="padding:3px 8px; text-align:left; border:1px solid #ddd;">Hours</th>
-                <th style="padding:3px 8px; text-align:left; border:1px solid #ddd;">Status</th>
+            <tr style="background:#334155; color:#fff;">
+                <th style="padding:4px 8px; text-align:left; border:1px solid #ddd;">Visit</th>
+                <th style="padding:4px 8px; text-align:left; border:1px solid #ddd;">Day #</th>
+                <th style="padding:4px 8px; text-align:left; border:1px solid #ddd;">Date</th>
+                <th style="padding:4px 8px; text-align:left; border:1px solid #ddd;">Weekday</th>
+                <th style="padding:4px 8px; text-align:left; border:1px solid #ddd;">Hours</th>
+                <th style="padding:4px 8px; text-align:left; border:1px solid #ddd;">Planned Tasks</th>
             </tr>
             @foreach($agreementScheduledVisits as $vIdx => $visit)
-            <tr>
-                <td style="padding:3px 8px; border:1px solid #ddd;">{{ $vIdx + 1 }}</td>
-                <td style="padding:3px 8px; border:1px solid #ddd;">{{ \Illuminate\Support\Carbon::parse($visit['date'])->format('M d, Y') }}</td>
-                <td style="padding:3px 8px; border:1px solid #ddd;">{{ \Illuminate\Support\Carbon::parse($visit['date'])->format('l') }}</td>
-                <td style="padding:3px 8px; border:1px solid #ddd;">7:00 AM – 6:00 PM</td>
-                <td style="padding:3px 8px; border:1px solid #ddd; text-transform:capitalize;">{{ $visit['status'] ?? 'scheduled' }}</td>
-            </tr>
+                @php
+                    $deliverables = $visit['deliverables'] ?? [];
+                    $visitLabel = 'Visit ' . ($vIdx + 1);
+                    $visitDate = $visit['date'] ?? '';
+                @endphp
+                @if(count($deliverables) > 0)
+                    @foreach($deliverables as $dIdx => $dl)
+                        @php
+                            $dlDate  = $dl['date'] ?? $visitDate;
+                            $dlDay   = $dl['day']  ?? ($dIdx + 1);
+                            $dlTasks = $dl['tasks'] ?? [];
+                            // backward compat: old records used plain string 'planned_work'
+                            if (empty($dlTasks) && !empty($dl['planned_work'])) {
+                                $dlTasks = [$dl['planned_work']];
+                            }
+                            $rowBg = $dIdx === 0 ? '#eff6ff' : '#fff';
+                        @endphp
+                        <tr style="background:{{ $rowBg }};">
+                            <td style="padding:3px 8px; border:1px solid #ddd; font-weight:{{ $dIdx === 0 ? '600' : 'normal' }}; color:{{ $dIdx === 0 ? '#1e40af' : '#444' }};">
+                                {{ $dIdx === 0 ? $visitLabel : '' }}
+                            </td>
+                            <td style="padding:3px 8px; border:1px solid #ddd; text-align:center;">Day {{ $dlDay }}</td>
+                            <td style="padding:3px 8px; border:1px solid #ddd; white-space:nowrap;">
+                                @if($dlDate){{ \Carbon\Carbon::parse($dlDate)->format('M d, Y') }}@else—@endif
+                            </td>
+                            <td style="padding:3px 8px; border:1px solid #ddd; white-space:nowrap;">
+                                @if($dlDate){{ \Carbon\Carbon::parse($dlDate)->format('l') }}@else—@endif
+                            </td>
+                            <td style="padding:3px 8px; border:1px solid #ddd; white-space:nowrap;">7:00 AM – 6:00 PM</td>
+                            <td style="padding:3px 8px; border:1px solid #ddd;">
+                                @if(count($dlTasks) > 0)
+                                    <ul style="margin:0; padding-left:14px;">
+                                        @foreach($dlTasks as $task)
+                                            @if(trim((string)$task) !== '')
+                                                <li>{{ $task }}</li>
+                                            @endif
+                                        @endforeach
+                                    </ul>
+                                @else
+                                    <span style="color:#999;">—</span>
+                                @endif
+                            </td>
+                        </tr>
+                    @endforeach
+                @else
+                    {{-- Visit with no deliverable breakdown — show single row --}}
+                    <tr style="background:#eff6ff;">
+                        <td style="padding:3px 8px; border:1px solid #ddd; font-weight:600; color:#1e40af;">{{ $visitLabel }}</td>
+                        <td style="padding:3px 8px; border:1px solid #ddd; text-align:center;">Day 1</td>
+                        <td style="padding:3px 8px; border:1px solid #ddd; white-space:nowrap;">
+                            @if($visitDate){{ \Carbon\Carbon::parse($visitDate)->format('M d, Y') }}@else—@endif
+                        </td>
+                        <td style="padding:3px 8px; border:1px solid #ddd; white-space:nowrap;">
+                            @if($visitDate){{ \Carbon\Carbon::parse($visitDate)->format('l') }}@else—@endif
+                        </td>
+                        <td style="padding:3px 8px; border:1px solid #ddd; white-space:nowrap;">7:00 AM – 6:00 PM</td>
+                        <td style="padding:3px 8px; border:1px solid #ddd;"><span style="color:#999;">—</span></td>
+                    </tr>
+                @endif
             @endforeach
         </table>
     @endif
@@ -238,8 +411,7 @@
     <div><strong>A. Project Cost Breakdown:</strong></div>
     <div>• Labour Cost: ${{ number_format($agreementLabour, 2) }}</div>
     <div>• Material Cost: ${{ number_format($agreementMaterials, 2) }}</div>
-    <div>• Tool Usage &amp; Allocation: ${{ number_format($agreementTools, 2) }}</div>
-    <div>• TOTAL PROJECT COST: ${{ number_format($agreementTotal, 2) }}</div>
+    <div>• TOTAL PROJECT COST (Labour + Materials): ${{ number_format($agreementTotal, 2) }}</div>
     <div style="margin-top:6px;"><strong>B. Payment Structure:</strong></div>
     <div>1. Deposit (50%): ${{ number_format($agreementDeposit, 2) }} (Required to schedule and mobilize)</div>
     <div>2. Progress Payment: ${{ number_format($agreementProgress, 2) }} (Due at agreed milestone or before final close-out)</div>
@@ -344,7 +516,17 @@
             <td style="width:50%; vertical-align:top; padding-right:14px; border-top:2px solid #333; padding-top:8px;">
                 <strong>STEP 1 — CLIENT SIGNATURE</strong><br><br>
                 @if(!empty($agreementInspection->approved_by_client) && !empty($agreementInspection->client_full_name))
-                    Signature: <em>Digitally Signed</em><br>
+                    Signature: <em style="font-style:italic;">Digitally Signed</em><br>
+                    @if(!empty($agreementInspection->client_signature_image_path))
+                        @php
+                            $disk = config('filesystems.default', 'public');
+                            $clientSigUrl = $pdfMode ?? false
+                                ? storage_path('app/public/' . $agreementInspection->client_signature_image_path)
+                                : \Illuminate\Support\Facades\Storage::disk($disk)->url($agreementInspection->client_signature_image_path);
+                        @endphp
+                        <img src="{{ $clientSigUrl }}" alt="Client Signature"
+                             style="max-height:55px;max-width:180px;object-fit:contain;display:block;margin:4px 0;"><br>
+                    @endif
                     Date: {{ optional($agreementInspection->client_approved_at)->format('Y-m-d h:i A') ?: 'N/A' }}<br>
                     Name (Print): {{ $agreementInspection->client_full_name }}
                 @else
@@ -357,7 +539,17 @@
             <td style="width:50%; vertical-align:top; padding-left:14px; border-top:2px solid #333; padding-top:8px;">
                 <strong>STEP 3 — ETOGO COUNTERSIGNATURE</strong><br><br>
                 @if(!empty($agreementInspection->etogo_signed_at))
-                    Signature: <em>Digitally Signed</em><br>
+                    Signature: <em style="font-style:italic;">Digitally Signed</em><br>
+                    @if(!empty($agreementInspection->etogo_signature_image_path))
+                        @php
+                            $disk = config('filesystems.default', 'public');
+                            $etogoSigUrl = $pdfMode ?? false
+                                ? storage_path('app/public/' . $agreementInspection->etogo_signature_image_path)
+                                : \Illuminate\Support\Facades\Storage::disk($disk)->url($agreementInspection->etogo_signature_image_path);
+                        @endphp
+                        <img src="{{ $etogoSigUrl }}" alt="Etogo Signature"
+                             style="max-height:55px;max-width:180px;object-fit:contain;display:block;margin:4px 0;"><br>
+                    @endif
                     Date: {{ optional($agreementInspection->etogo_signed_at)->format('Y-m-d h:i A') ?: 'N/A' }}<br>
                     Name (Print): {{ $agreementInspection->etogoRepresentative?->name ?? 'Etogo Representative' }}
                 @else

@@ -8,6 +8,7 @@ use App\Models\Inspection;
 use App\Models\InspectionQuotation;
 use App\Models\User;
 use App\Notifications\ClientQuotationApprovedNotification;
+use App\Notifications\InspectionFeePaidNotification;
 use App\Services\AgreementScheduleService;
 use App\Services\BDCCalculator;
 use App\Services\InspectionInvoiceSyncService;
@@ -68,7 +69,42 @@ class InspectionController extends Controller
             ->orderByDesc('id')
             ->paginate(10);
 
-        return view('client.inspections.index', compact('inspections'));
+        $viewMode = 'inspections';
+        return view('client.inspections.index', compact('inspections', 'viewMode'));
+    }
+
+    /**
+     * List only inspections that have client-visible quotations.
+     */
+    public function quotations(Request $request)
+    {
+        $filter      = $request->input('filter', 'all');
+        $propertyIds = Property::where('user_id', Auth::id())->pluck('id');
+
+        $latestInspectionIds = Inspection::whereIn('property_id', $propertyIds)
+            ->where('status', '!=', 'cancelled')
+            ->selectRaw('MAX(id) as id')
+            ->groupBy('property_id')
+            ->pluck('id');
+
+        $query = Inspection::with(['property', 'project'])
+            ->whereIn('id', $latestInspectionIds)
+            ->whereIn('property_id', $propertyIds)
+            ->whereNotNull('active_quotation_id')
+            ->whereIn('quotation_status', ['shared', 'client_reviewing', 'approved']);
+
+        if ($filter === 'pending') {
+            $query->whereIn('quotation_status', ['shared', 'client_reviewing']);
+        } elseif ($filter === 'approved') {
+            $query->where('quotation_status', 'approved');
+        }
+
+        $inspections = $query->orderByDesc('quotation_shared_at')
+            ->orderByDesc('id')
+            ->paginate(10)
+            ->withQueryString();
+
+        return view('client.inspections.quotations', compact('inspections', 'filter'));
     }
 
     /**
@@ -140,6 +176,7 @@ class InspectionController extends Controller
             'client_approved_at' => now(),
             'client_full_name' => $fullName,
             'client_signature' => 'typed:' . $fullName,
+            'client_signature_image_path' => auth()->user()->signature_path ?: null,
             'client_acknowledgment' => 'Client accepted Job Approval & Service Agreement online on ' . now()->toDateTimeString(),
         ]);
 
@@ -246,6 +283,24 @@ class InspectionController extends Controller
         }
 
         $snapshotFindings = collect($quotation->findings_snapshot ?? [])->values();
+        $inspectionFindings = collect($inspection->findings ?? [])->values();
+
+        $normalizePhotoPaths = function ($value) {
+            if (is_array($value)) {
+                return array_values(array_filter($value, fn($p) => is_string($p) && trim($p) !== ''));
+            }
+            if (is_string($value) && trim($value) !== '') {
+                $decoded = json_decode($value, true);
+                if (is_array($decoded)) {
+                    return array_values(array_filter($decoded, fn($p) => is_string($p) && trim($p) !== ''));
+                }
+            }
+            return [];
+        };
+
+        $pharPhotoById = $inspection->pharFindings()
+            ->get(['id', 'photo_ids'])
+            ->mapWithKeys(fn($f) => [(int) $f->id => $normalizePhotoPaths($f->photo_ids ?? [])]);
 
         // Backward-compatibility for legacy quotations where snapshot material_cost was
         // saved as 0. Recover from PHARFinding first, then from inspection findings JSON.
@@ -253,8 +308,6 @@ class InspectionController extends Controller
             $pharMaterialById = $inspection->pharFindings()
                 ->get(['id', 'material_cost'])
                 ->mapWithKeys(fn($f) => [(int) $f->id => (float) ($f->material_cost ?? 0)]);
-
-            $inspectionFindings = collect($inspection->findings ?? [])->values();
 
             $snapshotFindings = $snapshotFindings->values()->map(function ($finding, $index) use ($pharMaterialById, $inspectionFindings) {
                 $materialCost = (float) ($finding['material_cost'] ?? 0);
@@ -274,6 +327,48 @@ class InspectionController extends Controller
                 return $finding;
             })->values();
         }
+
+        $snapshotFindings = $snapshotFindings->values()->map(function ($finding, $index) use ($inspectionFindings, $normalizePhotoPaths, $pharPhotoById) {
+            $jsonFinding = $inspectionFindings->get($index, []);
+
+            $rawMaterials = $finding['materials'] ?? $finding['phar_materials'] ?? $jsonFinding['phar_materials'] ?? [];
+            $materials = collect(is_array($rawMaterials) ? $rawMaterials : [])
+                ->map(function ($material) {
+                    return [
+                        'material_name' => trim((string) ($material['material_name'] ?? '')),
+                        'quantity' => (float) ($material['quantity'] ?? 0),
+                        'unit' => trim((string) ($material['unit'] ?? 'ea')),
+                        'unit_cost' => round((float) ($material['unit_cost'] ?? 0), 2),
+                        'line_total' => round((float) ($material['line_total'] ?? 0), 2),
+                        'notes' => trim((string) ($material['notes'] ?? '')),
+                    ];
+                })
+                ->filter(fn ($material) => $material['material_name'] !== '')
+                ->values()
+                ->all();
+
+            $materialCost = (float) ($finding['material_cost'] ?? 0);
+            if ($materialCost <= 0 && !empty($materials)) {
+                $materialCost = (float) collect($materials)->sum(fn ($material) => (float) ($material['line_total'] ?? 0));
+            }
+
+            $finding['materials'] = $materials;
+            $finding['material_cost'] = round($materialCost, 2);
+            $finding['recommendation'] = trim((string) ($finding['recommendation'] ?? $finding['task_question'] ?? $jsonFinding['issue'] ?? ''));
+            $finding['notes'] = trim((string) ($finding['notes'] ?? $jsonFinding['phar_notes'] ?? $jsonFinding['notes'] ?? ''));
+
+            $photoPaths = $normalizePhotoPaths($finding['finding_photos'] ?? []);
+            if (empty($photoPaths)) {
+                $photoPaths = $normalizePhotoPaths($jsonFinding['finding_photos'] ?? []);
+            }
+            if (empty($photoPaths)) {
+                $findingId = (int) ($finding['id'] ?? 0);
+                $photoPaths = $pharPhotoById->get($findingId, []);
+            }
+            $finding['finding_photos'] = $photoPaths;
+
+            return $finding;
+        })->values();
 
         $approvedIds = collect($quotation->approved_finding_ids ?? [])->map(fn ($id) => (int) $id)->all();
         $isLocked = ($quotation->fresh()->status ?? null) === 'approved';
@@ -841,6 +936,22 @@ class InspectionController extends Controller
 
             DB::commit();
 
+            $adminRecipients = User::role(['Super Admin', 'Administrator', 'Project Manager', 'Inspector', 'Technician', 'Store Manager'])
+                ->get()
+                ->unique('id')
+                ->values();
+
+            if ($adminRecipients->isNotEmpty()) {
+                Notification::send($adminRecipients, new InspectionFeePaidNotification(
+                    inspectionId: (int) $inspection->id,
+                    propertyId: (int) $property->id,
+                    propertyName: (string) ($property->property_name ?? 'Property'),
+                    propertyCode: (string) ($property->property_code ?? 'N/A'),
+                    amount: (float) self::INSPECTION_FEE_DOLLARS,
+                    clientName: (string) (Auth::user()->name ?? 'Client'),
+                ));
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Inspection scheduled successfully!',
@@ -913,6 +1024,22 @@ class InspectionController extends Controller
         ]);
 
         $this->ensureInspectionFeeInvoice($inspection->fresh(['property', 'project']));
+
+        $adminRecipients = User::role(['Super Admin', 'Administrator', 'Project Manager', 'Inspector', 'Technician', 'Store Manager'])
+            ->get()
+            ->unique('id')
+            ->values();
+
+        if ($adminRecipients->isNotEmpty()) {
+            Notification::send($adminRecipients, new InspectionFeePaidNotification(
+                inspectionId: (int) $inspection->id,
+                propertyId: (int) ($inspection->property_id ?? 0),
+                propertyName: (string) ($inspection->property?->property_name ?? 'Property'),
+                propertyCode: (string) ($inspection->property?->property_code ?? 'N/A'),
+                amount: (float) self::INSPECTION_FEE_DOLLARS,
+                clientName: (string) (Auth::user()->name ?? 'Client'),
+            ));
+        }
 
         return redirect()->route('client.properties.index')
             ->with('success', 'Inspection scheduled successfully! Your inspection fee of $' . number_format(self::INSPECTION_FEE_DOLLARS, 2) . ' has been processed. An inspector will be assigned to your property shortly.');

@@ -100,6 +100,93 @@
 }
 #pharSummaryBar strong { color: #cbd5e1; font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; }
 #pharSummaryBar .sum-val { font-size: 1.75rem; font-weight: 700; line-height: 1.1; }
+
+/* ─── PHAR summary panel (light redesign) ───────────────────── */
+.phar-summary-panel {
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    border: 1px solid #dbe7f7;
+    border-radius: .8rem;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, .07);
+    padding: 1rem;
+}
+.phar-summary-panel .top-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .65rem;
+    margin-bottom: .8rem;
+}
+.phar-summary-panel .legend-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .38rem;
+    padding: .25rem .55rem;
+    border-radius: 999px;
+    font-size: .76rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+    background: #f8fafc;
+}
+.phar-summary-panel .legend-dot {
+    width: .5rem;
+    height: .5rem;
+    border-radius: 999px;
+}
+.phar-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: .7rem;
+}
+.phar-stat-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: .7rem;
+    padding: .72rem .85rem;
+    min-height: 92px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+.phar-stat-card .stat-label {
+    font-size: .71rem;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: #64748b;
+    font-weight: 700;
+    margin-bottom: .25rem;
+}
+.phar-stat-card .stat-value {
+    font-size: 1.75rem;
+    font-weight: 800;
+    line-height: 1.05;
+    color: #0f172a;
+}
+.phar-stat-card .stat-sub {
+    font-size: .73rem;
+    color: #0f766e;
+    margin-top: .2rem;
+    font-weight: 600;
+}
+.phar-col-third { grid-column: span 12; }
+@media (min-width: 768px) {
+    .phar-col-third { grid-column: span 6; }
+}
+@media (min-width: 992px) {
+    .phar-col-third { grid-column: span 4; }
+}
+
+/* Strong contrast for contract preview action */
+.btn-contract-preview {
+    border: 2px solid #495057;
+    color: #212529;
+    background: #ffffff;
+    font-weight: 600;
+}
+.btn-contract-preview:hover,
+.btn-contract-preview:focus {
+    background: #495057;
+    color: #ffffff;
+    border-color: #495057;
+}
 </style>
 @endpush
 
@@ -202,90 +289,93 @@
             </div>
 
             {{-- ── Findings Stats Panel ──────────────────────────────────── --}}
-            <div class="mb-3 rounded" style="background:#1e293b;color:#fff;padding:1rem 1.5rem;">
+            <div class="mb-3 phar-summary-panel">
                 @if($isApprovedScopeLocked)
-                <div class="d-flex flex-wrap gap-2 mb-3">
+                <div class="d-flex flex-wrap gap-2 mb-2">
                     <span class="badge" style="background:#0d6efd;">Proposed Scope</span>
                     <span class="badge" style="background:#198754;">Approved by Client</span>
                     <span class="badge" style="background:#fd7e14;color:#212529;">Deferred by Client</span>
                 </div>
                 @endif
 
-                <div class="row text-center mb-3 pb-3" style="border-bottom:1px solid rgba(255,255,255,.15);">
-                    <div class="col">
-                        <div class="small fw-semibold mb-1" style="color:#fc8181;">&#x1F534; Safety &amp; Health</div>
-                        <div class="fw-bold" style="font-size:1.5rem;color:#fc8181;line-height:1.1;">{{ $sevCount2['critical'] }}</div>
-                        @if($isApprovedScopeLocked)
-                            <div class="small" style="color:#86efac;">approved: {{ $sevApprovedCount2['critical'] }}</div>
-                        @endif
-                    </div>
-                    <div class="col">
-                        <div class="small fw-semibold mb-1" style="color:#fbd38d;">&#x1F7E0; Urgency</div>
-                        <div class="fw-bold" style="font-size:1.5rem;color:#fbd38d;line-height:1.1;">{{ $sevCount2['high'] }}</div>
-                        @if($isApprovedScopeLocked)
-                            <div class="small" style="color:#86efac;">approved: {{ $sevApprovedCount2['high'] }}</div>
-                        @endif
-                    </div>
-                    <div class="col">
-                        <div class="small fw-semibold mb-1" style="color:#d6bcfa;">&#x1F7E3; NOI Protection</div>
-                        <div class="fw-bold" style="font-size:1.5rem;color:#d6bcfa;line-height:1.1;">{{ $sevCount2['noi_protection'] }}</div>
-                        @if($isApprovedScopeLocked)
-                            <div class="small" style="color:#86efac;">approved: {{ $sevApprovedCount2['noi_protection'] }}</div>
-                        @endif
-                    </div>
-                    <div class="col">
-                        <div class="small fw-semibold mb-1" style="color:#fef08a;">&#x1F7E1; Value Depreciation</div>
-                        <div class="fw-bold" style="font-size:1.5rem;color:#fef08a;line-height:1.1;">{{ $sevCount2['medium'] }}</div>
-                        @if($isApprovedScopeLocked)
-                            <div class="small" style="color:#86efac;">approved: {{ $sevApprovedCount2['medium'] }}</div>
-                        @endif
-                    </div>
-                    <div class="col">
-                        <div class="small fw-semibold mb-1" style="color:#86efac;">&#x1F7E2; Non-Urgent</div>
-                        <div class="fw-bold" style="font-size:1.5rem;color:#86efac;line-height:1.1;">{{ $sevCount2['low'] }}</div>
-                        @if($isApprovedScopeLocked)
-                            <div class="small" style="color:#86efac;">approved: {{ $sevApprovedCount2['low'] }}</div>
-                        @endif
-                    </div>
+                <div class="top-legend">
+                    <span class="legend-chip" style="border-color:#fecaca;background:#fff5f5;color:#991b1b;"><span class="legend-dot" style="background:#ef4444;"></span>Safety &amp; Health</span>
+                    <span class="legend-chip" style="border-color:#fed7aa;background:#fff7ed;color:#9a3412;"><span class="legend-dot" style="background:#f97316;"></span>Urgency</span>
+                    <span class="legend-chip" style="border-color:#ddd6fe;background:#f5f3ff;color:#5b21b6;"><span class="legend-dot" style="background:#8b5cf6;"></span>NOI Protection</span>
+                    <span class="legend-chip" style="border-color:#fde68a;background:#fffbeb;color:#92400e;"><span class="legend-dot" style="background:#eab308;"></span>Value Depreciation</span>
+                    <span class="legend-chip" style="border-color:#bbf7d0;background:#f0fdf4;color:#166534;"><span class="legend-dot" style="background:#22c55e;"></span>Non-Urgent</span>
                 </div>
 
-                <div class="row text-center mb-2 pb-2" style="border-bottom:1px solid rgba(255,255,255,.12);">
-                    <div class="col-md-4">
-                        <div class="small fw-semibold mb-1" style="color:#cbd5e1;">TOTAL FINDINGS</div>
-                        <div class="fw-bold" style="font-size:1.5rem;color:#93c5fd;line-height:1.1;">{{ $scopedFindings2->count() }}</div>
+                <div class="phar-summary-grid">
+                    <div class="phar-stat-card phar-col-third">
+                        <div class="stat-label">Safety &amp; Health</div>
+                        <div class="stat-value" style="color:#ef4444;">{{ $sevCount2['critical'] }}</div>
                         @if($isApprovedScopeLocked)
-                            <div class="small" style="color:#86efac;">approved: {{ $approvedFindings2->count() }} | deferred: {{ $deferredFindings2->count() }}</div>
+                            <div class="stat-sub">approved: {{ $sevApprovedCount2['critical'] }}</div>
                         @endif
                     </div>
-                    <div class="col-md-4">
-                        <div class="small fw-semibold mb-1" style="color:#cbd5e1;">TOTAL LABOUR HOURS</div>
-                        <div class="fw-bold" style="font-size:1.5rem;color:#67e8f9;line-height:1.1;">{{ number_format($totalLabourHrs2, 1) }}</div>
+                    <div class="phar-stat-card phar-col-third">
+                        <div class="stat-label">Urgency</div>
+                        <div class="stat-value" style="color:#f97316;">{{ $sevCount2['high'] }}</div>
                         @if($isApprovedScopeLocked)
-                            <div class="small" style="color:#86efac;">approved: {{ number_format($approvedLabourHrs2, 1) }} hrs</div>
+                            <div class="stat-sub">approved: {{ $sevApprovedCount2['high'] }}</div>
                         @endif
                     </div>
-                    <div class="col-md-4">
-                        <div class="small fw-semibold mb-1" style="color:#cbd5e1;">TOTAL FR LABOUR COST (FRLC)</div>
-                        <div class="fw-bold" style="font-size:1.5rem;color:#fcd34d;line-height:1.1;">${{ number_format($totalFRLC2, 2) }}</div>
+                    <div class="phar-stat-card phar-col-third">
+                        <div class="stat-label">NOI Protection</div>
+                        <div class="stat-value" style="color:#8b5cf6;">{{ $sevCount2['noi_protection'] }}</div>
                         @if($isApprovedScopeLocked)
-                            <div class="small" style="color:#86efac;">approved: ${{ number_format($approvedFRLC2, 2) }}</div>
+                            <div class="stat-sub">approved: {{ $sevApprovedCount2['noi_protection'] }}</div>
                         @endif
                     </div>
-                </div>
+                    <div class="phar-stat-card phar-col-third">
+                        <div class="stat-label">Value Depreciation</div>
+                        <div class="stat-value" style="color:#eab308;">{{ $sevCount2['medium'] }}</div>
+                        @if($isApprovedScopeLocked)
+                            <div class="stat-sub">approved: {{ $sevApprovedCount2['medium'] }}</div>
+                        @endif
+                    </div>
+                    <div class="phar-stat-card phar-col-third">
+                        <div class="stat-label">Non-Urgent</div>
+                        <div class="stat-value" style="color:#22c55e;">{{ $sevCount2['low'] }}</div>
+                        @if($isApprovedScopeLocked)
+                            <div class="stat-sub">approved: {{ $sevApprovedCount2['low'] }}</div>
+                        @endif
+                    </div>
 
-                <div class="row text-center pt-1">
-                    <div class="col-md-6">
-                        <div class="small fw-semibold mb-1" style="color:#cbd5e1;">TOTAL MATERIAL ITEMS</div>
-                        <div class="fw-bold" style="font-size:1.5rem;color:#67e8f9;line-height:1.1;">{{ $totalMatItems2 }}</div>
+                    <div class="phar-stat-card phar-col-third">
+                        <div class="stat-label">Total Findings</div>
+                        <div class="stat-value" style="color:#2563eb;">{{ $scopedFindings2->count() }}</div>
                         @if($isApprovedScopeLocked)
-                            <div class="small" style="color:#86efac;">approved: {{ $approvedMatItems2 }}</div>
+                            <div class="stat-sub">approved: {{ $approvedFindings2->count() }} | deferred: {{ $deferredFindings2->count() }}</div>
                         @endif
                     </div>
-                    <div class="col-md-6">
-                        <div class="small fw-semibold mb-1" style="color:#cbd5e1;">TOTAL MATERIAL COST (FMC)</div>
-                        <div class="fw-bold" style="font-size:1.5rem;color:#4ade80;line-height:1.1;">${{ number_format($totalMatCost2, 2) }}</div>
+                    <div class="phar-stat-card phar-col-third">
+                        <div class="stat-label">Total Labour Hours</div>
+                        <div class="stat-value" style="color:#0891b2;">{{ number_format($totalLabourHrs2, 1) }}</div>
                         @if($isApprovedScopeLocked)
-                            <div class="small" style="color:#86efac;">approved: ${{ number_format($approvedMatCost2, 2) }}</div>
+                            <div class="stat-sub">approved: {{ number_format($approvedLabourHrs2, 1) }} hrs</div>
+                        @endif
+                    </div>
+                    <div class="phar-stat-card phar-col-third">
+                        <div class="stat-label">Total FR Labour Cost (FRLC)</div>
+                        <div class="stat-value" style="color:#ca8a04;">${{ number_format($totalFRLC2, 2) }}</div>
+                        @if($isApprovedScopeLocked)
+                            <div class="stat-sub">approved: ${{ number_format($approvedFRLC2, 2) }}</div>
+                        @endif
+                    </div>
+                    <div class="phar-stat-card phar-col-third">
+                        <div class="stat-label">Total Material Items</div>
+                        <div class="stat-value" style="color:#0ea5e9;">{{ $totalMatItems2 }}</div>
+                        @if($isApprovedScopeLocked)
+                            <div class="stat-sub">approved: {{ $approvedMatItems2 }}</div>
+                        @endif
+                    </div>
+                    <div class="phar-stat-card phar-col-third">
+                        <div class="stat-label">Total Material Cost (FMC)</div>
+                        <div class="stat-value" style="color:#16a34a;">${{ number_format($totalMatCost2, 2) }}</div>
+                        @if($isApprovedScopeLocked)
+                            <div class="stat-sub">approved: ${{ number_format($approvedMatCost2, 2) }}</div>
                         @endif
                     </div>
                 </div>
@@ -1050,7 +1140,7 @@
                                     <i class="mdi mdi-file-eye me-1"></i>Preview Inspection Report
                                 </a>
                                 <a href="{{ route('inspections.preview-agreement', $inspection->id) }}" target="_blank"
-                                   class="btn btn-outline-secondary">
+                                   class="btn btn-contract-preview">
                                     <i class="mdi mdi-file-document-outline me-1"></i>Preview Contract Draft
                                 </a>
                                 <form method="POST" action="{{ route('inspections.share-quotation', $inspection->id) }}" class="d-inline">

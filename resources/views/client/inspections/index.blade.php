@@ -1,13 +1,19 @@
 @extends('client.layout')
 
-@section('title', 'My Inspections')
+@section('title', ($viewMode ?? 'inspections') === 'quotations' ? 'My Quotations' : 'My Inspections')
 
 @section('content')
 <div class="row">
     <div class="col-12">
         <div class="card">
             <div class="card-header bg-primary text-white">
-                <h5 class="mb-0"><i class="mdi mdi-clipboard-check me-2"></i>My Inspections</h5>
+                <h5 class="mb-0">
+                    @if(($viewMode ?? 'inspections') === 'quotations')
+                        <i class="mdi mdi-file-check-outline me-2"></i>My Quotations
+                    @else
+                        <i class="mdi mdi-clipboard-check me-2"></i>My Inspections
+                    @endif
+                </h5>
             </div>
             <div class="card-body">
                 <div class="table-responsive">
@@ -159,7 +165,13 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="7" class="text-center text-muted py-4">No inspections yet.</td>
+                                    <td colspan="7" class="text-center text-muted py-4">
+                                        @if(($viewMode ?? 'inspections') === 'quotations')
+                                            No quotations available yet.
+                                        @else
+                                            No inspections yet.
+                                        @endif
+                                    </td>
                                 </tr>
                             @endforelse
                         </tbody>

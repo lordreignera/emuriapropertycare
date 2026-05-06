@@ -15,8 +15,7 @@
             $initialMaterial += (float) ($finding['material_cost'] ?? 0);
         }
     }
-    $initialBdc = (float) ($inspection->bdc_annual ?? 0);
-    $initialTotal = $initialLabour + $initialMaterial + $initialBdc;
+    $initialTotal = $initialLabour + $initialMaterial;
 @endphp
 
 <div class="row justify-content-center">
@@ -48,9 +47,10 @@
                         You already approved this quotation. Admin will now finalize the report and agreement using your approved findings.
                     </div>
                 @else
-                    <p class="mb-0 text-muted">
-                        Select the findings you want approved for current remediation. Pricing updates based on your selected items.
-                    </p>
+                    <div class="alert alert-warning mb-0">
+                        <strong>Approval Notice:</strong> The findings you select and approve below are the exact work items that will be charged.
+                        Labour and materials in your selected findings form your approved project cost.
+                    </div>
                 @endif
             </div>
         </div>
@@ -128,6 +128,84 @@
                                 @if(!empty($finding['notes']))
                                     <p class="small mb-0 mt-2 text-muted">{{ $finding['notes'] }}</p>
                                 @endif
+
+                                @if(!empty($finding['issue_description']))
+                                    <p class="small mb-0 mt-2"><strong>Issue Description:</strong> {{ $finding['issue_description'] }}</p>
+                                @endif
+
+                                @if(!empty($finding['recommendations']) && is_array($finding['recommendations']))
+                                    <div class="small mb-0 mt-2">
+                                        <strong>Recommendations:</strong>
+                                        <ul class="mb-0 mt-1 ps-3">
+                                            @foreach($finding['recommendations'] as $recItem)
+                                                <li>{{ $recItem }}</li>
+                                            @endforeach
+                                        </ul>
+                                    </div>
+                                @endif
+
+                                @if(!empty($finding['recommendation']))
+                                    <p class="small mb-0 mt-2"><strong>Recommendation:</strong> {{ $finding['recommendation'] }}</p>
+                                @endif
+
+                                @if(!empty($finding['recommendation_details']))
+                                    <p class="small mb-0 mt-2"><strong>Recommendation Description:</strong> {{ $finding['recommendation_details'] }}</p>
+                                @endif
+
+                                @php
+                                    $findingPhotos = collect($finding['finding_photos'] ?? [])
+                                        ->filter(fn($p) => is_string($p) && trim($p) !== '')
+                                        ->values();
+                                @endphp
+                                @if($findingPhotos->isNotEmpty())
+                                    <div class="mt-3">
+                                        <div class="small fw-semibold mb-1">Attached Photos</div>
+                                        <div class="d-flex flex-wrap gap-2">
+                                            @foreach($findingPhotos as $fp)
+                                                <a href="{{ $inspection->getStorageUrl($fp) }}" target="_blank" title="View photo">
+                                                    <img src="{{ $inspection->getStorageUrl($fp) }}" alt="Finding photo" style="height:72px;width:72px;object-fit:cover;border-radius:6px;border:1px solid #dee2e6;">
+                                                </a>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                @endif
+
+                                @php
+                                    $materials = collect($finding['materials'] ?? [])->filter(fn($m) => !empty($m['material_name']))->values();
+                                @endphp
+                                @if($materials->isNotEmpty())
+                                    <div class="table-responsive mt-3">
+                                        <table class="table table-sm table-bordered mb-0">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th>Material</th>
+                                                    <th class="text-end">Qty</th>
+                                                    <th>Unit</th>
+                                                    <th class="text-end">Unit Cost</th>
+                                                    <th class="text-end">Line Total</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach($materials as $material)
+                                                    <tr>
+                                                        <td>
+                                                            {{ $material['material_name'] ?? '-' }}
+                                                            @if(!empty($material['notes']))
+                                                                <div class="small text-muted">{{ $material['notes'] }}</div>
+                                                            @endif
+                                                        </td>
+                                                        <td class="text-end">{{ number_format((float) ($material['quantity'] ?? 0), 2) }}</td>
+                                                        <td>{{ $material['unit'] ?? 'ea' }}</td>
+                                                        <td class="text-end">${{ number_format((float) ($material['unit_cost'] ?? 0), 2) }}</td>
+                                                        <td class="text-end">${{ number_format((float) ($material['line_total'] ?? 0), 2) }}</td>
+                                                    </tr>
+                                                @endforeach
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                @else
+                                    <p class="small mb-0 mt-2 text-muted">No material lines assigned for this finding.</p>
+                                @endif
                             </div>
                             <div class="text-end">
                                 <div><small class="text-muted">Labour</small> <strong>${{ number_format($labourCost, 2) }}</strong></div>
@@ -147,22 +225,21 @@
                 </div>
                 <div class="card-body">
                     <div class="row text-center">
-                        <div class="col-md-3">
+                        <div class="col-md-4">
                             <small class="text-muted d-block">Labour</small>
                             <strong id="sum-labour">${{ number_format($initialLabour, 2) }}</strong>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-4">
                             <small class="text-muted d-block">Materials</small>
                             <strong id="sum-material">${{ number_format($initialMaterial, 2) }}</strong>
                         </div>
-                        <div class="col-md-3">
-                            <small class="text-muted d-block">BDC</small>
-                            <strong id="sum-bdc">${{ number_format($initialBdc, 2) }}</strong>
-                        </div>
-                        <div class="col-md-3">
+                        <div class="col-md-4">
                             <small class="text-muted d-block">Total</small>
                             <strong class="text-success" id="sum-total">${{ number_format($initialTotal, 2) }}</strong>
                         </div>
+                    </div>
+                    <div class="alert alert-info mt-3 mb-0 py-2">
+                        <strong>By clicking Approve Quotation:</strong> you confirm the selected findings above as the approved and chargeable scope of work.
                     </div>
                 </div>
             </div>
@@ -178,7 +255,7 @@
                 <a href="{{ route('client.inspections.index') }}" class="btn btn-light">Back to Inspections</a>
                 @if(!$isLocked)
                     <button type="submit" class="btn btn-primary" id="submit-quotation-btn">
-                        <i class="mdi mdi-send-check-outline me-1"></i>Submit Selected Findings
+                        <i class="mdi mdi-check-decagram-outline me-1"></i>Approve Quotation
                     </button>
                 @else
                     <span class="btn btn-success disabled" aria-disabled="true">
@@ -200,11 +277,8 @@
     const selectedCountEl = document.getElementById('selected-count');
     const labourEl = document.getElementById('sum-labour');
     const materialEl = document.getElementById('sum-material');
-    const bdcEl = document.getElementById('sum-bdc');
     const totalEl = document.getElementById('sum-total');
     const submitBtn = document.getElementById('submit-quotation-btn');
-
-    const bdcBase = Number({{ json_encode((float) ($inspection->bdc_annual ?? 0)) }} || 0);
 
     function formatCurrency(amount) {
         return '$' + amount.toFixed(2);
@@ -223,12 +297,11 @@
             }
         });
 
-        const total = labour + material + bdcBase;
+        const total = labour + material;
 
         selectedCountEl.textContent = String(count);
         labourEl.textContent = formatCurrency(labour);
         materialEl.textContent = formatCurrency(material);
-        bdcEl.textContent = formatCurrency(bdcBase);
         totalEl.textContent = formatCurrency(total);
 
         if (submitBtn) {

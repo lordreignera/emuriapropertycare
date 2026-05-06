@@ -24,6 +24,31 @@
     </div>
 </div>
 
+{{-- Balance reminder banner --}}
+@if(!empty($completedWithBalance) && $completedWithBalance->isNotEmpty())
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="alert alert-warning border-0 shadow-sm d-flex align-items-start gap-3 mb-0" role="alert">
+            <i class="mdi mdi-alert-circle-outline fs-4 mt-1 flex-shrink-0"></i>
+            <div class="flex-grow-1">
+                <strong>Outstanding Balance Reminder</strong> —
+                {{ $completedWithBalance->count() }} completed project{{ $completedWithBalance->count() > 1 ? 's have' : ' has' }}
+                an outstanding payment balance.
+                @foreach($completedWithBalance as $cwb)
+                    <span class="badge bg-warning text-dark ms-1">
+                        {{ $cwb->property->property_address ?? ('Project #'.$cwb->id) }}
+                    </span>
+                @endforeach
+            </div>
+            <a href="{{ route('client.projects.index') }}"
+               class="btn btn-warning btn-sm ms-2 flex-shrink-0 fw-semibold">
+                <i class="mdi mdi-credit-card me-1"></i>View Projects
+            </a>
+        </div>
+    </div>
+</div>
+@endif
+
 {{-- Stats Cards --}}
 <div class="row g-4 mb-4">
     <!-- Properties Card -->
@@ -282,6 +307,19 @@
                             <i class="mdi mdi-chevron-right text-muted"></i>
                         </div>
                     </a>
+
+                    <a href="{{ route('client.service-requests.create') }}" class="text-decoration-none">
+                        <div class="d-flex align-items-center p-3 rounded-3 border-2 hover-shadow transition">
+                            <div class="rounded-3 p-3 me-3" style="background: linear-gradient(135deg, #dc3545 0%, #b02a37 100%);">
+                                <i class="mdi mdi-alert-circle text-white" style="font-size: 1.75rem;"></i>
+                            </div>
+                            <div class="flex-grow-1">
+                                <h6 class="mb-0 fw-semibold text-dark">Report Issue</h6>
+                                <small class="text-muted">Submit a repair, emergency, or change request</small>
+                            </div>
+                            <i class="mdi mdi-chevron-right text-muted"></i>
+                        </div>
+                    </a>
                 </div>
             </div>
         </div>
@@ -295,10 +333,10 @@
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <div>
-                        <h4 class="fw-bold mb-1">Quotation &amp; Finalization Status</h4>
-                        <p class="text-muted mb-0 small">Review and approve your quotation. Once approved, admin will finalize your assessment — your report and agreement will then appear here.</p>
+                        <h4 class="fw-bold mb-1">Quotation Approval Status</h4>
+                        <p class="text-muted mb-0 small">Approve the findings you want to proceed with. Approved findings are the exact work scope that will be charged.</p>
                     </div>
-                    <a href="{{ route('client.inspections.index') }}" class="btn btn-outline-primary btn-sm">View All</a>
+                    <a href="{{ route('client.inspections.quotations') }}" class="btn btn-outline-primary btn-sm">View All</a>
                 </div>
 
                 <div class="table-responsive">
@@ -336,13 +374,13 @@
                                                     <i class="mdi mdi-clock-outline me-1"></i>Awaiting Admin Finalization
                                                 </span>
                                                 <a href="{{ route('client.inspections.quotation', $inspection->id) }}" class="btn btn-sm btn-link text-muted p-0">
-                                                    <small>View approved quotation</small>
+                                                    <small>View approved scope</small>
                                                 </a>
                                             </div>
                                         @else
                                             <a href="{{ route('client.inspections.quotation', $inspection->id) }}" class="btn btn-sm btn-primary">
-                                                <i class="mdi mdi-file-check-outline"></i>
-                                                Review Quotation
+                                                <i class="mdi mdi-check-decagram-outline"></i>
+                                                Approve Quotation
                                             </a>
                                         @endif
                                     </td>

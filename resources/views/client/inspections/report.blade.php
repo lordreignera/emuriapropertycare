@@ -1,6 +1,6 @@
 @extends($adminPreview ?? false ? 'admin.layout' : 'client.layout')
 
-@section('title', 'Inspection Report & Pricing Breakdown')
+@section('title', 'Inspection Report & Work Scope Breakdown')
 
 @section('content')
 @if($adminPreview ?? false)
@@ -17,9 +17,9 @@
                     <div>
                         <h4 class="card-title mb-0">
                             <i class="mdi mdi-clipboard-check-outline me-2 text-success"></i>
-                            Inspection Report & Pricing Breakdown
+                            Inspection Report & Work Scope Breakdown
                         </h4>
-                        <p class="text-muted small mb-0">Complete breakdown of inspection findings and pricing calculation</p>
+                        <p class="text-muted small mb-0">Complete breakdown of inspection findings, materials, and labour</p>
                     </div>
                     <div>
                         @if(isset($adminPreview) && $adminPreview)
@@ -134,7 +134,7 @@
                                     </tr>
                                     <tr>
                                         <th>Units:</th>
-                                        <td>{{ $inspection->property?->residential_units ?? 'N/A' }}</td>
+                                        <td>{{ $inspection->residential_units_snapshot ?: ($inspection->property?->number_of_units ?: ($inspection->property?->residential_units ?? 'N/A')) }}</td>
                                     </tr>
                                     <tr>
                                         <th>Owner Name:</th>
@@ -229,51 +229,72 @@
                         return $left . '|' . $right;
                     };
 
-                    // Show only approved scope when:
-                    // (a) the inspection quotation_status is 'approved', OR
-                    // (b) a re-share is pending (quotation_status='shared') but the controller
-                    //     resolved activeQuotation to the most recent approved quotation.
-                    $showApprovedScopeOnly =
-                        !empty($activeQuotation) &&
-                        (($activeQuotation->status ?? null) === 'approved') &&
-                        (
-                            (($inspection->quotation_status ?? null) === 'approved') ||
-                            (($inspection->quotation_status ?? null) === 'shared')
-                        );
+                    // The report always shows ALL findings because the client paid for the inspection.
+                    // Per-finding status badges indicate approved / deferred / noted.
 
-                    if ($showApprovedScopeOnly) {
-                        $allInline = collect($inlineFindingsRaw)->values();
-                        $approvedIdMap = $quotationApprovedIds->flip();
+                    // Build approved & deferred key lookups from the quotation snapshot
+                    $approvedIdFlip  = $quotationApprovedIds->flip();
+                    $deferredIdFlip  = $quotationDeferredIds->flip();
 
-                        $filteredById = $allInline
-                            ->filter(fn ($f) => $approvedIdMap->has((int) ($f['id'] ?? 0)))
-                            ->values();
+                    $approvedKeySet  = $quotationSnapshot
+                        ->filter(fn($f) => $quotationApprovedIds->contains((int) ($f['id'] ?? 0)))
+                        ->mapWithKeys(fn($f) => [
+                            $makeFindingKey($f['task_question'] ?? ($f['issue'] ?? ''), $f['category'] ?? '') => true
+                        ]);
+                    $deferredKeySet  = $quotationSnapshot
+                        ->filter(fn($f) => $quotationDeferredIds->contains((int) ($f['id'] ?? 0)))
+                        ->mapWithKeys(fn($f) => [
+                            $makeFindingKey($f['task_question'] ?? ($f['issue'] ?? ''), $f['category'] ?? '') => true
+                        ]);
 
-                        if ($filteredById->isNotEmpty()) {
-                            $inlineFindingsRaw = $filteredById->all();
-                        } else {
-                            $approvedScopeKeys = $quotationSnapshot
-                                ->filter(fn($f) => $quotationApprovedIds->contains((int) ($f['id'] ?? 0)))
-                                ->map(fn($f) => $makeFindingKey(
-                                    $f['task_question'] ?? ($f['issue'] ?? ''),
-                                    $f['category'] ?? ''
-                                ))
-                                ->filter(fn($k) => $k !== '|')
-                                ->unique()
-                                ->values();
+                    // Backfill descriptive fields from quotation snapshot for legacy findings
+                    // where issue_description / recommendation_details were not persisted inline.
+                    $snapshotById = $quotationSnapshot
+                        ->filter(fn($f) => !empty($f['id']))
+                        ->mapWithKeys(fn($f) => [(int) $f['id'] => $f]);
 
-                            $inlineFindingsRaw = $allInline
-                                ->filter(function ($f) use ($approvedScopeKeys, $makeFindingKey) {
-                                    $key = $makeFindingKey(
-                                        $f['task_question'] ?? ($f['issue'] ?? ''),
-                                        $f['phar_category'] ?? ($f['category'] ?? '')
-                                    );
-                                    return $approvedScopeKeys->contains($key);
-                                })
-                                ->values()
-                                ->all();
-                        }
-                    }
+                    $snapshotByKey = $quotationSnapshot
+                        ->mapWithKeys(function ($f) use ($makeFindingKey) {
+                            $key = $makeFindingKey(
+                                $f['task_question'] ?? ($f['issue'] ?? ''),
+                                $f['category'] ?? ''
+                            );
+                            return $key !== '|' ? [$key => $f] : [];
+                        });
+
+                    $inlineFindingsRaw = collect($inlineFindingsRaw)
+                        ->map(function ($finding) use ($snapshotById, $snapshotByKey, $makeFindingKey) {
+                            $snapshotFinding = null;
+                            $findingId = (int) ($finding['id'] ?? 0);
+
+                            if ($findingId > 0 && $snapshotById->has($findingId)) {
+                                $snapshotFinding = $snapshotById->get($findingId);
+                            } else {
+                                $key = $makeFindingKey(
+                                    $finding['task_question'] ?? ($finding['issue'] ?? ''),
+                                    $finding['phar_category'] ?? ($finding['category'] ?? '')
+                                );
+                                $snapshotFinding = $snapshotByKey->get($key);
+                            }
+
+                            if (!$snapshotFinding) {
+                                return $finding;
+                            }
+
+                            if (empty($finding['issue_description']) && !empty($snapshotFinding['issue_description'])) {
+                                $finding['issue_description'] = $snapshotFinding['issue_description'];
+                            }
+                            if (empty($finding['recommendation_details']) && !empty($snapshotFinding['recommendation_details'])) {
+                                $finding['recommendation_details'] = $snapshotFinding['recommendation_details'];
+                            }
+                            if (empty($finding['recommendations']) && !empty($snapshotFinding['recommendations']) && is_array($snapshotFinding['recommendations'])) {
+                                $finding['recommendations'] = $snapshotFinding['recommendations'];
+                            }
+
+                            return $finding;
+                        })
+                        ->values()
+                        ->all();
 
                     $severityOrder = ['critical','high','noi_protection','medium','low'];
                     $severityMeta  = [
@@ -283,10 +304,29 @@
                         'medium'         => ['label' => 'Value Depreciation',         'color' => '#d4a017', 'icon' => '🟡'],
                         'low'            => ['label' => 'Non-Urgent',                 'color' => '#198754', 'icon' => '🟢'],
                     ];
+
+                    $isApprovedQuotation = !empty($activeQuotation)
+                        && (($activeQuotation->status ?? null) === 'approved');
+
                     $indexedFindings = collect($inlineFindingsRaw)
                         ->values()
-                        ->map(function ($finding, $idx) {
+                        ->map(function ($finding, $idx) use ($makeFindingKey, $activeQuotation, $isApprovedQuotation, $approvedIdFlip, $deferredIdFlip, $approvedKeySet, $deferredKeySet) {
                             $finding['__finding_index'] = $idx;
+
+                            $rowKey = $makeFindingKey(
+                                $finding['task_question'] ?? ($finding['issue'] ?? ''),
+                                $finding['phar_category'] ?? ($finding['category'] ?? '')
+                            );
+                            $fid = (int) ($finding['id'] ?? 0);
+
+                            if ($isApprovedQuotation && ($approvedIdFlip->has($fid) || ($fid === 0 && $approvedKeySet->has($rowKey)))) {
+                                $finding['__finding_quote_status'] = 'approved';
+                            } elseif ($activeQuotation && ($deferredIdFlip->has($fid) || ($fid === 0 && $deferredKeySet->has($rowKey)))) {
+                                $finding['__finding_quote_status'] = 'deferred';
+                            } else {
+                                $finding['__finding_quote_status'] = 'noted';
+                            }
+
                             return $finding;
                         });
 
@@ -336,10 +376,26 @@
                     }
 
                     $groupedFindings = $indexedFindings->groupBy('severity');
-                    $totalLabourHrs  = $indexedFindings->sum('phar_labour_hours');
-                    $totalMatCost    = $indexedFindings->sum(fn($f) =>
+
+                    // Pricing scope: if quotation is approved, charge only approved findings.
+                    $pricedFindings = $isApprovedQuotation
+                        ? $indexedFindings->filter(fn($f) => ($f['__finding_quote_status'] ?? 'noted') === 'approved')->values()
+                        : $indexedFindings;
+
+                    if ($isApprovedQuotation && $pricedFindings->isEmpty()) {
+                        // Safety fallback for legacy edge cases where approved matching fails.
+                        $pricedFindings = $indexedFindings;
+                    }
+
+                    $pricingScopeApprovedOnly = $isApprovedQuotation && $pricedFindings->isNotEmpty();
+
+                    $totalLabourHrs  = $pricedFindings->sum('phar_labour_hours');
+                    $hourlyRateForClient = (float) ($inspection->labour_hourly_rate ?? 165);
+                    $totalLabourCost = round($totalLabourHrs * $hourlyRateForClient, 2);
+                    $totalMatCost    = $pricedFindings->sum(fn($f) =>
                         collect($f['phar_materials'] ?? [])->sum(fn($m) => (float)($m['line_total'] ?? 0))
                     );
+                    $clientVisibleTotal = round($totalLabourCost + $totalMatCost, 2);
                 @endphp
                 @if(count($inlineFindingsRaw) > 0)
                 <div class="card mb-4 findings-card">
@@ -354,13 +410,10 @@
                                 <thead class="table-dark">
                                     <tr>
                                         <th width="3%">#</th>
-                                        <th width="30%">Issue / Task</th>
-                                        <th width="12%">Category</th>
-                                        <th width="8%" class="text-end">Labour Hrs</th>
-                                        <th width="16%">Material Used</th>
-                                        <th width="10%" class="text-center">Qty &amp; Unit</th>
-                                        <th width="9%" class="text-end">Unit Cost</th>
-                                        <th width="12%" class="text-end">Material Cost</th>
+                                        <th width="43%">Finding Details</th>
+                                        <th width="15%" class="text-end">Labour</th>
+                                        <th width="29%">Materials Breakdown</th>
+                                        <th width="10%" class="text-end">Subtotal</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -369,7 +422,7 @@
                                     @if($groupedFindings->has($sev))
                                     @php $meta = $severityMeta[$sev]; @endphp
                                     <tr>
-                                        <td colspan="8" class="fw-bold text-white py-2 px-3" style="background:{{ $meta['color'] }};">
+                                        <td colspan="5" class="fw-bold text-white py-2 px-3" style="background:{{ $meta['color'] }};">
                                             {{ $meta['icon'] }} {{ $meta['label'] }}
                                             <span class="badge bg-white ms-2" style="color:{{ $meta['color'] }};">
                                                 {{ $groupedFindings[$sev]->count() }}
@@ -380,9 +433,10 @@
                                     @php
                                         $rowNum++;
                                         $pharMaterials  = $finding['phar_materials'] ?? [];
-                                        $firstMat       = $pharMaterials[0] ?? null;
-                                        $extraMats      = array_slice($pharMaterials, 1);
                                         $findingMatCost = collect($pharMaterials)->sum(fn($m) => (float)($m['line_total'] ?? 0));
+                                        $findingLabourHours = (float)($finding['phar_labour_hours'] ?? 0);
+                                        $findingLabourCost = round($findingLabourHours * $hourlyRateForClient, 2);
+                                        $findingSubtotal = round($findingLabourCost + $findingMatCost, 2);
                                         $recommendations = $finding['recommendations'] ?? [];
                                         $findingPhotos = $normalizePhotoPaths($finding['finding_photos'] ?? []);
                                         $rowKey = $findingMatchKey(
@@ -395,11 +449,24 @@
                                         if (empty($findingPhotos)) {
                                             $findingPhotos = $pharPhotoFallbackByIndex[$finding['__finding_index']] ?? [];
                                         }
+                                        $findingQuoteStatus = $finding['__finding_quote_status'] ?? 'noted';
                                     @endphp
                                     <tr>
                                         <td class="text-muted small align-top">{{ $rowNum }}</td>
                                         <td class="align-top">
                                             <strong>{{ $finding['issue'] ?? '-' }}</strong>
+                                            @if($activeQuotation)
+                                                @if($findingQuoteStatus === 'approved')
+                                                    <span class="badge ms-1" style="background:#198754;font-size:.7rem;">✔ Approved</span>
+                                                @elseif($findingQuoteStatus === 'deferred')
+                                                    <span class="badge ms-1" style="background:#6c757d;font-size:.7rem;">⏳ Deferred</span>
+                                                @else
+                                                    <span class="badge ms-1" style="background:#0d6efd;font-size:.7rem;">📋 Noted</span>
+                                                @endif
+                                            @endif
+                                            <div class="mt-1">
+                                                <span class="badge bg-secondary">{{ $finding['phar_category'] ?? $finding['type'] ?? 'General' }}</span>
+                                            </div>
                                             @if(!empty($finding['system']))
                                                 <br><small class="text-muted">{{ $finding['system'] }}{{ !empty($finding['subsystem']) ? ' › '.$finding['subsystem'] : '' }}</small>
                                             @endif
@@ -409,12 +476,22 @@
                                                     {{ implode(' — ', array_filter([$finding['location'] ?? null, $finding['spot'] ?? null])) }}
                                                 </div>
                                             @endif
+                                            @if(!empty($finding['issue_description']))
+                                                <div class="mt-1" style="font-size:.8rem;color:#444;">
+                                                    <strong>Issue Description:</strong> {{ $finding['issue_description'] }}
+                                                </div>
+                                            @endif
                                             @if(!empty($recommendations))
                                                 <ul class="mb-0 mt-1 ps-3" style="font-size:.78rem;color:#444;">
                                                     @foreach($recommendations as $rec)
                                                         <li>{{ $rec }}</li>
                                                     @endforeach
                                                 </ul>
+                                            @endif
+                                            @if(!empty($finding['recommendation_details']))
+                                                <div class="mt-1" style="font-size:.8rem;color:#444;">
+                                                    <strong>Recommendation Description:</strong> {{ $finding['recommendation_details'] }}
+                                                </div>
                                             @endif
                                             @if(!empty($findingPhotos))
                                                 <div class="d-flex flex-wrap gap-1 mt-2">
@@ -429,58 +506,54 @@
                                                 <small class="text-muted d-block mt-2">No inspection photo uploaded for this finding.</small>
                                             @endif
                                         </td>
+                                        <td class="text-end align-top">
+                                            <div><small class="text-muted d-block">Hours</small><strong>{{ number_format($findingLabourHours, 1) }} hrs</strong></div>
+                                            <div class="mt-1"><small class="text-muted d-block">Cost</small>
+                                                @if($findingLabourCost > 0)
+                                                    <strong>${{ number_format($findingLabourCost, 2) }}</strong>
+                                                @else
+                                                    <span class="text-muted">—</span>
+                                                @endif
+                                            </div>
+                                        </td>
                                         <td class="align-top">
-                                            <span class="badge bg-secondary">{{ $finding['phar_category'] ?? $finding['type'] ?? 'General' }}</span>
-                                        </td>
-                                        <td class="text-end align-top">{{ number_format((float)($finding['phar_labour_hours'] ?? 0), 1) }} hrs</td>
-                                        <td class="align-top">{{ $firstMat['material_name'] ?? '—' }}</td>
-                                        <td class="text-center align-top">
-                                            @if($firstMat)
-                                                {{ $firstMat['quantity'] ?? '1' }} {{ $firstMat['unit'] ?? '' }}
+                                            @if(!empty($pharMaterials))
+                                                <div class="small text-muted mb-1">{{ count($pharMaterials) }} item(s)</div>
+                                                <div class="d-flex flex-column gap-1">
+                                                    @foreach($pharMaterials as $mat)
+                                                        <div class="border rounded px-2 py-1" style="font-size:.78rem;">
+                                                            <div class="fw-semibold">{{ $mat['material_name'] ?? 'Unnamed material' }}</div>
+                                                            <div class="text-muted">
+                                                                {{ number_format((float)($mat['quantity'] ?? 0), 2) }} {{ $mat['unit'] ?? 'ea' }}
+                                                                &times; ${{ number_format((float)($mat['unit_cost'] ?? 0), 2) }}
+                                                            </div>
+                                                            <div class="text-end fw-semibold">${{ number_format((float)($mat['line_total'] ?? 0), 2) }}</div>
+                                                        </div>
+                                                    @endforeach
+                                                </div>
                                             @else
-                                                <span class="text-muted">—</span>
+                                                <span class="text-muted">No materials assigned</span>
                                             @endif
                                         </td>
                                         <td class="text-end align-top">
-                                            @if($firstMat && (float)($firstMat['unit_cost'] ?? 0) > 0)
-                                                ${{ number_format((float)$firstMat['unit_cost'], 2) }}
+                                            @if($findingSubtotal > 0)
+                                                <strong class="fs-6">${{ number_format($findingSubtotal, 2) }}</strong>
                                             @else
                                                 <span class="text-muted">—</span>
                                             @endif
-                                        </td>
-                                        <td class="text-end align-top">
-                                            @if($findingMatCost > 0)
-                                                <strong>${{ number_format($findingMatCost, 2) }}</strong>
-                                            @else
-                                                <span class="text-muted">—</span>
-                                            @endif
+                                            <div class="small text-muted mt-1">Labour + Materials</div>
                                         </td>
                                     </tr>
-                                    @foreach($extraMats as $extraMat)
-                                    <tr class="table-light">
-                                        <td></td>
-                                        <td colspan="2" class="text-muted small ps-4" style="font-size:.8rem;">↳ additional material</td>
-                                        <td></td>
-                                        <td class="small">{{ $extraMat['material_name'] ?? '—' }}</td>
-                                        <td class="text-center small">{{ $extraMat['quantity'] ?? '1' }} {{ $extraMat['unit'] ?? '' }}</td>
-                                        <td class="text-end small">
-                                            @if((float)($extraMat['unit_cost'] ?? 0) > 0)
-                                                ${{ number_format((float)$extraMat['unit_cost'], 2) }}
-                                            @endif
-                                        </td>
-                                        <td class="text-end small">${{ number_format((float)($extraMat['line_total'] ?? 0), 2) }}</td>
-                                    </tr>
-                                    @endforeach
                                     @endforeach
                                     @endif
                                 @endforeach
                                 </tbody>
                                 <tfoot class="table-secondary fw-bold">
                                     <tr>
-                                        <th colspan="3" class="text-end">TOTALS:</th>
-                                        <th class="text-end">{{ number_format($totalLabourHrs, 1) }} hrs</th>
-                                        <th colspan="3"></th>
+                                        <th colspan="2" class="text-end">{{ $pricingScopeApprovedOnly ? 'APPROVED TOTALS:' : 'TOTALS:' }}</th>
+                                        <th class="text-end">{{ number_format($totalLabourHrs, 1) }} hrs / ${{ number_format($totalLabourCost, 2) }}</th>
                                         <th class="text-end">${{ number_format($totalMatCost, 2) }}</th>
+                                        <th class="text-end">${{ number_format($clientVisibleTotal, 2) }}</th>
                                     </tr>
                                 </tfoot>
                             </table>
@@ -489,150 +562,53 @@
                 </div>
                 @endif
 
-                <!-- Pricing Breakdown -->
+                <!-- Client Pricing Summary -->
                 <div class="card mb-4">
                     <div class="card-header bg-success text-white">
                         <h5 class="mb-0">
-                            <i class="mdi mdi-calculator me-2"></i>Pricing Calculation Breakdown
+                            <i class="mdi mdi-calculator me-2"></i>Client Pricing Summary
                         </h5>
                     </div>
                     <div class="card-body">
 
-                        <!-- Step 1: Cost Components -->
-                        <div class="mb-4">
-                            <h6 class="text-primary border-bottom pb-2">
-                                <i class="mdi mdi-numeric-1-circle me-2"></i>Cost Components (Annual)
-                            </h6>
-                            <div class="row">
-                                <div class="col-md-4">
-                                    <div class="card bg-light">
-                                        <div class="card-body">
-                                            <h6 class="text-muted mb-1">Base Deployment Cost (BDC)</h6>
-                                            <div class="fs-4">${{ number_format($inspection->bdc_annual ?? 0, 2) }}</div>
-                                            <small class="text-muted">Operational baseline for property care</small>
-                                        </div>
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="card border-primary">
+                                    <div class="card-body">
+                                        <h6 class="text-muted mb-1">Labour</h6>
+                                        <div class="fs-4 text-primary">${{ number_format($totalLabourCost, 2) }}</div>
+                                        <small class="text-muted">{{ number_format($totalLabourHrs, 1) }} hrs @ ${{ number_format($hourlyRateForClient, 2) }}/hr</small>
                                     </div>
                                 </div>
-                                <div class="col-md-4">
-                                    <div class="card bg-light">
-                                        <div class="card-body">
-                                            <h6 class="text-muted mb-1">Findings Remediation Labour (FRLC)</h6>
-                                            <div class="fs-4">${{ number_format($inspection->frlc_annual ?? 0, 2) }}</div>
-                                            <small class="text-muted">{{ number_format($totalLabourHrs, 1) }} hrs @ ${{ number_format($inspection->labour_hourly_rate ?? 165, 2) }}/hr</small>
-                                        </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card border-primary">
+                                    <div class="card-body">
+                                        <h6 class="text-muted mb-1">Materials</h6>
+                                        <div class="fs-4 text-primary">${{ number_format($totalMatCost, 2) }}</div>
+                                        <small class="text-muted">
+                                            {{ $pricingScopeApprovedOnly ? 'Total assigned materials across approved findings' : 'Total assigned materials across all findings' }}
+                                        </small>
                                     </div>
                                 </div>
-                                <div class="col-md-4">
-                                    <div class="card bg-light">
-                                        <div class="card-body">
-                                            <h6 class="text-muted mb-1">Findings Material Cost (FMC)</h6>
-                                            <div class="fs-4">${{ number_format($inspection->fmc_annual ?? 0, 2) }}</div>
-                                            <small class="text-muted">Materials for remediation work</small>
-                                        </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="card border-success bg-light">
+                                    <div class="card-body">
+                                        <h6 class="text-muted mb-1">Total</h6>
+                                        <div class="fs-3 text-success"><strong>${{ number_format($clientVisibleTotal, 2) }}</strong></div>
+                                        <small class="text-muted">Labour + Materials</small>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Step 2: Total Remediation Cost -->
-                        <div class="mb-4">
-                            <h6 class="text-primary border-bottom pb-2">
-                                <i class="mdi mdi-numeric-2-circle me-2"></i>Total Remediation Cost (TRC)
-                            </h6>
-                            <div class="card bg-info text-white">
-                                <div class="card-body">
-                                    <div class="row align-items-center">
-                                        <div class="col-md-8">
-                                            <h5 class="mb-1">TRC = BDC + FRLC + FMC</h5>
-                                            <small>Annual: ${{ number_format($inspection->trc_annual ?? 0, 2) }}</small>
-                                        </div>
-                                        <div class="col-md-4 text-end">
-                                            <div class="fs-3">
-                                                <strong>${{ number_format($inspection->trc_annual ?? 0, 2) }}</strong>
-                                                <div class="fs-6">total</div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                        <div class="mt-3">
+                            <small class="text-muted">
+                                Pricing shown to client includes only labour and materials by finding.
+                                {{ $pricingScopeApprovedOnly ? 'Totals above are scoped to approved quotation findings only.' : 'Totals above reflect all findings currently listed.' }}
+                            </small>
                         </div>
-
-                        <!-- Step 3: ARP & Condition -->
-                        <div class="mb-4">
-                            <h6 class="text-primary border-bottom pb-2">
-                                <i class="mdi mdi-numeric-3-circle me-2"></i>Annual Recurring Price (ARP) & Condition Assessment
-                            </h6>
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="card border-primary">
-                                        <div class="card-body">
-                                            <h6 class="text-muted mb-1">ARP (Total Remediation Cost)</h6>
-                                            <div class="fs-4 text-primary">${{ number_format($inspection->trc_annual ?? 0, 2) }}</div>
-                                        </div>
-                                    </div>
-                                </div>
-                                @if(false) {{-- CPI Score hidden --}}
-                                <div class="col-md-6">
-                                    <div class="card border-primary">
-                                        <div class="card-body">
-                                            <h6 class="text-muted mb-1">CPI Score</h6>
-                                            <div class="fs-4 text-primary">{{ number_format($inspection->cpi_total_score ?? 0, 1) }}/100</div>
-                                            @if($inspection->cpi_rating)
-                                                <span class="badge
-                                                    @php
-                                                        $cpiR = $inspection->cpi_rating;
-                                                        echo match(true) {
-                                                            $cpiR === 'Excellent' => 'bg-success',
-                                                            $cpiR === 'Good'      => 'bg-info text-dark',
-                                                            $cpiR === 'Fair'      => 'bg-warning text-dark',
-                                                            $cpiR === 'Poor'      => 'bg-orange text-white',
-                                                            default               => 'bg-danger',
-                                                        };
-                                                    @endphp
-                                                ">{{ $inspection->cpi_rating }}</span>
-                                            @endif
-                                        </div>
-                                    </div>
-                                </div>
-                                @endif {{-- end hidden CPI --}}
-                            </div>
-
-                            @if(false) {{-- ASI/TUS scores hidden --}}
-                            <div class="row mt-3">
-                                <div class="col-md-6">
-                                    <div class="card border-success">
-                                        <div class="card-body">
-                                            <h6 class="text-muted mb-1">ASI Score <small class="text-muted">(CPI×60% + TUS×40%)</small></h6>
-                                            <div class="fs-4 text-success">{{ number_format($inspection->asi_score ?? 0, 1) }}/100</div>
-                                            @if($inspection->asi_rating)
-                                                <span class="badge
-                                                    @php
-                                                        $asiR = $inspection->asi_rating;
-                                                        echo match(true) {
-                                                            $asiR === 'Highly stable asset'  => 'bg-success',
-                                                            $asiR === 'Stable asset'          => 'bg-info text-dark',
-                                                            $asiR === 'Moderate stability'    => 'bg-warning text-dark',
-                                                            $asiR === 'Vulnerable stability'  => 'bg-orange text-white',
-                                                            $asiR === 'Unstable asset'        => 'bg-danger',
-                                                            default                           => 'bg-dark',
-                                                        };
-                                                    @endphp
-                                                ">{{ $inspection->asi_rating }}</span>
-                                            @endif
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="card border-secondary">
-                                        <div class="card-body">
-                                            <h6 class="text-muted mb-1">TUS Score <small class="text-muted">(Tenant Underwriting)</small></h6>
-                                            <div class="fs-4 text-secondary">{{ number_format($inspection->tus_score ?? 75, 1) }}/100</div>
-                                            <small class="text-muted">Inspector-entered per inspection</small>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            @endif {{-- end hidden ASI/TUS --}}
                         </div>
 
                         <!-- Per-Unit Breakdown (Multi-Unit Properties) -->
@@ -725,7 +701,13 @@
                 <!-- Work Payment (if not yet paid) -->
                 @if($inspection->status === 'completed' && ($inspection->work_payment_status ?? 'pending') !== 'paid')
                 @php
-                    $rptFullAmt  = (float) ($inspection->trc_annual ?? $inspection->arp_equivalent_final ?? 0);
+                    $rptFullAmt  = (float) ($clientVisibleTotal ?? 0);
+                    if ($rptFullAmt <= 0) {
+                        $rptFullAmt = (float) ($inspection->frlc_annual ?? 0) + (float) ($inspection->fmc_annual ?? 0);
+                    }
+                    if ($rptFullAmt <= 0) {
+                        $rptFullAmt = (float) ($inspection->trc_annual ?? $inspection->arp_equivalent_final ?? 0);
+                    }
                     $rptVisits   = max(1, (int) ($inspection->bdc_visits_per_year ?? 1));
                     $rptPerVisit = (float) ($inspection->trc_per_visit ?? ($rptVisits > 0 ? round($rptFullAmt / $rptVisits, 2) : 0));
                 @endphp
@@ -870,16 +852,82 @@
 
 <style>
 @media print {
-    .no-print, .btn, .alert, nav, .navbar, .sidebar, #sidebar { display: none !important; }
-    .card { page-break-inside: avoid; box-shadow: none !important; border: 1px solid #dee2e6 !important; }
-    .card-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    body { background: white !important; font-size: 11px; }
-    .col-md-4, .col-md-6, .col-md-8 { width: 33.33% !important; float: left; }
-    #findingsTable td, #findingsTable th { font-size: 10px; padding: 4px 6px; }
-    .badge { -webkit-print-color-adjust: exact; print-color-adjust: exact; border: 1px solid #999; }
-    h4, h5, h6 { page-break-after: avoid; }
-    .findings-card { page-break-before: auto; }
-    @page { margin: 15mm; size: A4 landscape; }
+    .no-print, .btn, .alert, nav, .navbar, .sidebar, #sidebar {
+        display: none !important;
+    }
+
+    html, body {
+        background: #ffffff !important;
+        font-size: 10.5px;
+        line-height: 1.35;
+    }
+
+    .row, .col-lg-12, .col-md-3, .col-md-4, .col-md-6, .col-md-8, .col-xl-10 {
+        display: block !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        flex: none !important;
+    }
+
+    .card {
+        page-break-inside: avoid;
+        box-shadow: none !important;
+        border: 1px solid #dee2e6 !important;
+        margin-bottom: 12px !important;
+    }
+
+    .card-body {
+        padding: 10px !important;
+    }
+
+    .card-header {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        padding: 8px 10px !important;
+    }
+
+    .table-responsive {
+        overflow: visible !important;
+    }
+
+    #findingsTable {
+        width: 100% !important;
+        table-layout: fixed;
+    }
+
+    #findingsTable th,
+    #findingsTable td {
+        font-size: 9px;
+        padding: 4px 5px;
+        white-space: normal !important;
+        word-break: break-word;
+        overflow-wrap: anywhere;
+        vertical-align: top;
+    }
+
+    #findingsTable img {
+        height: 34px !important;
+        width: 34px !important;
+    }
+
+    .badge {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        border: 1px solid #999;
+    }
+
+    h4, h5, h6 {
+        page-break-after: avoid;
+    }
+
+    .findings-card {
+        page-break-before: auto;
+    }
+
+    @page {
+        margin: 10mm;
+        size: A4 portrait;
+    }
 }
 </style>
 @endsection

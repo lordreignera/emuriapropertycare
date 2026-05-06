@@ -14,7 +14,7 @@
                             Tool Assignment &amp; Return
                         </h4>
                         <p class="text-muted small mb-0 mt-1">
-                            Assign tools to projects where both client and Etogo manager have signed.
+                            Assign tools to client-signed, deposit-paid projects before Etogo countersign.
                             Track quantities deployed and returned.
                         </p>
                     </div>
@@ -282,15 +282,20 @@
                 <div class="modal-body bg-white text-dark">
                     @if($eligibleInspections->isEmpty())
                         <div class="alert alert-warning mb-0">
-                            No scheduled/signed projects are currently eligible for manual assignment.
+                            No client-signed, deposit-paid projects are currently eligible for manual assignment.
                         </div>
                     @else
                         <div class="mb-3">
                             <label class="form-label fw-semibold">Project / Property</label>
-                            <select name="inspection_id" class="form-select" required>
+                            <select id="manualInspectionSelect" name="inspection_id" class="form-select" required>
                                 <option value="">Select project...</option>
                                 @foreach($eligibleInspections as $insp)
-                                    <option value="{{ $insp->id }}">
+                                    @php
+                                        $recommendedCsv = collect($toolRecommendationsByInspection[$insp->id] ?? [])->implode(',');
+                                    @endphp
+                                    <option value="{{ $insp->id }}"
+                                            data-recommended-tools="{{ $recommendedCsv }}"
+                                            {{ (string) request('inspection_id') === (string) $insp->id ? 'selected' : '' }}>
                                         {{ optional($insp->property)->property_name ?? $insp->property_name ?? ('Inspection #' . $insp->id) }}
                                         | Inspection #{{ $insp->id }}
                                         @if(optional($insp->project)->project_number)
@@ -305,18 +310,25 @@
                         </div>
                         <div class="mb-3">
                             <label class="form-label fw-semibold">Tool</label>
-                            <select name="tool_setting_id" class="form-select" required>
+                            <select id="manualToolSelect" name="tool_setting_id" class="form-select" required>
                                 <option value="">Select tool...</option>
                                 @foreach($activeTools as $tool)
                                     @php
                                         $dep = (int) ($deployedByTool[$tool->id] ?? 0);
                                         $rem = max(0, (int) $tool->quantity - $dep);
                                     @endphp
-                                    <option value="{{ $tool->id }}">
+                                    <option value="{{ $tool->id }}"
+                                            data-tool-name="{{ $tool->tool_name }}"
+                                            data-available="{{ $rem }}"
+                                            data-total="{{ (int) $tool->quantity }}">
                                         {{ $tool->tool_name }} ({{ $rem }} available / {{ (int) $tool->quantity }} total)
                                     </option>
                                 @endforeach
                             </select>
+                            <div id="recommendedToolsWrap" class="mt-2 d-none">
+                                <div class="small text-muted mb-1">Suggested from selected inspection findings:</div>
+                                <div id="recommendedToolsList" class="d-flex flex-wrap gap-1"></div>
+                            </div>
                         </div>
                         <div class="mb-3">
                             <label class="form-label fw-semibold">Quantity</label>
@@ -472,4 +484,109 @@
     </div>
     @endif
 @endforeach
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const inspectionSelect = document.getElementById('manualInspectionSelect');
+    const toolSelect = document.getElementById('manualToolSelect');
+    const suggestionsWrap = document.getElementById('recommendedToolsWrap');
+    const suggestionsList = document.getElementById('recommendedToolsList');
+
+    if (!inspectionSelect || !toolSelect || !suggestionsWrap || !suggestionsList) {
+        return;
+    }
+
+    // Store the original text for every tool option so we can restore it cleanly
+    const originalOptionText = {};
+    Array.prototype.forEach.call(toolSelect.options, function (opt) {
+        if (opt.value) {
+            originalOptionText[opt.value] = opt.textContent;
+        }
+    });
+
+    const updateDropdownBadges = function (recommendedIds) {
+        Array.prototype.forEach.call(toolSelect.options, function (opt) {
+            if (!opt.value) {
+                return;
+            }
+            // Restore original text first (strip any previously injected badge)
+            opt.textContent = originalOptionText[opt.value] || opt.textContent;
+            if (recommendedIds.includes(opt.value)) {
+                opt.textContent = '⭐ [Suggested] ' + (originalOptionText[opt.value] || opt.textContent);
+            }
+        });
+    };
+
+    const renderSuggestions = function () {
+        const selectedInspection = inspectionSelect.options[inspectionSelect.selectedIndex];
+        const csv = (selectedInspection && selectedInspection.dataset.recommendedTools)
+            ? selectedInspection.dataset.recommendedTools
+            : '';
+        const ids = csv
+            .split(',')
+            .map(function (id) { return id.trim(); })
+            .filter(function (id) { return id.length > 0; });
+
+        suggestionsList.innerHTML = '';
+
+        // Update option labels regardless of whether we have suggestions
+        updateDropdownBadges(ids);
+
+        if (ids.length === 0) {
+            suggestionsWrap.classList.add('d-none');
+            return;
+        }
+
+        suggestionsWrap.classList.remove('d-none');
+
+        ids.forEach(function (toolId) {
+            const option = toolSelect.querySelector('option[value="' + toolId + '"]');
+            if (!option) {
+                return;
+            }
+
+            const available = parseInt(option.dataset.available, 10);
+            const total     = parseInt(option.dataset.total, 10);
+            const toolName  = option.dataset.toolName || originalOptionText[toolId] || option.textContent.trim();
+            const isOut     = available <= 0;
+
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn btn-sm ' + (isOut ? 'btn-outline-danger' : 'btn-outline-primary') + ' d-flex align-items-center gap-1';
+            if (isOut) {
+                btn.title = 'All units currently deployed — none in store';
+            }
+
+            const nameSpan = document.createElement('span');
+            nameSpan.textContent = toolName;
+
+            const badge = document.createElement('span');
+            badge.className = 'badge ' + (isOut ? 'bg-danger' : (available < 3 ? 'bg-warning text-dark' : 'bg-success'));
+            badge.textContent = isOut ? '0/' + total + ' out' : available + '/' + total + ' avail';
+
+            btn.appendChild(nameSpan);
+            btn.appendChild(badge);
+
+            btn.addEventListener('click', function () {
+                toolSelect.value = toolId;
+            });
+
+            suggestionsList.appendChild(btn);
+        });
+
+        if (!toolSelect.value || !ids.includes(toolSelect.value)) {
+            toolSelect.value = ids[0];
+        }
+    };
+
+    inspectionSelect.addEventListener('change', renderSuggestions);
+
+    const manualAssignModal = document.getElementById('manualAssignModal');
+    if (manualAssignModal) {
+        manualAssignModal.addEventListener('shown.bs.modal', renderSuggestions);
+    }
+
+    renderSuggestions();
+});
+</script>
 @endsection

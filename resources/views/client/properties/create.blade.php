@@ -867,6 +867,16 @@
 
                                 <div id="known_problems_list" class="list-input-container"></div>
 
+                                <div class="mt-3">
+                                    <label for="known_problem_images" class="form-label">Upload issue images <small class="text-muted">(optional)</small></label>
+                                    <input type="file" class="form-control @error('known_problem_images.*') is-invalid @enderror"
+                                        id="known_problem_images" name="known_problem_images[]" multiple accept="image/jpeg,image/png,image/jpg,image/gif,image/webp">
+                                    <small class="form-text text-muted">Attach photos of cracks, leaks, stains, damage, or anything you want us to inspect.</small>
+                                    @error('known_problem_images.*')
+                                    <span class="text-danger small d-block mt-1">{{ $message }}</span>
+                                    @enderror
+                                </div>
+
                                 @error('known_problems')
                                 <span class="text-danger small d-block mt-1">{{ $message }}</span>
                                 @enderror
@@ -1062,9 +1072,21 @@ document.addEventListener('DOMContentLoaded', function() {
     // Toggle tenant units field
     const hasTenants = document.getElementById('has_tenants');
     const numberOfUnitsWrapper = document.getElementById('number_of_units_wrapper');
+    const numberOfUnitsInput = document.getElementById('number_of_units');
+
+    function syncTenantUnitsVisibility() {
+        const showUnits = hasTenants.checked;
+        numberOfUnitsWrapper.style.display = showUnits ? 'block' : 'none';
+        if (numberOfUnitsInput) {
+            numberOfUnitsInput.required = showUnits;
+        }
+    }
+
+    // Ensure correct state on first render (especially after validation errors)
+    syncTenantUnitsVisibility();
     
     hasTenants.addEventListener('change', function() {
-        numberOfUnitsWrapper.style.display = this.checked ? 'block' : 'none';
+        syncTenantUnitsVisibility();
     });
 
     // Generic select-all support for grouped checkboxes

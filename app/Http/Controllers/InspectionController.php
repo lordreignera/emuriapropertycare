@@ -18,9 +18,11 @@ use App\Services\InspectionInvoiceSyncService;
 use App\Models\InspectionSystem;
 use App\Models\InspectionQuotation;
 use App\Models\PHARFinding;
+use App\Models\ServiceRequest;
 use App\Notifications\AssessmentCompletedNotification;
 use App\Notifications\AssessmentScheduleUpdatedNotification;
 use App\Notifications\QuotationSharedNotification;
+use App\Notifications\ToolAssignmentReadyNotification;
 use App\Notifications\WorkSchedulePublishedNotification;
 use App\Support\PharCatalog;
 use Illuminate\Support\Carbon;
@@ -75,7 +77,7 @@ class InspectionController extends Controller
             ->whereIn('id', $latestCompletedByProperty)
             ->count();
 
-        $inspectionListQuery = static fn () => Inspection::with(['property.user', 'property.projectManager', 'inspector', 'assignedBy', 'project.manager'])
+        $inspectionListQuery = static fn () => Inspection::with(['property.user', 'property.projectManager', 'inspector', 'assignedBy', 'project.manager', 'toolAssignments', 'activeQuotation'])
             ->whereNotNull('property_id');
         
         // Base query for inspections
@@ -107,12 +109,17 @@ class InspectionController extends Controller
             $query->whereIn('status', ['scheduled', 'in_progress']);
         }
 
-        // Project Scheduling view: countersigned but no visit schedule set yet
+        // Ready-to-countersign view: client signed + paid + tools assigned + schedule set, but Etogo not yet countersigned
         if ($request->get('view') === 'needs-schedule') {
             $query = $inspectionListQuery()
-                ->whereNotNull('etogo_signed_at')
+                ->whereNotNull('client_signature')
+                ->where('work_payment_status', 'paid')
+                ->whereNull('etogo_signed_at')
+                ->whereHas('toolAssignments', function ($q) {
+                    $q->whereNull('returned_at')->where('quantity', '>', 0);
+                })
                 ->where(function ($q) {
-                    $q->whereNull('work_schedule')->orWhere('work_schedule', '[]');
+                    $q->whereNotNull('work_schedule')->where('work_schedule', '<>', '[]');
                 });
 
             if ($user->hasRole('Inspector')) {
@@ -135,12 +142,19 @@ class InspectionController extends Controller
             }
         }
 
-        // Pending Etogo signature: client signed + paid, waiting for Etogo countersign
+        // Pre-sign setup queue: client signed + paid, but tools/schedule setup is incomplete
         if ($request->get('view') === 'pending-etogo') {
             $query = $inspectionListQuery()
                 ->whereNotNull('client_signature')
                 ->where('work_payment_status', 'paid')
-                ->whereNull('etogo_signed_at');
+                ->whereNull('etogo_signed_at')
+                ->where(function ($q) {
+                    $q->whereDoesntHave('toolAssignments', function ($tq) {
+                        $tq->whereNull('returned_at')->where('quantity', '>', 0);
+                    })
+                    ->orWhereNull('work_schedule')
+                    ->orWhere('work_schedule', '[]');
+                });
 
             if ($user->hasRole('Inspector')) {
                 $query->where('inspector_id', $user->id);
@@ -186,7 +200,8 @@ class InspectionController extends Controller
     public function create(Request $request)
     {
         $propertyId = $request->get('property_id');
-        
+        $serviceRequestId = $request->integer('service_request_id') ?: null;
+
         if (!$propertyId) {
             return redirect()->route('inspections.index')
                 ->with('error', 'Property ID is required to start an inspection.');
@@ -210,10 +225,18 @@ class InspectionController extends Controller
             }
         }
 
-        // Get existing inspection if it exists
+        // Get existing inspection if it exists (prefer paid, then latest in-progress draft)
         $inspection = Inspection::where('property_id', $property->id)
             ->where('inspection_fee_status', 'paid')
+            ->latest('id')
             ->first();
+
+        if (!$inspection) {
+            $inspection = Inspection::where('property_id', $property->id)
+                ->where('status', 'in_progress')
+                ->latest('id')
+                ->first();
+        }
 
         $systems = collect();
         if (Schema::hasTable('systems') && Schema::hasTable('subsystems')) {
@@ -226,9 +249,84 @@ class InspectionController extends Controller
                 ->get();
         }
 
+        $serviceRequest = null;
+        $seededSystemFindings = [];
+        if ($serviceRequestId) {
+            $serviceRequest = ServiceRequest::query()
+                ->where('id', $serviceRequestId)
+                ->where('property_id', $property->id)
+                ->first();
+
+            if (!$serviceRequest) {
+                return redirect()->route('inspections.index')
+                    ->with('error', 'Service request not found for this property.');
+            }
+
+            $hasExistingFindings = !empty($inspection?->findings) && is_array($inspection?->findings);
+            if (!$hasExistingFindings && $systems->isNotEmpty()) {
+                $defaultSystemId = (int) ($systems->first()->id ?? 0);
+                $urgencyToSeverity = [
+                    'critical' => 'critical',
+                    'high' => 'high',
+                    'medium' => 'medium',
+                    'low' => 'low',
+                ];
+
+                $seededSeverity = $urgencyToSeverity[(string) ($serviceRequest->urgency ?? 'medium')] ?? 'medium';
+                $seededNotesPrefix = 'Seeded from client service request ' . $serviceRequest->request_number . '.';
+
+                $rawItems = collect($serviceRequest->items_reported ?? []);
+                if ($rawItems->isEmpty()) {
+                    $rawItems = collect([['issue' => (string) ($serviceRequest->title ?? 'Reported issue')]]);
+                }
+
+                $seededSystemFindings = $rawItems
+                    ->map(function ($item) use ($defaultSystemId, $seededSeverity, $seededNotesPrefix) {
+                        $issue = is_array($item)
+                            ? trim((string) ($item['issue'] ?? ''))
+                            : trim((string) $item);
+
+                        if ($issue === '') {
+                            return null;
+                        }
+
+                        $location = is_array($item)
+                            ? trim((string) ($item['location'] ?? ''))
+                            : '';
+
+                        return [
+                            'system_id' => $defaultSystemId,
+                            'subsystem_id' => null,
+                            'issue' => $issue,
+                            'location' => $location,
+                            'spot' => '',
+                            'severity' => $seededSeverity,
+                            'notes' => $seededNotesPrefix,
+                            'recommendations' => [],
+                            'risk_impact' => '',
+                            'phar_labour_hours' => 0,
+                            'phar_category' => '',
+                            'phar_included_yn' => true,
+                            'phar_notes' => '',
+                            'materials' => [],
+                        ];
+                    })
+                    ->filter()
+                    ->values()
+                    ->all();
+            }
+        }
+
         $dbMaterialSettings = \App\Models\FmcMaterialSetting::active()->get([
             'material_name', 'default_unit', 'default_unit_cost', 'hst_rate', 'pst_rate', 'system_id', 'subsystem_id',
-        ]);
+        ])->map(static function ($row) {
+            $base = (float) ($row->default_unit_cost ?? 0);
+            $hst  = (float) ($row->hst_rate ?? 5.00);
+            $pst  = (float) ($row->pst_rate ?? 7.00);
+
+            $row->taxed_unit_cost = round($base * (1 + $hst / 100) * (1 + $pst / 100), 2);
+            return $row;
+        });
         $materialUnits = array_values(array_unique(array_merge(
             config('phar.material_units', []),
             PharCatalog::materialUnits(),
@@ -241,6 +339,12 @@ class InspectionController extends Controller
                 'default_unit_cost' => $row['default_unit_cost'],
                 'hst_rate'          => $row['hst_rate']  ?? 5.00,
                 'pst_rate'          => $row['pst_rate']  ?? 7.00,
+                'taxed_unit_cost'   => round(
+                    (float) ($row['default_unit_cost'] ?? 0)
+                    * (1 + (float) ($row['hst_rate'] ?? 5.00) / 100)
+                    * (1 + (float) ($row['pst_rate'] ?? 7.00) / 100),
+                    2
+                ),
                 'system_id'         => null,
                 'subsystem_id'      => null,
             ]
@@ -262,7 +366,9 @@ class InspectionController extends Controller
             'systems',
             'materialUnits',
             'fmcMaterialSettings',
-            'pharCategories'
+            'pharCategories',
+            'serviceRequest',
+            'seededSystemFindings'
         ));
     }
 
@@ -301,10 +407,217 @@ class InspectionController extends Controller
     /**
      * Store a newly created inspection in storage.
      */
+    public function autosaveDraft(Request $request)
+    {
+        $validated = $request->validate([
+            'property_id' => 'required|exists:properties,id',
+            'service_request_id' => 'nullable|exists:service_requests,id',
+            'inspection_date' => 'nullable|date',
+            'inspector_id' => 'nullable|exists:users,id',
+            'weather_conditions' => 'nullable|string|max:120',
+            'summary' => 'nullable|string',
+            'overall_condition' => 'nullable|in:excellent,good,fair,poor,critical',
+            'inspector_notes' => 'nullable|string',
+            'recommendations' => 'nullable|string',
+            'risk_summary' => 'nullable|string',
+            'system_findings' => 'nullable|array',
+            'system_findings.*.system_id' => 'nullable|exists:systems,id',
+            'system_findings.*.subsystem_id' => 'nullable|exists:subsystems,id',
+            'system_findings.*.issue' => 'nullable|string|max:255',
+            'system_findings.*.issue_description' => 'nullable|string|max:5000',
+            'system_findings.*.location' => 'nullable|string|max:255',
+            'system_findings.*.spot' => 'nullable|string|max:255',
+            'system_findings.*.severity' => 'nullable|in:low,medium,high,critical,noi_protection,urgent,health_safety_threatening,value_depreciation,non_urgent',
+            'system_findings.*.notes' => 'nullable|string',
+            'system_findings.*.recommendations' => 'nullable',
+            'system_findings.*.recommendations.*' => 'nullable|string|max:500',
+            'system_findings.*.recommendation_details' => 'nullable|string|max:5000',
+            'system_findings.*.risk_impact' => 'nullable|string|max:1000',
+            'system_findings.*.phar_labour_hours' => 'nullable|numeric|min:0',
+            'system_findings.*.phar_category' => 'nullable|string|max:255',
+            'system_findings.*.phar_included_yn' => 'nullable|boolean',
+            'system_findings.*.phar_notes' => 'nullable|string',
+            'system_findings.*.materials' => 'nullable|array',
+            'system_findings.*.materials.*.material_name' => 'nullable|string|max:255',
+            'system_findings.*.materials.*.quantity' => 'nullable|numeric|min:0',
+            'system_findings.*.materials.*.unit' => 'nullable|string|max:50',
+            'system_findings.*.materials.*.unit_cost' => 'nullable|numeric|min:0',
+            'system_findings.*.materials.*.line_total' => 'nullable|numeric|min:0',
+            'system_findings.*.materials.*.notes' => 'nullable|string|max:500',
+            'system_findings.*.materials.*.property_id' => 'nullable|integer',
+        ]);
+
+        $property = Property::findOrFail((int) $validated['property_id']);
+
+        $project = \App\Models\Project::firstOrCreate(
+            ['property_id' => $property->id],
+            [
+                'title' => 'Property Inspection - ' . $property->property_name,
+                'description' => 'CPI Inspection for ' . $property->property_name,
+                'status' => 'pending',
+                'user_id' => $property->user_id,
+                'managed_by' => $property->project_manager_id,
+                'created_by' => Auth::id(),
+                'project_number' => 'PRJ-' . strtoupper(Str::random(8)),
+            ]
+        );
+
+        $inspection = Inspection::where('property_id', $property->id)
+            ->where('inspection_fee_status', 'paid')
+            ->whereIn('status', ['scheduled', 'in_progress', 'completed'])
+            ->latest('id')
+            ->first();
+
+        if (!$inspection) {
+            $inspection = Inspection::where('property_id', $property->id)
+                ->where('status', 'in_progress')
+                ->latest('id')
+                ->first();
+        }
+
+        if (!$inspection) {
+            $inspection = new Inspection();
+            $inspection->property_id = $property->id;
+            $inspection->project_id = $project->id;
+            $inspection->inspector_id = $validated['inspector_id'] ?? Auth::id();
+            $inspection->assigned_by = $property->project_manager_id ?? Auth::id();
+        } else {
+            $inspection->project_id = $inspection->project_id ?: $project->id;
+            $inspection->inspector_id = $validated['inspector_id'] ?? ($inspection->inspector_id ?: Auth::id());
+            $inspection->assigned_by = $inspection->assigned_by ?: ($property->project_manager_id ?? Auth::id());
+        }
+
+        $inspection->scheduled_date = $validated['inspection_date']
+            ?? $inspection->scheduled_date
+            ?? now();
+        $inspection->status = 'in_progress';
+        $inspection->weather_conditions = $validated['weather_conditions'] ?? null;
+
+        $inspection->owner_name = $property->user->name ?? null;
+        $inspection->owner_email = $property->user->email ?? null;
+        $inspection->owner_phone = $property->owner_phone
+            ?: (($property->user->phone ?? null)
+                ?: ($property->admin_phone ?: null));
+        $inspection->property_code = $property->property_code;
+        $inspection->property_name = $property->property_name;
+        $inspection->property_address_snapshot = trim(($property->property_address ?? '') . ', ' . ($property->city ?? ''));
+        $inspection->property_type_snapshot = $property->type;
+        $inspection->residential_units_snapshot = (int) ($property->number_of_units ?: $property->residential_units ?: 0);
+        $inspection->commercial_sqft_snapshot = $property->square_footage_interior;
+        $inspection->mixed_use_weight_snapshot = $property->mixed_use_commercial_weight;
+
+        $systemFindings = collect($request->input('system_findings', []));
+        $systemNameMap = collect();
+        $systemSlugMap = collect();
+        $subsystemNameMap = collect();
+
+        if (Schema::hasTable('systems') && Schema::hasTable('subsystems') && $systemFindings->isNotEmpty()) {
+            $systemIds = $systemFindings->pluck('system_id')->filter()->unique()->values();
+            $subsystemIds = $systemFindings->pluck('subsystem_id')->filter()->unique()->values();
+            $systemNameMap = InspectionSystem::whereIn('id', $systemIds)->pluck('name', 'id');
+            $systemSlugMap = InspectionSystem::whereIn('id', $systemIds)->pluck('slug', 'id');
+            $subsystemNameMap = \App\Models\InspectionSubsystem::whereIn('id', $subsystemIds)->pluck('name', 'id');
+        }
+
+        $severityAliases = [
+            'urgent'                    => 'critical',
+            'health_safety_threatening' => 'high',
+            'value_depreciation'        => 'medium',
+            'non_urgent'                => 'low',
+        ];
+
+        $allowedSeverities = ['critical', 'high', 'noi_protection', 'medium', 'low'];
+
+        $savedInspectionPhotos = [];
+        if ($inspection) {
+            foreach ((array) ($inspection->findings ?? []) as $fi => $findingRow) {
+                if (!empty($findingRow['finding_photos'])) {
+                    $savedInspectionPhotos[$fi] = array_values(array_filter((array) $findingRow['finding_photos']));
+                }
+            }
+        }
+
+        $normalizedFindings = $systemFindings
+            ->map(function ($finding, $idx) use ($systemNameMap, $systemSlugMap, $subsystemNameMap, $severityAliases, $allowedSeverities, $savedInspectionPhotos) {
+                $systemId = $finding['system_id'] ?? null;
+                $subsystemId = $finding['subsystem_id'] ?? null;
+                $rawSeverity = (string) ($finding['severity'] ?? 'low');
+                $normalizedSeverity = $severityAliases[$rawSeverity] ?? $rawSeverity;
+
+                return [
+                    'system_id' => $systemId,
+                    'system' => $systemNameMap[$systemId] ?? null,
+                    'system_slug' => $systemSlugMap[$systemId] ?? null,
+                    'subsystem_id' => $subsystemId,
+                    'subsystem' => $subsystemNameMap[$subsystemId] ?? null,
+                    'issue' => trim((string) ($finding['issue'] ?? '')),
+                    'issue_description' => trim((string) ($finding['issue_description'] ?? '')),
+                    'location' => trim((string) ($finding['location'] ?? '')),
+                    'spot' => trim((string) ($finding['spot'] ?? '')),
+                    'severity' => in_array($normalizedSeverity, $allowedSeverities, true) ? $normalizedSeverity : 'low',
+                    'notes' => trim((string) ($finding['notes'] ?? '')),
+                    'recommendations' => collect(is_array($finding['recommendations'] ?? null)
+                        ? ($finding['recommendations'] ?? [])
+                        : preg_split('/\r\n|\r|\n|\|/', (string) ($finding['recommendations'] ?? '')))
+                        ->map(fn ($item) => trim((string) $item))
+                        ->filter()
+                        ->values()
+                        ->all(),
+                    'recommendation_details' => trim((string) ($finding['recommendation_details'] ?? '')),
+                    'type' => $systemSlugMap[$systemId] ?? null,
+                    'finding_photos' => $savedInspectionPhotos[$idx] ?? [],
+                    'risk_impact' => trim((string) ($finding['risk_impact'] ?? '')),
+                    'phar_labour_hours' => (float) ($finding['phar_labour_hours'] ?? 0),
+                    'phar_category' => trim((string) ($finding['phar_category'] ?? '')),
+                    'phar_included_yn' => isset($finding['phar_included_yn']) ? (bool) $finding['phar_included_yn'] : true,
+                    'phar_notes' => trim((string) ($finding['phar_notes'] ?? '')),
+                    'phar_materials' => collect($finding['materials'] ?? [])
+                        ->filter(fn($material) => !empty($material['material_name']))
+                        ->map(fn($material) => [
+                            'material_name' => trim((string) ($material['material_name'] ?? '')),
+                            'quantity' => (float) ($material['quantity'] ?? 1),
+                            'unit' => (string) ($material['unit'] ?? 'ea'),
+                            'unit_cost' => (float) ($material['unit_cost'] ?? 0),
+                            'line_total' => (float) ($material['line_total'] ?? 0),
+                            'notes' => trim((string) ($material['notes'] ?? '')),
+                            'property_id' => (int) ($material['property_id'] ?? 0),
+                        ])
+                        ->values()
+                        ->all(),
+                ];
+            })
+            ->filter(function ($finding) {
+                return $finding['system_id']
+                    && ($finding['issue'] !== ''
+                        || $finding['issue_description'] !== ''
+                        || $finding['notes'] !== ''
+                        || !empty($finding['recommendations'])
+                        || $finding['recommendation_details'] !== '');
+            })
+            ->values()
+            ->all();
+
+        $inspection->summary = $validated['summary'] ?? ('Inspection for ' . $property->property_name);
+        $inspection->overall_condition = $validated['overall_condition'] ?? null;
+        $inspection->inspector_notes = $validated['inspector_notes'] ?? null;
+        $inspection->recommendations = $validated['recommendations'] ?? null;
+        $inspection->risk_summary = $validated['risk_summary'] ?? null;
+        $inspection->findings = $normalizedFindings;
+
+        $inspection->save();
+
+        return response()->json([
+            'ok' => true,
+            'inspection_id' => $inspection->id,
+            'saved_at' => now()->toIso8601String(),
+        ]);
+    }
+
     public function store(Request $request)
     {
         $validated = $request->validate([
             'property_id' => 'required|exists:properties,id',
+            'service_request_id' => 'nullable|exists:service_requests,id',
             'status' => 'required|in:scheduled,in_progress,completed',
             'inspection_date' => 'required|date',
             'inspector_id' => 'nullable|exists:users,id',
@@ -344,12 +657,14 @@ class InspectionController extends Controller
             'system_findings.*.system_id' => 'nullable|exists:systems,id',
             'system_findings.*.subsystem_id' => 'nullable|exists:subsystems,id',
             'system_findings.*.issue' => 'nullable|string|max:255',
+            'system_findings.*.issue_description' => 'nullable|string|max:5000',
             'system_findings.*.location' => 'nullable|string|max:255',
             'system_findings.*.spot' => 'nullable|string|max:255',
             'system_findings.*.severity' => 'nullable|in:low,medium,high,critical,noi_protection,urgent,health_safety_threatening,value_depreciation,non_urgent',
             'system_findings.*.notes' => 'nullable|string',
             'system_findings.*.recommendations' => 'nullable',
             'system_findings.*.recommendations.*' => 'nullable|string|max:500',
+            'system_findings.*.recommendation_details' => 'nullable|string|max:5000',
             'system_findings.*.phar_labour_hours'              => 'nullable|numeric|min:0',
             'system_findings.*.materials'                      => 'nullable|array',
             'system_findings.*.materials.*.material_name'      => 'nullable|string|max:255',
@@ -420,7 +735,7 @@ class InspectionController extends Controller
         $inspection->property_name = $property->property_name;
         $inspection->property_address_snapshot = trim(($property->property_address ?? '') . ', ' . ($property->city ?? ''));
         $inspection->property_type_snapshot = $property->type;
-        $inspection->residential_units_snapshot = $property->residential_units;
+        $inspection->residential_units_snapshot = (int) ($property->number_of_units ?: $property->residential_units ?: 0);
         $inspection->commercial_sqft_snapshot = $property->square_footage_interior;
         $inspection->mixed_use_weight_snapshot = $property->mixed_use_commercial_weight;
 
@@ -521,6 +836,7 @@ class InspectionController extends Controller
                     'subsystem_id' => $subsystemId,
                     'subsystem' => $subsystemNameMap[$subsystemId] ?? null,
                     'issue' => trim((string) ($finding['issue'] ?? '')),
+                    'issue_description' => trim((string) ($finding['issue_description'] ?? '')),
                     'location' => trim((string) ($finding['location'] ?? '')),
                     'spot' => trim((string) ($finding['spot'] ?? '')),
                     'severity' => in_array($normalizedSeverity, $allowedSeverities, true) ? $normalizedSeverity : 'low',
@@ -532,6 +848,7 @@ class InspectionController extends Controller
                         ->filter()
                         ->values()
                         ->all(),
+                    'recommendation_details' => trim((string) ($finding['recommendation_details'] ?? '')),
                     'type'           => $systemSlugMap[$systemId] ?? null,
                     'finding_photos' => array_values(array_unique(array_merge(
                         $savedInspectionPhotos[$idx] ?? [],
@@ -561,8 +878,10 @@ class InspectionController extends Controller
             ->filter(function ($finding) {
                 return $finding['system_id']
                     && ($finding['issue'] !== ''
+                        || $finding['issue_description'] !== ''
                         || $finding['notes'] !== ''
-                        || !empty($finding['recommendations']));
+                        || !empty($finding['recommendations'])
+                        || $finding['recommendation_details'] !== '');
             })
             ->values()
             ->all();
@@ -590,6 +909,23 @@ class InspectionController extends Controller
         }
 
         $inspection->save();
+
+        if (!empty($validated['service_request_id'])) {
+            $serviceRequest = ServiceRequest::query()
+                ->where('id', (int) $validated['service_request_id'])
+                ->where('property_id', $property->id)
+                ->first();
+
+            if ($serviceRequest) {
+                $serviceRequest->update([
+                    'inspection_id' => $inspection->id,
+                    'created_inspection_id' => $inspection->id,
+                    'project_id' => $inspection->project_id ?: $serviceRequest->project_id,
+                    'status' => 'assessed',
+                    'assessed_at' => $serviceRequest->assessed_at ?? now(),
+                ]);
+            }
+        }
 
         // ==== FINDINGS & MATERIALS ARE NOW COLLECTED ON PAGE 2 (PHAR DATA FORM) ====
         // Findings processing moved to storePharData() method
@@ -986,6 +1322,29 @@ class InspectionController extends Controller
 
             DB::commit();
 
+            // Notify Store Managers that tools are ready to be assigned for this property
+            try {
+                $freshInspection = $inspection->fresh(['property.user']);
+                if ($freshInspection && $freshInspection->client_signature) {
+                    $propertyName  = $freshInspection->property?->property_name
+                                  ?? $freshInspection->property?->property_code
+                                  ?? 'Property #' . $freshInspection->property_id;
+                    $clientName    = $freshInspection->property?->user?->name ?? 'Client';
+                    $storeManagers = \App\Models\User::role('Store Manager')->get();
+                    $notification  = new ToolAssignmentReadyNotification(
+                        $freshInspection->id,
+                        $freshInspection->property_id,
+                        $propertyName,
+                        $clientName,
+                    );
+                    foreach ($storeManagers as $manager) {
+                        $manager->notify($notification);
+                    }
+                }
+            } catch (\Throwable $notifyEx) {
+                Log::warning('ToolAssignmentReadyNotification failed', ['error' => $notifyEx->getMessage()]);
+            }
+
             return response()->json([
                 'success' => true,
                 'message' => 'Payment successful. Work has been started.',
@@ -1037,9 +1396,14 @@ class InspectionController extends Controller
     public function countersignAgreement(Request $request, Inspection $inspection)
     {
         $user = Auth::user();
-        if (!$user || !$user->hasAnyRole(['Super Admin', 'Admin', 'Project Manager'])) {
+        if (!$user || !$user->hasAnyRole(['Super Admin', 'Administrator', 'Project Manager'])) {
             abort(403, 'You are not authorized to countersign this agreement.');
         }
+
+        $validated = $request->validate([
+            'staff_full_name' => 'required|string|max:255',
+            'staff_acknowledgment' => 'required|accepted',
+        ]);
 
         if (($inspection->status ?? null) !== 'completed') {
             return back()->with('error', 'Agreement countersign is only available for completed inspections.');
@@ -1053,6 +1417,19 @@ class InspectionController extends Controller
             return back()->with('error', 'Deposit/work payment must be confirmed before Etogo countersign.');
         }
 
+        $hasAssignedTools = $inspection->toolAssignments()
+            ->whereNull('returned_at')
+            ->where('quantity', '>', 0)
+            ->exists();
+        if (!$hasAssignedTools) {
+            return back()->with('error', 'Assign tools first before Etogo countersign.');
+        }
+
+        $hasScheduledVisits = collect($inspection->work_schedule ?? [])->isNotEmpty();
+        if (!$hasScheduledVisits) {
+            return back()->with('error', 'Set project visit schedule before Etogo countersign.');
+        }
+
         if ($inspection->etogo_signed_at) {
             return back()->with('info', 'Agreement has already been countersigned by Etogo.');
         }
@@ -1060,11 +1437,12 @@ class InspectionController extends Controller
         $inspection->update([
             'etogo_signed_by' => Auth::id(),
             'etogo_signed_at' => now(),
+            'etogo_signature_image_path' => Auth::user()->signature_path ?: null,
         ]);
 
         $this->agreementScheduleService->refresh($inspection);
 
-        return back()->with('success', 'Agreement countersigned by ' . Auth::user()->name . '.');
+        return back()->with('success', 'Agreement countersigned by ' . trim((string) $validated['staff_full_name']) . '.');
     }
 
     /**
@@ -1074,12 +1452,29 @@ class InspectionController extends Controller
     public function storeWorkSchedule(Request $request, Inspection $inspection)
     {
         $user = Auth::user();
-        if (!$user || !$user->hasAnyRole(['Super Admin', 'Admin', 'Project Manager'])) {
+        if (!$user || !$user->hasAnyRole(['Super Admin', 'Administrator', 'Project Manager'])) {
             abort(403);
         }
 
-        if (!$inspection->etogo_signed_at) {
-            return back()->with('error', 'The agreement must be countersigned by Etogo before scheduling work visits.');
+        if (!$inspection->approved_by_client || !$inspection->client_approved_at) {
+            return back()->with('error', 'Client must sign the agreement before scheduling project visits.');
+        }
+
+        if (($inspection->work_payment_status ?? 'pending') !== 'paid') {
+            return back()->with('error', 'Deposit/work payment must be confirmed before scheduling project visits.');
+        }
+
+        $hasAssignedTools = $inspection->toolAssignments()
+            ->whereNull('returned_at')
+            ->where('quantity', '>', 0)
+            ->exists();
+
+        if (!$hasAssignedTools) {
+            return back()->with('error', 'Assign project tools first before scheduling visits.');
+        }
+
+        if ($inspection->etogo_signed_at) {
+            return back()->with('error', 'Visit schedule is locked after Etogo countersign.');
         }
 
         $hasMaintenanceLogs = $inspection->maintenanceVisitLogs()->exists();
@@ -1092,8 +1487,14 @@ class InspectionController extends Controller
         }
 
         $validated = $request->validate([
-            'visit_dates'   => 'required|array|min:1',
-            'visit_dates.*' => 'required|date',
+            'visit_dates'                         => 'required|array|min:1',
+            'visit_dates.*'                       => 'required|date',
+            'visit_deliverables'                  => 'nullable|array',
+            'visit_deliverables.*'                => 'nullable|array',
+            'visit_deliverables.*.*'              => 'nullable|array',
+            'visit_deliverables.*.*.date'    => 'nullable|date',
+            'visit_deliverables.*.*.tasks'   => 'nullable|array',
+            'visit_deliverables.*.*.tasks.*' => 'nullable|string|max:500',
         ]);
 
         $badDates = collect($validated['visit_dates'])->filter(function (string $date) {
@@ -1105,12 +1506,32 @@ class InspectionController extends Controller
             return back()->with('error', 'Visit dates must be Monday – Saturday (no Sundays). Invalid: ' . $badDates->implode(', '));
         }
 
-        $schedule = collect($validated['visit_dates'])
-            ->map(fn($d) => Carbon::parse($d)->toDateString())
-            ->unique()
-            ->sort()
+        $rawDeliverables = $validated['visit_deliverables'] ?? [];
+
+        // Pair each date with its deliverables before deduplication/sort
+        $visitEntries = collect($validated['visit_dates'])->map(function ($d, $i) use ($rawDeliverables) {
+            $dateStr = Carbon::parse($d)->toDateString();
+            $deliverables = collect($rawDeliverables[$i] ?? [])
+                ->map(fn($dl) => [
+                    'date'  => !empty($dl['date']) ? Carbon::parse($dl['date'])->toDateString() : $dateStr,
+                    'tasks' => array_values(array_filter(array_map('trim', $dl['tasks'] ?? []))),
+                ])
+                ->filter(fn($dl) => !empty($dl['tasks']))
+                ->values()
+                ->map(fn($dl, $j) => array_merge(['day' => $j + 1], $dl))
+                ->all();
+            return ['date' => $dateStr, 'deliverables' => $deliverables];
+        });
+
+        $schedule = $visitEntries
+            ->keyBy('date')
+            ->sortKeys()
             ->values()
-            ->map(fn($d) => ['date' => $d, 'status' => 'scheduled'])
+            ->map(fn($v) => [
+                'date'         => $v['date'],
+                'status'       => 'scheduled',
+                'deliverables' => $v['deliverables'],
+            ])
             ->all();
 
         $updates = ['work_schedule' => $schedule];
@@ -1183,7 +1604,14 @@ class InspectionController extends Controller
             'pst_rate',
             'system_id',
             'subsystem_id',
-        ]);
+        ])->map(static function ($row) {
+            $base = (float) ($row->default_unit_cost ?? 0);
+            $hst  = (float) ($row->hst_rate ?? 5.00);
+            $pst  = (float) ($row->pst_rate ?? 7.00);
+
+            $row->taxed_unit_cost = round($base * (1 + $hst / 100) * (1 + $pst / 100), 2);
+            return $row;
+        });
         $materialUnits = array_values(array_unique(array_merge(
             config('phar.material_units', []),
             PharCatalog::materialUnits(),
@@ -1195,6 +1623,12 @@ class InspectionController extends Controller
             'default_unit_cost' => $row['default_unit_cost'],
             'hst_rate'          => $row['hst_rate'] ?? 5.00,
             'pst_rate'          => $row['pst_rate'] ?? 7.00,
+            'taxed_unit_cost'   => round(
+                (float) ($row['default_unit_cost'] ?? 0)
+                * (1 + (float) ($row['hst_rate'] ?? 5.00) / 100)
+                * (1 + (float) ($row['pst_rate'] ?? 7.00) / 100),
+                2
+            ),
             'system_id'         => null,
             'subsystem_id'      => null,
         ]);
@@ -1493,18 +1927,48 @@ class InspectionController extends Controller
         $findingsSnapshot = $findings->values()->map(function (PHARFinding $finding, int $index) use ($hourlyRate, $inspectionFindings) {
             $labourHours = (float) ($finding->labour_hours ?? 0);
             $materialCost = (float) ($finding->material_cost ?? 0);
+            $jsonFinding = $inspectionFindings->get($index, []);
+            $issueText = trim((string) ($jsonFinding['issue'] ?? $finding->task_question ?? ''));
+            $issueDescription = trim((string) ($jsonFinding['issue_description'] ?? ''));
+            $recommendationDetails = trim((string) ($jsonFinding['recommendation_details'] ?? ''));
+            $recommendationList = collect(is_array($jsonFinding['recommendations'] ?? null)
+                ? ($jsonFinding['recommendations'] ?? [])
+                : preg_split('/\r\n|\r|\n|\|/', (string) ($jsonFinding['recommendations'] ?? '')))
+                ->map(fn ($item) => trim((string) $item))
+                ->filter()
+                ->values()
+                ->all();
+
+            $materials = collect($jsonFinding['phar_materials'] ?? [])
+                ->map(function ($material) {
+                    return [
+                        'material_name' => trim((string) ($material['material_name'] ?? '')),
+                        'quantity' => (float) ($material['quantity'] ?? 0),
+                        'unit' => trim((string) ($material['unit'] ?? 'ea')),
+                        'unit_cost' => round((float) ($material['unit_cost'] ?? 0), 2),
+                        'line_total' => round((float) ($material['line_total'] ?? 0), 2),
+                        'notes' => trim((string) ($material['notes'] ?? '')),
+                    ];
+                })
+                ->filter(fn ($material) => $material['material_name'] !== '')
+                ->values()
+                ->all();
 
             // Backward-compatibility: for legacy rows where PHARFinding.material_cost was
             // persisted as 0, recover from inspection findings JSON materials by index.
             if ($materialCost <= 0) {
-                $jsonFinding = $inspectionFindings->get($index, []);
-                $materialCost = (float) collect($jsonFinding['phar_materials'] ?? [])
+                $materialCost = (float) collect($materials)
                     ->sum(fn($m) => (float) ($m['line_total'] ?? 0));
             }
 
             return [
                 'id' => (int) $finding->id,
-                'task_question' => $finding->task_question,
+                'task_question' => $issueText !== '' ? $issueText : $finding->task_question,
+                'issue' => $issueText !== '' ? $issueText : $finding->task_question,
+                'issue_description' => $issueDescription,
+                'recommendation' => $finding->task_question,
+                'recommendations' => $recommendationList,
+                'recommendation_details' => $recommendationDetails,
                 'category' => $finding->category,
                 'priority' => $finding->priority,
                 'included_yn' => (bool) $finding->included_yn,
@@ -1512,6 +1976,7 @@ class InspectionController extends Controller
                 'labour_cost' => round($labourHours * $hourlyRate, 2),
                 'material_cost' => round($materialCost, 2),
                 'notes' => $finding->notes,
+                'materials' => $materials,
                 'photo_ids' => is_array($finding->photo_ids) ? array_values($finding->photo_ids) : [],
             ];
         })->values()->all();
@@ -1832,11 +2297,40 @@ class InspectionController extends Controller
     /**
      * Admin preview of the client-facing agreement/contract (read-only, no auth check on ownership).
      */
-    public function previewAgreement(Inspection $inspection)
+    public function previewAgreement(Request $request, Inspection $inspection)
     {
         $inspection = $this->agreementScheduleService->refresh($inspection);
         $adminPreview = true;
-        return view('client.inspections.agreement', compact('inspection', 'adminPreview'));
+        $forCountersign = (bool) $request->boolean('for_countersign', false);
+        return view('client.inspections.agreement', compact('inspection', 'adminPreview', 'forCountersign'));
+    }
+
+    /**
+     * Admin download of the client-facing agreement PDF.
+     */
+    public function downloadAgreementPdf(Inspection $inspection)
+    {
+        if (($inspection->status ?? null) !== 'completed') {
+            return redirect()->route('inspections.index')
+                ->with('error', 'Agreement PDF is available only after inspection completion.');
+        }
+
+        $inspection = $this->agreementScheduleService->refresh($inspection);
+
+        $pdf = Pdf::loadView('client.inspections.agreement-pdf', compact('inspection'))
+            ->setPaper('a4', 'portrait')
+            ->setOption('margin-top', 12)
+            ->setOption('margin-right', 10)
+            ->setOption('margin-bottom', 12)
+            ->setOption('margin-left', 10)
+            ->setOption('isHtml5ParserEnabled', true)
+            ->setOption('isRemoteEnabled', true);
+
+        $clientName = Str::slug((string) ($inspection->property?->user?->name ?? 'client'));
+        $propertyName = Str::slug((string) ($inspection->property?->property_name ?? $inspection->property?->property_code ?? 'property'));
+        $filename = 'Client_Agreement_' . $clientName . '_' . $propertyName . '.pdf';
+
+        return $pdf->download($filename);
     }
 
     protected function ensureClientInvoiceFromInspection(Inspection $inspection): void

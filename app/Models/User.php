@@ -35,6 +35,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'profile_photo_path',
+        'signature_path',
     ];
 
     /**
@@ -75,6 +77,54 @@ class User extends Authenticatable
     // ========================================
     // RELATIONSHIPS
     // ========================================
+
+    /**
+     * Override Jetstream's profile_photo_url to serve signed S3 URLs when on S3 disk.
+     * Falls back to the default Jetstream behaviour for local/public disk.
+     */
+    public function getProfilePhotoUrlAttribute(): string
+    {
+        $disk   = config('filesystems.default', 'public');
+        $driver = config("filesystems.disks.{$disk}.driver", 'local');
+
+        if ($this->profile_photo_path) {
+            if ($driver === 's3') {
+                return \Illuminate\Support\Facades\Storage::disk($disk)->temporaryUrl(
+                    $this->profile_photo_path,
+                    now()->addHours(1)
+                );
+            }
+
+            return \Illuminate\Support\Facades\Storage::disk($disk)->url($this->profile_photo_path);
+        }
+
+        // No photo — use UI-Avatars initials
+        return 'https://ui-avatars.com/api/?name='.urlencode($this->name)
+            .'&color=7F9CF5&background=EBF4FF';
+    }
+
+    /**
+     * Return a URL for the user's signature image, or null if none uploaded.
+     * Uses signed S3 URLs on S3 disk, plain URLs on public disk.
+     */
+    public function getSignatureUrlAttribute(): ?string
+    {
+        if (!$this->signature_path) {
+            return null;
+        }
+
+        $disk   = config('filesystems.default', 'public');
+        $driver = config("filesystems.disks.{$disk}.driver", 'local');
+
+        if ($driver === 's3') {
+            return \Illuminate\Support\Facades\Storage::disk($disk)->temporaryUrl(
+                $this->signature_path,
+                now()->addHours(1)
+            );
+        }
+
+        return \Illuminate\Support\Facades\Storage::disk($disk)->url($this->signature_path);
+    }
 
     /**
      * Get all properties owned by this user (client)

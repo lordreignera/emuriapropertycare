@@ -4,7 +4,10 @@ namespace App\Http\Controllers\Client;
 
 use App\Http\Controllers\Controller;
 use App\Models\Property;
+use App\Models\User;
+use App\Notifications\PropertyRegisteredNotification;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Storage;
 
 class PropertyController extends Controller
@@ -81,6 +84,7 @@ class PropertyController extends Controller
             'personality' => 'nullable|in:calm,busy,luxury,high-use',
             'personality_notes' => 'nullable|string|max:2000',
             'known_problems' => 'nullable',
+            'known_problem_images.*' => 'nullable|image|max:10240',
             'sensitivities' => 'nullable|array',
             'sensitivities.*' => 'string|max:255',
             'home_journey' => 'nullable|array',
@@ -161,9 +165,28 @@ class PropertyController extends Controller
         if ($request->hasFile('blueprint_file')) {
             $validated['blueprint_file'] = $request->file('blueprint_file')->store('properties/blueprints', $disk);
         }
+
+        if ($request->hasFile('known_problem_images')) {
+            $validated['known_problem_images'] = $this->storeKnownProblemImages($request, $disk);
+        }
         
         // Create property
         $property = Property::create($validated);
+
+        $adminRecipients = User::role(['Super Admin', 'Administrator', 'Project Manager', 'Inspector', 'Technician', 'Store Manager'])
+            ->get()
+            ->unique('id')
+            ->values();
+
+        if ($adminRecipients->isNotEmpty()) {
+            Notification::send($adminRecipients, new PropertyRegisteredNotification(
+                propertyId: (int) $property->id,
+                propertyCode: (string) ($property->property_code ?? 'N/A'),
+                propertyName: (string) ($property->property_name ?? 'Property'),
+                city: (string) ($property->city ?? 'Unknown city'),
+                clientName: (string) (auth()->user()->name ?? 'Client'),
+            ));
+        }
         
         return redirect()
             ->route('client.properties.show', $property->id)
@@ -222,9 +245,12 @@ class PropertyController extends Controller
 
         $validated = $request->validate([
             'property_name' => 'required|string|max:255',
+            'property_brand' => 'nullable|string|max:50',
             'type' => 'required|in:residential,commercial,mixed_use',
             'property_subtype' => 'nullable|in:house,townhome,condo,duplex,multi_unit',
             'year_built' => 'nullable|integer|min:1800|max:' . date('Y'),
+            'residential_units' => 'nullable|integer|min:1',
+            'mixed_use_commercial_weight' => 'nullable|numeric|min:0|max:100',
             
             // Address
             'property_address' => 'required|string|max:255',
@@ -261,6 +287,7 @@ class PropertyController extends Controller
             'personality' => 'nullable|in:calm,busy,luxury,high-use',
             'personality_notes' => 'nullable|string|max:2000',
             'known_problems' => 'nullable',
+            'known_problem_images.*' => 'nullable|image|max:10240',
             'sensitivities' => 'nullable|array',
             'sensitivities.*' => 'string|max:255',
             'home_journey' => 'nullable|array',
@@ -337,6 +364,16 @@ class PropertyController extends Controller
             
             $validated['blueprint_file'] = $request->file('blueprint_file')->store('properties/blueprints', $disk);
         }
+
+        if ($request->hasFile('known_problem_images')) {
+            if ($property->known_problem_images) {
+                foreach ($property->known_problem_images as $image) {
+                    Storage::disk($disk)->delete($image);
+                }
+            }
+
+            $validated['known_problem_images'] = $this->storeKnownProblemImages($request, $disk);
+        }
         
         $property->update($validated);
         
@@ -374,6 +411,12 @@ class PropertyController extends Controller
         // Delete blueprint
         if ($property->blueprint_file) {
             Storage::disk($disk)->delete($property->blueprint_file);
+        }
+
+        if ($property->known_problem_images) {
+            foreach ($property->known_problem_images as $image) {
+                Storage::disk($disk)->delete($image);
+            }
         }
         
         $property->delete();
@@ -427,5 +470,18 @@ class PropertyController extends Controller
         }
 
         return null;
+    }
+
+    protected function storeKnownProblemImages(Request $request, string $disk): array
+    {
+        $images = [];
+
+        foreach ((array) $request->file('known_problem_images', []) as $image) {
+            if ($image) {
+                $images[] = $image->store('properties/known-problems', $disk);
+            }
+        }
+
+        return $images;
     }
 }

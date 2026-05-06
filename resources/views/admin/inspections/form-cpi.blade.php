@@ -33,6 +33,7 @@
             <form action="{{ route('inspections.store') }}" method="POST" enctype="multipart/form-data" id="inspectionSystemsForm">
                 @csrf
                 <input type="hidden" name="property_id" value="{{ $property->id }}">
+                <input type="hidden" name="service_request_id" value="{{ old('service_request_id', $serviceRequest->id ?? '') }}">
                 <input type="hidden" name="status" value="in_progress">
 
                 @if($errors->any())
@@ -124,7 +125,7 @@
                                 <div class="col-md-3">
                                     <div class="form-group">
                                         <label>Residential Units</label>
-                                        <input type="text" class="form-control" value="{{ $property->residential_units ?? 0 }}" readonly>
+                                        <input type="text" class="form-control" value="{{ $property->number_of_units ?: ($property->residential_units ?? 0) }}" readonly>
                                     </div>
                                 </div>
                             @endif
@@ -158,6 +159,13 @@
                     </div>
                     <div class="card-body">
                         <p class="text-muted mb-3">Add findings per system — each finding is a card showing all fields at a glance.</p>
+
+                        @if(!empty($serviceRequest))
+                            <div class="alert alert-info">
+                                <strong>Seeded from Service Request:</strong> {{ $serviceRequest->request_number }}
+                                <div class="small mt-1">Client-reported items are preloaded below as initial findings. Reassign systems/subsystems as needed before saving.</div>
+                            </div>
+                        @endif
 
                         @if($systems->isEmpty())
                             <div class="alert alert-warning mb-0">
@@ -232,6 +240,7 @@
                                 <i class="mdi mdi-arrow-left me-1"></i>Cancel
                             </a>
                             <div>
+                                <small id="formAutosaveStatus" class="text-muted me-3">Autosave: waiting...</small>
                                 <button type="submit" class="btn btn-warning me-2">
                                     <i class="mdi mdi-content-save me-1"></i>Save as Draft
                                 </button>
@@ -344,6 +353,7 @@
 <script>
 const systemsConfig = @json($systemsConfig);
 const CPI_PROPERTY_ID = {{ $property->id }};
+const CPI_AUTOSAVE_URL = @json(route('inspections.autosave-draft'));
 const MATERIAL_UNITS = @json($materialUnits ?? []);
 const FMC_MATERIAL_SETTINGS = @json($fmcMaterialSettings ?? []);
 const PHAR_CATEGORIES = @json($pharCategories ?? []);
@@ -357,7 +367,7 @@ function getStoredPhotoPath(findingIdx, photoIdx) {
     return (FINDING_PHOTO_PATHS?.[findingIdx]?.[photoIdx]) ?? '';
 }
 
-const initialFindings = @json(old('system_findings', $inspection->findings ?? []));
+const initialFindings = @json(old('system_findings', $seededSystemFindings ?? $inspection->findings ?? []));
 let findingIndex = 0;
 let findingMediaViewerState = {
     items: [],
@@ -545,6 +555,55 @@ function openFindingMediaViewer(items, startIndex) {
     }
 }
 
+function initializeFindingMediaState(card, findingIndexValue) {
+    if (!Array.isArray(card._findingMediaSelectedFiles)) {
+        card._findingMediaSelectedFiles = [];
+    }
+
+    if (!Array.isArray(card._findingMediaSavedItems)) {
+        const savedUrls = Array.isArray(FINDING_PHOTO_URLS?.[findingIndexValue]) ? FINDING_PHOTO_URLS[findingIndexValue] : [];
+        card._findingMediaSavedItems = savedUrls.map((url, index) => ({
+            url,
+            path: getStoredPhotoPath(findingIndexValue, index),
+        }));
+    }
+}
+
+function syncFindingMediaInputFiles(card) {
+    const input = card.querySelector('.finding-media-input');
+    if (!input) {
+        return;
+    }
+
+    const transfer = new DataTransfer();
+    (card._findingMediaSelectedFiles || []).forEach((file) => transfer.items.add(file));
+    input.files = transfer.files;
+}
+
+function appendFindingMediaFiles(card, fileList) {
+    const files = Array.from(fileList || []);
+    if (!files.length) {
+        return;
+    }
+
+    if (!Array.isArray(card._findingMediaSelectedFiles)) {
+        card._findingMediaSelectedFiles = [];
+    }
+
+    const selected = card._findingMediaSelectedFiles || [];
+    const seen = new Set(selected.map((file) => `${file.name}|${file.size}|${file.lastModified}`));
+
+    files.forEach((file) => {
+        const key = `${file.name}|${file.size}|${file.lastModified}`;
+        if (!seen.has(key)) {
+            selected.push(file);
+            seen.add(key);
+        }
+    });
+
+    card._findingMediaSelectedFiles = selected;
+}
+
 function renderFindingMediaGallery(card, findingIndexValue) {
     const gallery = card.querySelector('.finding-media-gallery');
     const input = card.querySelector('.finding-media-input');
@@ -552,20 +611,31 @@ function renderFindingMediaGallery(card, findingIndexValue) {
         return;
     }
 
+    initializeFindingMediaState(card, findingIndexValue);
+
     if (Array.isArray(card._findingMediaBlobUrls)) {
         card._findingMediaBlobUrls.forEach((url) => URL.revokeObjectURL(url));
     }
     card._findingMediaBlobUrls = [];
 
-    const savedUrls = Array.isArray(FINDING_PHOTO_URLS?.[findingIndexValue]) ? FINDING_PHOTO_URLS[findingIndexValue] : [];
-    const selectedFiles = Array.from(input.files || []);
+    const savedItems = Array.isArray(card._findingMediaSavedItems) ? card._findingMediaSavedItems : [];
+    const selectedFiles = Array.isArray(card._findingMediaSelectedFiles) ? card._findingMediaSelectedFiles : [];
+    const existingHiddenWrap = card.querySelector('.finding-existing-photos');
+
+    if (existingHiddenWrap) {
+        existingHiddenWrap.innerHTML = savedItems
+            .map((saved) => `<input type="hidden" name="existing_finding_photos[${findingIndexValue}][]" value="${escapeHtml(saved.path || '')}">`)
+            .join('');
+    }
 
     const items = [];
-    savedUrls.forEach((url) => {
-        const mediaType = isVideoMedia(url) ? 'video' : 'image';
+    savedItems.forEach((saved) => {
+        const mediaType = isVideoMedia(saved.url) ? 'video' : 'image';
         items.push({
+            source: 'saved',
             type: mediaType,
-            src: url,
+            src: saved.url,
+            path: saved.path,
             label: 'Saved ' + mediaType,
         });
     });
@@ -574,8 +644,10 @@ function renderFindingMediaGallery(card, findingIndexValue) {
         const blobUrl = URL.createObjectURL(file);
         card._findingMediaBlobUrls.push(blobUrl);
         items.push({
+            source: 'new',
             type: file.type.startsWith('video/') ? 'video' : 'image',
             src: blobUrl,
+            fileKey: `${file.name}|${file.size}|${file.lastModified}`,
             label: 'New ' + (file.type.startsWith('video/') ? 'video' : 'photo'),
         });
     });
@@ -608,6 +680,30 @@ function renderFindingMediaGallery(card, findingIndexValue) {
         wrapper.addEventListener('click', function () {
             openFindingMediaViewer(items, idx);
         });
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'btn btn-sm btn-danger';
+        removeBtn.innerHTML = '&times;';
+        removeBtn.style.cssText = 'position:absolute;top:3px;right:3px;line-height:1;padding:1px 6px;font-size:14px;border-radius:999px;';
+        removeBtn.title = 'Remove this item';
+        removeBtn.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            if (item.source === 'saved') {
+                const savedList = Array.isArray(card._findingMediaSavedItems) ? card._findingMediaSavedItems : [];
+                card._findingMediaSavedItems = savedList.filter(saved => !(saved.path === item.path && saved.url === item.src));
+            } else {
+                const selectedList = Array.isArray(card._findingMediaSelectedFiles) ? card._findingMediaSelectedFiles : [];
+                card._findingMediaSelectedFiles = selectedList.filter(file => (`${file.name}|${file.size}|${file.lastModified}`) !== item.fileKey);
+                syncFindingMediaInputFiles(card);
+            }
+
+            renderFindingMediaGallery(card, findingIndexValue);
+        });
+
+        wrapper.appendChild(removeBtn);
 
         gallery.appendChild(wrapper);
     });
@@ -746,24 +842,50 @@ function applyPharCatalogToCard(card, systemName, subsystemName, findingText, cu
     // Auto-add material row if none exists and a material is defined
     const matContainer = card.querySelector('.cpi-materials-container');
     if (matContainer && matContainer.children.length === 0 && entry.material_name) {
-        // Trigger an event on the add-material button to get the correct subsystem context
-        const addBtn = card.querySelector('.add-cpi-material');
-        if (addBtn) {
-            addBtn.click();
-            // Then fill that first row
-            const firstRow = matContainer.querySelector('.cpi-material-row');
-            if (firstRow) {
-                const nameEl = firstRow.querySelector(`[name*="[material_name]"]`);
-                const qtyEl  = firstRow.querySelector('.cpi-mat-qty');
-                const unitEl = firstRow.querySelector(`select[name*="[unit]"]`);
-                const costEl = firstRow.querySelector('.cpi-mat-cost');
-                if (nameEl) nameEl.value = entry.material_name;
-                if (qtyEl)  qtyEl.value  = entry.material_quantity;
-                if (unitEl && entry.unit) unitEl.value = entry.unit;
-                if (costEl) costEl.value  = entry.unit_cost;
-                // Trigger line total recalc
-                costEl?.dispatchEvent(new Event('input'));
+        // Trigger the "Add Selected" button (or "Add Custom" if no preset matches) to create a row
+        const addSelectedBtn = card.querySelector('.cpi-material-add-selected');
+        const addCustomBtn   = card.querySelector('.cpi-material-add-custom');
+        const matCustomInput = card.querySelector('.cpi-material-custom-input');
+        const matTemplateSelect = card.querySelector('.cpi-material-template');
+
+        // Try to match a preset; otherwise fall back to custom
+        const presetMatch = Array.from(matTemplateSelect?.options || [])
+            .find(o => o.value && o.value.toLowerCase() === String(entry.material_name || '').toLowerCase());
+
+        if (presetMatch && matTemplateSelect) {
+            matTemplateSelect.value = presetMatch.value;
+            addSelectedBtn?.click();
+        } else {
+            if (matCustomInput) matCustomInput.value = entry.material_name;
+            addCustomBtn?.click();
+        }
+
+        // Then fill that first row
+        const firstRow = matContainer.querySelector('.cpi-material-row');
+        if (firstRow) {
+            const nameEl = firstRow.querySelector(`[name*="[material_name]"]`);
+            const qtyEl  = firstRow.querySelector('.cpi-mat-qty');
+            const unitEl = firstRow.querySelector(`select[name*="[unit]"]`);
+            const costEl = firstRow.querySelector('.cpi-mat-cost');
+            if (nameEl) nameEl.value = entry.material_name;
+            if (qtyEl)  qtyEl.value  = entry.material_quantity;
+            if (unitEl && entry.unit) {
+                unitEl.value = entry.unit;
+            } else if (unitEl && presetMatch?.dataset?.unit) {
+                unitEl.value = presetMatch.dataset.unit;
             }
+
+            // For preset materials, keep the precomputed taxed unit cost from FMC option data.
+            // Only fall back to entry.unit_cost when no preset match exists (custom mode).
+            if (costEl) {
+                if (presetMatch?.dataset?.cost) {
+                    costEl.value = presetMatch.dataset.cost;
+                } else if (entry.unit_cost != null) {
+                    costEl.value = entry.unit_cost;
+                }
+            }
+            // Trigger line total recalc
+            costEl?.dispatchEvent(new Event('input'));
         }
     }
 
@@ -845,7 +967,10 @@ function buildCpiMaterialPresetOptions(searchTerm = '', subsystemId = null) {
         const rawCost   = Number(setting.default_unit_cost ?? 0);
         const hst       = Number(setting.hst_rate ?? 5);
         const pst       = Number(setting.pst_rate ?? 7);
-        const taxedCost = (rawCost * (1 + hst / 100) * (1 + pst / 100)).toFixed(2);
+        const taxedFromPayload = Number(setting.taxed_unit_cost ?? NaN);
+        const taxedCost = Number.isFinite(taxedFromPayload)
+            ? taxedFromPayload.toFixed(2)
+            : (rawCost * (1 + hst / 100) * (1 + pst / 100)).toFixed(2);
         html += `<option value="${safeName}" data-unit="${safeUnit}" data-cost="${taxedCost}" data-hst="${hst.toFixed(2)}" data-pst="${pst.toFixed(2)}" data-raw="${rawCost.toFixed(2)}">${safeName}</option>`;
     });
     return html;
@@ -853,23 +978,19 @@ function buildCpiMaterialPresetOptions(searchTerm = '', subsystemId = null) {
 
 function createCpiMaterialRow(fi, mi, subsystemId = null) {
     return `<div class="cpi-material-row border rounded p-2 mb-1 bg-white" data-subsystem-id="${subsystemId ? String(subsystemId) : ''}">
-        <div class="d-flex justify-content-end mb-1">
+        <div class="d-flex justify-content-between align-items-center mb-1">
+            <span class="badge bg-light text-dark border" style="font-size:.72rem;">Material Item</span>
             <button type="button" class="btn btn-sm btn-outline-danger remove-cpi-material py-0 px-1">
                 <i class="mdi mdi-delete-outline"></i> Remove
             </button>
         </div>
         <div class="row g-2 align-items-end">
-            <div class="col-md-3">
-                <label class="form-label" style="font-size:.72rem;font-weight:600;color:#6c757d;">Preset</label>
-                <input type="text" class="form-control form-control-sm cpi-material-search mb-1" placeholder="Search materials...">
-                <select class="form-select form-select-sm cpi-material-template">${buildCpiMaterialPresetOptions('', subsystemId)}</select>
-            </div>
-            <div class="col-md-3">
+            <div class="col-md-4">
                 <label class="form-label" style="font-size:.72rem;font-weight:600;color:#6c757d;">Description</label>
                 <input type="text" name="system_findings[${fi}][materials][${mi}][material_name]"
                     class="form-control form-control-sm" placeholder="Material description">
             </div>
-            <div class="col-md-1">
+            <div class="col-md-2">
                 <label class="form-label" style="font-size:.72rem;font-weight:600;color:#6c757d;">Qty</label>
                 <input type="number" name="system_findings[${fi}][materials][${mi}][quantity]"
                     class="form-control form-control-sm cpi-mat-qty" min="0" step="0.01" value="1">
@@ -886,9 +1007,9 @@ function createCpiMaterialRow(fi, mi, subsystemId = null) {
                     class="form-control form-control-sm cpi-mat-cost" min="0" step="0.01" value="0">
                 <small class="text-muted cpi-material-custom-hint" style="font-size:.70rem;display:none;">Custom mode: type your own taxed unit cost.</small>
             </div>
-            <div class="col-md-1">
+            <div class="col-md-2">
                 <label class="form-label" style="font-size:.72rem;font-weight:600;color:#6c757d;">Line Total</label>
-                <input type="text" class="form-control form-control-sm cpi-mat-total" readonly value="$0.00">
+                <input type="text" class="form-control form-control-sm cpi-mat-total text-end fw-bold text-dark" style="background:#fff7db;border-color:#f1c96b;font-size:1.05rem;" readonly value="$0.00">
                 <input type="hidden" name="system_findings[${fi}][materials][${mi}][line_total]"
                     class="cpi-mat-total-hidden" value="0">
             </div>
@@ -978,7 +1099,14 @@ function addSystemFindingRow(systemId, prefill = {}) {
                 </select>
             </div>
         </div>
-        <!-- Row 1b: Risk / Impact -->
+        <!-- Row 1b: Issue Description -->
+        <div class="row g-2 px-3 pt-2">
+            <div class="col-12">
+                <label class="form-label small fw-semibold text-muted mb-1">Issue Description</label>
+                <textarea name="system_findings[${currentIndex}][issue_description]" class="form-control form-control-sm" rows="3" placeholder="Describe the issue in detail (what was observed, how extensive it is, and any context)...">${escapeHtml(prefill.issue_description || '')}</textarea>
+            </div>
+        </div>
+        <!-- Row 1c: Risk / Impact -->
         <div class="row g-2 px-3 pt-2">
             <div class="col-12">
                 <label class="form-label small fw-semibold text-muted mb-1">Risk / Impact</label>
@@ -1009,10 +1137,14 @@ function addSystemFindingRow(systemId, prefill = {}) {
                     </div>
                     <div class="input-group input-group-sm mb-1">
                         <input type="text" class="form-control recommendation-input" placeholder="Or type a custom recommendation">
-                        <button type="button" class="btn btn-outline-secondary btn-sm recommendation-add">Add</button>
+                        <button type="button" class="btn btn-primary btn-sm recommendation-add fw-semibold" title="Add custom recommendation">Add Custom</button>
                     </div>
                     <div class="recommendation-list small mt-1"></div>
                     <div class="recommendation-hidden-inputs"></div>
+                    <div class="mt-2">
+                        <label class="form-label small fw-semibold text-muted mb-1">Recommendation Details</label>
+                        <textarea name="system_findings[${currentIndex}][recommendation_details]" class="form-control form-control-sm" rows="3" placeholder="Write detailed recommendation steps, scope, and inspector guidance...">${escapeHtml(prefill.recommendation_details || '')}</textarea>
+                    </div>
                 </div>
             </div>
             <div class="col-md-6">
@@ -1034,8 +1166,10 @@ function addSystemFindingRow(systemId, prefill = {}) {
                 <input type="file"
                     name="finding_photos[${currentIndex}][]"
                     class="form-control form-control-sm finding-media-input"
-                    multiple accept="image/*,video/*">
-                <div class="form-text">Attach photos or videos for this finding. Items are shown below and can be opened to zoom/rotate/expand (max 50 MB each).</div>
+                    multiple
+                    accept="image/*,video/*"
+                    capture="environment">
+                <div class="form-text">Attach photos or videos for this finding, or capture instantly with your camera on supported devices. You can select multiple times to add more files and remove individual items below before submitting (max 50 MB each).</div>
             </div>
         </div>
         <!-- Row 5: Labour Hours + Materials -->
@@ -1054,17 +1188,30 @@ function addSystemFindingRow(systemId, prefill = {}) {
                         <span class="input-group-text">hrs</span>
                     </div>
                 </div>
-                <div class="col-md-9 d-flex justify-content-end align-items-end">
-                    <button type="button" class="btn btn-sm btn-outline-primary add-cpi-material"
-                        data-index="${currentIndex}">
-                        <i class="mdi mdi-plus"></i> Add Material
-                    </button>
+                <div class="col-md-9">
+                    <label class="form-label small fw-semibold mb-1" style="color:#3d5a99;">
+                        <i class="mdi mdi-package-variant me-1"></i>Add Materials
+                    </label>
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <input type="text" class="form-control form-control-sm cpi-material-search" placeholder="Search materials...">
+                        </div>
+                        <div class="col-md-6">
+                            <div class="input-group input-group-sm">
+                                <select class="form-select form-select-sm cpi-material-template">${buildCpiMaterialPresetOptions('', prefill.subsystem_id || null)}</select>
+                                <button type="button" class="btn btn-outline-primary btn-sm cpi-material-add-selected">Add Selected</button>
+                            </div>
+                        </div>
+                        <div class="col-md-8">
+                            <input type="text" class="form-control form-control-sm cpi-material-custom-input" placeholder="Or type a custom material (e.g., Asphalt shingles)">
+                        </div>
+                        <div class="col-md-4 d-grid">
+                            <button type="button" class="btn btn-primary btn-sm cpi-material-add-custom" title="Add custom material">Add Custom</button>
+                        </div>
+                    </div>
                 </div>
             </div>
-            <label class="form-label small fw-semibold mb-1" style="color:#3d5a99;">
-                <i class="mdi mdi-package-variant me-1"></i>Materials
-                <span class="fw-normal text-muted">(optional)</span>
-            </label>
+            <label class="form-label small fw-semibold mb-1" style="color:#3d5a99;">Materials <span class="fw-normal text-muted">(optional)</span></label>
             <div class="cpi-materials-container"></div>
 
             <!-- Row 5b: Category / Included in Tier / Additional Notes -->
@@ -1107,6 +1254,9 @@ function addSystemFindingRow(systemId, prefill = {}) {
     const findingMediaInput = card.querySelector('.finding-media-input');
     if (findingMediaInput) {
         findingMediaInput.addEventListener('change', function () {
+            appendFindingMediaFiles(card, this.files);
+            syncFindingMediaInputFiles(card);
+            this.value = '';
             renderFindingMediaGallery(card, currentIndex);
         });
         renderFindingMediaGallery(card, currentIndex);
@@ -1177,13 +1327,17 @@ function addSystemFindingRow(systemId, prefill = {}) {
 
     // ── Labour & Materials wiring ──────────────────────────────────────────────
     let cpiMatIdx = 0;
-    const addMatBtn   = card.querySelector('.add-cpi-material');
-    const matContainer = card.querySelector('.cpi-materials-container');
+    const matContainer       = card.querySelector('.cpi-materials-container');
+    const addSelectedBtn     = card.querySelector('.cpi-material-add-selected');
+    const addCustomBtn       = card.querySelector('.cpi-material-add-custom');
+    const matSearchInput     = card.querySelector('.cpi-material-search');
+    const matTemplateSelect  = card.querySelector('.cpi-material-template');
+    const matCustomInput     = card.querySelector('.cpi-material-custom-input');
     const subsystemSelForMat = card.querySelector(`select[name="system_findings[${currentIndex}][subsystem_id]"]`);
 
     function updateCpiLineTotal(row) {
         const qty   = parseFloat(row.querySelector('.cpi-mat-qty')?.value  || 0);
-        const cost  = parseFloat(row.querySelector('.cpi-mat-cost')?.value || 0); // already taxed
+        const cost  = parseFloat(row.querySelector('.cpi-mat-cost')?.value || 0);
         const total = qty * cost;
         const display   = row.querySelector('.cpi-mat-total');
         const hidden    = row.querySelector('.cpi-mat-total-hidden');
@@ -1204,155 +1358,143 @@ function addSystemFindingRow(systemId, prefill = {}) {
         }
     }
 
+    // Wire up events on a material row (qty / cost recalc + remove)
     function wireCpiMaterialRow(row) {
-        function setMaterialCostMode(isCustom) {
-            const costEl = row.querySelector('.cpi-mat-cost');
-            const hintEl = row.querySelector('.cpi-material-custom-hint');
-            if (!costEl) {
-                return;
-            }
+        const costEl = row.querySelector('.cpi-mat-cost');
+        const hintEl = row.querySelector('.cpi-material-custom-hint');
 
+        // Show/hide hint and lock/unlock cost field based on preset vs custom mode
+        function applyMode(isCustom) {
+            if (!costEl) return;
             costEl.readOnly = !isCustom;
             costEl.style.background = isCustom ? '' : '#f8f9fa';
-            costEl.style.cursor = isCustom ? '' : 'default';
-
-            if (hintEl) {
-                hintEl.style.display = isCustom ? '' : 'none';
-            }
+            costEl.style.cursor     = isCustom ? '' : 'default';
+            if (hintEl) hintEl.style.display = isCustom ? '' : 'none';
         }
 
-        // Preset select auto-fills name / unit / taxed cost
-        const presetSel = row.querySelector('.cpi-material-template');
-        const searchInput = row.querySelector('.cpi-material-search');
-
-        function refreshPresetOptions() {
-            if (!presetSel) {
-                return;
-            }
-
-            const selectedValue = presetSel.value;
-            const subsystemForRow = row.dataset.subsystemId || null;
-            const searchValue = searchInput ? searchInput.value : '';
-
-            presetSel.innerHTML = buildCpiMaterialPresetOptions(searchValue, subsystemForRow);
-
-            if (selectedValue && Array.from(presetSel.options).some(opt => opt.value === selectedValue)) {
-                presetSel.value = selectedValue;
-            }
-        }
-
-        if (searchInput) {
-            searchInput.addEventListener('input', refreshPresetOptions);
-        }
-
-        if (presetSel) {
-            presetSel.addEventListener('change', function () {
-                if (!this.value) {
-                    row.dataset.hst = '';
-                    row.dataset.pst = '';
-                    row.dataset.raw = '';
-                    setMaterialCostMode(true);
-                    updateCpiLineTotal(row);
-                    return;
-                }
-
-                const opt    = this.options[this.selectedIndex];
-                const nameEl = row.querySelector(`[name*="[material_name]"]`);
-                const unitEl = row.querySelector(`select[name*="[unit]"]`);
-                const costEl = row.querySelector('.cpi-mat-cost');
-                if (nameEl) nameEl.value = this.value;
-                if (unitEl && opt.dataset.unit)
-                    unitEl.value = opt.dataset.unit;
-                if (costEl && opt.dataset.cost) {
-                    costEl.value = opt.dataset.cost; // taxed unit cost
-                }
-                row.dataset.hst = opt.dataset.hst ?? 5;
-                row.dataset.pst = opt.dataset.pst ?? 7;
-                row.dataset.raw = opt.dataset.raw ?? opt.dataset.cost;
-                setMaterialCostMode(false);
-                updateCpiLineTotal(row);
-            });
-        }
-
-        refreshPresetOptions();
-        setMaterialCostMode(!presetSel || !presetSel.value);
+        // Initial mode is set by the caller via row.dataset; default to custom (editable)
+        const hasPreset = !!(row.dataset.hst || row.dataset.pst || row.dataset.raw);
+        applyMode(!hasPreset);
 
         row.querySelector('.cpi-mat-qty')?.addEventListener('input',  () => updateCpiLineTotal(row));
         row.querySelector('.cpi-mat-cost')?.addEventListener('input', () => updateCpiLineTotal(row));
         row.querySelector('.remove-cpi-material')?.addEventListener('click', () => row.remove());
     }
 
-    if (addMatBtn && matContainer) {
-        // Pre-fill materials from edit/reload
-        if (Array.isArray(prefill.phar_materials) && prefill.phar_materials.length) {
-            prefill.phar_materials.forEach((mat) => {
-                const mi = cpiMatIdx++;
-                const wrapper = document.createElement('div');
-                wrapper.innerHTML = createCpiMaterialRow(currentIndex, mi,
-                    parseInt(prefill.subsystem_id) || null);
-                const row = wrapper.firstElementChild;
-                const nameEl = row.querySelector(`[name*="[material_name]"]`);
-                const qtyEl  = row.querySelector('.cpi-mat-qty');
-                const unitEl = row.querySelector(`select[name*="[unit]"]`);
-                const costEl = row.querySelector('.cpi-mat-cost');
-                const presetSel = row.querySelector('.cpi-material-template');
-                if (nameEl) nameEl.value = mat.material_name ?? '';
-                if (qtyEl)  qtyEl.value  = mat.quantity ?? 1;
-                if (unitEl && mat.unit) unitEl.value = mat.unit;
-                // Try to look up current taxed cost from FMC settings; fall back to stored value
-                const fmcMatch = FMC_MATERIAL_SETTINGS.find(s =>
-                    s.material_name.toLowerCase() === (mat.material_name ?? '').toLowerCase()
-                );
-                if (costEl) {
-                    if (fmcMatch) {
-                        const raw   = Number(fmcMatch.default_unit_cost ?? 0);
-                        const hst   = Number(fmcMatch.hst_rate ?? 5);
-                        const pst   = Number(fmcMatch.pst_rate ?? 7);
-                        const taxed = (raw * (1 + hst / 100) * (1 + pst / 100)).toFixed(2);
-                        if (presetSel) {
-                            presetSel.value = fmcMatch.material_name;
-                        }
-                        costEl.value    = taxed;
-                        row.dataset.hst = hst.toFixed(2);
-                        row.dataset.pst = pst.toFixed(2);
-                        row.dataset.raw = raw.toFixed(2);
-                    } else {
-                        costEl.value = mat.unit_cost ?? 0; // custom material — honour stored value
-                    }
-                }
-                updateCpiLineTotal(row);
-                wireCpiMaterialRow(row);
-                matContainer.appendChild(row);
-            });
+    // Create + append a material row, optionally pre-filled with preset or custom data
+    function addMaterialRow(opts = {}) {
+        const subId   = subsystemSelForMat ? (parseInt(subsystemSelForMat.value) || null) : null;
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = createCpiMaterialRow(currentIndex, cpiMatIdx++, subId);
+        const row    = wrapper.firstElementChild;
+        const nameEl = row.querySelector(`[name*="[material_name]"]`);
+        const qtyEl  = row.querySelector('.cpi-mat-qty');
+        const unitEl = row.querySelector(`select[name*="[unit]"]`);
+        const costEl = row.querySelector('.cpi-mat-cost');
+
+        if (opts.name  && nameEl) nameEl.value = opts.name;
+        if (opts.qty   && qtyEl)  qtyEl.value  = opts.qty;
+        if (opts.unit  && unitEl) unitEl.value  = opts.unit;
+        if (opts.cost  && costEl) costEl.value  = opts.cost;
+
+        if (opts.isPreset) {
+            row.dataset.hst = opts.hst || '';
+            row.dataset.pst = opts.pst || '';
+            row.dataset.raw = opts.raw || '';
         }
 
-        if (subsystemSelForMat) {
-            subsystemSelForMat.addEventListener('change', function () {
-                matContainer.querySelectorAll('.cpi-material-row').forEach((row) => {
-                    row.dataset.subsystemId = this.value || '';
-                    const presetSel = row.querySelector('.cpi-material-template');
-                    const searchInput = row.querySelector('.cpi-material-search');
-                    if (!presetSel) {
-                        return;
-                    }
+        updateCpiLineTotal(row);
+        wireCpiMaterialRow(row);
+        matContainer.appendChild(row);
+        return row;
+    }
 
-                    const selectedValue = presetSel.value;
-                    const searchValue = searchInput ? searchInput.value : '';
-                    presetSel.innerHTML = buildCpiMaterialPresetOptions(searchValue, row.dataset.subsystemId || null);
-                    if (selectedValue && Array.from(presetSel.options).some(opt => opt.value === selectedValue)) {
-                        presetSel.value = selectedValue;
-                    }
+    // Wire search input to filter the preset dropdown
+    if (matSearchInput && matTemplateSelect) {
+        matSearchInput.addEventListener('input', function () {
+            const subId   = subsystemSelForMat ? (subsystemSelForMat.value || null) : null;
+            const curVal  = matTemplateSelect.value;
+            matTemplateSelect.innerHTML = buildCpiMaterialPresetOptions(this.value, subId);
+            if (curVal && Array.from(matTemplateSelect.options).some(o => o.value === curVal)) {
+                matTemplateSelect.value = curVal;
+            }
+        });
+    }
+
+    // "Add Selected" — adds a row pre-filled from the chosen preset
+    if (addSelectedBtn && matContainer) {
+        addSelectedBtn.addEventListener('click', () => {
+            if (!matTemplateSelect || !matTemplateSelect.value) {
+                // Nothing selected — add a blank custom row
+                addMaterialRow({});
+                return;
+            }
+            const opt = matTemplateSelect.options[matTemplateSelect.selectedIndex];
+            addMaterialRow({
+                name:     matTemplateSelect.value,
+                unit:     opt.dataset.unit || '',
+                cost:     opt.dataset.cost || '0',
+                hst:      opt.dataset.hst  || '',
+                pst:      opt.dataset.pst  || '',
+                raw:      opt.dataset.raw  || '',
+                isPreset: true,
+            });
+        });
+    }
+
+    // "Add Custom" — adds a row in fully-editable mode with the typed name
+    if (addCustomBtn && matContainer) {
+        addCustomBtn.addEventListener('click', () => {
+            const customName = matCustomInput ? String(matCustomInput.value || '').trim() : '';
+            addMaterialRow({ name: customName });
+            if (matCustomInput) matCustomInput.value = '';
+        });
+    }
+
+    // When subsystem changes, refresh the card-level preset dropdown
+    if (subsystemSelForMat && matTemplateSelect) {
+        subsystemSelForMat.addEventListener('change', function () {
+            const curVal    = matTemplateSelect.value;
+            const searchVal = matSearchInput ? matSearchInput.value : '';
+            matTemplateSelect.innerHTML = buildCpiMaterialPresetOptions(searchVal, this.value || null);
+            if (curVal && Array.from(matTemplateSelect.options).some(o => o.value === curVal)) {
+                matTemplateSelect.value = curVal;
+            }
+        });
+    }
+
+    // Pre-fill materials from edit / reload
+    if (matContainer && Array.isArray(prefill.phar_materials) && prefill.phar_materials.length) {
+        prefill.phar_materials.forEach((mat) => {
+            const fmcMatch = FMC_MATERIAL_SETTINGS.find(s =>
+                String(s.material_name || '').toLowerCase() === String(mat.material_name || '').toLowerCase()
+            );
+            if (fmcMatch) {
+                const raw   = Number(fmcMatch.default_unit_cost ?? 0);
+                const hst   = Number(fmcMatch.hst_rate ?? 5);
+                const pst   = Number(fmcMatch.pst_rate ?? 7);
+                const taxedFromPayload = Number(fmcMatch.taxed_unit_cost ?? NaN);
+                const taxed = Number.isFinite(taxedFromPayload)
+                    ? taxedFromPayload.toFixed(2)
+                    : (raw * (1 + hst / 100) * (1 + pst / 100)).toFixed(2);
+                addMaterialRow({
+                    name:     fmcMatch.material_name,
+                    qty:      mat.quantity ?? 1,
+                    unit:     mat.unit || fmcMatch.default_unit || '',
+                    cost:     taxed,
+                    hst:      hst.toFixed(2),
+                    pst:      pst.toFixed(2),
+                    raw:      raw.toFixed(2),
+                    isPreset: true,
                 });
-            });
-        }
-
-        addMatBtn.addEventListener('click', () => {
-            const subId = subsystemSelForMat ? (parseInt(subsystemSelForMat.value) || null) : null;
-            const wrapper = document.createElement('div');
-            wrapper.innerHTML = createCpiMaterialRow(currentIndex, cpiMatIdx++, subId);
-            const row = wrapper.firstElementChild;
-            wireCpiMaterialRow(row);
-            matContainer.appendChild(row);
+            } else {
+                addMaterialRow({
+                    name: mat.material_name ?? '',
+                    qty:  mat.quantity ?? 1,
+                    unit: mat.unit || '',
+                    cost: mat.unit_cost != null ? String(mat.unit_cost) : '0',
+                });
+            }
         });
     }
 }
@@ -1484,6 +1626,180 @@ function removeSystemFindingRow(button) {
 // Severity order: critical (urgent) first, then high (H&S), then medium (value dep.), then low (non-urgent)
 const severityOrder = { critical: 0, high: 1, medium: 2, low: 3 };
 
+const AUTOSAVE_INTERVAL_MS = 5000;
+const AUTOSAVE_KEY = `inspection_form_autosave_${CPI_PROPERTY_ID}`;
+
+function setAutosaveStatus(message, isError = false) {
+    const statusEl = document.getElementById('formAutosaveStatus');
+    if (!statusEl) {
+        return;
+    }
+
+    statusEl.textContent = message;
+    statusEl.classList.remove('text-danger', 'text-success', 'text-muted');
+    statusEl.classList.add(isError ? 'text-danger' : 'text-muted');
+}
+
+function collectAutosavePayload(form) {
+    const payload = {};
+    const fields = form.querySelectorAll('input[name], select[name], textarea[name]');
+
+    fields.forEach((field) => {
+        if (field.disabled || !field.name || field.type === 'file') {
+            return;
+        }
+
+        let value;
+        if (field.type === 'checkbox') {
+            value = field.checked;
+        } else if (field.type === 'radio') {
+            if (!field.checked) {
+                return;
+            }
+            value = field.value;
+        } else {
+            value = field.value;
+        }
+
+        if (Object.prototype.hasOwnProperty.call(payload, field.name)) {
+            if (!Array.isArray(payload[field.name])) {
+                payload[field.name] = [payload[field.name]];
+            }
+            payload[field.name].push(value);
+        } else {
+            payload[field.name] = value;
+        }
+    });
+
+    return payload;
+}
+
+function applyAutosavePayload(form, payload) {
+    if (!payload || typeof payload !== 'object') {
+        return;
+    }
+
+    const fields = form.querySelectorAll('input[name], select[name], textarea[name]');
+    const arrayIndexByName = {};
+
+    fields.forEach((field) => {
+        if (!field.name || !Object.prototype.hasOwnProperty.call(payload, field.name)) {
+            return;
+        }
+
+        const rawValue = payload[field.name];
+        let nextValue = rawValue;
+        if (Array.isArray(rawValue)) {
+            const idx = arrayIndexByName[field.name] || 0;
+            nextValue = rawValue[idx];
+            arrayIndexByName[field.name] = idx + 1;
+        }
+
+        if (field.type === 'checkbox') {
+            field.checked = !!nextValue;
+        } else if (field.type === 'radio') {
+            field.checked = String(field.value) === String(nextValue);
+        } else if (field.type !== 'file') {
+            field.value = nextValue ?? '';
+        }
+
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+        field.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+}
+
+function initializeFormAutosave() {
+    const form = document.getElementById('inspectionSystemsForm');
+    if (!form) {
+        return;
+    }
+
+    let lastSavedSnapshot = '';
+    let lastServerSnapshot = '';
+    let serverSaveInFlight = false;
+
+    const csrfToken = form.querySelector('input[name="_token"]')?.value || '';
+
+    try {
+        const savedRaw = localStorage.getItem(AUTOSAVE_KEY);
+        if (savedRaw) {
+            const savedData = JSON.parse(savedRaw);
+            applyAutosavePayload(form, savedData);
+            setAutosaveStatus('Autosave: restored local draft');
+        }
+    } catch (_err) {
+        setAutosaveStatus('Autosave: could not restore local draft', true);
+    }
+
+    const persist = () => {
+        try {
+            const payload = collectAutosavePayload(form);
+            payload.status = 'in_progress';
+            const snapshot = JSON.stringify(payload);
+
+            if (snapshot !== lastSavedSnapshot) {
+                localStorage.setItem(AUTOSAVE_KEY, snapshot);
+                lastSavedSnapshot = snapshot;
+            }
+
+            const now = new Date();
+            const hh = String(now.getHours()).padStart(2, '0');
+            const mm = String(now.getMinutes()).padStart(2, '0');
+            const ss = String(now.getSeconds()).padStart(2, '0');
+
+            if (snapshot === lastServerSnapshot || serverSaveInFlight) {
+                setAutosaveStatus(`Autosave: local saved at ${hh}:${mm}:${ss}`);
+                return;
+            }
+
+            serverSaveInFlight = true;
+            setAutosaveStatus('Autosave: syncing to server...');
+
+            fetch(CPI_AUTOSAVE_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify(payload),
+            })
+                .then(async (response) => {
+                    if (!response.ok) {
+                        const text = await response.text();
+                        throw new Error(text || `HTTP ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then(() => {
+                    lastServerSnapshot = snapshot;
+                    const syncedAt = new Date();
+                    const sh = String(syncedAt.getHours()).padStart(2, '0');
+                    const sm = String(syncedAt.getMinutes()).padStart(2, '0');
+                    const ss2 = String(syncedAt.getSeconds()).padStart(2, '0');
+                    setAutosaveStatus(`Autosave: synced at ${sh}:${sm}:${ss2}`);
+                })
+                .catch(() => {
+                    setAutosaveStatus('Autosave: local saved, server sync failed', true);
+                })
+                .finally(() => {
+                    serverSaveInFlight = false;
+                });
+        } catch (_err) {
+            setAutosaveStatus('Autosave: storage failed', true);
+        }
+    };
+
+    form.addEventListener('submit', function () {
+        // Keep one final snapshot in local storage in case server validation fails.
+        persist();
+    });
+
+    window.setInterval(persist, AUTOSAVE_INTERVAL_MS);
+    window.setTimeout(persist, 1200);
+}
+
 document.addEventListener('DOMContentLoaded', function () {
     if (Array.isArray(initialFindings) && initialFindings.length > 0) {
         // Sort by severity priority before rendering so most critical findings appear first
@@ -1501,6 +1817,8 @@ document.addEventListener('DOMContentLoaded', function () {
             addSystemFindingRow(finding.system_id, finding);
         });
     }
+
+    initializeFormAutosave();
 });
 
 </script>

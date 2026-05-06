@@ -10,12 +10,19 @@
         ->where('status', 'active')
         ->count();
 
+        $quotationReadyCount = \App\Models\Inspection::whereIn('property_id', $clientPropertyIds)
+            ->whereIn('quotation_status', ['shared', 'client_reviewing', 'approved'])
+            ->count();
+
     $unpaidInvoicesCount = \App\Models\Invoice::where('user_id', Auth::id())
         ->whereIn('status', ['draft', 'sent', 'partial', 'overdue'])
         ->count();
+    $openServiceRequestsCount = \App\Models\ServiceRequest::where('user_id', Auth::id())
+        ->whereNotIn('status', ['resolved', 'cancelled'])
+        ->count();
 
     $propertyOpen = request()->routeIs('client.properties.*') || request()->routeIs('client.tenants.*');
-    $servicesOpen = request()->routeIs('client.inspections.*') || request()->routeIs('client.projects.*');
+    $servicesOpen = request()->routeIs('client.inspections.*') || request()->routeIs('client.projects.*') || request()->routeIs('client.service-requests.*');
     $billingOpen = request()->routeIs('client.invoices.*') || request()->routeIs('client.subscription.*');
     $supportOpen = request()->routeIs('client.complaints.*') || request()->routeIs('client.emergency-reports.*') || request()->routeIs('client.support');
 @endphp
@@ -34,13 +41,12 @@
             </div>
         </div>
 
-        <div class="client-section-title">Main Navigation</div>
         <a class="client-link {{ request()->routeIs('dashboard') ? 'is-active' : '' }}" href="{{ route('dashboard') }}">
-            <i class="mdi mdi-view-dashboard icon-success"></i>
-            <span>Dashboard</span>
+            <span class="client-summary-left">
+                <i class="mdi mdi-view-dashboard icon-success"></i>
+                <span>Dashboard</span>
+            </span>
         </a>
-
-        <div class="client-section-title">Property Management</div>
         <details class="client-group" {{ $propertyOpen ? 'open' : '' }}>
             <summary class="client-link {{ $propertyOpen ? 'is-active' : '' }}">
                 <span class="client-summary-left">
@@ -56,12 +62,11 @@
             </div>
         </details>
 
-        <div class="client-section-title">Services</div>
         <details class="client-group" {{ $servicesOpen ? 'open' : '' }}>
             <summary class="client-link {{ $servicesOpen ? 'is-active' : '' }}">
                 <span class="client-summary-left">
                     <i class="mdi mdi-clipboard-check icon-info"></i>
-                    <span>Inspection Services</span>
+                    <span>Services</span>
                 </span>
                 <span class="client-arrow">▾</span>
             </summary>
@@ -72,16 +77,27 @@
                         <span class="client-badge">{{ $scheduledInspectionsCount }}</span>
                     @endif
                 </a>
+                    <a class="client-sublink {{ request()->routeIs('client.inspections.quotations') ? 'is-active' : '' }}" href="{{ route('client.inspections.quotations') }}">
+                        <span class="client-sublabel">Quotations</span>
+                        @if($quotationReadyCount > 0)
+                            <span class="client-badge">{{ $quotationReadyCount }}</span>
+                        @endif
+                    </a>
                 <a class="client-sublink {{ request()->routeIs('client.projects.*') ? 'is-active' : '' }}" href="{{ route('client.projects.index') }}">
-                    <span class="client-sublabel">Projects</span>
+                    <span class="client-sublabel">Projects Preview</span>
                     @if($activeProjectsCount > 0)
                         <span class="client-badge">{{ $activeProjectsCount }}</span>
+                    @endif
+                </a>
+                <a class="client-sublink {{ request()->routeIs('client.service-requests.*') ? 'is-active' : '' }}" href="{{ route('client.service-requests.index') }}">
+                    <span class="client-sublabel">Service Requests</span>
+                    @if($openServiceRequestsCount > 0)
+                        <span class="client-badge">{{ $openServiceRequestsCount }}</span>
                     @endif
                 </a>
             </div>
         </details>
 
-        <div class="client-section-title">Billing</div>
         <details class="client-group" {{ $billingOpen ? 'open' : '' }}>
             <summary class="client-link {{ $billingOpen ? 'is-active' : '' }}">
                 <span class="client-summary-left">
@@ -101,7 +117,6 @@
             </div>
         </details>
 
-        <div class="client-section-title">Support</div>
         <details class="client-group" {{ $supportOpen ? 'open' : '' }}>
             <summary class="client-link {{ $supportOpen ? 'is-active' : '' }}">
                 <span class="client-summary-left">

@@ -76,6 +76,15 @@ Route::middleware([
     };
 
     Route::get('/dashboard', [App\Http\Controllers\DashboardController::class, 'index'])->name('dashboard');
+
+    // ── Profile & Settings (all authenticated users) ────────────────────────
+    Route::get('/settings',               [App\Http\Controllers\ProfileController::class, 'show'])->name('profile.settings');
+    Route::put('/settings/profile',       [App\Http\Controllers\ProfileController::class, 'updateProfile'])->name('profile.update');
+    Route::put('/settings/password',      [App\Http\Controllers\ProfileController::class, 'updatePassword'])->name('profile.password');
+    Route::post('/settings/photo',        [App\Http\Controllers\ProfileController::class, 'uploadPhoto'])->name('profile.photo');
+    Route::post('/settings/signature',    [App\Http\Controllers\ProfileController::class, 'uploadSignature'])->name('profile.signature');
+    Route::delete('/settings/signature',  [App\Http\Controllers\ProfileController::class, 'removeSignature'])->name('profile.signature.remove');
+    // ────────────────────────────────────────────────────────────────────────
     
     // Main workflow routes
     Route::resource('properties', App\Http\Controllers\PropertyController::class);
@@ -90,10 +99,13 @@ Route::middleware([
     });
     Route::resource('inspections', App\Http\Controllers\InspectionController::class)
         ->except(['update', 'destroy']);
+    Route::post('/inspections/autosave-draft', [App\Http\Controllers\InspectionController::class, 'autosaveDraft'])
+        ->name('inspections.autosave-draft');
     Route::prefix('inspections/{inspection}')
         ->name('inspections.')
         ->group(function () {
             Route::get('/download-invoice', [App\Http\Controllers\InspectionController::class, 'downloadInvoice'])->name('download-invoice');
+            Route::get('/agreement/download', [App\Http\Controllers\InspectionController::class, 'downloadAgreementPdf'])->name('agreement.download');
             Route::get('/work-payment', [App\Http\Controllers\InspectionController::class, 'workPayment'])->name('work-payment');
             Route::post('/work-payment', [App\Http\Controllers\InspectionController::class, 'processWorkPayment'])->name('process-work-payment');
             Route::post('/agreement/staff-sign', [App\Http\Controllers\InspectionController::class, 'staffSignAgreement'])->name('agreement.staff-sign');
@@ -118,6 +130,8 @@ Route::middleware([
     Route::get('/maintenance-visit-logs', [App\Http\Controllers\MaintenanceVisitLogController::class, 'index'])->name('maintenance-visit-logs.index');
     Route::get('/maintenance-visit-logs/{inspection}', [App\Http\Controllers\MaintenanceVisitLogController::class, 'show'])->name('maintenance-visit-logs.show');
     Route::post('/maintenance-visit-logs/{inspection}/log', [App\Http\Controllers\MaintenanceVisitLogController::class, 'store'])->name('maintenance-visit-logs.store');
+    Route::post('/maintenance-visit-logs/{inspection}/complete-finding', [App\Http\Controllers\MaintenanceVisitLogController::class, 'completeFinding'])->name('maintenance-visit-logs.complete-finding');
+    Route::post('/maintenance-visit-logs/{inspection}/complete-project', [App\Http\Controllers\MaintenanceVisitLogController::class, 'completeProject'])->name('maintenance-visit-logs.complete-project');
 
     // Tool Return & Assignment (Store Manager + Super Admin only)
     Route::middleware('role:Super Admin|Store Manager')->group(function () {
@@ -169,6 +183,7 @@ Route::middleware([
         
         // Inspections
         Route::get('/inspections', [App\Http\Controllers\Client\InspectionController::class, 'index'])->name('inspections.index');
+        Route::get('/inspections/quotations', [App\Http\Controllers\Client\InspectionController::class, 'quotations'])->name('inspections.quotations');
         Route::get('/inspections/{inspection}/report', [App\Http\Controllers\Client\InspectionController::class, 'report'])->name('inspections.report');
         Route::get('/inspections/{inspection}/agreement', [App\Http\Controllers\Client\InspectionController::class, 'agreement'])->name('inspections.agreement');
         Route::get('/inspections/{inspection}/agreement/download', [App\Http\Controllers\Client\InspectionController::class, 'downloadAgreementPdf'])->name('inspections.agreement.download');
@@ -192,6 +207,16 @@ Route::middleware([
             ->name('projects.index');
         Route::get('/projects/{project}/inspections/{inspection}/log-sheet', [App\Http\Controllers\Client\ProjectController::class, 'showCompletedLogSheet'])
             ->name('projects.log-sheet');
+
+        // Service Requests
+        Route::get('/service-requests', [App\Http\Controllers\Client\ServiceRequestController::class, 'index'])
+            ->name('service-requests.index');
+        Route::get('/service-requests/create', [App\Http\Controllers\Client\ServiceRequestController::class, 'create'])
+            ->name('service-requests.create');
+        Route::post('/service-requests', [App\Http\Controllers\Client\ServiceRequestController::class, 'store'])
+            ->name('service-requests.store');
+        Route::get('/service-requests/{serviceRequest}', [App\Http\Controllers\Client\ServiceRequestController::class, 'show'])
+            ->name('service-requests.show');
         
         // Invoices
         Route::get('/invoices', [App\Http\Controllers\Client\InvoiceController::class, 'index'])
@@ -259,9 +284,18 @@ Route::middleware([
         Route::resource('finding-template-settings', App\Http\Controllers\Admin\FindingTemplateSettingController::class)->except(['show'])->names('finding-template-settings');
         Route::post('recommendation-settings/reload-defaults', [App\Http\Controllers\Admin\RecommendationSettingController::class, 'reloadDefaults'])->name('recommendation-settings.reload-defaults');
         Route::resource('recommendation-settings', App\Http\Controllers\Admin\RecommendationSettingController::class)->except(['show'])->names('recommendation-settings');
+        // Tool Settings — also accessible to Store Manager (nested group overrides outer middleware)
+    }); // end Super Admin|Administrator group — re-opened below for shared routes
+
+    // Tool settings: accessible to Super Admin, Administrator, and Store Manager
+    Route::prefix('admin')->name('admin.')->middleware('role:Super Admin|Administrator|Store Manager')->group(function () {
         Route::resource('tool-settings', App\Http\Controllers\Admin\ToolSettingController::class)->except(['show'])->names('tool-settings')->parameters(['tool-settings' => 'toolSetting']);
         Route::get('tool-settings/{toolSetting}/logs', [App\Http\Controllers\Admin\ToolSettingController::class, 'logs'])->name('tool-settings.logs');
         Route::post('tool-assignments/{assignment}/return', [App\Http\Controllers\Admin\ToolSettingController::class, 'markReturned'])->name('admin-tool-assignments.return');
+    });
+
+    // Resume Super Admin|Administrator only routes
+    Route::prefix('admin')->name('admin.')->middleware('role:Super Admin|Administrator')->group(function () {
         Route::resource('systems', App\Http\Controllers\Admin\SystemController::class)->except(['show'])->names('systems');
         Route::resource('subsystems', App\Http\Controllers\Admin\SubsystemController::class)->except(['show'])->names('subsystems');
         
@@ -275,5 +309,15 @@ Route::middleware([
         Route::get('/reports', function() {
             return view('admin.reports.index');
         })->name('reports.index');
+
+        // Service Requests
+        Route::get('/service-requests', [App\Http\Controllers\Admin\ServiceRequestController::class, 'index'])
+            ->name('service-requests.index');
+        Route::get('/service-requests/{serviceRequest}', [App\Http\Controllers\Admin\ServiceRequestController::class, 'show'])
+            ->name('service-requests.show');
+        Route::post('/service-requests/{serviceRequest}/triage', [App\Http\Controllers\Admin\ServiceRequestController::class, 'triage'])
+            ->name('service-requests.triage');
+        Route::post('/service-requests/{serviceRequest}/assess', [App\Http\Controllers\Admin\ServiceRequestController::class, 'assess'])
+            ->name('service-requests.assess');
     });
 });

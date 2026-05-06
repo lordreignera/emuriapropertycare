@@ -11,344 +11,1010 @@
 @endsection
 
 @section('content')
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body">
-                <form action="{{ route('client.properties.update', $property->id) }}" method="POST" enctype="multipart/form-data">
-                    @csrf
-                    @method('PUT')
+<form action="{{ route('client.properties.update', $property->id) }}" method="POST" enctype="multipart/form-data" id="propertyForm">
+    @csrf
+    @method('PUT')
 
-                    {{-- ===== VALIDATION ERROR SUMMARY ===== --}}
-                    @if($errors->any())
-                    <div class="alert alert-danger border-danger mb-4" role="alert"
-                         style="border-left:4px solid #dc3545 !important; position:sticky; top:70px; z-index:100;">
-                        <div class="d-flex align-items-center mb-2">
-                            <i class="mdi mdi-alert-circle fs-5 me-2"></i>
-                            <strong>Please fix the following errors before submitting:</strong>
-                        </div>
-                        <ul class="mb-0 ps-3">
-                            @foreach($errors->all() as $error)
-                                <li>{{ $error }}</li>
-                            @endforeach
-                        </ul>
-                    </div>
-                    @endif
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Property Name</label>
-                            <input type="text" name="property_name" class="form-control @error('property_name') is-invalid @enderror"
-                                   value="{{ old('property_name', $property->property_name) }}" required>
-                            @error('property_name')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Brand (optional)</label>
-                            <input type="text" name="property_brand" class="form-control @error('property_brand') is-invalid @enderror"
-                                   value="{{ old('property_brand', $property->property_brand) }}">
-                            @error('property_brand')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Type</label>
-                            <select name="type" class="form-select @error('type') is-invalid @enderror" required>
-                                @foreach(['residential','commercial','mixed_use'] as $type)
-                                    <option value="{{ $type }}" @selected(old('type', $property->type) === $type)>
-                                        {{ ucfirst(str_replace('_', ' ', $type)) }}
-                                    </option>
-                                @endforeach
-                            </select>
-                            @error('type')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Home Style</label>
-                            <select name="property_subtype" class="form-select @error('property_subtype') is-invalid @enderror">
-                                <option value="">Select Home Style</option>
-                                <option value="house" @selected(old('property_subtype', $property->property_subtype) === 'house')>House</option>
-                                <option value="townhome" @selected(old('property_subtype', $property->property_subtype) === 'townhome')>Townhome</option>
-                                <option value="condo" @selected(old('property_subtype', $property->property_subtype) === 'condo')>Condo</option>
-                                <option value="duplex" @selected(old('property_subtype', $property->property_subtype) === 'duplex')>Duplex</option>
-                                <option value="multi_unit" @selected(old('property_subtype', $property->property_subtype) === 'multi_unit')>Multi-Unit</option>
-                            </select>
-                            @error('property_subtype')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Year Built</label>
-                            <input type="number" name="year_built" class="form-control @error('year_built') is-invalid @enderror"
-                                   value="{{ old('year_built', $property->year_built) }}" min="1800" max="{{ date('Y') }}">
-                            @error('year_built')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
-                    </div>
-
-                    <hr>
-
-                    <h5 class="mb-3">Address</h5>
+    {{-- ===== VALIDATION ERROR SUMMARY ===== --}}
+    @if($errors->any())
+    <div class="alert alert-danger border-danger mb-4" role="alert"
+         style="border-left:4px solid #dc3545 !important; position:sticky; top:70px; z-index:100;">
+        <div class="d-flex align-items-center mb-2">
+            <i class="mdi mdi-alert-circle fs-5 me-2"></i>
+            <strong>Please fix the following errors before submitting:</strong>
+        </div>
+        <ul class="mb-0 ps-3">
+            @foreach($errors->all() as $error)
+                <li>{{ $error }}</li>
+            @endforeach
+        </ul>
+    </div>
+    @endif
+        <div class="col-12">
+            {{-- Property Information --}}
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h4 class="card-title mb-4">
+                        <i class="mdi mdi-home-modern text-primary"></i> Property Information
+                    </h4>
+                    
                     <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Address</label>
-                            <input type="text" name="property_address" class="form-control @error('property_address') is-invalid @enderror"
-                                   value="{{ old('property_address', $property->property_address) }}" required>
-                            @error('property_address')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">City</label>
-                            <input type="text" name="city" class="form-control @error('city') is-invalid @enderror"
-                                   value="{{ old('city', $property->city) }}" required>
-                            @error('city')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Province/State</label>
-                            <input type="text" name="province" class="form-control @error('province') is-invalid @enderror"
-                                   value="{{ old('province', $property->province) }}" required>
-                            @error('province')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
-                        <div class="col-md-3 mb-3">
-                            <label class="form-label">Postal Code</label>
-                            <input type="text" name="postal_code" class="form-control @error('postal_code') is-invalid @enderror"
-                                   value="{{ old('postal_code', $property->postal_code) }}" required>
-                            @error('postal_code')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
-                        <div class="col-md-3 mb-3">
-                            <label class="form-label">Country</label>
-                            <input type="text" name="country" class="form-control @error('country') is-invalid @enderror"
-                                   value="{{ old('country', $property->country) }}" required>
-                            @error('country')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
-                    </div>
-
-                    <hr>
-
-                    <h5 class="mb-3">Owner</h5>
-                    <div class="row">
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">Owner Name</label>
-                            <input type="text" name="owner_first_name" class="form-control @error('owner_first_name') is-invalid @enderror"
-                                   value="{{ old('owner_first_name', $property->owner_first_name) }}" required>
-                            @error('owner_first_name')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">Owner Phone</label>
-                            <input type="text" name="owner_phone" class="form-control @error('owner_phone') is-invalid @enderror"
-                                   value="{{ old('owner_phone', $property->owner_phone) }}" required>
-                            @error('owner_phone')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label">Owner Email</label>
-                            <input type="email" name="owner_email" class="form-control @error('owner_email') is-invalid @enderror"
-                                   value="{{ old('owner_email', $property->owner_email) }}" required>
-                            @error('owner_email')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
-                    </div>
-
-                    <hr>
-
-                    @php
-                        $selectedHomeJourney = old('home_journey', $property->home_journey ?? []);
-                        $selectedHomeFeel = old('home_feel', $property->home_feel ?? []);
-                        $selectedCareGoals = old('care_goals', $property->care_goals ?? []);
-                    @endphp
-
-                    <h5 class="mb-3">Step 1 — Warm Welcome & Vision</h5>
-                    <div class="row mb-3">
                         <div class="col-md-6">
-                            <label class="form-label fw-bold">Home Journey</label>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="home_journey[]" id="ehj_proactive" value="proactive_care" {{ in_array('proactive_care', (array) $selectedHomeJourney) ? 'checked' : '' }}><label class="form-check-label" for="ehj_proactive">Proactive care</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="home_journey[]" id="ehj_predictable" value="predictable_maintenance" {{ in_array('predictable_maintenance', (array) $selectedHomeJourney) ? 'checked' : '' }}><label class="form-check-label" for="ehj_predictable">Predictable maintenance</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="home_journey[]" id="ehj_quality" value="improve_quality_of_life" {{ in_array('improve_quality_of_life', (array) $selectedHomeJourney) ? 'checked' : '' }}><label class="form-check-label" for="ehj_quality">Improve quality of life</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="home_journey[]" id="ehj_value" value="maintain_property_value" {{ in_array('maintain_property_value', (array) $selectedHomeJourney) ? 'checked' : '' }}><label class="form-check-label" for="ehj_value">Maintain/increase property value</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="home_journey[]" id="ehj_repairs" value="support_repairs_and_renovations" {{ in_array('support_repairs_and_renovations', (array) $selectedHomeJourney) ? 'checked' : '' }}><label class="form-check-label" for="ehj_repairs">Support repairs/renovations</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="home_journey[]" id="ehj_team" value="trusted_team" {{ in_array('trusted_team', (array) $selectedHomeJourney) ? 'checked' : '' }}><label class="form-check-label" for="ehj_team">Trusted team</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="home_journey[]" id="ehj_ready" value="guest_ready" {{ in_array('guest_ready', (array) $selectedHomeJourney) ? 'checked' : '' }}><label class="form-check-label" for="ehj_ready">Guest-ready / inspection-ready</label></div>
-                            <div class="mt-3">
-                                <label for="edit_custom_home_journey_input" class="form-label">Add custom home journey item</label>
-                                <div class="d-flex gap-2 mb-2">
-                                    <input type="text" class="form-control" id="edit_custom_home_journey_input" placeholder="Type custom journey item and click Add">
-                                    <button type="button" class="btn btn-outline-primary" id="edit_add_custom_home_journey_btn">
-                                        <i class="mdi mdi-plus"></i> Add
-                                    </button>
-                                </div>
-                                <div id="edit_custom_home_journey_list" class="list-input-container"></div>
-                                <div id="edit_custom_home_journey_inputs"></div>
+                            <div class="form-group">
+                                <label for="property_name">Property Name <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control @error('property_name') is-invalid @enderror" 
+                                    id="property_name" name="property_name" value="{{ old('property_name', $property->property_name) }}" 
+                                    placeholder="e.g., Sunset Villa" required>
+                                @error('property_name')
+                                <span class="invalid-feedback">{{ $message }}</span>
+                                @enderror
                             </div>
                         </div>
+
                         <div class="col-md-6">
-                            <label class="form-label fw-bold">Well-Cared-For Home Feels Like</label>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="home_feel[]" id="ehf_safe" value="safe_healthy" {{ in_array('safe_healthy', (array) $selectedHomeFeel) ? 'checked' : '' }}><label class="form-check-label" for="ehf_safe">Safe & healthy</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="home_feel[]" id="ehf_organized" value="organized_peaceful" {{ in_array('organized_peaceful', (array) $selectedHomeFeel) ? 'checked' : '' }}><label class="form-check-label" for="ehf_organized">Organized & peaceful</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="home_feel[]" id="ehf_inviting" value="inviting_beautiful" {{ in_array('inviting_beautiful', (array) $selectedHomeFeel) ? 'checked' : '' }}><label class="form-check-label" for="ehf_inviting">Inviting & beautiful</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="home_feel[]" id="ehf_efficient" value="efficient_modern" {{ in_array('efficient_modern', (array) $selectedHomeFeel) ? 'checked' : '' }}><label class="form-check-label" for="ehf_efficient">Efficient & modern</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="home_feel[]" id="ehf_lowstress" value="low_stress_effortless" {{ in_array('low_stress_effortless', (array) $selectedHomeFeel) ? 'checked' : '' }}><label class="form-check-label" for="ehf_lowstress">Low-stress & effortless</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="home_feel[]" id="ehf_life" value="ready_for_life_changes" {{ in_array('ready_for_life_changes', (array) $selectedHomeFeel) ? 'checked' : '' }}><label class="form-check-label" for="ehf_life">Ready for life changes</label></div>
-                            <div class="mt-3">
-                                <label for="edit_custom_home_feel_input" class="form-label">Add custom home feel item</label>
-                                <div class="d-flex gap-2 mb-2">
-                                    <input type="text" class="form-control" id="edit_custom_home_feel_input" placeholder="Type custom home-feel item and click Add">
-                                    <button type="button" class="btn btn-outline-primary" id="edit_add_custom_home_feel_btn">
-                                        <i class="mdi mdi-plus"></i> Add
-                                    </button>
-                                </div>
-                                <div id="edit_custom_home_feel_list" class="list-input-container"></div>
-                                <div id="edit_custom_home_feel_inputs"></div>
+                            <div class="form-group">
+                                <label for="property_brand">Property Brand <small class="text-muted">(Optional)</small></label>
+                                <input type="text" class="form-control @error('property_brand') is-invalid @enderror" 
+                                    id="property_brand" name="property_brand" value="{{ old('property_brand', $property->property_brand) }}" 
+                                    placeholder="e.g., Sunset, Maple, Victoria"
+                                    maxlength="20">
+                                <small class="form-text text-muted">Used to generate property code prefix</small>
+                                @error('property_brand')
+                                <span class="invalid-feedback">{{ $message }}</span>
+                                @enderror
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="property_code_preview">Property Code Preview</label>
+                                <input type="text" class="form-control" 
+                                    id="property_code_preview" 
+                                    readonly 
+                                    style="background-color: #f8f9fa; font-weight: bold; color: #495057;"
+                                    value="{{ $property->property_code }}">
+                                <small class="form-text text-muted">Auto-generated unique identifier for your property</small>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="type">Property Type <span class="text-danger">*</span></label>
+                                <select class="form-control @error('type') is-invalid @enderror" id="type" name="type" required>
+                                    <option value="">Select Type</option>
+                                    <option value="residential" {{ old('type', $property->type) == 'residential' ? 'selected' : '' }}>Residential</option>
+                                    <option value="commercial" {{ old('type', $property->type) == 'commercial' ? 'selected' : '' }}>Commercial</option>
+                                    <option value="mixed_use" {{ old('type', $property->type) == 'mixed_use' ? 'selected' : '' }}>Mixed-Use</option>
+                                </select>
+                                @error('type')
+                                <span class="invalid-feedback">{{ $message }}</span>
+                                @enderror
+                                <small class="form-text text-muted">This determines pricing calculation method</small>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="property_subtype">Home Style</label>
+                                <select class="form-control @error('property_subtype') is-invalid @enderror" id="property_subtype" name="property_subtype">
+                                    <option value="">Select Home Style</option>
+                                    <option value="house" {{ old('property_subtype', $property->property_subtype) == 'house' ? 'selected' : '' }}>House</option>
+                                    <option value="townhome" {{ old('property_subtype', $property->property_subtype) == 'townhome' ? 'selected' : '' }}>Townhome</option>
+                                    <option value="condo" {{ old('property_subtype', $property->property_subtype) == 'condo' ? 'selected' : '' }}>Condo</option>
+                                    <option value="duplex" {{ old('property_subtype', $property->property_subtype) == 'duplex' ? 'selected' : '' }}>Duplex</option>
+                                    <option value="multi_unit" {{ old('property_subtype', $property->property_subtype) == 'multi_unit' ? 'selected' : '' }}>Multi-Unit</option>
+                                </select>
+                                @error('property_subtype')
+                                <span class="invalid-feedback">{{ $message }}</span>
+                                @enderror
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="year_built">Year Built</label>
+                                <select class="form-control @error('year_built') is-invalid @enderror" 
+                                    id="year_built" name="year_built">
+                                    <option value="">Select Year</option>
+                                    @for($year = date('Y'); $year >= 1800; $year--)
+                                        <option value="{{ $year }}" {{ (string) old('year_built', $property->year_built) === (string) $year ? 'selected' : '' }}>
+                                            {{ $year }}
+                                        </option>
+                                    @endfor
+                                </select>
+                                @error('year_built')
+                                <span class="invalid-feedback">{{ $message }}</span>
+                                @enderror
+                            </div>
+                        </div>
+
+                        {{-- Residential Units (shown for residential and mixed-use) --}}
+                        <div class="col-md-6" id="residential_units_wrapper" style="display:none;">
+                            <div class="form-group">
+                                <label for="residential_units">Number of Residential Units <span class="text-danger">*</span></label>
+                                <input type="number" class="form-control @error('residential_units') is-invalid @enderror" 
+                                    id="residential_units" name="residential_units" value="{{ old('residential_units', $property->residential_units ?? 1) }}" 
+                                    min="1" placeholder="e.g., 10 units">
+                                @error('residential_units')
+                                <span class="invalid-feedback">{{ $message }}</span>
+                                @enderror
+                                <small class="form-text text-muted">Used to calculate your pricing tier</small>
+                            </div>
+                        </div>
+
+                        {{-- Mixed-Use Commercial Weight (only for mixed-use) --}}
+                        <div class="col-md-6" id="commercial_weight_wrapper" style="display:none;">
+                            <div class="form-group">
+                                <label for="mixed_use_commercial_weight">Commercial Area Percentage</label>
+                                <input type="number" class="form-control @error('mixed_use_commercial_weight') is-invalid @enderror" 
+                                    id="mixed_use_commercial_weight" name="mixed_use_commercial_weight" 
+                                    value="{{ old('mixed_use_commercial_weight', $property->mixed_use_commercial_weight ?? 50) }}" 
+                                    min="0" max="100" step="0.1" placeholder="50">
+                                @error('mixed_use_commercial_weight')
+                                <span class="invalid-feedback">{{ $message }}</span>
+                                @enderror
+                                <small class="form-text text-muted">What % of the property is commercial? (0-100)</small>
                             </div>
                         </div>
                     </div>
 
-                    <h5 class="mb-3">Step 3 — Home Care Goals</h5>
-                    <div class="row mb-3">
-                        <div class="col-md-6">
-                            <label class="form-label fw-bold">Comfort & Beauty</label>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="ecg_walls" value="walls_paint_care" {{ in_array('walls_paint_care', (array) $selectedCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="ecg_walls">Walls & paint care</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="ecg_trim" value="trim_woodwork_finishing" {{ in_array('trim_woodwork_finishing', (array) $selectedCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="ecg_trim">Trim & woodwork finishing</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="ecg_floor" value="flooring_care_patching" {{ in_array('flooring_care_patching', (array) $selectedCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="ecg_floor">Flooring care & patching</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="ecg_appliance" value="appliance_support" {{ in_array('appliance_support', (array) $selectedCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="ecg_appliance">Appliance support</label></div>
+                    <script>
+                        document.getElementById('type').addEventListener('change', function() {
+                            const type = this.value;
+                            const unitsWrapper = document.getElementById('residential_units_wrapper');
+                            const weightWrapper = document.getElementById('commercial_weight_wrapper');
+                            const unitsInput = document.getElementById('residential_units');
+                            
+                            if (type === 'residential') {
+                                unitsWrapper.style.display = 'block';
+                                weightWrapper.style.display = 'none';
+                                unitsInput.required = true;
+                            } else if (type === 'mixed_use') {
+                                unitsWrapper.style.display = 'block';
+                                weightWrapper.style.display = 'block';
+                                unitsInput.required = true;
+                            } else if (type === 'commercial') {
+                                unitsWrapper.style.display = 'none';
+                                weightWrapper.style.display = 'none';
+                                unitsInput.required = false;
+                            } else {
+                                unitsWrapper.style.display = 'none';
+                                weightWrapper.style.display = 'none';
+                                unitsInput.required = false;
+                            }
+                        });
+                        
+                        // Trigger on page load if value exists
+                        document.addEventListener('DOMContentLoaded', function() {
+                            const typeSelect = document.getElementById('type');
+                            if (typeSelect.value) {
+                                typeSelect.dispatchEvent(new Event('change'));
+                            }
+                        });
+                    </script>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Address Information --}}
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h4 class="card-title mb-4">
+                        <i class="mdi mdi-map-marker text-success"></i> Address Information
+                    </h4>
+                    
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="form-group">
+                                <label for="property_address">Street Address <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control @error('property_address') is-invalid @enderror" 
+                                    id="property_address" name="property_address" value="{{ old('property_address', $property->property_address) }}" 
+                                    placeholder="123 Main Street" required>
+                                @error('property_address')
+                                <span class="invalid-feedback">{{ $message }}</span>
+                                @enderror
+                            </div>
                         </div>
+
                         <div class="col-md-6">
-                            <label class="form-label fw-bold">Protection & Safety</label>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="ecg_electrical" value="electrical_safety" {{ in_array('electrical_safety', (array) $selectedCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="ecg_electrical">Electrical safety</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="ecg_moisture" value="moisture_leak_prevention" {{ in_array('moisture_leak_prevention', (array) $selectedCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="ecg_moisture">Moisture & leak prevention</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="ecg_hvac" value="hvac_filters_program" {{ in_array('hvac_filters_program', (array) $selectedCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="ecg_hvac">HVAC & filters program</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="ecg_pest" value="pest_prevention_sealing" {{ in_array('pest_prevention_sealing', (array) $selectedCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="ecg_pest">Pest prevention & sealing</label></div>
+                            <div class="form-group">
+                                <label for="city">City <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control @error('city') is-invalid @enderror" 
+                                    id="city" name="city" value="{{ old('city', $property->city) }}" required>
+                                @error('city')
+                                <span class="invalid-feedback">{{ $message }}</span>
+                                @enderror
+                            </div>
                         </div>
+
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="province">Province/State <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control @error('province') is-invalid @enderror" 
+                                    id="province" name="province" value="{{ old('province', $property->province) }}" required>
+                                @error('province')
+                                <span class="invalid-feedback">{{ $message }}</span>
+                                @enderror
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="postal_code">Postal/ZIP Code <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control @error('postal_code') is-invalid @enderror" 
+                                    id="postal_code" name="postal_code" value="{{ old('postal_code', $property->postal_code) }}" required>
+                                @error('postal_code')
+                                <span class="invalid-feedback">{{ $message }}</span>
+                                @enderror
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="country">Country <span class="text-danger">*</span></label>
+                                @php
+                                    $selectedCountry = old('country', $property->country);
+                                    $countryOptions = [
+                                        'Afghanistan', 'Albania', 'Algeria', 'Andorra', 'Angola', 'Argentina', 'Armenia', 'Australia',
+                                        'Austria', 'Azerbaijan', 'Bahamas', 'Bahrain', 'Bangladesh', 'Barbados', 'Belarus', 'Belgium',
+                                        'Belize', 'Benin', 'Bhutan', 'Bolivia', 'Bosnia and Herzegovina', 'Botswana', 'Brazil', 'Brunei',
+                                        'Bulgaria', 'Burkina Faso', 'Burundi', 'Cambodia', 'Cameroon', 'Canada', 'Cape Verde',
+                                        'Central African Republic', 'Chad', 'Chile', 'China', 'Colombia', 'Comoros', 'Congo',
+                                        'Costa Rica', 'Croatia', 'Cuba', 'Cyprus', 'Czech Republic', 'Denmark', 'Djibouti', 'Dominica',
+                                        'Dominican Republic', 'Ecuador', 'Egypt', 'El Salvador', 'Equatorial Guinea', 'Eritrea', 'Estonia',
+                                        'Ethiopia', 'Fiji', 'Finland', 'France', 'Gabon', 'Gambia', 'Georgia', 'Germany', 'Ghana',
+                                        'Greece', 'Grenada', 'Guatemala', 'Guinea', 'Guinea-Bissau', 'Guyana', 'Haiti', 'Honduras',
+                                        'Hungary', 'Iceland', 'India', 'Indonesia', 'Iran', 'Iraq', 'Ireland', 'Israel', 'Italy',
+                                        'Jamaica', 'Japan', 'Jordan', 'Kazakhstan', 'Kenya', 'Kiribati', 'Kuwait', 'Kyrgyzstan', 'Laos',
+                                        'Latvia', 'Lebanon', 'Lesotho', 'Liberia', 'Libya', 'Liechtenstein', 'Lithuania', 'Luxembourg',
+                                        'Madagascar', 'Malawi', 'Malaysia', 'Maldives', 'Mali', 'Malta', 'Marshall Islands', 'Mauritania',
+                                        'Mauritius', 'Mexico', 'Micronesia', 'Moldova', 'Monaco', 'Mongolia', 'Montenegro', 'Morocco',
+                                        'Mozambique', 'Myanmar', 'Namibia', 'Nauru', 'Nepal', 'Netherlands', 'New Zealand', 'Nicaragua',
+                                        'Niger', 'Nigeria', 'North Korea', 'North Macedonia', 'Norway', 'Oman', 'Pakistan', 'Palau',
+                                        'Palestine', 'Panama', 'Papua New Guinea', 'Paraguay', 'Peru', 'Philippines', 'Poland',
+                                        'Portugal', 'Qatar', 'Romania', 'Russia', 'Rwanda', 'Saint Kitts and Nevis', 'Saint Lucia',
+                                        'Saint Vincent and the Grenadines', 'Samoa', 'San Marino', 'Sao Tome and Principe',
+                                        'Saudi Arabia', 'Senegal', 'Serbia', 'Seychelles', 'Sierra Leone', 'Singapore', 'Slovakia',
+                                        'Slovenia', 'Solomon Islands', 'Somalia', 'South Africa', 'South Korea', 'South Sudan', 'Spain',
+                                        'Sri Lanka', 'Sudan', 'Suriname', 'Sweden', 'Switzerland', 'Syria', 'Taiwan', 'Tajikistan',
+                                        'Tanzania', 'Thailand', 'Timor-Leste', 'Togo', 'Tonga', 'Trinidad and Tobago', 'Tunisia',
+                                        'Turkey', 'Turkmenistan', 'Tuvalu', 'Uganda', 'Ukraine', 'United Arab Emirates', 'United Kingdom',
+                                        'United States', 'Uruguay', 'Uzbekistan', 'Vanuatu', 'Vatican City', 'Venezuela', 'Vietnam',
+                                        'Yemen', 'Zambia', 'Zimbabwe',
+                                    ];
+                                @endphp
+                                <select class="form-control @error('country') is-invalid @enderror" id="country" name="country" required>
+                                    <option value="">Select Country</option>
+                                    @foreach($countryOptions as $countryOption)
+                                        <option value="{{ $countryOption }}" {{ $selectedCountry == $countryOption ? 'selected' : '' }}>{{ $countryOption }}</option>
+                                    @endforeach
+                                </select>
+                                @error('country')
+                                <span class="invalid-feedback">{{ $message }}</span>
+                                @enderror
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Property Size --}}
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h4 class="card-title mb-4">
+                        <i class="mdi mdi-floor-plan text-info"></i> Property Size
+                    </h4>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="square_footage_interior">Interior Square Footage</label>
+                                <input type="number" step="0.01" class="form-control @error('square_footage_interior') is-invalid @enderror" 
+                                    id="square_footage_interior" name="square_footage_interior" 
+                                    value="{{ old('square_footage_interior', $property->square_footage_interior) }}" placeholder="e.g., 2500.00">
+                                @error('square_footage_interior')
+                                <span class="invalid-feedback">{{ $message }}</span>
+                                @enderror
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="square_footage_green">Green Space Square Footage</label>
+                                <input type="number" step="0.01" class="form-control @error('square_footage_green') is-invalid @enderror" 
+                                    id="square_footage_green" name="square_footage_green" 
+                                    value="{{ old('square_footage_green', $property->square_footage_green) }}" placeholder="e.g., 1000.00">
+                                @error('square_footage_green')
+                                <span class="invalid-feedback">{{ $message }}</span>
+                                @enderror
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="square_footage_paved">Paved Area Square Footage</label>
+                                <input type="number" step="0.01" class="form-control @error('square_footage_paved') is-invalid @enderror" 
+                                    id="square_footage_paved" name="square_footage_paved" 
+                                    value="{{ old('square_footage_paved', $property->square_footage_paved) }}" placeholder="e.g., 500.00">
+                                @error('square_footage_paved')
+                                <span class="invalid-feedback">{{ $message }}</span>
+                                @enderror
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="square_footage_extra">Extra Space Square Footage</label>
+                                <input type="number" step="0.01" class="form-control @error('square_footage_extra') is-invalid @enderror" 
+                                    id="square_footage_extra" name="square_footage_extra" 
+                                    value="{{ old('square_footage_extra', $property->square_footage_extra) }}" placeholder="e.g., 200.00">
+                                @error('square_footage_extra')
+                                <span class="invalid-feedback">{{ $message }}</span>
+                                @enderror
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Owner Information --}}
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h4 class="card-title mb-4">
+                        <i class="mdi mdi-account text-warning"></i> Owner Information
+                    </h4>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="owner_first_name">Owner First Name <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control @error('owner_first_name') is-invalid @enderror" 
+                                    id="owner_first_name" name="owner_first_name" value="{{ old('owner_first_name', $property->owner_first_name) }}" required>
+                                @error('owner_first_name')
+                                <span class="invalid-feedback">{{ $message }}</span>
+                                @enderror
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="owner_phone">Owner Phone <span class="text-danger">*</span></label>
+                                <input type="tel" class="form-control @error('owner_phone') is-invalid @enderror" 
+                                    id="owner_phone" name="owner_phone" value="{{ old('owner_phone', $property->owner_phone) }}" required>
+                                @error('owner_phone')
+                                <span class="invalid-feedback">{{ $message }}</span>
+                                @enderror
+                            </div>
+                        </div>
+
+                        <div class="col-md-12">
+                            <div class="form-group">
+                                <label for="owner_email">Owner Email <span class="text-danger">*</span></label>
+                                <input type="email" class="form-control @error('owner_email') is-invalid @enderror" 
+                                    id="owner_email" name="owner_email" value="{{ old('owner_email', $property->owner_email) }}" required>
+                                @error('owner_email')
+                                <span class="invalid-feedback">{{ $message }}</span>
+                                @enderror
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Property Admin (Optional) --}}
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h4 class="card-title mb-4">
+                        <i class="mdi mdi-account-tie text-secondary"></i> Property Administrator <small class="text-muted">(Optional)</small>
+                    </h4>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="admin_first_name">Admin First Name</label>
+                                <input type="text" class="form-control @error('admin_first_name') is-invalid @enderror" 
+                                    id="admin_first_name" name="admin_first_name" value="{{ old('admin_first_name', $property->admin_first_name) }}">
+                                @error('admin_first_name')
+                                <span class="invalid-feedback">{{ $message }}</span>
+                                @enderror
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="admin_last_name">Admin Last Name</label>
+                                <input type="text" class="form-control @error('admin_last_name') is-invalid @enderror" 
+                                    id="admin_last_name" name="admin_last_name" value="{{ old('admin_last_name', $property->admin_last_name) }}">
+                                @error('admin_last_name')
+                                <span class="invalid-feedback">{{ $message }}</span>
+                                @enderror
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="admin_email">Admin Email</label>
+                                <input type="email" class="form-control @error('admin_email') is-invalid @enderror" 
+                                    id="admin_email" name="admin_email" value="{{ old('admin_email', $property->admin_email) }}">
+                                @error('admin_email')
+                                <span class="invalid-feedback">{{ $message }}</span>
+                                @enderror
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="admin_phone">Admin Phone</label>
+                                <input type="tel" class="form-control @error('admin_phone') is-invalid @enderror" 
+                                    id="admin_phone" name="admin_phone" value="{{ old('admin_phone', $property->admin_phone) }}">
+                                @error('admin_phone')
+                                <span class="invalid-feedback">{{ $message }}</span>
+                                @enderror
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Occupancy Information --}}
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h4 class="card-title mb-4">
+                        <i class="mdi mdi-account-group text-purple"></i> Occupancy Information
+                    </h4>
+                    
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="form-group">
+                                <label for="occupied_by">Occupied By</label>
+                                <select class="form-control @error('occupied_by') is-invalid @enderror" id="occupied_by" name="occupied_by">
+                                    <option value="">Select Option</option>
+                                    <option value="owner" {{ old('occupied_by', $property->occupied_by) == 'owner' ? 'selected' : '' }}>Owner</option>
+                                    <option value="family" {{ old('occupied_by', $property->occupied_by) == 'family' ? 'selected' : '' }}>Family</option>
+                                    <option value="tenants" {{ old('occupied_by', $property->occupied_by) == 'tenants' ? 'selected' : '' }}>Tenant(s)</option>
+                                    <option value="mixed" {{ old('occupied_by', $property->occupied_by) == 'mixed' ? 'selected' : '' }}>Mixed (Owner + Tenants)</option>
+                                </select>
+                                @error('occupied_by')
+                                <span class="invalid-feedback">{{ $message }}</span>
+                                @enderror
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-check mt-3">
+                                <input type="checkbox" class="form-check-input" id="has_pets" name="has_pets" value="1" 
+                                    {{ old('has_pets', $property->has_pets) ? 'checked' : '' }}>
+                                <label class="form-check-label" for="has_pets">
+                                    Has Pets
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-check mt-3">
+                                <input type="checkbox" class="form-check-input" id="has_kids" name="has_kids" value="1" 
+                                    {{ old('has_kids', $property->has_kids) ? 'checked' : '' }}>
+                                <label class="form-check-label" for="has_kids">
+                                    Has Children
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="col-md-12 mt-3">
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input" id="has_tenants" name="has_tenants" value="1" 
+                                    {{ old('has_tenants', $property->has_tenants) ? 'checked' : '' }}>
+                                <label class="form-check-label" for="has_tenants">
+                                    This property has multiple tenant units
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6 mt-3" id="number_of_units_wrapper" style="display: none;">
+                            <div class="form-group">
+                                <label for="number_of_units">Number of Tenant Units</label>
+                                <input type="number" class="form-control @error('number_of_units') is-invalid @enderror" 
+                                    id="number_of_units" name="number_of_units" value="{{ old('number_of_units', $property->number_of_units) }}" min="1">
+                                @error('number_of_units')
+                                <span class="invalid-feedback">{{ $message }}</span>
+                                @enderror
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Warm Welcome & Vision Setting (let us know you) --}}
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h4 class="card-title mb-4">
+                        <i class="mdi mdi-hand-heart text-primary"></i> Warm Welcome & Vision Setting (let us know you)
+                    </h4>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label class="mb-2">Tell us about your home journey <small class="text-muted">(Select all that resonate)</small></label>
+                                @php $oldHomeJourney = (array) old('home_journey', $property->home_journey ?? []); @endphp
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input js-select-all" type="checkbox" id="select_all_home_journey" data-target-name="home_journey[]">
+                                    <label class="form-check-label fw-semibold" for="select_all_home_journey">Select all</label>
+                                </div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="home_journey[]" id="hj_proactive" value="proactive_care" {{ in_array('proactive_care', $oldHomeJourney) ? 'checked' : '' }}><label class="form-check-label" for="hj_proactive">I want proactive care so issues never become emergencies</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="home_journey[]" id="hj_predictable" value="predictable_maintenance" {{ in_array('predictable_maintenance', $oldHomeJourney) ? 'checked' : '' }}><label class="form-check-label" for="hj_predictable">I want predictable maintenance & peace of mind</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="home_journey[]" id="hj_quality" value="improve_quality_of_life" {{ in_array('improve_quality_of_life', $oldHomeJourney) ? 'checked' : '' }}><label class="form-check-label" for="hj_quality">I want to improve quality of life & comfort</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="home_journey[]" id="hj_value" value="maintain_property_value" {{ in_array('maintain_property_value', $oldHomeJourney) ? 'checked' : '' }}><label class="form-check-label" for="hj_value">I want to maintain/increase property value</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="home_journey[]" id="hj_repairs" value="support_repairs_and_renovations" {{ in_array('support_repairs_and_renovations', $oldHomeJourney) ? 'checked' : '' }}><label class="form-check-label" for="hj_repairs">I need support managing repairs, trades, and renovations</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="home_journey[]" id="hj_team" value="trusted_team" {{ in_array('trusted_team', $oldHomeJourney) ? 'checked' : '' }}><label class="form-check-label" for="hj_team">I want a trusted team — not random contractors</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="home_journey[]" id="hj_ready" value="guest_ready" {{ in_array('guest_ready', $oldHomeJourney) ? 'checked' : '' }}><label class="form-check-label" for="hj_ready">I want my home to be always guest-ready / inspection-ready</label></div>
+                                <div class="mt-3">
+                                    <label for="custom_home_journey_input" class="form-label">Add custom home journey item</label>
+                                    <div class="d-flex gap-2 mb-2">
+                                        <input type="text" class="form-control" id="custom_home_journey_input" placeholder="Type custom journey item and click Add">
+                                        <button type="button" class="btn btn-outline-primary" id="add_custom_home_journey_btn">
+                                            <i class="mdi mdi-plus"></i> Add
+                                        </button>
+                                    </div>
+                                    <div id="custom_home_journey_list" class="list-input-container"></div>
+                                    <div id="custom_home_journey_inputs"></div>
+                                </div>
+                                @error('home_journey')<span class="text-danger small d-block mt-1">{{ $message }}</span>@enderror
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label class="mb-2">What does a well-cared-for home feel like to you?</label>
+                                @php $oldHomeFeel = (array) old('home_feel', $property->home_feel ?? []); @endphp
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input js-select-all" type="checkbox" id="select_all_home_feel" data-target-name="home_feel[]">
+                                    <label class="form-check-label fw-semibold" for="select_all_home_feel">Select all</label>
+                                </div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="home_feel[]" id="hf_safe" value="safe_healthy" {{ in_array('safe_healthy', $oldHomeFeel) ? 'checked' : '' }}><label class="form-check-label" for="hf_safe">Safe & healthy</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="home_feel[]" id="hf_organized" value="organized_peaceful" {{ in_array('organized_peaceful', $oldHomeFeel) ? 'checked' : '' }}><label class="form-check-label" for="hf_organized">Organized & peaceful</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="home_feel[]" id="hf_inviting" value="inviting_beautiful" {{ in_array('inviting_beautiful', $oldHomeFeel) ? 'checked' : '' }}><label class="form-check-label" for="hf_inviting">Inviting & beautiful</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="home_feel[]" id="hf_efficient" value="efficient_modern" {{ in_array('efficient_modern', $oldHomeFeel) ? 'checked' : '' }}><label class="form-check-label" for="hf_efficient">Efficient & modern</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="home_feel[]" id="hf_low_stress" value="low_stress_effortless" {{ in_array('low_stress_effortless', $oldHomeFeel) ? 'checked' : '' }}><label class="form-check-label" for="hf_low_stress">Low-stress & effortless</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="home_feel[]" id="hf_ready" value="ready_for_life_changes" {{ in_array('ready_for_life_changes', $oldHomeFeel) ? 'checked' : '' }}><label class="form-check-label" for="hf_ready">Ready for life changes (aging, kids, guests, rental plans)</label></div>
+                                <div class="mt-3">
+                                    <label for="custom_home_feel_input" class="form-label">Add custom home feel item</label>
+                                    <div class="d-flex gap-2 mb-2">
+                                        <input type="text" class="form-control" id="custom_home_feel_input" placeholder="Type custom home-feel item and click Add">
+                                        <button type="button" class="btn btn-outline-primary" id="add_custom_home_feel_btn">
+                                            <i class="mdi mdi-plus"></i> Add
+                                        </button>
+                                    </div>
+                                    <div id="custom_home_feel_list" class="list-input-container"></div>
+                                    <div id="custom_home_feel_inputs"></div>
+                                </div>
+                                @error('home_feel')<span class="text-danger small d-block mt-1">{{ $message }}</span>@enderror
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {{--let us know your Home Care Goals --}}
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h4 class="card-title mb-4">
+                        <i class="mdi mdi-target text-success"></i> let us know your Home Care Goals
+                    </h4>
+                    @php $oldCareGoals = (array) old('care_goals', $property->care_goals ?? []); @endphp
+                    <div class="form-check mb-3">
+                        <input class="form-check-input js-select-all" type="checkbox" id="select_all_care_goals" data-target-name="care_goals[]">
+                        <label class="form-check-label fw-semibold" for="select_all_care_goals">Select all Home Care Goals</label>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label class="fw-bold mb-2">Comfort & Beauty</label>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="cg_walls" value="walls_paint_care" {{ in_array('walls_paint_care', $oldCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="cg_walls">Walls & paint care</label></div>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="cg_trim" value="trim_woodwork_finishing" {{ in_array('trim_woodwork_finishing', $oldCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="cg_trim">Trim & woodwork finishing</label></div>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="cg_flooring" value="flooring_care_patching" {{ in_array('flooring_care_patching', $oldCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="cg_flooring">Flooring care & patching</label></div>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="cg_appliance" value="appliance_support" {{ in_array('appliance_support', $oldCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="cg_appliance">Appliance support</label></div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="fw-bold mb-2">Protection & Safety</label>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="cg_electrical" value="electrical_safety" {{ in_array('electrical_safety', $oldCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="cg_electrical">Electrical safety</label></div>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="cg_moisture" value="moisture_leak_prevention" {{ in_array('moisture_leak_prevention', $oldCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="cg_moisture">Moisture & leak prevention</label></div>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="cg_hvac" value="hvac_filters_program" {{ in_array('hvac_filters_program', $oldCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="cg_hvac">HVAC & filters program</label></div>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="cg_pest" value="pest_prevention_sealing" {{ in_array('pest_prevention_sealing', $oldCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="cg_pest">Pest prevention & sealing</label></div>
+                        </div>
+
                         <div class="col-md-6 mt-3">
-                            <label class="form-label fw-bold">Exterior & Grounds</label>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="ecg_gutter" value="gutter_cleaning_drainage" {{ in_array('gutter_cleaning_drainage', (array) $selectedCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="ecg_gutter">Gutter cleaning & drainage</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="ecg_pressure" value="pressure_washing" {{ in_array('pressure_washing', (array) $selectedCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="ecg_pressure">Pressure washing</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="ecg_garden" value="garden_lawn_care" {{ in_array('garden_lawn_care', (array) $selectedCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="ecg_garden">Garden / lawn care</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="ecg_tree" value="tree_pruning_yard_health" {{ in_array('tree_pruning_yard_health', (array) $selectedCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="ecg_tree">Tree pruning & yard health</label></div>
+                            <label class="fw-bold mb-2">Exterior & Grounds</label>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="cg_gutter" value="gutter_cleaning_drainage" {{ in_array('gutter_cleaning_drainage', $oldCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="cg_gutter">Gutter cleaning & drainage</label></div>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="cg_pressure" value="pressure_washing" {{ in_array('pressure_washing', $oldCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="cg_pressure">Pressure washing</label></div>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="cg_garden" value="garden_lawn_care" {{ in_array('garden_lawn_care', $oldCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="cg_garden">Garden / lawn care</label></div>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="cg_tree" value="tree_pruning_yard_health" {{ in_array('tree_pruning_yard_health', $oldCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="cg_tree">Tree pruning & yard health</label></div>
                         </div>
+
                         <div class="col-md-6 mt-3">
-                            <label class="form-label fw-bold">Convenience & Lifestyle</label>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="ecg_seasonal" value="seasonal_prep" {{ in_array('seasonal_prep', (array) $selectedCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="ecg_seasonal">Seasonal prep (fall/spring)</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="ecg_travel" value="travel_away_watch" {{ in_array('travel_away_watch', (array) $selectedCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="ecg_travel">Travel-away home watch</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="ecg_move" value="moving_in_out_service" {{ in_array('moving_in_out_service', (array) $selectedCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="ecg_move">Moving in or out service</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="ecg_presale" value="pre_sale_refresh" {{ in_array('pre_sale_refresh', (array) $selectedCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="ecg_presale">Pre-sale property refresh</label></div>
+                            <label class="fw-bold mb-2">Convenience & Lifestyle</label>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="cg_seasonal" value="seasonal_prep" {{ in_array('seasonal_prep', $oldCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="cg_seasonal">Seasonal prep (fall/spring)</label></div>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="cg_travel" value="travel_away_watch" {{ in_array('travel_away_watch', $oldCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="cg_travel">Travel-away home watch</label></div>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="cg_move" value="moving_in_out_service" {{ in_array('moving_in_out_service', $oldCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="cg_move">Moving in or out service</label></div>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="care_goals[]" id="cg_presale" value="pre_sale_refresh" {{ in_array('pre_sale_refresh', $oldCareGoals) ? 'checked' : '' }}><label class="form-check-label" for="cg_presale">Pre-sale property refresh</label></div>
+                        </div>
+
+                        <div class="col-12">
+                            @error('care_goals')<span class="text-danger small d-block mt-2">{{ $message }}</span>@enderror
                         </div>
                     </div>
+                </div>
+            </div>
 
-                    <hr>
-
-                    <h5 class="mb-3">Additional Details</h5>
+            {{-- Property Details --}}
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h4 class="card-title mb-4">
+                        <i class="mdi mdi-text-box text-cyan"></i> Property Details
+                    </h4>
+                    
                     <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Personality</label>
-                            <select name="personality" class="form-select @error('personality') is-invalid @enderror">
-                                <option value="">Select</option>
-                                @foreach(['calm','busy','luxury','high-use'] as $personality)
-                                    <option value="{{ $personality }}" @selected(old('personality', $property->personality) === $personality)>
-                                        {{ ucfirst($personality) }}
-                                    </option>
-                                @endforeach
-                            </select>
-                            @error('personality')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
+                        <div class="col-md-12">
+                            <div class="form-group">
+                                <label for="personality">Property Personality/Style</label>
+                                <select class="form-control @error('personality') is-invalid @enderror" 
+                                    id="personality" name="personality">
+                                    <option value="">Select Property Personality</option>
+                                    <option value="calm" {{ old('personality', $property->personality) == 'calm' ? 'selected' : '' }}>Calm & Peaceful</option>
+                                    <option value="busy" {{ old('personality', $property->personality) == 'busy' ? 'selected' : '' }}>Busy & Active</option>
+                                    <option value="luxury" {{ old('personality', $property->personality) == 'luxury' ? 'selected' : '' }}>Luxury & Upscale</option>
+                                    <option value="high-use" {{ old('personality', $property->personality) == 'high-use' ? 'selected' : '' }}>High-Use & Heavy Traffic</option>
+                                </select>
+                                @error('personality')
+                                <span class="invalid-feedback">{{ $message }}</span>
+                                @enderror
+                            </div>
                         </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">Describe Personality Further <small class="text-muted">(optional)</small></label>
-                            <textarea name="personality_notes" class="form-control @error('personality_notes') is-invalid @enderror" rows="3" placeholder="Add extra context for your property personality...">{{ old('personality_notes', $property->personality_notes) }}</textarea>
-                            @error('personality_notes')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label d-block">Any sensitivities? <small class="text-muted">(check all)</small></label>
-                            @php $selectedSensitivities = (array) old('sensitivities', $property->sensitivities ?? []); @endphp
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="sensitivities[]" id="edit_sens_allergies" value="allergies_air_quality" {{ in_array('allergies_air_quality', $selectedSensitivities) ? 'checked' : '' }}><label class="form-check-label" for="edit_sens_allergies">Allergies / air quality</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="sensitivities[]" id="edit_sens_water" value="water_damage_risk" {{ in_array('water_damage_risk', $selectedSensitivities) ? 'checked' : '' }}><label class="form-check-label" for="edit_sens_water">Water damage risk</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="sensitivities[]" id="edit_sens_aging" value="aging_in_place_needs" {{ in_array('aging_in_place_needs', $selectedSensitivities) ? 'checked' : '' }}><label class="form-check-label" for="edit_sens_aging">Aging-in-place needs</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="sensitivities[]" id="edit_sens_eco" value="eco_friendly_products_only" {{ in_array('eco_friendly_products_only', $selectedSensitivities) ? 'checked' : '' }}><label class="form-check-label" for="edit_sens_eco">Eco-friendly products only</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="sensitivities[]" id="edit_sens_pet" value="pet_safe_cleaning_materials" {{ in_array('pet_safe_cleaning_materials', $selectedSensitivities) ? 'checked' : '' }}><label class="form-check-label" for="edit_sens_pet">Pet-safe cleaning materials</label></div>
-                            <div class="form-check"><input class="form-check-input" type="checkbox" name="sensitivities[]" id="edit_sens_accessibility" value="accessibility_modifications" {{ in_array('accessibility_modifications', $selectedSensitivities) ? 'checked' : '' }}><label class="form-check-label" for="edit_sens_accessibility">Accessibility Modifications</label></div>
 
-                            <div class="mt-3">
-                                <label for="edit_custom_sensitivity_input" class="form-label">Add custom sensitivity</label>
+                        <div class="col-md-12">
+                            <div class="form-group">
+                                <label for="personality_notes">Describe your property personality further <small class="text-muted">(optional)</small></label>
+                                <textarea class="form-control @error('personality_notes') is-invalid @enderror"
+                                    id="personality_notes" name="personality_notes" rows="3"
+                                    placeholder="Add any extra details about style, vibe, usage patterns, or preferences...">{{ old('personality_notes', $property->personality_notes) }}</textarea>
+                                @error('personality_notes')
+                                <span class="invalid-feedback">{{ $message }}</span>
+                                @enderror
+                            </div>
+                        </div>
+
+                        <div class="col-md-12">
+                            <div class="form-group">
+                                <label for="known_problem_input">Known Problems/Issues</label>
+                                @php
+                                    $oldKnownProblemsRaw = old('known_problems', $property->known_problems);
+                                    if (is_array($oldKnownProblemsRaw)) {
+                                        $oldKnownProblemsList = array_values(array_filter(array_map('trim', $oldKnownProblemsRaw)));
+                                    } else {
+                                        $oldKnownProblemsRaw = trim((string) $oldKnownProblemsRaw);
+                                        if ($oldKnownProblemsRaw === '' || strtolower($oldKnownProblemsRaw) === 'null') {
+                                            $oldKnownProblemsList = [];
+                                        } else {
+                                            $oldKnownProblemsList = array_values(array_filter(array_map('trim', preg_split('/[,\n]+/', $oldKnownProblemsRaw))));
+                                        }
+                                    }
+                                @endphp
+
                                 <div class="d-flex gap-2 mb-2">
-                                    <input type="text" class="form-control" id="edit_custom_sensitivity_input" placeholder="Type custom sensitivity and click Add">
-                                    <button type="button" class="btn btn-outline-primary" id="edit_add_custom_sensitivity_btn">
+                                    <input type="text" class="form-control" id="known_problem_input" placeholder="Type an issue and click Add">
+                                    <button type="button" class="btn btn-outline-primary" id="add_known_problem_btn">
                                         <i class="mdi mdi-plus"></i> Add
                                     </button>
                                 </div>
-                                <div id="edit_custom_sensitivities_list" class="list-input-container"></div>
-                                <div id="edit_custom_sensitivities_inputs"></div>
-                                <small class="form-text text-muted">You can add anything not listed above and remove it before submitting.</small>
-                            </div>
 
-                            @error('sensitivities')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
+                                <input type="hidden" name="known_problems" id="known_problems" value="{{ is_array(old('known_problems', $property->known_problems)) ? implode(', ', old('known_problems', $property->known_problems)) : old('known_problems', $property->known_problems) }}">
+
+                                <div id="known_problems_list" class="list-input-container"></div>
+
+                                <div class="mt-3">
+                                    <label for="known_problem_images" class="form-label">Upload issue images <small class="text-muted">(optional)</small></label>
+                                    @if($property->known_problem_images && count($property->known_problem_images) > 0)
+                                        <div class="row g-2 mb-2">
+                                            @foreach($property->known_problem_images as $issueImage)
+                                                <div class="col-md-3">
+                                                    <img src="{{ $property->getStorageUrl($issueImage) }}" class="img-fluid rounded" alt="Known issue image">
+                                                </div>
+                                            @endforeach
+                                        </div>
+                                    @endif
+                                    <input type="file" class="form-control @error('known_problem_images.*') is-invalid @enderror"
+                                        id="known_problem_images" name="known_problem_images[]" multiple accept="image/jpeg,image/png,image/jpg,image/gif,image/webp">
+                                    <small class="form-text text-muted">Attach photos of cracks, leaks, stains, damage, or anything you want us to inspect.</small>
+                                    @error('known_problem_images.*')
+                                    <span class="text-danger small d-block mt-1">{{ $message }}</span>
+                                    @enderror
+                                </div>
+
+                                @error('known_problems')
+                                <span class="text-danger small d-block mt-1">{{ $message }}</span>
+                                @enderror
+                            </div>
                         </div>
-                        <div class="col-md-12 mb-3">
-                            <label class="form-label">Known Problems</label>
-                            <textarea name="known_problems" class="form-control @error('known_problems') is-invalid @enderror" rows="3">{{ old('known_problems', $property->known_problems) }}</textarea>
-                            @error('known_problems')
-                            <div class="invalid-feedback">{{ $message }}</div>
-                            @enderror
+
+                        <div class="col-md-12">
+                            <div class="form-group">
+                                <label class="mb-2">Any sensitivities? <small class="text-muted">(check all)</small></label>
+                                @php $selectedSensitivities = (array) old('sensitivities', $property->sensitivities ?? []); @endphp
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input js-select-all" type="checkbox" id="select_all_sensitivities" data-target-name="sensitivities[]">
+                                    <label class="form-check-label fw-semibold" for="select_all_sensitivities">Select all</label>
+                                </div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="sensitivities[]" id="sens_allergies" value="allergies_air_quality" {{ in_array('allergies_air_quality', $selectedSensitivities) ? 'checked' : '' }}><label class="form-check-label" for="sens_allergies">Allergies / air quality</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="sensitivities[]" id="sens_water" value="water_damage_risk" {{ in_array('water_damage_risk', $selectedSensitivities) ? 'checked' : '' }}><label class="form-check-label" for="sens_water">Water damage risk</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="sensitivities[]" id="sens_aging" value="aging_in_place_needs" {{ in_array('aging_in_place_needs', $selectedSensitivities) ? 'checked' : '' }}><label class="form-check-label" for="sens_aging">Aging-in-place needs</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="sensitivities[]" id="sens_eco" value="eco_friendly_products_only" {{ in_array('eco_friendly_products_only', $selectedSensitivities) ? 'checked' : '' }}><label class="form-check-label" for="sens_eco">Eco-friendly products only</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="sensitivities[]" id="sens_pet" value="pet_safe_cleaning_materials" {{ in_array('pet_safe_cleaning_materials', $selectedSensitivities) ? 'checked' : '' }}><label class="form-check-label" for="sens_pet">Pet-safe cleaning materials</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="sensitivities[]" id="sens_accessibility" value="accessibility_modifications" {{ in_array('accessibility_modifications', $selectedSensitivities) ? 'checked' : '' }}><label class="form-check-label" for="sens_accessibility">Accessibility Modifications</label></div>
+
+                                <div class="mt-3">
+                                    <label for="custom_sensitivity_input" class="form-label">Add custom sensitivity</label>
+                                    <div class="d-flex gap-2 mb-2">
+                                        <input type="text" class="form-control" id="custom_sensitivity_input" placeholder="Type custom sensitivity and click Add">
+                                        <button type="button" class="btn btn-outline-primary" id="add_custom_sensitivity_btn">
+                                            <i class="mdi mdi-plus"></i> Add
+                                        </button>
+                                    </div>
+                                    <div id="custom_sensitivities_list" class="list-input-container"></div>
+                                    <div id="custom_sensitivities_inputs"></div>
+                                    <small class="form-text text-muted">You can add anything not listed above and remove it before submit.</small>
+                                </div>
+
+                                @error('sensitivities')
+                                <span class="text-danger small d-block mt-1">{{ $message }}</span>
+                                @enderror
+                            </div>
                         </div>
                     </div>
+                </div>
+            </div>
 
-                    <hr>
-
-                    <h5 class="mb-3">Uploads</h5>
-                    @if($property->property_photos && count($property->property_photos) > 0)
-                        <div class="row mb-3">
-                            @foreach($property->property_photos as $photo)
-                                <div class="col-md-3 mb-2">
-                                    <img src="{{ $property->getStorageUrl($photo) }}" class="img-fluid rounded" alt="Property Photo">
-                                </div>
-                            @endforeach
-                        </div>
-                    @endif
-                    <div class="mb-3">
-                        <label class="form-label">Replace Property Photos</label>
-                        <input type="file" name="property_photos[]" class="form-control @error('property_photos.*') is-invalid @enderror" multiple accept="image/*">
-                        @error('property_photos.*')
-                        <div class="invalid-feedback">{{ $message }}</div>
+            {{-- Property Photos --}}
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h4 class="card-title mb-4">
+                        <i class="mdi mdi-camera text-danger"></i> Property Photos
+                        <span class="badge badge-info ms-2">Up to 15 photos</span>
+                    </h4>
+                    
+                    <div class="form-group">
+                        <label for="property_photos">Upload Property Photos <span class="text-danger">*</span></label>
+                        @if($property->property_photos && count($property->property_photos) > 0)
+                            <div class="row g-2 mb-2">
+                                @foreach($property->property_photos as $photo)
+                                    <div class="col-md-3">
+                                        <img src="{{ $property->getStorageUrl($photo) }}" class="img-fluid rounded" alt="Property photo">
+                                    </div>
+                                @endforeach
+                            </div>
+                        @endif
+                        <input type="file" class="form-control @error('property_photos') is-invalid @enderror" 
+                            id="property_photos" name="property_photos[]" multiple accept="image/jpeg,image/png,image/jpg,image/gif">
+                        <small class="form-text text-muted">
+                            <i class="mdi mdi-information"></i> You can select 10-15 photos at once (max 10MB each). 
+                            Supported formats: JPG, PNG, GIF
+                        </small>
+                        @error('property_photos')
+                        <span class="invalid-feedback">{{ $message }}</span>
                         @enderror
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Replace Blueprint (optional)</label>
-                        <input type="file" name="blueprint_file" class="form-control @error('blueprint_file') is-invalid @enderror" accept="image/jpeg,image/png,image/jpg,application/pdf,.dwg,.dxf">
-                        <small class="form-text text-muted">Supported formats: PDF, JPG/JPEG, PNG, DWG, DXF. For images, use at least 1000px shortest side.</small>
+
+                    <div id="photo-count" class="alert alert-info mt-2" style="display: none;">
+                        <i class="mdi mdi-image-multiple"></i> <strong><span id="photo-count-number">0</span></strong> photo(s) selected
+                    </div>
+
+                    <div id="photo-preview" class="row mt-3"></div>
+                </div>
+            </div>
+
+            {{-- Blueprint/Floor Plan --}}
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h4 class="card-title mb-4">
+                        <i class="mdi mdi-floor-plan text-primary"></i> Blueprint / Floor Plan
+                        <span class="badge badge-secondary ms-2">Optional</span>
+                    </h4>
+                    
+                    <div class="form-group">
+                        <label for="blueprint_file">Upload Blueprint or Floor Plan</label>
+                        @if($property->blueprint_file)
+                            <div class="mb-2">
+                                <a href="{{ $property->getStorageUrl($property->blueprint_file) }}" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">
+                                    <i class="mdi mdi-eye"></i> View Current Blueprint
+                                </a>
+                            </div>
+                        @endif
+                        <input type="file" class="form-control @error('blueprint_file') is-invalid @enderror" 
+                            id="blueprint_file" name="blueprint_file" accept="image/jpeg,image/png,image/jpg,application/pdf,.dwg,.dxf">
+                        <small class="form-text text-muted">
+                            <i class="mdi mdi-information"></i> Upload property blueprint or floor plan (max 20MB). 
+                            Supported formats: PDF, JPG/JPEG, PNG, DWG, DXF. For images, use high-resolution files (minimum 1000px shortest side).
+                        </small>
                         @error('blueprint_file')
-                        <div class="invalid-feedback">{{ $message }}</div>
+                        <span class="invalid-feedback">{{ $message }}</span>
                         @enderror
                     </div>
 
+                    <div id="blueprint-preview" class="mt-3"></div>
+                </div>
+            </div>
+
+            {{-- Submit Buttons --}}
+            <div class="card">
+                <div class="card-body">
                     <div class="d-flex justify-content-between">
-                        <a href="{{ route('client.properties.show', $property->id) }}" class="btn btn-light">Cancel</a>
-                        <button type="submit" class="btn btn-primary">Update Property</button>
+                        <a href="{{ route('client.properties.show', $property->id) }}" class="btn btn-light">
+                            <i class="mdi mdi-arrow-left"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="mdi mdi-check"></i> Update Property
+                        </button>
                     </div>
-                </form>
+                </div>
             </div>
         </div>
     </div>
-</div>
+</form>
+
+<style>
+.photo-preview-item {
+    position: relative;
+    margin-bottom: 15px;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    transition: transform 0.2s;
+}
+.photo-preview-item:hover {
+    transform: scale(1.02);
+}
+.photo-preview-item img {
+    width: 100%;
+    height: 200px;
+    object-fit: cover;
+    border: 2px solid #e0e0e0;
+}
+.photo-preview-item .photo-preview-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);
+    padding: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.photo-preview-item .remove-photo-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: rgba(220, 53, 69, 0.9);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    transition: all 0.2s;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+.photo-preview-item .remove-photo-btn:hover {
+    background: rgba(220, 53, 69, 1);
+    transform: scale(1.1);
+}
+.blueprint-preview-item {
+    border: 2px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 15px;
+    background: #f8f9fa;
+}
+</style>
 
 <script>
+@php
+    $propertyDataForJs = [
+        'property_name' => $property->property_name,
+        'property_brand' => $property->property_brand,
+        'type' => $property->type,
+        'property_subtype' => $property->property_subtype,
+        'year_built' => $property->year_built,
+        'residential_units' => $property->residential_units,
+        'mixed_use_commercial_weight' => $property->mixed_use_commercial_weight,
+        'property_address' => $property->property_address,
+        'city' => $property->city,
+        'province' => $property->province,
+        'postal_code' => $property->postal_code,
+        'country' => $property->country,
+        'square_footage_interior' => $property->square_footage_interior,
+        'square_footage_green' => $property->square_footage_green,
+        'square_footage_paved' => $property->square_footage_paved,
+        'square_footage_extra' => $property->square_footage_extra,
+        'owner_first_name' => $property->owner_first_name,
+        'owner_phone' => $property->owner_phone,
+        'owner_email' => $property->owner_email,
+        'admin_first_name' => $property->admin_first_name,
+        'admin_last_name' => $property->admin_last_name,
+        'admin_email' => $property->admin_email,
+        'admin_phone' => $property->admin_phone,
+        'occupied_by' => $property->occupied_by,
+        'has_pets' => $property->has_pets,
+        'has_kids' => $property->has_kids,
+        'has_tenants' => $property->has_tenants,
+        'number_of_units' => $property->number_of_units,
+        'personality' => $property->personality,
+        'personality_notes' => $property->personality_notes,
+    ];
+@endphp
 document.addEventListener('DOMContentLoaded', function() {
+    const prefillWhenNoValidationErrors = @json(!$errors->any());
+    const propertyData = @json($propertyDataForJs);
+
+    if (prefillWhenNoValidationErrors) {
+        Object.entries(propertyData).forEach((entry) => {
+            const name = entry[0];
+            const value = entry[1];
+            const field = document.querySelector(`[name="${name}"]`);
+            if (!field || value === null || value === undefined) {
+                return;
+            }
+
+            if (field.type === 'checkbox') {
+                field.checked = Boolean(value);
+            } else {
+                field.value = value;
+            }
+        });
+
+        const typeField = document.getElementById('type');
+        if (typeField) {
+            typeField.dispatchEvent(new Event('change'));
+        }
+
+        const hasTenantsField = document.getElementById('has_tenants');
+        const numberOfUnitsWrapperField = document.getElementById('number_of_units_wrapper');
+        if (hasTenantsField && numberOfUnitsWrapperField) {
+            numberOfUnitsWrapperField.style.display = hasTenantsField.checked ? 'block' : 'none';
+        }
+    }
+
+    // Auto-update property code preview based on brand
+    const brandInput = document.getElementById('property_brand');
+    const codePreview = document.getElementById('property_code_preview');
+    
+    function updatePropertyCodePreview() {
+        const brand = brandInput.value.trim();
+        const prefix = brand ? brand.substring(0, 3).toUpperCase() : 'PROP';
+        const timestamp = Math.floor(Date.now() / 1000); // Current timestamp
+        codePreview.value = prefix + '-' + timestamp;
+    }
+    
+    // Update on brand input change
+    brandInput.addEventListener('input', updatePropertyCodePreview);
+    
+    // Initialize with current timestamp
+    updatePropertyCodePreview();
+    
+    // Toggle tenant units field
+    const hasTenants = document.getElementById('has_tenants');
+    const numberOfUnitsWrapper = document.getElementById('number_of_units_wrapper');
+    
+    hasTenants.addEventListener('change', function() {
+        numberOfUnitsWrapper.style.display = this.checked ? 'block' : 'none';
+    });
+
+    // Generic select-all support for grouped checkboxes
+    const selectAllToggles = document.querySelectorAll('.js-select-all');
+
+    // Custom checklist values add/remove (journey, feel, sensitivities)
     const predefinedHomeJourneyValues = [
         'proactive_care',
         'predictable_maintenance',
@@ -461,40 +1127,407 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     initCustomChecklistValues({
-        inputId: 'edit_custom_home_journey_input',
-        addBtnId: 'edit_add_custom_home_journey_btn',
-        listId: 'edit_custom_home_journey_list',
-        hiddenContainerId: 'edit_custom_home_journey_inputs',
+        inputId: 'custom_home_journey_input',
+        addBtnId: 'add_custom_home_journey_btn',
+        listId: 'custom_home_journey_list',
+        hiddenContainerId: 'custom_home_journey_inputs',
         hiddenName: 'home_journey[]',
-        selectedRaw: @json($selectedHomeJourney ?? []),
+        selectedRaw: @json($oldHomeJourney ?? []),
         predefinedValues: predefinedHomeJourneyValues,
         emptyText: 'No custom home journey items added.',
         removeAriaLabel: 'Remove home journey item'
     });
 
     initCustomChecklistValues({
-        inputId: 'edit_custom_home_feel_input',
-        addBtnId: 'edit_add_custom_home_feel_btn',
-        listId: 'edit_custom_home_feel_list',
-        hiddenContainerId: 'edit_custom_home_feel_inputs',
+        inputId: 'custom_home_feel_input',
+        addBtnId: 'add_custom_home_feel_btn',
+        listId: 'custom_home_feel_list',
+        hiddenContainerId: 'custom_home_feel_inputs',
         hiddenName: 'home_feel[]',
-        selectedRaw: @json($selectedHomeFeel ?? []),
+        selectedRaw: @json($oldHomeFeel ?? []),
         predefinedValues: predefinedHomeFeelValues,
         emptyText: 'No custom home feel items added.',
         removeAriaLabel: 'Remove home feel item'
     });
 
     initCustomChecklistValues({
-        inputId: 'edit_custom_sensitivity_input',
-        addBtnId: 'edit_add_custom_sensitivity_btn',
-        listId: 'edit_custom_sensitivities_list',
-        hiddenContainerId: 'edit_custom_sensitivities_inputs',
+        inputId: 'custom_sensitivity_input',
+        addBtnId: 'add_custom_sensitivity_btn',
+        listId: 'custom_sensitivities_list',
+        hiddenContainerId: 'custom_sensitivities_inputs',
         hiddenName: 'sensitivities[]',
         selectedRaw: @json($selectedSensitivities ?? []),
         predefinedValues: predefinedSensitivityValues,
         emptyText: 'No custom sensitivities added.',
         removeAriaLabel: 'Remove sensitivity'
     });
+
+    function getTargetCheckboxesByName(name) {
+        return Array.from(document.querySelectorAll(`input[type="checkbox"][name="${name}"]`));
+    }
+
+    function syncSelectAllState(name) {
+        const toggle = document.querySelector(`.js-select-all[data-target-name="${name}"]`);
+        if (!toggle) return;
+
+        const targets = getTargetCheckboxesByName(name);
+        if (!targets.length) {
+            toggle.checked = false;
+            return;
+        }
+
+        toggle.checked = targets.every(checkbox => checkbox.checked);
+    }
+
+    selectAllToggles.forEach(toggle => {
+        const targetName = toggle.dataset.targetName;
+        const targets = getTargetCheckboxesByName(targetName);
+
+        toggle.addEventListener('change', function() {
+            targets.forEach(checkbox => {
+                checkbox.checked = this.checked;
+            });
+        });
+
+        targets.forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                syncSelectAllState(targetName);
+            });
+        });
+
+        syncSelectAllState(targetName);
+    });
+
+    // Photo preview with validation and accumulation
+    const photoInput = document.getElementById('property_photos');
+    const photoPreview = document.getElementById('photo-preview');
+    const photoCount = document.getElementById('photo-count');
+    const photoCountNumber = document.getElementById('photo-count-number');
+    let selectedFiles = []; // Store accumulated files
+    
+    photoInput.addEventListener('change', function(e) {
+        const newFiles = Array.from(e.target.files);
+        
+        // Add new files to accumulated list
+        newFiles.forEach(file => {
+            // Validate file size (10MB)
+            if (file.size > 10 * 1024 * 1024) {
+                alert(`${file.name} exceeds 10MB. Please choose a smaller file.`);
+                return;
+            }
+            
+            // Check if file already exists (by name and size)
+            const exists = selectedFiles.some(f => f.name === file.name && f.size === file.size);
+            if (!exists) {
+                selectedFiles.push(file);
+            }
+        });
+        
+        // Validate total file count
+        if (selectedFiles.length > 15) {
+            alert(`Maximum 15 photos allowed. You have selected ${selectedFiles.length} photos. Please remove some.`);
+            selectedFiles = selectedFiles.slice(0, 15); // Keep only first 15
+        }
+        
+        // Update display
+        updatePhotoDisplay();
+    });
+    
+    function updatePhotoDisplay() {
+        photoPreview.innerHTML = '';
+        
+        if (selectedFiles.length === 0) {
+            photoCount.style.display = 'none';
+            return;
+        }
+        
+        // Show photo count
+        photoCountNumber.textContent = selectedFiles.length;
+        photoCount.style.display = 'block';
+        
+        // Create a DataTransfer object to update the file input
+        const dataTransfer = new DataTransfer();
+        
+        selectedFiles.forEach((file, index) => {
+            // Add to DataTransfer
+            dataTransfer.items.add(file);
+            
+            if (file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const col = document.createElement('div');
+                    col.className = 'col-md-3 mb-3';
+                    col.innerHTML = `
+                        <div class="photo-preview-item">
+                            <img src="${e.target.result}" alt="Photo ${index + 1}">
+                            <div class="photo-preview-overlay">
+                                <span class="badge badge-light">Photo ${index + 1}</span>
+                                <span class="badge badge-info">${(file.size / 1024 / 1024).toFixed(2)} MB</span>
+                            </div>
+                            <button type="button" class="remove-photo-btn" data-index="${index}" title="Remove photo">
+                                <i class="mdi mdi-close"></i>
+                            </button>
+                        </div>
+                    `;
+                    photoPreview.appendChild(col);
+                    
+                    // Add click handler for remove button
+                    col.querySelector('.remove-photo-btn').addEventListener('click', function() {
+                        removePhoto(index);
+                    });
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+        
+        // Update the file input with accumulated files
+        photoInput.files = dataTransfer.files;
+    }
+    
+    function removePhoto(index) {
+        selectedFiles.splice(index, 1);
+        updatePhotoDisplay();
+    }
+
+    // Make country dropdown searchable
+    const countrySelect = document.getElementById('country');
+    const oldCountry = "{{ old('country', $property->country) }}";
+    
+    // Add search functionality
+    countrySelect.addEventListener('keyup', function(e) {
+        const searchTerm = this.value.toLowerCase();
+        const options = Array.from(this.options);
+        
+        options.forEach(option => {
+            if (option.value === '') return; // Keep the "Select Country" option
+            
+            const text = option.text.toLowerCase();
+            if (text.includes(searchTerm)) {
+                option.style.display = '';
+            } else {
+                option.style.display = 'none';
+            }
+        });
+    });
+    
+    // Set selected country if old value exists
+    if (oldCountry) {
+        countrySelect.value = oldCountry;
+    }
+
+    // Dynamic list inputs for known problems and sensitivities
+    const knownProblemsHidden = document.getElementById('known_problems');
+    const knownProblemsInput = document.getElementById('known_problem_input');
+    const knownProblemsList = document.getElementById('known_problems_list');
+    const addKnownProblemBtn = document.getElementById('add_known_problem_btn');
+
+    const knownProblemsItems = @json($oldKnownProblemsList ?? []);
+
+    function normalizeValue(value) {
+        return String(value || '').trim();
+    }
+
+    function syncHiddenField(hiddenField, items) {
+        hiddenField.value = items.join(', ');
+    }
+
+    function renderItems(container, items, onRemove) {
+        container.innerHTML = '';
+
+        if (!items.length) {
+            const empty = document.createElement('div');
+            empty.className = 'text-muted small';
+            empty.textContent = 'No items added yet.';
+            container.appendChild(empty);
+            return;
+        }
+
+        items.forEach((item, index) => {
+            const badge = document.createElement('div');
+            badge.className = 'list-item-badge';
+            badge.innerHTML = `
+                <span>${item}</span>
+                <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-2" data-index="${index}" aria-label="Remove item">
+                    <i class="mdi mdi-close-circle"></i>
+                </button>
+            `;
+            badge.querySelector('button').addEventListener('click', function() {
+                onRemove(index);
+            });
+            container.appendChild(badge);
+        });
+    }
+
+    function addItem(input, items, hiddenField, container) {
+        const value = normalizeValue(input.value);
+        if (!value) {
+            return;
+        }
+
+        const exists = items.some(item => item.toLowerCase() === value.toLowerCase());
+        if (!exists) {
+            items.push(value);
+        }
+
+        input.value = '';
+        syncHiddenField(hiddenField, items);
+        render();
+    }
+
+    function removeKnownProblem(index) {
+        knownProblemsItems.splice(index, 1);
+        syncHiddenField(knownProblemsHidden, knownProblemsItems);
+        render();
+    }
+
+    function render() {
+        renderItems(knownProblemsList, knownProblemsItems, removeKnownProblem);
+    }
+
+    addKnownProblemBtn.addEventListener('click', function() {
+        addItem(knownProblemsInput, knownProblemsItems, knownProblemsHidden, knownProblemsList);
+    });
+
+    knownProblemsInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            addItem(knownProblemsInput, knownProblemsItems, knownProblemsHidden, knownProblemsList);
+        }
+    });
+
+    syncHiddenField(knownProblemsHidden, knownProblemsItems);
+    render();
+
+    // Blueprint preview with validation
+    const blueprintInput = document.getElementById('blueprint_file');
+    const blueprintPreview = document.getElementById('blueprint-preview');
+    
+    blueprintInput.addEventListener('change', function(e) {
+        blueprintPreview.innerHTML = '';
+        const file = e.target.files[0];
+        
+        if (file) {
+            // Validate file size (20MB)
+            if (file.size > 20 * 1024 * 1024) {
+                alert('Blueprint file exceeds 20MB. Please choose a smaller file.');
+                this.value = '';
+                return;
+            }
+            
+            if (file.type === 'application/pdf') {
+                blueprintPreview.innerHTML = `
+                    <div class="blueprint-preview-item">
+                        <div class="d-flex align-items-center p-3">
+                            <i class="mdi mdi-file-pdf" style="font-size: 3rem; color: #d32f2f;"></i>
+                            <div class="ms-3">
+                                <p class="mb-0"><strong>${file.name}</strong></p>
+                                <small class="text-muted">${(file.size / 1024 / 1024).toFixed(2)} MB</small>
+                                <span class="badge badge-success ms-2">PDF</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else if (file.name.toLowerCase().endsWith('.dwg') || file.name.toLowerCase().endsWith('.dxf')) {
+                const extension = file.name.toLowerCase().endsWith('.dwg') ? 'DWG' : 'DXF';
+                blueprintPreview.innerHTML = `
+                    <div class="blueprint-preview-item">
+                        <div class="d-flex align-items-center p-3">
+                            <i class="mdi mdi-file-cad" style="font-size: 3rem; color: #1565c0;"></i>
+                            <div class="ms-3">
+                                <p class="mb-0"><strong>${file.name}</strong></p>
+                                <small class="text-muted">${(file.size / 1024 / 1024).toFixed(2)} MB</small>
+                                <span class="badge badge-primary ms-2">${extension}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else if (file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    blueprintPreview.innerHTML = `
+                        <div class="blueprint-preview-item">
+                            <img src="${e.target.result}" style="max-width: 100%; height: auto; border-radius: 8px;" alt="Blueprint">
+                            <div class="mt-2">
+                                <span class="badge badge-info">${file.name}</span>
+                                <span class="badge badge-secondary ms-2">${(file.size / 1024 / 1024).toFixed(2)} MB</span>
+                            </div>
+                        </div>
+                    `;
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+    });
+
 });
 </script>
+
+<style>
+/* Fix for dark input fields - make them light and readable */
+.form-control,
+.form-control:focus,
+.form-select,
+select.form-control,
+textarea.form-control {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    border: 1px solid #ced4da !important;
+}
+
+.form-control::placeholder {
+    color: #6c757d !important;
+    opacity: 0.7;
+}
+
+/* Fix for select dropdowns */
+.form-control option {
+    background-color: #ffffff !important;
+    color: #000000 !important;
+}
+
+/* Fix for disabled/readonly fields */
+.form-control:disabled,
+.form-control[readonly] {
+    background-color: #e9ecef !important;
+    color: #6c757d !important;
+}
+
+/* Fix for labels */
+.form-group label {
+    color: #495057 !important;
+}
+
+/* Fix for small text */
+.form-text,
+small.form-text {
+    color: #6c757d !important;
+}
+
+/* Ensure card text is visible */
+.card-body {
+    color: #212529 !important;
+}
+
+.card-title {
+    color: #212529 !important;
+}
+
+.list-input-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+}
+
+.list-item-badge {
+    display: inline-flex;
+    align-items: center;
+    background: #eef4ff;
+    color: #1f2937;
+    border: 1px solid #cfe0ff;
+    border-radius: 999px;
+    padding: 0.35rem 0.7rem;
+    font-size: 0.9rem;
+}
+</style>
 @endsection

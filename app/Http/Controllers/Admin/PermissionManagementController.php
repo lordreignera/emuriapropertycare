@@ -29,8 +29,8 @@ class PermissionManagementController extends Controller
         
         // Group permissions by resource type (the second word in permission name)
         $groupedPermissions = $permissions->groupBy(function($permission) {
-            $parts = explode(' ', $permission->name);
-            return $parts[1] ?? 'Other';
+            $parts = explode('-', $permission->name);
+            return $parts[1] ?? 'other';
         });
 
         return view('admin.permissions.index', compact('groupedPermissions'));

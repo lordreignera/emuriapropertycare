@@ -49,12 +49,23 @@
                 <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
                     <h5 class="mb-0"><i class="mdi mdi-file-sign me-2"></i>Agreement Workflow</h5>
                     @if(($inspection->status ?? null) === 'completed' && $inspection->approved_by_client && ($inspection->work_payment_status ?? 'pending') === 'paid' && !$inspection->etogo_signed_at)
-                        <form method="POST" action="{{ route('inspections.agreement.countersign', $inspection->id) }}" class="no-print">
-                            @csrf
-                            <button type="submit" class="btn btn-sm btn-light">
-                                <i class="mdi mdi-pen me-1"></i>Etogo Countersign
-                            </button>
-                        </form>
+                        @if(Auth::user()->hasRole(['Super Admin', 'Administrator', 'Project Manager']))
+                        @php
+                            $hasTools    = ($toolAssignments ?? collect())->where('returned_at', null)->where('quantity', '>', 0)->isNotEmpty();
+                            $hasSched    = collect($inspection->work_schedule ?? [])->isNotEmpty();
+                            $readyToSign = $hasTools && $hasSched;
+                        @endphp
+                        @if($readyToSign)
+                        <a href="{{ route('inspections.preview-agreement', $inspection->id) }}?for_countersign=1"
+                           class="btn btn-sm btn-warning no-print">
+                            <i class="mdi mdi-pen me-1"></i>Review &amp; Countersign
+                        </a>
+                        @else
+                        <span class="badge bg-secondary no-print" title="{{ !$hasTools ? 'Assign tools first.' : 'Set visit schedule first.' }}">
+                            <i class="mdi mdi-lock me-1"></i>{{ !$hasTools ? 'Tools needed' : 'Schedule needed' }}
+                        </span>
+                        @endif
+                        @endif
                     @endif
                 </div>
                 <div class="card-body">
@@ -98,7 +109,7 @@
             </div>
 
             {{-- ====== WORK VISIT SCHEDULE ====== --}}
-            @if($inspection->etogo_signed_at)
+            @if($inspection->approved_by_client && ($inspection->work_payment_status ?? 'pending') === 'paid')
             @php
                 $totalVisits   = max(1, (int)($inspection->bdc_visits_per_year ?? 1));
                 $savedSchedule = collect($inspection->work_schedule ?? [])->sortBy('date')->values();
@@ -155,28 +166,199 @@
                         </div>
                     @endif
 
-                    @if(!($scheduleLocked ?? false))
-                        <form method="POST" action="{{ route('inspections.work-schedule.store', $inspection->id) }}">
+                    @if(!($scheduleLocked ?? false) && !$inspection->etogo_signed_at)
+                        @if(Auth::user()->hasRole(['Super Admin', 'Administrator', 'Project Manager']))
+                        <form method="POST" action="{{ route('inspections.work-schedule.store', $inspection->id) }}" id="showScheduleForm" onkeydown="if(event.key==='Enter'&&event.target.tagName==='INPUT'){event.preventDefault();return false;}">
                             @csrf
                             <p class="text-muted small mb-2">Set or update the {{ $totalVisits }} work visit date(s). Monday – Saturday are accepted (no Sundays).</p>
-                            <div class="row g-2" id="visitDatesContainer">
-                                @for($i = 0; $i < $totalVisits; $i++)
-                                <div class="col-md-3 col-sm-4 col-6">
-                                    <label class="form-label small mb-1">Visit {{ $i + 1 }}</label>
-                                    <input type="date"
-                                           name="visit_dates[]"
-                                           class="form-control form-control-sm"
-                                           value="{{ $suggestedDates[$i] ?? '' }}"
-                                           required>
+
+                            @php $existingSched = $savedSchedule ?? []; @endphp
+                            @for($i = 0; $i < $totalVisits; $i++)
+                            @php
+                                $existingVisit       = $existingSched[$i] ?? null;
+                                $existingDeliverables = $existingVisit['deliverables'] ?? [];
+                            @endphp
+                            <div class="card border mb-3" id="show-visit-card-{{ $i }}">
+                                <div class="card-header bg-light py-2 fw-semibold small">
+                                    <i class="mdi mdi-calendar-account me-1 text-primary"></i>Visit {{ $i + 1 }}
                                 </div>
-                                @endfor
+                                <div class="card-body pb-2">
+                                    <div class="row mb-3">
+                                        <div class="col-md-5">
+                                            <label class="form-label small mb-1">Paid Visit Date <span class="text-danger">*</span></label>
+                                            <input type="date"
+                                                   name="visit_dates[]"
+                                                   class="form-control form-control-sm show-visit-date"
+                                                   value="{{ $suggestedDates[$i] ?? ($existingVisit['date'] ?? '') }}"
+                                                   data-visit-idx="{{ $i }}"
+                                                   required>
+                                        </div>
+                                    </div>
+                                    <div class="rounded p-2 mb-2" style="background:#f0f4ff;border:1px solid #c5d2f6;">
+                                        <p class="fw-semibold small mb-1">
+                                            <i class="mdi mdi-clipboard-list-outline me-1 text-primary"></i>
+                                            Day-by-Day Work Plan
+                                            <span class="fw-normal text-muted">(optional — add as many days and tasks as needed)</span>
+                                        </p>
+                                        <p class="text-muted small mb-2">Day 1 = paid visit date. Per day, add multiple tasks. Add extra days for curing, drying, etc.</p>
+                                        <div id="show-deliverables-{{ $i }}" class="mb-2">
+                                            @foreach($existingDeliverables as $di => $dl)
+                                            @php
+                                                $existingTasks = $dl['tasks'] ?? ($dl['planned_work'] ? [$dl['planned_work']] : ['']);
+                                            @endphp
+                                            <div class="day-card border rounded p-2 mb-2" data-day-idx="{{ $di }}">
+                                                <div class="d-flex align-items-center gap-2 mb-2 flex-wrap">
+                                                    <span class="badge bg-primary" style="min-width:58px;">Day {{ $dl['day'] ?? ($di + 1) }}</span>
+                                                    <input type="date"
+                                                           name="visit_deliverables[{{ $i }}][{{ $di }}][date]"
+                                                           class="form-control form-control-sm show-day-date-input"
+                                                           style="width:170px;"
+                                                           value="{{ $dl['date'] ?? '' }}">
+                                                    <button type="button" class="btn btn-outline-danger btn-sm ms-auto show-remove-day-btn"
+                                                            onclick="showRemoveDayCard(this, {{ $i }})" title="Remove day">
+                                                        <i class="mdi mdi-delete-outline me-1"></i>Remove Day
+                                                    </button>
+                                                </div>
+                                                <div class="show-task-list ms-4 mb-1">
+                                                    @foreach($existingTasks as $ti => $task)
+                                                    <div class="row g-1 mb-1 align-items-center show-task-row">
+                                                        <div class="col">
+                                                            <input type="text"
+                                                                   name="visit_deliverables[{{ $i }}][{{ $di }}][tasks][{{ $ti }}]"
+                                                                   class="form-control form-control-sm show-task-input"
+                                                                   placeholder="Describe this task…"
+                                                                   value="{{ $task }}">
+                                                        </div>
+                                                        <div class="col-auto">
+                                                            <button type="button" class="btn btn-outline-danger btn-sm show-remove-task-btn"
+                                                                    onclick="showRemoveTask(this, {{ $i }})">
+                                                                <i class="mdi mdi-close"></i>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    @endforeach
+                                                </div>
+                                                <div class="ms-4">
+                                                    <button type="button" class="btn btn-sm btn-outline-secondary show-add-task-btn"
+                                                            onclick="showAddTask(this, {{ $i }})">
+                                                        <i class="mdi mdi-plus me-1"></i>Add Task
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            @endforeach
+                                        </div>
+                                        <button type="button" class="btn btn-sm btn-outline-primary"
+                                                onclick="showAddDayCard({{ $i }})">
+                                            <i class="mdi mdi-plus me-1"></i>Add Day
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
+                            @endfor
+
                             <div class="mt-3">
                                 <button type="submit" class="btn btn-success btn-sm">
                                     <i class="mdi mdi-content-save me-1"></i>Save Visit Schedule
                                 </button>
                             </div>
                         </form>
+
+                        <script>
+                        function showAddDayCard(visitIdx) {
+                            const container = document.getElementById('show-deliverables-' + visitIdx);
+                            const daycards = container.querySelectorAll('.day-card');
+                            let defaultDate = '';
+                            if (daycards.length > 0) {
+                                const lastDate = daycards[daycards.length - 1].querySelector('.show-day-date-input').value;
+                                if (lastDate) {
+                                    let d = new Date(lastDate + 'T12:00:00');
+                                    d.setDate(d.getDate() + 1);
+                                    while (d.getDay() === 0) d.setDate(d.getDate() + 1);
+                                    defaultDate = d.toISOString().split('T')[0];
+                                }
+                            } else {
+                                const vInput = document.querySelector('#show-visit-card-' + visitIdx + ' .show-visit-date');
+                                defaultDate = vInput ? vInput.value : '';
+                            }
+                            const di = daycards.length;
+                            const card = document.createElement('div');
+                            card.className = 'day-card border rounded p-2 mb-2';
+                            card.dataset.dayIdx = di;
+                            card.innerHTML =
+                                '<div class="d-flex align-items-center gap-2 mb-2 flex-wrap">' +
+                                    '<span class="badge bg-primary" style="min-width:58px;">Day ' + (di + 1) + '</span>' +
+                                    '<input type="date" name="visit_deliverables[' + visitIdx + '][' + di + '][date]"' +
+                                           ' class="form-control form-control-sm show-day-date-input" style="width:170px;" value="' + defaultDate + '">' +
+                                    '<button type="button" class="btn btn-outline-danger btn-sm ms-auto show-remove-day-btn"' +
+                                            ' onclick="showRemoveDayCard(this,' + visitIdx + ')">' +
+                                        '<i class="mdi mdi-delete-outline me-1"></i>Remove Day</button>' +
+                                '</div>' +
+                                '<div class="show-task-list ms-4 mb-1">' +
+                                    '<div class="row g-1 mb-1 align-items-center show-task-row">' +
+                                        '<div class="col"><input type="text" name="visit_deliverables[' + visitIdx + '][' + di + '][tasks][0]"' +
+                                            ' class="form-control form-control-sm show-task-input" placeholder="Describe this task\u2026"></div>' +
+                                        '<div class="col-auto"><button type="button" class="btn btn-outline-danger btn-sm show-remove-task-btn"' +
+                                            ' onclick="showRemoveTask(this,' + visitIdx + ')"><i class="mdi mdi-close"></i></button></div>' +
+                                    '</div>' +
+                                '</div>' +
+                                '<div class="ms-4"><button type="button" class="btn btn-sm btn-outline-secondary show-add-task-btn"' +
+                                        ' onclick="showAddTask(this,' + visitIdx + ')"><i class="mdi mdi-plus me-1"></i>Add Task</button></div>';
+                            container.appendChild(card);
+                            showReindexDays(container, visitIdx);
+                        }
+                        function showRemoveDayCard(btn, visitIdx) {
+                            btn.closest('.day-card').remove();
+                            showReindexDays(document.getElementById('show-deliverables-' + visitIdx), visitIdx);
+                        }
+                        function showAddTask(addBtn, visitIdx) {
+                            const dayCard = addBtn.closest('.day-card');
+                            const di = parseInt(dayCard.dataset.dayIdx);
+                            const taskList = dayCard.querySelector('.show-task-list');
+                            const ti = taskList.querySelectorAll('.show-task-row').length;
+                            const row = document.createElement('div');
+                            row.className = 'row g-1 mb-1 align-items-center show-task-row';
+                            row.innerHTML =
+                                '<div class="col"><input type="text" name="visit_deliverables[' + visitIdx + '][' + di + '][tasks][' + ti + ']"' +
+                                    ' class="form-control form-control-sm show-task-input" placeholder="Describe this task\u2026"></div>' +
+                                '<div class="col-auto"><button type="button" class="btn btn-outline-danger btn-sm show-remove-task-btn"' +
+                                    ' onclick="showRemoveTask(this,' + visitIdx + ')"><i class="mdi mdi-close"></i></button></div>';
+                            taskList.appendChild(row);
+                        }
+                        function showRemoveTask(btn, visitIdx) {
+                            const dayCard = btn.closest('.day-card');
+                            const di = parseInt(dayCard.dataset.dayIdx);
+                            btn.closest('.show-task-row').remove();
+                            dayCard.querySelector('.show-task-list').querySelectorAll('.show-task-input').forEach(function(inp, ti) {
+                                inp.name = 'visit_deliverables[' + visitIdx + '][' + di + '][tasks][' + ti + ']';
+                            });
+                        }
+                        function showReindexDays(container, visitIdx) {
+                            container.querySelectorAll('.day-card').forEach(function(card, di) {
+                                card.dataset.dayIdx = di;
+                                card.querySelector('.badge').textContent = 'Day ' + (di + 1);
+                                const dateInput = card.querySelector('.show-day-date-input');
+                                if (dateInput) dateInput.name = 'visit_deliverables[' + visitIdx + '][' + di + '][date]';
+                                card.querySelectorAll('.show-task-input').forEach(function(inp, ti) {
+                                    inp.name = 'visit_deliverables[' + visitIdx + '][' + di + '][tasks][' + ti + ']';
+                                });
+                                const rdBtn = card.querySelector('.show-remove-day-btn');
+                                if (rdBtn) rdBtn.setAttribute('onclick', 'showRemoveDayCard(this,' + visitIdx + ')');
+                                card.querySelectorAll('.show-add-task-btn').forEach(function(b) {
+                                    b.setAttribute('onclick', 'showAddTask(this,' + visitIdx + ')');
+                                });
+                                card.querySelectorAll('.show-remove-task-btn').forEach(function(b) {
+                                    b.setAttribute('onclick', 'showRemoveTask(this,' + visitIdx + ')');
+                                });
+                            });
+                        }
+                        </script>
+
+                        @endif
+                    @elseif($inspection->etogo_signed_at)
+                        <div class="alert alert-info mb-0">
+                            <i class="mdi mdi-lock me-1"></i>
+                            Schedule is locked — this agreement has been countersigned. Contact a Super Admin to make changes.
+                        </div>
                     @else
                         <div class="alert alert-warning mb-0">
                             Visit schedule is locked because maintenance work has already started.
@@ -245,7 +427,9 @@
             <div class="card mb-4 border-secondary">
                 <div class="card-body text-muted small">
                     <i class="mdi mdi-toolbox-outline me-1"></i>No tools have been assigned to this inspection yet.
+                    @if(Auth::user()->hasRole(['Super Admin', 'Store Manager']))
                     <a href="{{ route('tool-assignments.index') }}" class="ms-2">Assign Tools</a>
+                    @endif
                 </div>
             </div>
             @endif
@@ -387,6 +571,22 @@
                     'medium'         => ['label' => 'Value Depreciation',         'color' => '#d4a017', 'icon' => '🟡'],
                     'low'            => ['label' => 'Non-Urgent',                 'color' => '#198754', 'icon' => '🟢'],
                 ];
+                // Backfill issue_description + recommendation_details from quotation snapshot
+                $snapshotDescMap = [];
+                foreach ($quotationSnapshot as $sf) {
+                    $descKey = $makeFindingKey($sf['task_question'] ?? ($sf['issue'] ?? ''), $sf['category'] ?? '');
+                    if (!empty($sf['issue_description']) || !empty($sf['recommendation_details'])) {
+                        $snapshotDescMap[$descKey] = $sf;
+                    }
+                }
+                $inlineFindingsRaw = array_map(function ($f) use ($snapshotDescMap, $makeFindingKey) {
+                    $descKey = $makeFindingKey($f['task_question'] ?? ($f['issue'] ?? ''), $f['phar_category'] ?? ($f['category'] ?? ''));
+                    $snapshotEntry = $snapshotDescMap[$descKey] ?? [];
+                    $f['issue_description']      = $f['issue_description']      ?? $snapshotEntry['issue_description']      ?? '';
+                    $f['recommendation_details'] = $f['recommendation_details'] ?? $snapshotEntry['recommendation_details'] ?? '';
+                    return $f;
+                }, $inlineFindingsRaw);
+
                 $groupedFindings = collect($inlineFindingsRaw)->groupBy('severity');
                 $totalLabourHrs  = collect($inlineFindingsRaw)->sum('phar_labour_hours');
                 $totalMatCost    = collect($inlineFindingsRaw)->sum(fn($f) =>
@@ -450,12 +650,18 @@
                                                 {{ implode(' — ', array_filter([$finding['location'] ?? null, $finding['spot'] ?? null])) }}
                                             </div>
                                         @endif
+                                        @if(!empty($finding['issue_description']))
+                                            <div class="mt-1" style="font-size:.82rem;color:#333;"><em>Issue detail:</em> {{ $finding['issue_description'] }}</div>
+                                        @endif
                                         @if(!empty($recommendations))
                                             <ul class="mb-0 mt-1 ps-3" style="font-size:.78rem;color:#444;">
                                                 @foreach($recommendations as $rec)
                                                     <li>{{ $rec }}</li>
                                                 @endforeach
                                             </ul>
+                                        @endif
+                                        @if(!empty($finding['recommendation_details']))
+                                            <div class="mt-1" style="font-size:.82rem;color:#333;"><em>Recommendation detail:</em> {{ $finding['recommendation_details'] }}</div>
                                         @endif
                                         @if(!empty($finding['finding_photos']))
                                             <div class="d-flex flex-wrap gap-1 mt-2">

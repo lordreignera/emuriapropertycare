@@ -160,6 +160,7 @@
 
     $quotationSnapshot = collect($activeQuotation->findings_snapshot ?? [])->values();
     $quotationApprovedIds = collect($activeQuotation->approved_finding_ids ?? [])->map(fn($id) => (int) $id);
+    $quotationDeferredIds = collect($activeQuotation->deferred_finding_ids ?? [])->map(fn($id) => (int) $id);
 
     $makeFindingKey = function ($issueOrTask, $category) {
         $left = strtolower(trim((string) $issueOrTask));
@@ -167,47 +168,44 @@
         return $left . '|' . $right;
     };
 
-    $showApprovedScopeOnly =
-        !empty($activeQuotation) &&
-        (($activeQuotation->status ?? null) === 'approved') &&
-        (
-            (($inspection->quotation_status ?? null) === 'approved') ||
-            (($inspection->quotation_status ?? null) === 'shared')
-        );
+    $isApprovedQuotation = !empty($activeQuotation)
+        && (($activeQuotation->status ?? null) === 'approved');
 
-    if ($showApprovedScopeOnly) {
-        $allInline = collect($inlineFindingsRaw)->values();
-        $approvedIdMap = $quotationApprovedIds->flip();
+    $approvedIdFlip = $quotationApprovedIds->flip();
+    $deferredIdFlip = $quotationDeferredIds->flip();
 
-        $filteredById = $allInline
-            ->filter(fn ($f) => $approvedIdMap->has((int) ($f['id'] ?? 0)))
-            ->values();
+    $approvedKeySet = $quotationSnapshot
+        ->filter(fn($f) => $quotationApprovedIds->contains((int) ($f['id'] ?? 0)))
+        ->mapWithKeys(fn($f) => [
+            $makeFindingKey($f['task_question'] ?? ($f['issue'] ?? ''), $f['category'] ?? '') => true
+        ]);
+    $deferredKeySet = $quotationSnapshot
+        ->filter(fn($f) => $quotationDeferredIds->contains((int) ($f['id'] ?? 0)))
+        ->mapWithKeys(fn($f) => [
+            $makeFindingKey($f['task_question'] ?? ($f['issue'] ?? ''), $f['category'] ?? '') => true
+        ]);
 
-        if ($filteredById->isNotEmpty()) {
-            $inlineFindingsRaw = $filteredById->all();
-        } else {
-            $approvedScopeKeys = $quotationSnapshot
-                ->filter(fn($f) => $quotationApprovedIds->contains((int) ($f['id'] ?? 0)))
-                ->map(fn($f) => $makeFindingKey(
-                    $f['task_question'] ?? ($f['issue'] ?? ''),
-                    $f['category'] ?? ''
-                ))
-                ->filter(fn($k) => $k !== '|')
-                ->unique()
-                ->values();
+    // Display all findings in PDF, but mark each as approved/deferred/noted.
+    $inlineFindingsRaw = collect($inlineFindingsRaw)
+        ->values()
+        ->map(function ($f) use ($isApprovedQuotation, $activeQuotation, $approvedIdFlip, $deferredIdFlip, $approvedKeySet, $deferredKeySet, $makeFindingKey) {
+            $fid = (int) ($f['id'] ?? 0);
+            $key = $makeFindingKey(
+                $f['task_question'] ?? ($f['issue'] ?? ''),
+                $f['phar_category'] ?? ($f['category'] ?? '')
+            );
 
-            $inlineFindingsRaw = $allInline
-                ->filter(function ($f) use ($approvedScopeKeys, $makeFindingKey) {
-                    $key = $makeFindingKey(
-                        $f['task_question'] ?? ($f['issue'] ?? ''),
-                        $f['phar_category'] ?? ($f['category'] ?? '')
-                    );
-                    return $approvedScopeKeys->contains($key);
-                })
-                ->values()
-                ->all();
-        }
-    }
+            if ($isApprovedQuotation && ($approvedIdFlip->has($fid) || ($fid === 0 && $approvedKeySet->has($key)))) {
+                $f['__finding_quote_status'] = 'approved';
+            } elseif (!empty($activeQuotation) && ($deferredIdFlip->has($fid) || ($fid === 0 && $deferredKeySet->has($key)))) {
+                $f['__finding_quote_status'] = 'deferred';
+            } else {
+                $f['__finding_quote_status'] = 'noted';
+            }
+
+            return $f;
+        })
+        ->all();
 
     $severityOrder = ['critical','high','noi_protection','medium','low'];
     $severityMeta  = [
@@ -217,9 +215,19 @@
         'medium'         => ['label' => 'Value Depreciation',        'color' => '#d4a017'],
         'low'            => ['label' => 'Non-Urgent',                'color' => '#198754'],
     ];
-    $groupedFindings = collect($inlineFindingsRaw)->groupBy('severity');
-    $totalLabourHrs  = collect($inlineFindingsRaw)->sum('phar_labour_hours');
-    $totalMatCost    = collect($inlineFindingsRaw)->sum(fn($f) =>
+    $displayFindings = collect($inlineFindingsRaw);
+    $groupedFindings = $displayFindings->groupBy('severity');
+
+    // Keep pricing scoped to approved findings once quotation is approved.
+    $pricedFindings = $isApprovedQuotation
+        ? $displayFindings->filter(fn($f) => ($f['__finding_quote_status'] ?? 'noted') === 'approved')->values()
+        : $displayFindings;
+    if ($isApprovedQuotation && $pricedFindings->isEmpty()) {
+        $pricedFindings = $displayFindings;
+    }
+
+    $totalLabourHrs  = $pricedFindings->sum('phar_labour_hours');
+    $totalMatCost    = $pricedFindings->sum(fn($f) =>
         collect($f['phar_materials'] ?? [])->sum(fn($m) => (float)($m['line_total'] ?? 0))
     );
 
@@ -272,7 +280,7 @@
             </tr>
             <tr>
                 <td class="lbl">Units:</td>
-                <td>{{ $inspection->property?->residential_units ?? 'N/A' }}</td>
+                <td>{{ $inspection->residential_units_snapshot ?: ($inspection->property?->number_of_units ?: ($inspection->property?->residential_units ?? 'N/A')) }}</td>
                 <td class="lbl">Completed:</td>
                 <td>{{ $inspection->completed_date?->format('M d, Y h:i A') ?? '—' }}</td>
             </tr>
@@ -355,6 +363,16 @@
                     <td style="color:#999;font-size:8.5px;">{{ $rowNum }}</td>
                     <td>
                         <strong>{{ $finding['issue'] ?? '—' }}</strong>
+                        @php $findingQuoteStatus = $finding['__finding_quote_status'] ?? 'noted'; @endphp
+                        @if(!empty($activeQuotation))
+                            @if($findingQuoteStatus === 'approved')
+                                <span class="badge" style="background:#27ae60;margin-left:4px;">Approved</span>
+                            @elseif($findingQuoteStatus === 'deferred')
+                                <span class="badge" style="background:#7f8c8d;margin-left:4px;">Deferred</span>
+                            @else
+                                <span class="badge" style="background:#2980b9;margin-left:4px;">Noted</span>
+                            @endif
+                        @endif
                         @if(!empty($finding['system']))
                             <div class="issue-system">
                                 {{ $finding['system'] }}{{ !empty($finding['subsystem']) ? ' › '.$finding['subsystem'] : '' }}
@@ -365,10 +383,16 @@
                                 &#9679; {{ implode(' — ', array_filter([$finding['location'] ?? null, $finding['spot'] ?? null])) }}
                             </div>
                         @endif
+                        @if(!empty($finding['issue_description']))
+                            <div style="font-size:8.5px;color:#333;margin-top:2px;"><em>Issue detail:</em> {{ $finding['issue_description'] }}</div>
+                        @endif
                         @if(!empty($recs))
                             <ul class="issue-recs">
                                 @foreach($recs as $rec)<li>{{ $rec }}</li>@endforeach
                             </ul>
+                        @endif
+                        @if(!empty($finding['recommendation_details']))
+                            <div style="font-size:8.5px;color:#333;margin-top:2px;"><em>Recommendation detail:</em> {{ $finding['recommendation_details'] }}</div>
                         @endif
                         @if(!empty($fpUrls))
                             <div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:4px;">

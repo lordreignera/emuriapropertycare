@@ -365,7 +365,7 @@
                 </div>
                 @endif
 
-                @if($property->known_problems)
+                @if($property->known_problems || ($property->known_problem_images && count($property->known_problem_images) > 0))
                 <div class="mb-3">
                     <h6><strong>Known Problems/Issues:</strong></h6>
                         @php
@@ -379,6 +379,23 @@
                                 <li><i class="mdi mdi-alert-circle-outline text-warning"></i> {{ $knownProblem }}</li>
                                 @endforeach
                             </ul>
+                        @endif
+
+                        @if($property->known_problem_images && count($property->known_problem_images) > 0)
+                            <div class="row g-3 mt-3">
+                                @foreach($property->known_problem_images as $issueImage)
+                                    <div class="col-md-4">
+                                        <div class="property-photo-wrapper">
+                                            <img src="{{ $property->getStorageUrl($issueImage) }}"
+                                                class="property-photo js-media-open"
+                                                alt="Known issue photo"
+                                                data-media-src="{{ $property->getStorageUrl($issueImage) }}"
+                                                data-media-group="known-issue-photos"
+                                                data-media-index="{{ $loop->index }}">
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
                         @endif
                 </div>
                 @endif
