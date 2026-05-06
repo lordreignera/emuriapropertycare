@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Welcome to EMURIA — Client Welcome Letter</title>
+<style>
+  :root{--brand:#1f2f98;--brand-dark:#14206a;--accent:#f5a623;--success:#198754;--border:#dee2e6;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Segoe UI',Arial,sans-serif;font-size:14px;color:#1a1a2e;background:#f4f6fb;line-height:1.7;}
+  .page{max-width:720px;margin:30px auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.1);}
+  .letterhead{background:linear-gradient(135deg,var(--brand),var(--brand-dark));color:#fff;padding:36px 48px 28px;display:flex;align-items:center;justify-content:space-between;}
+  .letterhead .logo{font-size:1.7rem;font-weight:800;letter-spacing:1px;}
+  .letterhead .tagline{font-size:.85rem;opacity:.8;margin-top:4px;}
+  .letterhead .address{font-size:.8rem;opacity:.75;text-align:right;line-height:1.6;}
+  .gold-bar{height:6px;background:linear-gradient(90deg,var(--accent),#f7c948);}
+  .body{padding:44px 48px;}
+  .date{color:#6c757d;font-size:.88rem;margin-bottom:28px;}
+  .greeting{font-size:1.1rem;font-weight:700;margin-bottom:18px;color:var(--brand);}
+  p{margin-bottom:14px;font-size:.93rem;}
+  .highlight-box{background:linear-gradient(135deg,#e8ecff,#f0f4ff);border:1px solid #c5cefc;border-radius:10px;padding:20px 24px;margin:24px 0;}
+  .highlight-box h3{color:var(--brand);font-size:.95rem;font-weight:700;margin-bottom:14px;}
+  .step-list{list-style:none;padding:0;}
+  .step-list li{display:flex;gap:12px;align-items:flex-start;margin-bottom:12px;}
+  .step-num{min-width:28px;height:28px;background:var(--brand);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.82rem;flex-shrink:0;}
+  .step-text{font-size:.88rem;padding-top:4px;}
+  .step-text strong{display:block;margin-bottom:2px;}
+  .timeline{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:20px 0;}
+  .tl-item{text-align:center;padding:14px 10px;background:#f8faff;border:1px solid #c5cefc;border-radius:8px;}
+  .tl-item .icon{font-size:1.6rem;}
+  .tl-item .label{font-size:.75rem;font-weight:700;color:var(--brand);margin-top:6px;}
+  .tl-item .sub{font-size:.7rem;color:#6c757d;margin-top:3px;}
+  .cta-box{background:var(--brand);color:#fff;border-radius:10px;padding:20px 24px;margin:24px 0;text-align:center;}
+  .cta-box h3{font-size:1rem;font-weight:700;margin-bottom:8px;}
+  .cta-box a{display:inline-block;background:var(--accent);color:#000;font-weight:700;padding:10px 28px;border-radius:40px;text-decoration:none;font-size:.95rem;margin-top:8px;}
+  .contact-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:20px 0;}
+  .contact-item{background:#f8faff;border-radius:8px;padding:14px;font-size:.85rem;}
+  .contact-item .contact-label{font-size:.75rem;font-weight:700;color:var(--brand);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;}
+  .signature-area{margin-top:32px;padding-top:20px;border-top:1px solid var(--border);}
+  .sig-name{font-size:1.05rem;font-weight:700;color:var(--brand);margin-top:8px;}
+  .sig-title{font-size:.85rem;color:#6c757d;}
+  .footer-bar{background:#f4f6fb;border-top:1px solid var(--border);padding:14px 48px;text-align:center;font-size:.78rem;color:#6c757d;}
+  .print-btn{display:inline-block;margin:20px auto;background:var(--accent);color:#000;font-weight:700;padding:9px 24px;border-radius:40px;text-decoration:none;cursor:pointer;border:none;font-size:.9rem;}
+  .print-row{text-align:center;padding:12px;}
+  @media print{
+    body{background:#fff;}
+    .page{box-shadow:none;margin:0;border-radius:0;}
+    .letterhead{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .cta-box{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    .print-row{display:none;}
+    @page{margin:1cm;}
+  }
+</style>
+</head>
+<body>
+
+<div class="print-row"><button class="print-btn" onclick="window.print()">🖨️ Print / Save as PDF</button></div>
+
+<div class="page">
+
+  <div class="letterhead">
+    <div>
+      <div class="logo">EMURIA</div>
+      <div class="tagline">Regenerative Property Care</div>
+    </div>
+    <div class="address">
+      etogo.laravel.cloud<br>
+      support@emuria.com<br>
+      Regenerative Property Care
+    </div>
+  </div>
+  <div class="gold-bar"></div>
+
+  <div class="body">
+
+    <div class="date">May 2026</div>
+
+    <div class="greeting">Welcome to EMURIA Regenerative Property Care!</div>
+
+    <p>Dear [Client Name],</p>
+
+    <p>Thank you for registering with <strong>EMURIA Regenerative Property Care</strong>. We are delighted to welcome you to our platform and look forward to partnering with you to restore, protect, and maintain your property to the highest standard.</p>
+
+    <p>Our approach is built on a single principle: <em>proactive, science-based property care that prevents deterioration before it becomes costly.</em> Through our <strong>Property Health Assessment Report (PHAR)</strong> process, we assess every critical system of your property and build a personalised regenerative care programme tailored specifically to your needs.</p>
+
+    <div class="highlight-box">
+      <h3>⚡ Your Next Steps — What Happens From Here</h3>
+      <ul class="step-list">
+        <li><div class="step-num">1</div><div class="step-text"><strong>Register Your Property</strong>Login and go to Properties → Add Property. Enter your property details and any known issues. This takes about 5 minutes.</div></li>
+        <li><div class="step-num">2</div><div class="step-text"><strong>Pay the Inspection Fee — $299 USD</strong>Go to Services → Inspections and click "Pay Inspection Fee". This covers the full on-site PHAR assessment by our team.</div></li>
+        <li><div class="step-num">3</div><div class="step-text"><strong>Await Your Scheduled Visit</strong>We will contact you to confirm the inspection date. Our inspector or project manager will visit your property and carry out the assessment.</div></li>
+        <li><div class="step-num">4</div><div class="step-text"><strong>Review Your Quotation</strong>After the visit, we share a detailed quotation listing all findings and recommended remediation. You select which findings to address.</div></li>
+        <li><div class="step-num">5</div><div class="step-text"><strong>Sign the Agreement &amp; Pay 50% Deposit</strong>Once you agree on scope and pricing, sign the service agreement digitally and pay 50% to kick off your project.</div></li>
+      </ul>
+    </div>
+
+    <div class="timeline">
+      <div class="tl-item"><div class="icon">🏠</div><div class="label">Register Property</div><div class="sub">Day 1</div></div>
+      <div class="tl-item"><div class="icon">💳</div><div class="label">Pay $299 Fee</div><div class="sub">Day 1–3</div></div>
+      <div class="tl-item"><div class="icon">🔍</div><div class="label">Inspection Visit</div><div class="sub">Week 1–2</div></div>
+      <div class="tl-item"><div class="icon">✅</div><div class="label">Project Begins</div><div class="sub">After signing</div></div>
+    </div>
+
+    <p>Everything happens through your secure client dashboard. You can track inspection progress, view your quotation, sign your agreement, monitor your project, and manage payments — all in one place.</p>
+
+    <div class="cta-box">
+      <h3>Access Your Client Dashboard Now</h3>
+      <p style="opacity:.85;font-size:.88rem;margin-bottom:0;">Log in at any time to check your status, receive notifications, and manage your property.</p>
+      <a href="https://etogo.laravel.cloud" rel="noopener noreferrer">Go to Dashboard →</a>
+    </div>
+
+    <p>If at any time you have questions, our team is here to help. You can reach us through the <strong>Help &amp; Support</strong> section in your dashboard, or contact your assigned account manager directly.</p>
+
+    <p>We are committed to delivering excellence — and we are proud that you have chosen EMURIA to be your property care partner.</p>
+
+    <p>Warm regards,</p>
+
+    <div class="signature-area">
+      <div style="height:40px;border-bottom:1px solid #ccc;width:200px;"></div>
+      <div class="sig-name">The EMURIA Team</div>
+      <div class="sig-title">Regenerative Property Care</div>
+    </div>
+
+    <div class="contact-row" style="margin-top:28px;">
+      <div class="contact-item">
+        <div class="contact-label">Platform Access</div>
+        <strong>https://etogo.laravel.cloud</strong><br>
+        Login with your registered email
+      </div>
+      <div class="contact-item">
+        <div class="contact-label">Support</div>
+        Help &amp; Support → Contact Support<br>
+        in your client dashboard
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footer-bar">
+    EMURIA Regenerative Property Care &nbsp;·&nbsp; https://etogo.laravel.cloud &nbsp;·&nbsp; Confidential — for addressee only
+  </div>
+
+</div>
+
+<div class="print-row" style="margin-bottom:30px;">
+  <a href="user-guide.html" style="font-size:.85rem;color:#1f2f98;">← Back to User Guide</a>
+</div>
+
+</body>
+</html>

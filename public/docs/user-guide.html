@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EMURIA Regenerative Property Care — User Guide</title>
+<style>
+  :root {
+    --brand: #1f2f98;
+    --brand-dark: #14206a;
+    --brand-light: #e8ecff;
+    --accent: #f5a623;
+    --success: #198754;
+    --info: #0dcaf0;
+    --warning: #ffc107;
+    --danger: #dc3545;
+    --text: #1a1a2e;
+    --muted: #6c757d;
+    --border: #dee2e6;
+    --white: #ffffff;
+    --radius: 10px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 15px;
+    color: var(--text);
+    background: #f4f6fb;
+    line-height: 1.65;
+  }
+
+  /* ---- COVER ---- */
+  .cover {
+    background: linear-gradient(135deg, var(--brand) 0%, var(--brand-dark) 100%);
+    color: var(--white);
+    padding: 60px 40px 50px;
+    text-align: center;
+  }
+  .cover .logo { font-size: 3rem; font-weight: 800; letter-spacing: 1px; }
+  .cover .tagline { font-size: 1.15rem; opacity: .85; margin-top: 6px; }
+  .cover h1 { font-size: 2rem; font-weight: 700; margin: 24px 0 8px; }
+  .cover p  { opacity: .82; max-width: 620px; margin: 0 auto; }
+  .cover .live-link {
+    display: inline-block;
+    margin-top: 22px;
+    background: var(--accent);
+    color: #000;
+    font-weight: 700;
+    padding: 10px 28px;
+    border-radius: 40px;
+    text-decoration: none;
+    font-size: 1rem;
+  }
+
+  /* ---- LAYOUT ---- */
+  .container { max-width: 1020px; margin: 0 auto; padding: 40px 20px 80px; }
+
+  /* ---- TOC ---- */
+  .toc {
+    background: var(--white);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    padding: 28px 32px;
+    margin-bottom: 40px;
+  }
+  .toc h2 { color: var(--brand); font-size: 1.2rem; margin-bottom: 14px; }
+  .toc ol { padding-left: 20px; }
+  .toc li { margin-bottom: 5px; }
+  .toc a { color: var(--brand); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+
+  /* ---- SECTIONS ---- */
+  .section {
+    background: var(--white);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    margin-bottom: 32px;
+    overflow: hidden;
+  }
+  .section-header {
+    background: var(--brand);
+    color: var(--white);
+    padding: 16px 28px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .section-header.admin { background: #1b4f72; }
+  .section-header.store { background: #5d4037; }
+  .section-header.settings { background: #2e7d32; }
+  .section-header .icon { font-size: 1.6rem; }
+  .section-header h2 { font-size: 1.2rem; font-weight: 700; }
+  .section-header .role-badge {
+    margin-left: auto;
+    background: rgba(255,255,255,.22);
+    border-radius: 20px;
+    padding: 3px 14px;
+    font-size: .82rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .section-body { padding: 28px 32px; }
+
+  /* ---- STEP LIST ---- */
+  .steps { list-style: none; padding: 0; }
+  .steps li {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 22px;
+    align-items: flex-start;
+  }
+  .step-num {
+    min-width: 34px;
+    height: 34px;
+    background: var(--brand);
+    color: var(--white);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: .95rem;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .step-num.green  { background: var(--success); }
+  .step-num.orange { background: #e65100; }
+  .step-num.brown  { background: #5d4037; }
+  .step-content h4 { font-size: 1rem; font-weight: 700; margin-bottom: 4px; }
+  .step-content p  { color: #444; font-size: .93rem; }
+
+  /* ---- NAV PILL ---- */
+  .nav-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--brand-light);
+    border: 1px solid #c5cefc;
+    color: var(--brand);
+    border-radius: 20px;
+    padding: 3px 12px;
+    font-size: .82rem;
+    font-weight: 600;
+    margin: 2px 2px;
+    white-space: nowrap;
+  }
+  .nav-pill .arrow { color: var(--brand); opacity: .6; }
+
+  /* ---- CALLOUT ---- */
+  .callout {
+    border-left: 4px solid var(--brand);
+    background: var(--brand-light);
+    border-radius: 0 8px 8px 0;
+    padding: 12px 16px;
+    margin: 14px 0;
+    font-size: .92rem;
+  }
+  .callout.warning { border-color: var(--warning); background: #fff8e1; }
+  .callout.success { border-color: var(--success); background: #e8f5e9; }
+  .callout.danger  { border-color: var(--danger);  background: #fdecea; }
+  .callout strong { display: block; margin-bottom: 3px; }
+
+  /* ---- FLOW DIAGRAM ---- */
+  .flow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    align-items: center;
+    margin: 18px 0;
+  }
+  .flow-step {
+    background: var(--brand-light);
+    border: 2px solid #c5cefc;
+    color: var(--brand);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: .82rem;
+    font-weight: 600;
+    text-align: center;
+    min-width: 110px;
+  }
+  .flow-step.done  { background: #e8f5e9; border-color: #a5d6a7; color: #2e7d32; }
+  .flow-step.warn  { background: #fff8e1; border-color: #ffe082; color: #e65100; }
+  .flow-step.key   { background: #e3f2fd; border-color: #90caf9; color: #1565c0; }
+  .flow-arrow { color: var(--muted); font-size: 1.3rem; padding: 0 6px; align-self: center; }
+
+  /* ---- SIDEBAR REFERENCE TABLE ---- */
+  .nav-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  .nav-table th {
+    background: var(--brand);
+    color: var(--white);
+    padding: 9px 14px;
+    font-size: .85rem;
+    text-align: left;
+  }
+  .nav-table td { padding: 9px 14px; border-bottom: 1px solid var(--border); font-size: .88rem; vertical-align: top; }
+  .nav-table tr:last-child td { border-bottom: none; }
+  .nav-table tr:nth-child(even) td { background: #f9faff; }
+  .nav-table .role-cell { color: var(--muted); font-size: .8rem; }
+
+  /* ---- FOOTER ---- */
+  .footer {
+    text-align: center;
+    padding: 32px 20px;
+    color: var(--muted);
+    font-size: .85rem;
+    border-top: 1px solid var(--border);
+    margin-top: 20px;
+  }
+
+  @media(max-width:640px) {
+    .cover { padding: 40px 20px 36px; }
+    .section-body { padding: 20px; }
+    .flow { flex-direction: column; align-items: flex-start; }
+    .flow-arrow { transform: rotate(90deg); }
+  }
+
+  @media print {
+    body { background: #fff; }
+    .cover { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .section-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+
+<!-- COVER -->
+<div class="cover">
+  <div class="logo">EMURIA</div>
+  <div class="tagline">Regenerative Property Care</div>
+  <h1>User Guide &amp; System Navigation</h1>
+  <p>A complete step-by-step guide for Clients, Administrators, Project Managers, Inspectors and Store Managers on how to use the EMURIA platform.</p>
+  <a class="live-link" href="https://etogo.laravel.cloud" target="_blank" rel="noopener noreferrer">🌐 etogo.laravel.cloud</a>
+</div>
+
+<div class="container">
+
+  <!-- TABLE OF CONTENTS -->
+  <div class="toc">
+    <h2>📋 Table of Contents</h2>
+    <ol>
+      <li><a href="#getting-started">Getting Started — Accessing the System</a></li>
+      <li><a href="#client-guide">Client Guide — Full Journey</a></li>
+      <li><a href="#admin-guide">Administrator / Project Manager / Inspector Guide</a></li>
+      <li><a href="#store-guide">Store Manager Guide</a></li>
+      <li><a href="#nav-reference">Sidebar Navigation Reference</a></li>
+      <li><a href="#profile-settings">Profile &amp; Settings (All Users)</a></li>
+    </ol>
+  </div>
+
+  <!-- ============================= -->
+  <!-- SECTION 1: GETTING STARTED    -->
+  <!-- ============================= -->
+  <div class="section" id="getting-started">
+    <div class="section-header">
+      <span class="icon">🔐</span>
+      <h2>1. Getting Started — Accessing the System</h2>
+    </div>
+    <div class="section-body">
+
+      <div class="callout success">
+        <strong>Live Platform URL</strong>
+        Visit <a href="https://etogo.laravel.cloud" target="_blank" rel="noopener noreferrer"><strong>https://etogo.laravel.cloud</strong></a> from any browser to access the EMURIA system.
+      </div>
+
+      <h3 style="margin:18px 0 10px;color:var(--brand);">Who registers themselves?</h3>
+      <table class="nav-table">
+        <tr>
+          <th>User Type</th>
+          <th>How They Get Access</th>
+        </tr>
+        <tr>
+          <td><strong>Client</strong></td>
+          <td>Self-registers on the login page → clicks <strong>"Register"</strong> → fills name, email, password.</td>
+        </tr>
+        <tr>
+          <td><strong>Administrator</strong></td>
+          <td>Account created by the <strong>Super Admin</strong> via Access Control → User Management. Does NOT self-register.</td>
+        </tr>
+        <tr>
+          <td><strong>Project Manager</strong></td>
+          <td>Account created by the <strong>Super Admin</strong> via Access Control → User Management.</td>
+        </tr>
+        <tr>
+          <td><strong>Inspector</strong></td>
+          <td>Account created by the <strong>Super Admin</strong> via Access Control → User Management.</td>
+        </tr>
+        <tr>
+          <td><strong>Store Manager</strong></td>
+          <td>Account created by the <strong>Super Admin</strong> via Access Control → User Management.</td>
+        </tr>
+        <tr>
+          <td><strong>Technician</strong></td>
+          <td>Account created by the <strong>Super Admin</strong> via Access Control → User Management.</td>
+        </tr>
+      </table>
+
+      <h3 style="margin:22px 0 10px;color:var(--brand);">Logging In</h3>
+      <ol style="padding-left:20px;font-size:.93rem;line-height:2;">
+        <li>Go to <strong>https://etogo.laravel.cloud</strong></li>
+        <li>Enter your <strong>email address</strong> and <strong>password</strong></li>
+        <li>Click <strong>Login</strong></li>
+        <li>You are redirected to your role-appropriate dashboard automatically</li>
+      </ol>
+
+      <div class="callout warning" style="margin-top:16px;">
+        <strong>⚠️ Forgot your password?</strong>
+        Click "Forgot your password?" on the login page and follow the email reset link.
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============================= -->
+  <!-- SECTION 2: CLIENT GUIDE       -->
+  <!-- ============================= -->
+  <div class="section" id="client-guide">
+    <div class="section-header">
+      <span class="icon">🏠</span>
+      <h2>2. Client Guide — Complete Journey</h2>
+      <span class="role-badge">Role: Client</span>
+    </div>
+    <div class="section-body">
+
+      <div class="flow">
+        <div class="flow-step">Register &amp; Login</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">Add Property</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">Pay Inspection Fee</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">Await Inspection</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step warn">Review Quotation</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step key">Sign &amp; Pay 50%</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step done">Track Project</div>
+      </div>
+
+      <ul class="steps" style="margin-top:24px;">
+
+        <li>
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <h4>Register Your Account</h4>
+            <p>Visit <strong>https://etogo.laravel.cloud</strong>. On the login page click <strong>Register</strong>. Enter your full name, email address, and choose a strong password. Click <strong>Register</strong> to create your account. You will be taken directly to your Client Dashboard.</p>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <h4>Add Your Property</h4>
+            <p>In the left sidebar go to <span class="nav-pill">🏠 Properties</span> → <span class="nav-pill">Add Property</span>.<br>
+            Fill in your property details including the property name, address, type and size.<br>
+            <strong>Important:</strong> In the "Known Issues / Problem Areas" section, describe any existing problems you are aware of on the property. This helps our assessors prepare before their visit.<br>
+            Click <strong>Submit Property</strong>. Your property is now registered.</p>
+            <div class="callout">After submission, you can view all your registered properties under <span class="nav-pill">Properties</span> → <span class="nav-pill">My Properties</span>.</div>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <h4>Pay the Inspection Fee — $299 USD</h4>
+            <p>After registering your property, go to <span class="nav-pill">Services</span> → <span class="nav-pill">Inspections</span>.<br>
+            You will see your property listed with a <strong>"Pay Inspection Fee"</strong> button.<br>
+            The inspection fee is <strong>$299 USD</strong> (one-time per property assessment).<br>
+            Click the button and complete the Stripe payment form with your card details.<br>
+            Once paid, the status updates to <em>Fee Paid</em> and an Emuria administrator is notified automatically.</p>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <h4>Await the Inspection Notification</h4>
+            <p>After payment, an administrator will schedule a physical inspection visit to your property.<br>
+            You will receive a <strong>notification</strong> (shown in the system under your Dashboard) with the confirmed inspection date and time.<br>
+            You do not need to do anything at this stage — simply prepare access to your property on the scheduled date.</p>
+            <div class="callout warning">
+              <strong>Inspection visit:</strong> An Emuria Inspector or Project Manager will visit your property on the scheduled date to carry out the full PHAR (Property Health Assessment Report) inspection.
+            </div>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num">5</div>
+          <div class="step-content">
+            <h4>Review Your Quotation</h4>
+            <p>After the on-site assessment is complete, the inspector prepares a detailed report and shares a quotation with you.<br>
+            You will receive a notification. Go to <span class="nav-pill">Services</span> → <span class="nav-pill">Quotations</span> to view it.<br>
+            The quotation lists all findings discovered during the inspection with recommended remediation tasks and pricing.<br><br>
+            <strong>You have two options:</strong></p>
+            <ul style="padding-left:18px;margin-top:8px;font-size:.92rem;line-height:2;">
+              <li>✅ <strong>Select All Findings</strong> — approve the full scope of recommended work</li>
+              <li>🎯 <strong>Select Only Urgent Findings</strong> — choose which findings you want addressed first</li>
+            </ul>
+            <p style="margin-top:8px;">After selecting your preferred findings, click <strong>Submit Response</strong>. Emuria will review your selection and confirm the approved scope of work.</p>
+            <div class="callout success">The assessment is not marked complete until you respond to the quotation and your response is approved by Emuria staff.</div>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num">6</div>
+          <div class="step-content">
+            <h4>View Your Inspection Report</h4>
+            <p>Once the assessment is complete and your findings are confirmed, go to <span class="nav-pill">Services</span> → <span class="nav-pill">Inspections</span> and click your inspection to view the full report.<br>
+            The report shows all approved findings, photographs, and the agreed scope of remediation work.</p>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num">7</div>
+          <div class="step-content">
+            <h4>Sign the Service Agreement &amp; Pay 50% Deposit</h4>
+            <p>After viewing your report, you will be presented with the <strong>Client Job Approval &amp; Service Agreement</strong>.<br>
+            This agreement outlines the work scope, schedule, and payment terms.<br><br>
+            <strong>You must complete both of the following:</strong></p>
+            <ul style="padding-left:18px;margin-top:8px;font-size:.92rem;line-height:2;">
+              <li>✍️ <strong>Sign the Agreement</strong> — enter your full name and check the confirmation box. If you have uploaded a signature image in your Profile Settings, it will automatically appear on the contract.</li>
+              <li>💳 <strong>Pay 50% deposit</strong> of the total project cost</li>
+            </ul>
+            <div class="callout warning">
+              <strong>Work cannot begin until both steps are done.</strong> After you sign and pay, the Emuria team will assign tools, set the visit schedule, and countersign the agreement.
+            </div>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num">8</div>
+          <div class="step-content">
+            <h4>Await Etogo Countersignature &amp; Project Kickoff</h4>
+            <p>Once you have signed and the 50% deposit is confirmed, an authorized Emuria representative will:<br>
+            assign the necessary tools and equipment to your project, finalize the work visit schedule, and then countersign the agreement.<br><br>
+            You will be notified when the agreement is fully executed. Work will then commence on the scheduled dates.</p>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num">9</div>
+          <div class="step-content">
+            <h4>Track Your Active Project</h4>
+            <p>Go to <span class="nav-pill">Services</span> → <span class="nav-pill">Projects Preview</span> to monitor your project in real time.<br>
+            Each project card shows:</p>
+            <ul style="padding-left:18px;margin-top:6px;font-size:.92rem;line-height:2;">
+              <li>📊 <strong>Progress bar</strong> — percentage of work completed</li>
+              <li>📅 <strong>Start &amp; End dates</strong> from the signed contract</li>
+              <li>🏷️ <strong>Status badge</strong> — Pending / Active / In Progress / Completed</li>
+              <li>💰 <strong>Payment summary</strong> — total cost, amount paid, and balance due</li>
+            </ul>
+            <div class="callout">If your project reaches 100% and you still have an outstanding balance, a <strong>yellow balance reminder</strong> will appear on your Dashboard. Settle the remaining amount to fully close the project.</div>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num">10</div>
+          <div class="step-content">
+            <h4>Remaining Payments</h4>
+            <p>Depending on your payment plan (Full / Per Visit / Installment), you may have further payments due during the project.<br>
+            Go to <span class="nav-pill">Billing &amp; Finance</span> → <span class="nav-pill">Invoices</span> to see all your invoices and outstanding balances.<br>
+            A <strong>Pay Now</strong> button will appear on your project card whenever a payment is due.</p>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num">11</div>
+          <div class="step-content">
+            <h4>Submit a Service Request</h4>
+            <p>If you encounter a new issue or need additional support during or after a project, go to <span class="nav-pill">Services</span> → <span class="nav-pill">Service Requests</span>.<br>
+            Click <strong>New Request</strong>, describe the issue, and submit. Our team will triage and respond.</p>
+          </div>
+        </li>
+
+      </ul>
+
+      <h3 style="margin:20px 0 10px;color:var(--brand);">Client Sidebar Navigation</h3>
+      <table class="nav-table">
+        <tr>
+          <th>Menu</th>
+          <th>Sub-items</th>
+          <th>Purpose</th>
+        </tr>
+        <tr>
+          <td><strong>Dashboard</strong></td>
+          <td>—</td>
+          <td>Overview of your properties, active projects, outstanding payments, and notifications</td>
+        </tr>
+        <tr>
+          <td><strong>Properties</strong></td>
+          <td>Add Property, My Properties, Tenants</td>
+          <td>Register and manage your properties and tenants</td>
+        </tr>
+        <tr>
+          <td><strong>Services</strong></td>
+          <td>Inspections, Quotations, Projects Preview, Service Requests</td>
+          <td>Full lifecycle of assessments, quotations, active projects and service requests</td>
+        </tr>
+        <tr>
+          <td><strong>Billing &amp; Finance</strong></td>
+          <td>Invoices, My Subscription</td>
+          <td>View invoices, pay outstanding amounts, manage your subscription</td>
+        </tr>
+        <tr>
+          <td><strong>Help &amp; Support</strong></td>
+          <td>Complaints, Emergency Reports, Contact Support</td>
+          <td>Raise complaints, report emergencies, or contact the support team</td>
+        </tr>
+        <tr>
+          <td><strong>Settings</strong> (top-right)</td>
+          <td>—</td>
+          <td>Update your profile, upload signature, change password</td>
+        </tr>
+      </table>
+
+    </div>
+  </div>
+
+  <!-- ============================= -->
+  <!-- SECTION 3: ADMIN GUIDE        -->
+  <!-- ============================= -->
+  <div class="section" id="admin-guide">
+    <div class="section-header admin">
+      <span class="icon">🛠️</span>
+      <h2>3. Administrator / Project Manager / Inspector Guide</h2>
+      <span class="role-badge">Roles: Super Admin · Administrator · Project Manager · Inspector</span>
+    </div>
+    <div class="section-body">
+
+      <div class="callout">
+        <strong>Access:</strong> Admin and staff accounts are created by the Super Admin. You do not self-register. Log in at <strong>https://etogo.laravel.cloud</strong> using the credentials provided to you.
+      </div>
+
+      <div class="flow" style="margin-top:18px;">
+        <div class="flow-step">Login</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">Schedule Inspection</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">Fill PHAR Form</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step warn">Share Quotation</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">Complete Assessment</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step key">Pre-Sign Setup</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step key">Countersign</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step done">Work Logs</div>
+      </div>
+
+      <ul class="steps" style="margin-top:28px;">
+
+        <li>
+          <div class="step-num green">1</div>
+          <div class="step-content">
+            <h4>Log Into the Admin Dashboard</h4>
+            <p>Go to <strong>https://etogo.laravel.cloud</strong> and log in with your email and password.<br>
+            You will land on the Admin Dashboard showing active projects, pending assessments, and key metrics.</p>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num green">2</div>
+          <div class="step-content">
+            <h4>View Properties Awaiting Inspection</h4>
+            <p>In the sidebar go to <span class="nav-pill">PHAR Assessment Workflow</span> → <span class="nav-pill">Awaiting Assessment</span>.<br>
+            This lists all properties where the client has registered and paid the inspection fee ($299).<br>
+            Click on a property to open its inspection record.</p>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num green">3</div>
+          <div class="step-content">
+            <h4>Schedule the Inspection Visit</h4>
+            <p>Inside the inspection record, set the scheduled visit date and assign the Inspector or Project Manager responsible for the visit.<br>
+            The client receives an automatic notification of the scheduled date.</p>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num green">4</div>
+          <div class="step-content">
+            <h4>Conduct the On-Site Visit &amp; Fill the PHAR Assessment Form</h4>
+            <p>On the day of the visit, the Inspector or PM physically inspects the property.<br>
+            Back in the admin dashboard, open the inspection and click <strong>Fill PHAR Assessment Form</strong>.<br>
+            For each system and subsystem of the property, record:</p>
+            <ul style="padding-left:18px;margin-top:6px;font-size:.92rem;line-height:2;">
+              <li>🔍 <strong>Findings</strong> — issues observed (condition, severity)</li>
+              <li>📷 <strong>Images</strong> — photographs of each finding</li>
+              <li>💡 <strong>Recommendations</strong> — proposed remediation tasks</li>
+              <li>📐 <strong>BDC Inputs</strong> — property size, visit frequency, complexity parameters for pricing</li>
+            </ul>
+            <div class="callout">You can <strong>Save as Draft</strong> at any time and come back to continue filling the form before sharing anything with the client.</div>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num green">5</div>
+          <div class="step-content">
+            <h4>Compute Pricing &amp; Share Quotation</h4>
+            <p>After completing the findings and BDC data entry, the system automatically computes the ARP (Annual Regenerative Program) pricing.<br>
+            Review the total cost, then click <strong>Save Price</strong> and <strong>Share Quotation with Client</strong>.<br>
+            The client is notified that their quotation is ready to review.</p>
+            <div class="callout warning">
+              <strong>Important:</strong> You cannot mark the assessment as complete until the client has reviewed the quotation and confirmed their selected findings.
+            </div>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num green">6</div>
+          <div class="step-content">
+            <h4>Approve Client's Quotation Response &amp; Complete Assessment</h4>
+            <p>Go to <span class="nav-pill">PHAR Assessment Workflow</span> → <span class="nav-pill">Pre-Assessed Properties</span>.<br>
+            When the client has responded to the quotation selecting their preferred findings, review their selection.<br>
+            Approve the client-selected findings. The inspection is then marked <strong>Completed</strong> and the client receives their full report and agreement.</p>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num green">7</div>
+          <div class="step-content">
+            <h4>Pre-Sign Setup — Assign Tools &amp; Schedule Visits</h4>
+            <p>Once the client has signed the agreement and paid their 50% deposit, go to:<br>
+            <span class="nav-pill">Project Management</span> → <span class="nav-pill">Pre-Sign Setup</span><br><br>
+            Here you will see properties that are ready for the setup phase. For each project you must:</p>
+            <ul style="padding-left:18px;margin-top:6px;font-size:.92rem;line-height:2;">
+              <li>🔧 <strong>Assign Tools</strong> — select and assign all equipment needed based on the approved findings</li>
+              <li>📅 <strong>Set Work Visit Schedule</strong> — define all planned visit dates (Mon–Sat, 7 AM–6 PM only). The first visit date becomes the Project Start Date; the last visit date becomes the Target Completion Date.</li>
+            </ul>
+            <div class="callout warning">A project cannot be countersigned until <strong>both</strong> tools are assigned AND the visit schedule is set.</div>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num green">8</div>
+          <div class="step-content">
+            <h4>Countersign the Agreement</h4>
+            <p>Once tools and schedule are set, go to:<br>
+            <span class="nav-pill">Project Management</span> → <span class="nav-pill">Ready to Countersign</span><br><br>
+            Open the project and click <strong>Review &amp; Countersign</strong>. Review the fully executed contract, enter your full name, check the acknowledgment box, and click <strong>Countersign</strong>.<br>
+            If you have uploaded your signature image in <strong>Profile Settings</strong>, it will be embedded on the contract automatically.<br><br>
+            <strong>After countersigning:</strong> the agreement is fully executed and the project officially moves to Active status. Work may now begin on the scheduled visit dates.</p>
+            <div class="callout success">
+              <strong>✅ The project is now live.</strong> Both parties have signed. The visit schedule is locked and work can commence.
+            </div>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num green">9</div>
+          <div class="step-content">
+            <h4>Record Work Logs (Maintenance Visit Logs)</h4>
+            <p>As fieldwork progresses, navigate to:<br>
+            <span class="nav-pill">Project Management</span> → <span class="nav-pill">Active Projects</span><br><br>
+            Open the project and go into <strong>Work Logs</strong>. For each visit, log:</p>
+            <ul style="padding-left:18px;margin-top:6px;font-size:.92rem;line-height:2;">
+              <li>🗓️ <strong>Visit date</strong></li>
+              <li>✅ <strong>Tasks accomplished</strong> for each finding</li>
+              <li>📊 <strong>Progress status</strong> per finding</li>
+              <li>📝 <strong>Notes</strong> and photographs</li>
+            </ul>
+            <p style="margin-top:8px;">Progress is automatically calculated as <em>(logged visit dates ÷ total scheduled dates) × 100</em>.</p>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num green">10</div>
+          <div class="step-content">
+            <h4>Mark Project as Complete</h4>
+            <p>When the fieldwork reaches <strong>75% or more completion</strong> and all findings are resolved, you can click <strong>Mark as Complete</strong> on the project.<br>
+            This sets the project status to <strong>Completed</strong> and records the actual end date.<br>
+            The client is notified and their project card updates to show the Completed badge.</p>
+            <div class="callout warning">
+              <strong>After completion:</strong> All assigned tools must be returned. Notify the Store Manager to confirm tool returns.
+            </div>
+          </div>
+        </li>
+
+      </ul>
+
+      <h3 style="margin:20px 0 10px;color:var(--brand);">Admin Sidebar Navigation</h3>
+      <table class="nav-table">
+        <tr>
+          <th>Menu</th>
+          <th>Sub-items</th>
+          <th>Who Uses It</th>
+        </tr>
+        <tr>
+          <td><strong>Dashboard</strong></td>
+          <td>—</td>
+          <td>All admin roles — overview of projects, alerts, KPIs</td>
+        </tr>
+        <tr>
+          <td><strong>PHAR Assessment Workflow</strong></td>
+          <td>Awaiting Assessment, Pre-Assessed Properties, Completed, All Assessed Properties</td>
+          <td>Administrator, Inspector, Project Manager</td>
+        </tr>
+        <tr>
+          <td><strong>Project Management</strong></td>
+          <td>Pre-Sign Setup, Ready to Countersign, Active Projects, Completed Projects, Tool Return &amp; Assignment, Milestones &amp; Budget, Service Requests Queue, Change Orders</td>
+          <td>Administrator, Project Manager; Store Manager sees Awaiting Tool Assignment</td>
+        </tr>
+        <tr>
+          <td><strong>Billing &amp; Finance</strong></td>
+          <td>Unpaid Invoices, All Invoices, Budget Management</td>
+          <td>Administrator, Finance Officer</td>
+        </tr>
+        <tr>
+          <td><strong>Reports &amp; Savings</strong></td>
+          <td>Performance Reports, Cost &amp; Savings Analysis</td>
+          <td>Administrator, Project Manager</td>
+        </tr>
+        <tr>
+          <td><strong>Access Control</strong></td>
+          <td>User Management, Role Management, Permission Management</td>
+          <td>Super Admin, Administrator</td>
+        </tr>
+        <tr>
+          <td><strong>System Settings</strong></td>
+          <td>Property Systems, Property Subsystems, BDC Calibration Engine, FMC Material Settings, Findings Template Settings, Recommendation Settings, Tool Settings, Property Types</td>
+          <td>Super Admin, Administrator</td>
+        </tr>
+      </table>
+
+    </div>
+  </div>
+
+  <!-- ============================= -->
+  <!-- SECTION 4: STORE MANAGER      -->
+  <!-- ============================= -->
+  <div class="section" id="store-guide">
+    <div class="section-header store">
+      <span class="icon">🏪</span>
+      <h2>4. Store Manager Guide</h2>
+      <span class="role-badge">Role: Store Manager</span>
+    </div>
+    <div class="section-body">
+
+      <div class="callout">
+        The Store Manager is responsible for tool inventory — assigning tools to projects before work starts and confirming tools have been returned when a project completes.
+      </div>
+
+      <ul class="steps" style="margin-top:20px;">
+
+        <li>
+          <div class="step-num brown">1</div>
+          <div class="step-content">
+            <h4>Log In &amp; Access the Store Dashboard</h4>
+            <p>Log in at <strong>https://etogo.laravel.cloud</strong> with your credentials. Your dashboard focuses on Tool Operations — no PHAR assessment workflow is visible to you.</p>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num brown">2</div>
+          <div class="step-content">
+            <h4>View Projects Awaiting Tool Assignment</h4>
+            <p>Go to <span class="nav-pill">Tool Operations</span> → <span class="nav-pill">Awaiting Tool Assignment</span>.<br>
+            This lists all projects where the client has signed and paid, but tools have not yet been assigned. The badge count tells you how many are pending.</p>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num brown">3</div>
+          <div class="step-content">
+            <h4>Assign Tools to a Project</h4>
+            <p>Open a project from the list. Based on the approved findings and work scope, select the tools and equipment to be assigned. Enter the quantity for each tool and click <strong>Assign</strong>.<br>
+            The system deducts from available inventory and records the assignment against the project.</p>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num brown">4</div>
+          <div class="step-content">
+            <h4>Confirm Tool Returns After Project Completion</h4>
+            <p>When a project is marked complete, go to <span class="nav-pill">Tool Operations</span> → <span class="nav-pill">Tool Return &amp; Assignment</span>.<br>
+            Find the completed project, verify the tools returned in the field, and click <strong>Confirm Return</strong> for each item.<br>
+            Returned tools are added back into available inventory automatically.</p>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num brown">5</div>
+          <div class="step-content">
+            <h4>Manage Tool Settings (Inventory Catalogue)</h4>
+            <p>Go to <span class="nav-pill">Tool Management</span> → <span class="nav-pill">Tool Settings</span>.<br>
+            Here you can add new tools to the catalogue, set quantities, update descriptions, and manage stock levels available for assignment.</p>
+          </div>
+        </li>
+
+      </ul>
+
+    </div>
+  </div>
+
+  <!-- ============================= -->
+  <!-- SECTION 5: NAVIGATION REF     -->
+  <!-- ============================= -->
+  <div class="section" id="nav-reference">
+    <div class="section-header" style="background:#37474f;">
+      <span class="icon">🗺️</span>
+      <h2>5. Full System Navigation Reference</h2>
+    </div>
+    <div class="section-body">
+
+      <h3 style="color:var(--brand);margin-bottom:12px;">Client Portal Navigation</h3>
+      <table class="nav-table">
+        <tr><th>Sidebar Item</th><th>Where to Click</th><th>What It Does</th></tr>
+        <tr><td>Dashboard</td><td>Top of sidebar</td><td>Your overview page — project stats, balance alerts, notifications</td></tr>
+        <tr><td>Properties → Add Property</td><td>Properties ▾ → Add Property</td><td>Register a new property with Emuria</td></tr>
+        <tr><td>Properties → My Properties</td><td>Properties ▾ → My Properties</td><td>View, edit, or manage your registered properties</td></tr>
+        <tr><td>Properties → Tenants</td><td>Properties ▾ → Tenants</td><td>Manage tenants living on your property</td></tr>
+        <tr><td>Services → Inspections</td><td>Services ▾ → Inspections</td><td>View inspection status, pay inspection fee, access report &amp; agreement</td></tr>
+        <tr><td>Services → Quotations</td><td>Services ▾ → Quotations</td><td>Review and respond to shared quotations from the assessment team</td></tr>
+        <tr><td>Services → Projects Preview</td><td>Services ▾ → Projects Preview</td><td>Monitor active project progress, dates, status and payment</td></tr>
+        <tr><td>Services → Service Requests</td><td>Services ▾ → Service Requests</td><td>Submit and track new service requests</td></tr>
+        <tr><td>Billing → Invoices</td><td>Billing &amp; Finance ▾ → Invoices</td><td>View and pay invoices</td></tr>
+        <tr><td>Billing → My Subscription</td><td>Billing &amp; Finance ▾ → My Subscription</td><td>View your subscription plan and status</td></tr>
+        <tr><td>Help → Complaints</td><td>Help &amp; Support ▾ → Complaints</td><td>Submit a formal complaint</td></tr>
+        <tr><td>Help → Emergency Reports</td><td>Help &amp; Support ▾ → Emergency Reports</td><td>Report urgent property issues</td></tr>
+        <tr><td>Help → Contact Support</td><td>Help &amp; Support ▾ → Contact Support</td><td>Send a message to the Emuria support team</td></tr>
+      </table>
+
+      <h3 style="color:#1b4f72;margin:28px 0 12px;">Admin Portal Navigation</h3>
+      <table class="nav-table">
+        <tr><th>Sidebar Item</th><th>Where to Click</th><th>What It Does</th><th class="role-cell">Roles</th></tr>
+        <tr><td>Dashboard</td><td>Top of sidebar</td><td>Admin overview — KPIs, pending tasks, alerts</td><td class="role-cell">All</td></tr>
+        <tr><td>PHAR Workflow → Awaiting Assessment</td><td>PHAR Assessment Workflow ▾ → Awaiting Assessment</td><td>Properties where inspection fee is paid and visit not yet done</td><td class="role-cell">Admin, PM, Inspector</td></tr>
+        <tr><td>PHAR Workflow → Pre-Assessed Properties</td><td>PHAR Assessment Workflow ▾ → Pre-Assessed Properties</td><td>Inspections with findings entered; quotation pending or client responding</td><td class="role-cell">Admin, PM</td></tr>
+        <tr><td>PHAR Workflow → Completed</td><td>PHAR Assessment Workflow ▾ → Completed</td><td>Fully completed assessments</td><td class="role-cell">Admin, PM</td></tr>
+        <tr><td>Project Mgmt → Pre-Sign Setup</td><td>Project Management ▾ → Pre-Sign Setup</td><td>Projects where client signed + paid — assign tools and set schedule here</td><td class="role-cell">Admin, PM</td></tr>
+        <tr><td>Project Mgmt → Ready to Countersign</td><td>Project Management ▾ → Ready to Countersign</td><td>Projects with tools + schedule done — countersign agreement here</td><td class="role-cell">Admin, PM</td></tr>
+        <tr><td>Project Mgmt → Active Projects</td><td>Project Management ▾ → Active Projects</td><td>Live projects with fieldwork in progress — fill work logs here</td><td class="role-cell">Admin, PM, Inspector</td></tr>
+        <tr><td>Project Mgmt → Completed Projects</td><td>Project Management ▾ → Completed Projects</td><td>Projects at 100% progress</td><td class="role-cell">Admin, PM</td></tr>
+        <tr><td>Project Mgmt → Tool Return &amp; Assignment</td><td>Project Management ▾ → Tool Return &amp; Assignment</td><td>Confirm tools returned after project completion</td><td class="role-cell">Super Admin, Store Manager</td></tr>
+        <tr><td>Project Mgmt → Milestones &amp; Budget</td><td>Project Management ▾ → Milestones &amp; Budget</td><td>Track project milestones and budget allocations</td><td class="role-cell">Admin, PM</td></tr>
+        <tr><td>Project Mgmt → Service Requests Queue</td><td>Project Management ▾ → Service Requests Queue</td><td>View and triage incoming client service requests</td><td class="role-cell">Admin, PM</td></tr>
+        <tr><td>Billing → Unpaid Invoices</td><td>Billing &amp; Finance ▾ → Unpaid Invoices</td><td>Invoices awaiting payment</td><td class="role-cell">Admin, Finance</td></tr>
+        <tr><td>Access Control → User Management</td><td>Access Control ▾ → User Management</td><td>Create, edit, or deactivate user accounts</td><td class="role-cell">Super Admin, Admin</td></tr>
+        <tr><td>Access Control → Role Management</td><td>Access Control ▾ → Role Management</td><td>Manage system roles</td><td class="role-cell">Super Admin</td></tr>
+        <tr><td>Access Control → Permission Management</td><td>Access Control ▾ → Permission Management</td><td>Fine-grained permission control</td><td class="role-cell">Super Admin</td></tr>
+        <tr><td>System Settings → Property Systems</td><td>System Settings ▾ → Property Systems</td><td>Configure property system categories (Electrical, Plumbing, etc.)</td><td class="role-cell">Super Admin, Admin</td></tr>
+        <tr><td>System Settings → Findings Template</td><td>System Settings ▾ → Findings Template Settings</td><td>Manage reusable finding templates for the PHAR form</td><td class="role-cell">Super Admin, Admin</td></tr>
+        <tr><td>System Settings → Recommendation Settings</td><td>System Settings ▾ → Recommendation Settings</td><td>Manage recommended remediation templates</td><td class="role-cell">Super Admin, Admin</td></tr>
+        <tr><td>System Settings → Tool Settings</td><td>System Settings ▾ → Tool Settings</td><td>Manage tool catalogue and inventory</td><td class="role-cell">Super Admin, Admin, Store Manager</td></tr>
+        <tr><td>System Settings → BDC Calibration</td><td>System Settings ▾ → BDC Calibration Engine</td><td>Configure the pricing engine parameters</td><td class="role-cell">Super Admin, Admin</td></tr>
+        <tr><td>System Settings → Property Types</td><td>System Settings ▾ → Property Types</td><td>Define property categories (Residential, Commercial, etc.)</td><td class="role-cell">Super Admin, Admin</td></tr>
+      </table>
+
+    </div>
+  </div>
+
+  <!-- ============================= -->
+  <!-- SECTION 6: PROFILE SETTINGS   -->
+  <!-- ============================= -->
+  <div class="section" id="profile-settings">
+    <div class="section-header settings">
+      <span class="icon">⚙️</span>
+      <h2>6. Profile &amp; Settings — All Users</h2>
+      <span class="role-badge">All Roles</span>
+    </div>
+    <div class="section-body">
+
+      <p>Every user — whether Client, Administrator, Inspector, Project Manager or Store Manager — can manage their personal profile from the <strong>Settings</strong> page.</p>
+
+      <h3 style="margin:18px 0 10px;color:#2e7d32;">How to Access Settings</h3>
+      <p>Click your <strong>name or avatar</strong> in the top-right navbar and select <strong>Settings</strong>, or navigate directly to:<br>
+      <span class="nav-pill">https://etogo.laravel.cloud/settings</span></p>
+
+      <h3 style="margin:22px 0 10px;color:#2e7d32;">What You Can Do</h3>
+
+      <ul class="steps">
+
+        <li>
+          <div class="step-num" style="background:#2e7d32;">1</div>
+          <div class="step-content">
+            <h4>Update Profile Photo</h4>
+            <p>On the Settings page, click the <strong>camera icon</strong> over your profile picture and select a new image (JPG, PNG or WEBP, max 2 MB).<br>
+            The photo uploads and saves automatically as soon as you select it — no additional button click needed.</p>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num" style="background:#2e7d32;">2</div>
+          <div class="step-content">
+            <h4>Upload Your Signature Image</h4>
+            <p>In the <strong>My Signature</strong> card on the left, click the file input and select your signature image (JPG, PNG or WEBP, max 2 MB).<br>
+            Use a clear handwritten signature on a white background for best results.<br>
+            The signature uploads automatically when selected.</p>
+            <div class="callout success">
+              <strong>Why this matters:</strong> When you sign a service agreement or countersign a contract, your saved signature image is automatically embedded into the contract document and included in the downloadable PDF. This makes your agreements legally clear and professional.
+            </div>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num" style="background:#2e7d32;">3</div>
+          <div class="step-content">
+            <h4>Update Name &amp; Email</h4>
+            <p>In the <strong>Profile Information</strong> section on the right, update your full name and email address and click <strong>Save Changes</strong>.</p>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num" style="background:#2e7d32;">4</div>
+          <div class="step-content">
+            <h4>Change Your Password</h4>
+            <p>Scroll down to the <strong>Change Password</strong> section. Enter your current password, then your new password twice. A real-time <strong>password strength meter</strong> shows how strong your new password is (aim for Strong or Very Strong).<br>
+            Click <strong>Update Password</strong> to save.</p>
+            <div class="callout">
+              <strong>Password requirements:</strong> Minimum 8 characters, at least one uppercase letter, one lowercase letter, and one number.
+            </div>
+          </div>
+        </li>
+
+      </ul>
+
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <p><strong>EMURIA Regenerative Property Care</strong></p>
+    <p style="margin-top:4px;">Live Platform: <a href="https://etogo.laravel.cloud" target="_blank" rel="noopener noreferrer">https://etogo.laravel.cloud</a></p>
+    <p style="margin-top:4px;">For support, use the <strong>Help &amp; Support</strong> section in the sidebar or email your account manager.</p>
+    <p style="margin-top:12px;font-size:.78rem;opacity:.6;">Document version May 2026 · EMURIA Regenerative Property Care</p>
+  </div>
+
+</div>
+</body>
+</html>

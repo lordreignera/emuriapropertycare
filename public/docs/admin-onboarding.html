@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin Onboarding Guide — EMURIA</title>
+<style>
+  :root{--brand:#1b4f72;--brand-light:#e3f2fd;--accent:#f5a623;--success:#198754;--border:#dee2e6;--text:#1a1a2e;--muted:#6c757d;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Segoe UI',Arial,sans-serif;font-size:14px;color:var(--text);background:#f4f6fb;line-height:1.65;}
+  .cover{background:linear-gradient(135deg,#1b4f72,#0d3050);color:#fff;padding:50px 40px 42px;text-align:center;}
+  .cover .logo{font-size:2rem;font-weight:800;}
+  .cover h1{font-size:1.8rem;font-weight:700;margin:16px 0 8px;}
+  .cover p{opacity:.82;max-width:600px;margin:0 auto 20px;}
+  .cover .roles{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;}
+  .role-badge{background:rgba(255,255,255,.18);border-radius:20px;padding:4px 16px;font-size:.82rem;font-weight:600;}
+  .container{max-width:980px;margin:0 auto;padding:36px 20px 70px;}
+  .card{background:#fff;border-radius:10px;border:1px solid var(--border);margin-bottom:28px;overflow:hidden;}
+  .card-header{padding:14px 24px;display:flex;align-items:center;gap:10px;color:#fff;}
+  .card-header h2{font-size:1.05rem;font-weight:700;}
+  .card-body{padding:24px;}
+  .steps{list-style:none;padding:0;}
+  .step-li{display:flex;gap:16px;margin-bottom:22px;align-items:flex-start;}
+  .step-num{min-width:34px;height:34px;background:#1b4f72;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.92rem;flex-shrink:0;margin-top:2px;}
+  .step-content h4{font-size:.97rem;font-weight:700;margin-bottom:4px;}
+  .step-content p{color:#444;font-size:.88rem;}
+  .nav-pill{display:inline-flex;align-items:center;background:var(--brand-light);border:1px solid #90caf9;color:#1565c0;border-radius:20px;padding:2px 11px;font-size:.8rem;font-weight:600;margin:2px;}
+  .callout{border-left:4px solid #1b4f72;background:var(--brand-light);border-radius:0 8px 8px 0;padding:11px 15px;margin:12px 0;font-size:.88rem;}
+  .callout.warn{border-color:#f59e0b;background:#fff8e1;}
+  .callout.success{border-color:var(--success);background:#e8f5e9;}
+  .callout.danger{border-color:#dc3545;background:#fdecea;}
+  table{width:100%;border-collapse:collapse;margin-top:10px;}
+  th{background:#1b4f72;color:#fff;padding:9px 14px;font-size:.83rem;text-align:left;}
+  td{padding:9px 14px;border-bottom:1px solid var(--border);font-size:.87rem;vertical-align:top;}
+  tr:nth-child(even) td{background:#f9fdff;}
+  tr:last-child td{border-bottom:none;}
+  .checklist{list-style:none;padding:0;}
+  .checklist li{display:flex;gap:10px;align-items:flex-start;padding:7px 0;border-bottom:1px solid #f0f0f0;font-size:.88rem;}
+  .checklist li:last-child{border-bottom:none;}
+  .cb-box{width:18px;height:18px;border:2px solid #90caf9;border-radius:3px;flex-shrink:0;margin-top:1px;}
+  .footer{text-align:center;padding:28px;color:var(--muted);font-size:.83rem;border-top:1px solid var(--border);margin-top:10px;}
+  @media print{body{background:#fff;}.cover{-webkit-print-color-adjust:exact;print-color-adjust:exact;}.card-header{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="logo">EMURIA</div>
+  <h1>Admin &amp; Staff Onboarding Guide</h1>
+  <p>Everything a new Administrator, Project Manager, or Inspector needs to know to start working in the EMURIA system from Day 1.</p>
+  <div class="roles">
+    <span class="role-badge">Super Admin</span>
+    <span class="role-badge">Administrator</span>
+    <span class="role-badge">Project Manager</span>
+    <span class="role-badge">Inspector</span>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- DAY 1 CHECKLIST -->
+  <div class="card">
+    <div class="card-header" style="background:#1b4f72;"><span style="font-size:1.4rem;">✅</span><h2>Day 1 — Account Setup Checklist</h2></div>
+    <div class="card-body">
+      <div class="callout">Your account has been created by the Super Admin. Below are the steps to complete before starting any work.</div>
+      <ul class="checklist" style="margin-top:14px;">
+        <li><div class="cb-box"></div>Log into <strong>https://etogo.laravel.cloud</strong> using the credentials provided to you</li>
+        <li><div class="cb-box"></div>Click your name in the top-right → <strong>Settings</strong> → update your full name and email if needed</li>
+        <li><div class="cb-box"></div>Change your password immediately: Settings → Change Password section → choose a strong new password</li>
+        <li><div class="cb-box"></div>Upload a <strong>profile photo</strong> — click the camera icon on your avatar in Settings</li>
+        <li><div class="cb-box"></div>Upload your <strong>signature image</strong> — scan or photograph your handwritten signature on white paper; upload it in the "My Signature" card. This will appear on all contracts you sign or countersign</li>
+        <li><div class="cb-box"></div>Familiarise yourself with your dashboard — note which menu sections are visible to your role</li>
+        <li><div class="cb-box"></div>Read this onboarding guide fully before handling your first property</li>
+      </ul>
+      <div class="callout warn" style="margin-top:14px;">
+        <strong>⚠️ Do not skip the signature upload.</strong> Without a saved signature image, your countersignature on client contracts will show text only and no signature image in the PDF.
+      </div>
+    </div>
+  </div>
+
+  <!-- UNDERSTANDING YOUR DASHBOARD -->
+  <div class="card">
+    <div class="card-header" style="background:#0e7490;"><span style="font-size:1.4rem;">📊</span><h2>Understanding Your Dashboard</h2></div>
+    <div class="card-body">
+      <p style="margin-bottom:14px;">Your admin dashboard shows at a glance:</p>
+      <table>
+        <tr><th>Widget</th><th>What It Shows</th><th>Who Sees It</th></tr>
+        <tr><td>Active Projects</td><td>Number of projects currently in progress</td><td>All admin roles</td></tr>
+        <tr><td>Pending Inspections</td><td>Properties awaiting PHAR assessment visit</td><td>Admin, PM, Inspector</td></tr>
+        <tr><td>Awaiting Countersign</td><td>Projects where client has signed but Emuria hasn't yet</td><td>Admin, PM</td></tr>
+        <tr><td>Unpaid Invoices</td><td>Outstanding client payment invoices</td><td>Admin, Finance Officer</td></tr>
+        <tr><td>Tool Assignments Due</td><td>Projects needing tools assigned before countersigning</td><td>Admin, Store Manager</td></tr>
+        <tr><td>Service Requests</td><td>New incoming client service requests</td><td>Admin, PM</td></tr>
+      </table>
+      <div class="callout" style="margin-top:14px;">Numbers on dashboard widgets are real-time. Refresh your browser if you are expecting a recent change to appear.</div>
+    </div>
+  </div>
+
+  <!-- HANDLING YOUR FIRST INSPECTION -->
+  <div class="card">
+    <div class="card-header" style="background:#5d4037;"><span style="font-size:1.4rem;">🏠</span><h2>Handling Your First PHAR Assessment</h2></div>
+    <div class="card-body">
+      <ul class="steps">
+        <li class="step-li">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <h4>Find the Awaiting Assessment List</h4>
+            <p>Go to <span class="nav-pill">PHAR Assessment Workflow</span> → <span class="nav-pill">Awaiting Assessment</span>. This shows all properties where the client has paid the $299 inspection fee and is waiting for the visit.</p>
+          </div>
+        </li>
+        <li class="step-li">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <h4>Open the Inspection Record</h4>
+            <p>Click the property to open the inspection record. Review the property details and any client-reported issues. Assign yourself (or another inspector) as the responsible inspector. Set the scheduled visit date.</p>
+          </div>
+        </li>
+        <li class="step-li">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <h4>Carry Out the Physical Visit</h4>
+            <p>On the visit day, take the <strong>Inspector Field Checklist</strong> (available in System Settings → Documents). Record all observations, take photographs, and note severity scores. Record one-way travel distance (km) and travel time (minutes) — this is required for pricing.</p>
+          </div>
+        </li>
+        <li class="step-li">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <h4>Fill the PHAR Assessment Form</h4>
+            <p>Back at your desk, open the inspection and click <strong>Fill PHAR Assessment Form</strong>. Work through each property system section:<br>
+            — Enter each finding: description, severity, affected area<br>
+            — Add recommended remediation tasks<br>
+            — Enter labour hours estimate and material cost for each finding<br>
+            — Upload photographs for each finding<br>
+            — Enter BDC data: travel distance (km) and travel time (min)</p>
+            <div class="callout">You can <strong>Save as Draft</strong> at any time. The pricing dashboard at the bottom updates live as you enter data.</div>
+          </div>
+        </li>
+        <li class="step-li">
+          <div class="step-num">5</div>
+          <div class="step-content">
+            <h4>Review Pricing &amp; Share Quotation</h4>
+            <p>Once all findings are entered, review the Live Pricing Dashboard at the bottom of the form:<br>
+            — BDC Annual = travel cost<br>
+            — FRLC = labour from findings<br>
+            — FMC = materials from findings<br>
+            — TRC = total project cost (= ARP)<br><br>
+            When satisfied, click <strong>Save Price</strong> then <strong>Share Quotation with Client</strong>. The client will receive a notification.</p>
+          </div>
+        </li>
+        <li class="step-li">
+          <div class="step-num">6</div>
+          <div class="step-content">
+            <h4>Approve Client's Finding Selection</h4>
+            <p>Once the client responds to the quotation (selecting their preferred findings), go to <span class="nav-pill">Pre-Assessed Properties</span> and review their selection. Approve it to mark the assessment <strong>Complete</strong>.</p>
+            <div class="callout success">Assessment is now complete. The client receives their full report and the agreement becomes available for signing.</div>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- COUNTERSIGNING -->
+  <div class="card">
+    <div class="card-header" style="background:#1f2f98;"><span style="font-size:1.4rem;">✍️</span><h2>Pre-Sign Setup &amp; Countersigning a Contract</h2></div>
+    <div class="card-body">
+      <div class="callout warn" style="margin-bottom:16px;">
+        <strong>Prerequisites before countersigning:</strong> (1) Tools must be assigned to the project, AND (2) the work visit schedule must be set. Both steps happen in <strong>Pre-Sign Setup</strong>.
+      </div>
+      <ul class="steps">
+        <li class="step-li">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <h4>Go to Pre-Sign Setup</h4>
+            <p>Navigate to <span class="nav-pill">Project Management</span> → <span class="nav-pill">Pre-Sign Setup</span>. This queue shows projects where the client has signed the agreement and paid the 50% deposit — they are waiting for Emuria to complete setup before countersigning.</p>
+          </div>
+        </li>
+        <li class="step-li">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <h4>Assign Tools</h4>
+            <p>Open the project and go to the <strong>Tool Assignment</strong> tab. Based on the approved findings (equipment, cleaning, structural, etc.), select the required tools from the catalogue and assign them. The Store Manager is notified automatically.</p>
+          </div>
+        </li>
+        <li class="step-li">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <h4>Set the Work Visit Schedule</h4>
+            <p>In the <strong>Visit Schedule</strong> tab, add each planned work visit date. Remember:<br>
+            — Visits are only Monday–Saturday, 7:00 AM–6:00 PM<br>
+            — First visit date = Project Start Date<br>
+            — Last visit date = Target Completion Date</p>
+          </div>
+        </li>
+        <li class="step-li">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <h4>Countersign</h4>
+            <p>Once tools and schedule are done, the project moves to <span class="nav-pill">Ready to Countersign</span>. Open it, click <strong>Review &amp; Countersign</strong>, read the full contract, enter your full name, tick the acknowledgment, and click <strong>Countersign</strong>.<br><br>
+            Your profile signature image will be embedded automatically.</p>
+            <div class="callout success">Project is now Active. Work can begin on the scheduled dates.</div>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- WORK LOGS -->
+  <div class="card">
+    <div class="card-header" style="background:#374151;"><span style="font-size:1.4rem;">📋</span><h2>Recording Work Logs During a Project</h2></div>
+    <div class="card-body">
+      <p style="margin-bottom:14px;">As fieldwork progresses, keep the system up to date with work logs after each visit.</p>
+      <ul class="steps">
+        <li class="step-li">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <h4>Open the Active Project</h4>
+            <p>Go to <span class="nav-pill">Project Management</span> → <span class="nav-pill">Active Projects</span> → open the project.</p>
+          </div>
+        </li>
+        <li class="step-li">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <h4>Add a Maintenance Visit Log</h4>
+            <p>In the Work Logs section, click <strong>Add Visit Log</strong>. Enter the visit date, tasks completed for each finding, and any notes. Upload photos of completed work where applicable.</p>
+          </div>
+        </li>
+        <li class="step-li">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <h4>Progress Updates Automatically</h4>
+            <p>Project progress = (logged visit dates ÷ total scheduled visit dates) × 100. The client can see the progress bar update in real time from their dashboard.</p>
+          </div>
+        </li>
+        <li class="step-li">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <h4>Mark Project Complete</h4>
+            <p>When fieldwork is done (≥75% progress), click <strong>Mark as Complete</strong>. This closes the project, records the actual end date, and notifies the client. Remind the Store Manager to confirm tool returns.</p>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- USER MANAGEMENT -->
+  <div class="card">
+    <div class="card-header" style="background:#2e7d32;"><span style="font-size:1.4rem;">👥</span><h2>User Management (Super Admin / Administrator)</h2></div>
+    <div class="card-body">
+      <p style="margin-bottom:14px;">All non-client users must be created by an Administrator. Clients self-register.</p>
+      <table>
+        <tr><th>Action</th><th>Where to Go</th><th>Notes</th></tr>
+        <tr><td>Create a new staff account</td><td>Access Control → User Management → New User</td><td>Assign the correct role (PM, Inspector, Store Manager, etc.)</td></tr>
+        <tr><td>Change a user's role</td><td>Access Control → User Management → Edit User</td><td>Role change takes effect immediately on next login</td></tr>
+        <tr><td>Deactivate a user</td><td>Access Control → User Management → Deactivate</td><td>User can no longer log in; their historical data is preserved</td></tr>
+        <tr><td>Create / edit roles</td><td>Access Control → Role Management</td><td>Super Admin only</td></tr>
+        <tr><td>Assign permissions</td><td>Access Control → Permission Management</td><td>Super Admin only — fine-grained route-level permissions</td></tr>
+      </table>
+      <div class="callout danger" style="margin-top:14px;">
+        <strong>Never share account credentials.</strong> Every staff member must have their own individual account. Shared logins make audit trails unreliable.
+      </div>
+    </div>
+  </div>
+
+  <!-- SYSTEM SETTINGS -->
+  <div class="card">
+    <div class="card-header" style="background:#6a1b9a;"><span style="font-size:1.4rem;">⚙️</span><h2>System Settings Overview</h2></div>
+    <div class="card-body">
+      <table>
+        <tr><th>Setting</th><th>Purpose</th><th>Change Frequency</th></tr>
+        <tr><td>BDC Calibration Engine</td><td>Rate per km and rate per minute for travel cost calculation</td><td>When fuel/labour costs change significantly</td></tr>
+        <tr><td>Property Systems</td><td>Top-level property systems (Structural, Electrical, Plumbing, etc.)</td><td>Rarely — only when adding new service categories</td></tr>
+        <tr><td>Property Subsystems</td><td>Sub-categories under each system</td><td>Rarely</td></tr>
+        <tr><td>Findings Template Settings</td><td>Reusable finding templates for fast PHAR data entry</td><td>When new common findings need templates</td></tr>
+        <tr><td>Recommendation Settings</td><td>Reusable remediation recommendation templates</td><td>When new remediation methods are added</td></tr>
+        <tr><td>FMC Material Settings</td><td>Labour hourly rates for different skill categories</td><td>When labour rates change</td></tr>
+        <tr><td>Tool Settings</td><td>Tool catalogue and inventory levels</td><td>When new equipment is purchased or stock changes</td></tr>
+        <tr><td>Property Types</td><td>Property categories (Residential, Commercial, Industrial)</td><td>Rarely</td></tr>
+      </table>
+      <div class="callout warn" style="margin-top:14px;">
+        <strong>Important:</strong> Changes to pricing settings (BDC rates, labour rates) only affect new inspections. Existing inspection pricing is frozen at the time of assessment and is never retroactively changed.
+      </div>
+    </div>
+  </div>
+
+  <!-- DOS AND DON'TS -->
+  <div class="card">
+    <div class="card-header" style="background:#c62828;"><span style="font-size:1.4rem;">⚠️</span><h2>Important Rules — Do's and Don'ts</h2></div>
+    <div class="card-body">
+      <table>
+        <tr><th style="background:#198754;">✅ DO</th><th style="background:#dc3545;">❌ DO NOT</th></tr>
+        <tr><td>Upload your signature before countersigning any contract</td><td>Countersign a contract if tools have not been assigned and visit schedule not set</td></tr>
+        <tr><td>Save the PHAR form as draft regularly during data entry</td><td>Mark an assessment complete before the client has approved the quotation</td></tr>
+        <tr><td>Always upload photos for every finding logged</td><td>Delete or alter findings after a client has approved the quotation</td></tr>
+        <tr><td>Log a work visit entry after every site visit</td><td>Share client data, contracts, or personal information outside the system</td></tr>
+        <tr><td>Confirm tool returns with the Store Manager after project completion</td><td>Assign tools without verifying with the Store Manager they are available</td></tr>
+        <tr><td>Keep the visit schedule updated if dates change</td><td>Change pricing settings without management approval</td></tr>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">
+  <strong>EMURIA Regenerative Property Care</strong> — Admin Onboarding Guide · May 2026<br>
+  <a href="user-guide.html">← Back to User Guide</a>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EMURIA — Client Guide</title>
+<style>
+  :root {
+    --brand: #1f2f98;
+    --brand-dark: #14206a;
+    --brand-light: #e8ecff;
+    --accent: #f5a623;
+    --success: #198754;
+    --info: #0dcaf0;
+    --warning: #ffc107;
+    --danger: #dc3545;
+    --text: #1a1a2e;
+    --muted: #6c757d;
+    --border: #dee2e6;
+    --white: #ffffff;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 15px; color: var(--text); background: #f4f6fb; line-height: 1.65; }
+
+  /* COVER */
+  .cover { background: linear-gradient(135deg, var(--brand) 0%, var(--brand-dark) 100%); color: var(--white); padding: 60px 40px 50px; text-align: center; }
+  .cover .logo { font-size: 3rem; font-weight: 800; letter-spacing: 1px; }
+  .cover .tagline { font-size: 1.15rem; opacity: .85; margin-top: 6px; }
+  .cover h1 { font-size: 2rem; font-weight: 700; margin: 24px 0 8px; }
+  .cover p  { opacity: .82; max-width: 620px; margin: 0 auto; }
+  .cover .live-link { display: inline-block; margin-top: 22px; background: var(--accent); color: #000; font-weight: 700; padding: 10px 28px; border-radius: 40px; text-decoration: none; font-size: 1rem; }
+
+  /* LAYOUT */
+  .container { max-width: 1020px; margin: 0 auto; padding: 40px 20px 80px; }
+
+  /* TOC */
+  .toc { background: var(--white); border-radius: var(--radius); border: 1px solid var(--border); padding: 28px 32px; margin-bottom: 40px; }
+  .toc h2 { color: var(--brand); font-size: 1.2rem; margin-bottom: 14px; }
+  .toc ol { padding-left: 20px; }
+  .toc li { margin-bottom: 5px; }
+  .toc a { color: var(--brand); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+
+  /* SECTIONS */
+  .section { background: var(--white); border-radius: var(--radius); border: 1px solid var(--border); margin-bottom: 32px; overflow: hidden; }
+  .section-header { background: var(--brand); color: var(--white); padding: 16px 28px; display: flex; align-items: center; gap: 12px; }
+  .section-header.settings { background: #2e7d32; }
+  .section-header .icon { font-size: 1.6rem; }
+  .section-header h2 { font-size: 1.2rem; font-weight: 700; }
+  .section-header .role-badge { margin-left: auto; background: rgba(255,255,255,.22); border-radius: 20px; padding: 3px 14px; font-size: .82rem; font-weight: 600; white-space: nowrap; }
+  .section-body { padding: 28px 32px; }
+
+  /* STEP LIST */
+  .steps { list-style: none; padding: 0; }
+  .steps li { display: flex; gap: 16px; margin-bottom: 22px; align-items: flex-start; }
+  .step-num { min-width: 34px; height: 34px; background: var(--brand); color: var(--white); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: .95rem; flex-shrink: 0; margin-top: 1px; }
+  .step-content h4 { font-size: 1rem; font-weight: 700; margin-bottom: 4px; }
+  .step-content p  { color: #444; font-size: .93rem; }
+
+  /* NAV PILL */
+  .nav-pill { display: inline-flex; align-items: center; gap: 6px; background: var(--brand-light); border: 1px solid #c5cefc; color: var(--brand); border-radius: 20px; padding: 3px 12px; font-size: .82rem; font-weight: 600; margin: 2px 2px; white-space: nowrap; }
+
+  /* CALLOUT */
+  .callout { border-left: 4px solid var(--brand); background: var(--brand-light); border-radius: 0 8px 8px 0; padding: 12px 16px; margin: 14px 0; font-size: .92rem; }
+  .callout.warning { border-color: var(--warning); background: #fff8e1; }
+  .callout.success { border-color: var(--success); background: #e8f5e9; }
+  .callout strong { display: block; margin-bottom: 3px; }
+
+  /* FLOW DIAGRAM */
+  .flow { display: flex; flex-wrap: wrap; gap: 0; align-items: center; margin: 18px 0; }
+  .flow-step { background: var(--brand-light); border: 2px solid #c5cefc; color: var(--brand); border-radius: 8px; padding: 8px 14px; font-size: .82rem; font-weight: 600; text-align: center; min-width: 110px; }
+  .flow-step.done  { background: #e8f5e9; border-color: #a5d6a7; color: #2e7d32; }
+  .flow-step.warn  { background: #fff8e1; border-color: #ffe082; color: #e65100; }
+  .flow-step.key   { background: #e3f2fd; border-color: #90caf9; color: #1565c0; }
+  .flow-arrow { color: var(--muted); font-size: 1.3rem; padding: 0 6px; align-self: center; }
+
+  /* NAV TABLE */
+  .nav-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  .nav-table th { background: var(--brand); color: var(--white); padding: 9px 14px; font-size: .85rem; text-align: left; }
+  .nav-table td { padding: 9px 14px; border-bottom: 1px solid var(--border); font-size: .88rem; vertical-align: top; }
+  .nav-table tr:last-child td { border-bottom: none; }
+  .nav-table tr:nth-child(even) td { background: #f9faff; }
+
+  /* FOOTER */
+  .footer { text-align: center; padding: 32px 20px; color: var(--muted); font-size: .85rem; border-top: 1px solid var(--border); margin-top: 20px; }
+
+  @media(max-width:640px) {
+    .cover { padding: 40px 20px 36px; }
+    .section-body { padding: 20px; }
+    .flow { flex-direction: column; align-items: flex-start; }
+    .flow-arrow { transform: rotate(90deg); }
+  }
+  @media print {
+    body { background: #fff; }
+    .cover { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .section-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+</head>
+<body>
+
+<!-- COVER -->
+<div class="cover">
+  <div class="logo">EMURIA</div>
+  <div class="tagline">Regenerative Property Care</div>
+  <h1>Client Guide &amp; Platform Navigation</h1>
+  <p>Everything you need to know as a client — from registering your property to tracking your project and managing your account.</p>
+  <a class="live-link" href="https://etogo.laravel.cloud" target="_blank" rel="noopener noreferrer">🌐 etogo.laravel.cloud</a>
+</div>
+
+<div class="container">
+
+  <!-- TABLE OF CONTENTS -->
+  <div class="toc">
+    <h2>📋 Table of Contents</h2>
+    <ol>
+      <li><a href="#getting-started">Getting Started — Accessing the System</a></li>
+      <li><a href="#client-guide">Your Complete Journey — Step by Step</a></li>
+      <li><a href="#nav-reference">Sidebar Navigation Reference</a></li>
+      <li><a href="#profile-settings">Profile &amp; Settings</a></li>
+    </ol>
+  </div>
+
+  <!-- ============================= -->
+  <!-- SECTION 1: GETTING STARTED    -->
+  <!-- ============================= -->
+  <div class="section" id="getting-started">
+    <div class="section-header">
+      <span class="icon">🔐</span>
+      <h2>1. Getting Started — Accessing the System</h2>
+    </div>
+    <div class="section-body">
+
+      <div class="callout success">
+        <strong>Live Platform URL</strong>
+        Visit <a href="https://etogo.laravel.cloud" target="_blank" rel="noopener noreferrer"><strong>https://etogo.laravel.cloud</strong></a> from any browser to access the EMURIA system.
+      </div>
+
+      <h3 style="margin:18px 0 10px;color:var(--brand);">Creating Your Account</h3>
+      <p style="font-size:.93rem;margin-bottom:10px;">As a client you can register yourself directly on the platform — no invitation needed.</p>
+      <ol style="padding-left:20px;font-size:.93rem;line-height:2;">
+        <li>Go to <strong>https://etogo.laravel.cloud</strong></li>
+        <li>Click <strong>Register</strong> on the login page</li>
+        <li>Enter your full name, email address, and choose a strong password</li>
+        <li>Click <strong>Register</strong> — you are taken straight to your Client Dashboard</li>
+      </ol>
+
+      <h3 style="margin:22px 0 10px;color:var(--brand);">Logging In</h3>
+      <ol style="padding-left:20px;font-size:.93rem;line-height:2;">
+        <li>Go to <strong>https://etogo.laravel.cloud</strong></li>
+        <li>Enter your <strong>email address</strong> and <strong>password</strong></li>
+        <li>Click <strong>Login</strong> — you are redirected to your Client Dashboard automatically</li>
+      </ol>
+
+      <div class="callout warning" style="margin-top:16px;">
+        <strong>⚠️ Forgot your password?</strong>
+        Click "Forgot your password?" on the login page and follow the email reset link.
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============================= -->
+  <!-- SECTION 2: CLIENT GUIDE       -->
+  <!-- ============================= -->
+  <div class="section" id="client-guide">
+    <div class="section-header">
+      <span class="icon">🏠</span>
+      <h2>2. Your Complete Journey — Step by Step</h2>
+      <span class="role-badge">Role: Client</span>
+    </div>
+    <div class="section-body">
+
+      <div class="flow">
+        <div class="flow-step">Register &amp; Login</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">Add Property</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">Pay Inspection Fee</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step">Await Inspection</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step warn">Review Quotation</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step key">Sign &amp; Pay 50%</div>
+        <span class="flow-arrow">→</span>
+        <div class="flow-step done">Track Project</div>
+      </div>
+
+      <ul class="steps" style="margin-top:24px;">
+
+        <li>
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <h4>Register Your Account</h4>
+            <p>Visit <strong>https://etogo.laravel.cloud</strong>. On the login page click <strong>Register</strong>. Enter your full name, email address, and choose a strong password. Click <strong>Register</strong> to create your account. You will be taken directly to your Client Dashboard.</p>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <h4>Add Your Property</h4>
+            <p>In the left sidebar go to <span class="nav-pill">🏠 Properties</span> → <span class="nav-pill">Add Property</span>.<br>
+            Fill in your property details including the property name, address, type and size.<br>
+            <strong>Important:</strong> In the "Known Issues / Problem Areas" section, describe any existing problems you are aware of on the property. This helps our assessors prepare before their visit.<br>
+            Click <strong>Submit Property</strong>. Your property is now registered.</p>
+            <div class="callout">After submission, you can view all your registered properties under <span class="nav-pill">Properties</span> → <span class="nav-pill">My Properties</span>.</div>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <h4>Pay the Inspection Fee — $299 USD</h4>
+            <p>After registering your property, go to <span class="nav-pill">Services</span> → <span class="nav-pill">Inspections</span>.<br>
+            You will see your property listed with a <strong>"Pay Inspection Fee"</strong> button.<br>
+            The inspection fee is <strong>$299 USD</strong> (one-time per property assessment).<br>
+            Click the button and complete the Stripe payment form with your card details.<br>
+            Once paid, the status updates to <em>Fee Paid</em> and an Emuria administrator is notified automatically.</p>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <h4>Await the Inspection Notification</h4>
+            <p>After payment, an administrator will schedule a physical inspection visit to your property.<br>
+            You will receive a <strong>notification</strong> (shown in the system under your Dashboard) with the confirmed inspection date and time.<br>
+            You do not need to do anything at this stage — simply prepare access to your property on the scheduled date.</p>
+            <div class="callout warning">
+              <strong>Inspection visit:</strong> An Emuria Inspector or Project Manager will visit your property on the scheduled date to carry out the full PHAR (Property Health Assessment Report) inspection.
+            </div>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num">5</div>
+          <div class="step-content">
+            <h4>Review Your Quotation</h4>
+            <p>After the on-site assessment is complete, the inspector prepares a detailed report and shares a quotation with you.<br>
+            You will receive a notification. Go to <span class="nav-pill">Services</span> → <span class="nav-pill">Quotations</span> to view it.<br>
+            The quotation lists all findings discovered during the inspection with recommended remediation tasks and pricing.<br><br>
+            <strong>You have two options:</strong></p>
+            <ul style="padding-left:18px;margin-top:8px;font-size:.92rem;line-height:2;">
+              <li>✅ <strong>Select All Findings</strong> — approve the full scope of recommended work</li>
+              <li>🎯 <strong>Select Only Urgent Findings</strong> — choose which findings you want addressed first</li>
+            </ul>
+            <p style="margin-top:8px;">After selecting your preferred findings, click <strong>Submit Response</strong>. Emuria will review your selection and confirm the approved scope of work.</p>
+            <div class="callout success">The assessment is not marked complete until you respond to the quotation and your response is approved by Emuria staff.</div>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num">6</div>
+          <div class="step-content">
+            <h4>View Your Inspection Report</h4>
+            <p>Once the assessment is complete and your findings are confirmed, go to <span class="nav-pill">Services</span> → <span class="nav-pill">Inspections</span> and click your inspection to view the full report.<br>
+            The report shows all approved findings, photographs, and the agreed scope of remediation work.</p>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num">7</div>
+          <div class="step-content">
+            <h4>Sign the Service Agreement &amp; Pay 50% Deposit</h4>
+            <p>After viewing your report, you will be presented with the <strong>Client Job Approval &amp; Service Agreement</strong>.<br>
+            This agreement outlines the work scope, schedule, and payment terms.<br><br>
+            <strong>You must complete both of the following:</strong></p>
+            <ul style="padding-left:18px;margin-top:8px;font-size:.92rem;line-height:2;">
+              <li>✍️ <strong>Sign the Agreement</strong> — enter your full name and check the confirmation box. If you have uploaded a signature image in your Profile Settings, it will automatically appear on the contract.</li>
+              <li>💳 <strong>Pay 50% deposit</strong> of the total project cost</li>
+            </ul>
+            <div class="callout warning">
+              <strong>Work cannot begin until both steps are done.</strong> After you sign and pay, the Emuria team will assign tools, set the visit schedule, and countersign the agreement.
+            </div>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num">8</div>
+          <div class="step-content">
+            <h4>Await Emuria Countersignature &amp; Project Kickoff</h4>
+            <p>Once you have signed and the 50% deposit is confirmed, an authorized Emuria representative will assign the necessary tools and equipment to your project, finalize the work visit schedule, and countersign the agreement.<br><br>
+            You will be notified when the agreement is fully executed. Work will then commence on the scheduled dates.</p>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num">9</div>
+          <div class="step-content">
+            <h4>Track Your Active Project</h4>
+            <p>Go to <span class="nav-pill">Services</span> → <span class="nav-pill">Projects Preview</span> to monitor your project in real time.<br>
+            Each project card shows:</p>
+            <ul style="padding-left:18px;margin-top:6px;font-size:.92rem;line-height:2;">
+              <li>📊 <strong>Progress bar</strong> — percentage of work completed</li>
+              <li>📅 <strong>Start &amp; End dates</strong> from the signed contract</li>
+              <li>🏷️ <strong>Status badge</strong> — Pending / Active / In Progress / Completed</li>
+              <li>💰 <strong>Payment summary</strong> — total cost, amount paid, and balance due</li>
+            </ul>
+            <div class="callout">If your project reaches 100% and you still have an outstanding balance, a <strong>yellow balance reminder</strong> will appear on your Dashboard. Settle the remaining amount to fully close the project.</div>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num">10</div>
+          <div class="step-content">
+            <h4>Remaining Payments</h4>
+            <p>Depending on your payment plan (Full / Per Visit / Installment), you may have further payments due during the project.<br>
+            Go to <span class="nav-pill">Billing &amp; Finance</span> → <span class="nav-pill">Invoices</span> to see all your invoices and outstanding balances.<br>
+            A <strong>Pay Now</strong> button will appear on your project card whenever a payment is due.</p>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num">11</div>
+          <div class="step-content">
+            <h4>Submit a Service Request</h4>
+            <p>If you encounter a new issue or need additional support during or after a project, go to <span class="nav-pill">Services</span> → <span class="nav-pill">Service Requests</span>.<br>
+            Click <strong>New Request</strong>, describe the issue, and submit. Our team will triage and respond.</p>
+          </div>
+        </li>
+
+      </ul>
+
+    </div>
+  </div>
+
+  <!-- ============================= -->
+  <!-- SECTION 3: NAVIGATION REF     -->
+  <!-- ============================= -->
+  <div class="section" id="nav-reference">
+    <div class="section-header" style="background:#37474f;">
+      <span class="icon">🗺️</span>
+      <h2>3. Your Sidebar Navigation Reference</h2>
+      <span class="role-badge">Role: Client</span>
+    </div>
+    <div class="section-body">
+      <table class="nav-table">
+        <tr><th>Sidebar Item</th><th>Where to Click</th><th>What It Does</th></tr>
+        <tr><td><strong>Dashboard</strong></td><td>Top of sidebar</td><td>Your overview page — project stats, balance alerts, and notifications</td></tr>
+        <tr><td>Properties → Add Property</td><td>Properties ▾ → Add Property</td><td>Register a new property with Emuria</td></tr>
+        <tr><td>Properties → My Properties</td><td>Properties ▾ → My Properties</td><td>View, edit, or manage your registered properties</td></tr>
+        <tr><td>Properties → Tenants</td><td>Properties ▾ → Tenants</td><td>Manage tenants living on your property</td></tr>
+        <tr><td>Services → Inspections</td><td>Services ▾ → Inspections</td><td>View inspection status, pay inspection fee, access report &amp; agreement</td></tr>
+        <tr><td>Services → Quotations</td><td>Services ▾ → Quotations</td><td>Review and respond to shared quotations from the assessment team</td></tr>
+        <tr><td>Services → Projects Preview</td><td>Services ▾ → Projects Preview</td><td>Monitor active project progress, dates, status and payment</td></tr>
+        <tr><td>Services → Service Requests</td><td>Services ▾ → Service Requests</td><td>Submit and track new service requests</td></tr>
+        <tr><td>Billing → Invoices</td><td>Billing &amp; Finance ▾ → Invoices</td><td>View and pay your invoices</td></tr>
+        <tr><td>Billing → My Subscription</td><td>Billing &amp; Finance ▾ → My Subscription</td><td>View your subscription plan and status</td></tr>
+        <tr><td>Help → Complaints</td><td>Help &amp; Support ▾ → Complaints</td><td>Submit a formal complaint</td></tr>
+        <tr><td>Help → Emergency Reports</td><td>Help &amp; Support ▾ → Emergency Reports</td><td>Report urgent property issues</td></tr>
+        <tr><td>Help → Contact Support</td><td>Help &amp; Support ▾ → Contact Support</td><td>Send a message to the Emuria support team</td></tr>
+        <tr><td>Resources → Welcome Letter</td><td>Resources ▾ → ✉️ Welcome Letter</td><td>Your personalised welcome letter &amp; onboarding overview</td></tr>
+        <tr><td>Resources → Client Guide</td><td>Resources ▾ → 📖 User Guide</td><td>This guide — step-by-step help for using the platform</td></tr>
+        <tr><td>Resources → Agreement Guide</td><td>Resources ▾ → 📄 Agreement Guide</td><td>Clause-by-clause explanation of your service agreement</td></tr>
+        <tr><td>Settings (top-right)</td><td>Click your name/avatar → Settings</td><td>Update your profile photo, signature, name, email and password</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <!-- ============================= -->
+  <!-- SECTION 4: PROFILE SETTINGS   -->
+  <!-- ============================= -->
+  <div class="section" id="profile-settings">
+    <div class="section-header settings">
+      <span class="icon">⚙️</span>
+      <h2>4. Profile &amp; Settings</h2>
+      <span class="role-badge">Your Account</span>
+    </div>
+    <div class="section-body">
+
+      <p>You can manage your personal account from the <strong>Settings</strong> page.</p>
+
+      <h3 style="margin:18px 0 10px;color:#2e7d32;">How to Access Settings</h3>
+      <p>Click your <strong>name or avatar</strong> in the top-right navbar and select <strong>Settings</strong>, or navigate directly to:<br>
+      <span class="nav-pill">https://etogo.laravel.cloud/settings</span></p>
+
+      <h3 style="margin:22px 0 10px;color:#2e7d32;">What You Can Do</h3>
+
+      <ul class="steps">
+
+        <li>
+          <div class="step-num" style="background:#2e7d32;">1</div>
+          <div class="step-content">
+            <h4>Update Profile Photo</h4>
+            <p>On the Settings page, click the <strong>camera icon</strong> over your profile picture and select a new image (JPG, PNG or WEBP, max 2 MB).<br>
+            The photo uploads and saves automatically as soon as you select it — no additional button click needed.</p>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num" style="background:#2e7d32;">2</div>
+          <div class="step-content">
+            <h4>Upload Your Signature Image</h4>
+            <p>In the <strong>My Signature</strong> card on the left, click the file input and select your signature image (JPG, PNG or WEBP, max 2 MB).<br>
+            Use a clear handwritten signature on a white background for best results.<br>
+            The signature uploads automatically when selected.</p>
+            <div class="callout success">
+              <strong>Why this matters:</strong> When you sign your service agreement, your saved signature image is automatically embedded into the contract document and included in the downloadable PDF. This makes your agreement professionally signed and legally clear.
+            </div>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num" style="background:#2e7d32;">3</div>
+          <div class="step-content">
+            <h4>Update Name &amp; Email</h4>
+            <p>In the <strong>Profile Information</strong> section on the right, update your full name and email address and click <strong>Save Changes</strong>.</p>
+          </div>
+        </li>
+
+        <li>
+          <div class="step-num" style="background:#2e7d32;">4</div>
+          <div class="step-content">
+            <h4>Change Your Password</h4>
+            <p>Scroll down to the <strong>Change Password</strong> section. Enter your current password, then your new password twice. A real-time <strong>password strength meter</strong> shows how strong your new password is (aim for Strong or Very Strong).<br>
+            Click <strong>Update Password</strong> to save.</p>
+            <div class="callout">
+              <strong>Password requirements:</strong> Minimum 8 characters, at least one uppercase letter, one lowercase letter, and one number.
+            </div>
+          </div>
+        </li>
+
+      </ul>
+
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer">
+    <p><strong>EMURIA Regenerative Property Care</strong></p>
+    <p style="margin-top:4px;">Live Platform: <a href="https://etogo.laravel.cloud" target="_blank" rel="noopener noreferrer">https://etogo.laravel.cloud</a></p>
+    <p style="margin-top:4px;">For support, use the <strong>Help &amp; Support</strong> section in the sidebar or email your account manager.</p>
+    <p style="margin-top:12px;font-size:.78rem;opacity:.6;">Document version May 2026 · EMURIA Regenerative Property Care</p>
+  </div>
+
+</div>
+</body>
+</html>

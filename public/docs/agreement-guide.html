@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Service Agreement Template Guide — EMURIA</title>
+<style>
+  :root{--brand:#1f2f98;--brand-light:#e8ecff;--accent:#f5a623;--success:#198754;--danger:#dc3545;--border:#dee2e6;--text:#1a1a2e;--muted:#6c757d;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Segoe UI',Arial,sans-serif;font-size:14px;color:var(--text);background:#f4f6fb;line-height:1.65;}
+  .cover{background:linear-gradient(135deg,#2d3561,#1a1a2e);color:#fff;padding:48px 40px 40px;text-align:center;}
+  .cover .logo{font-size:2rem;font-weight:800;}
+  .cover h1{font-size:1.8rem;font-weight:700;margin:16px 0 8px;}
+  .cover p{opacity:.82;max-width:600px;margin:0 auto;}
+  .container{max-width:900px;margin:0 auto;padding:36px 20px 70px;}
+  .card{background:#fff;border-radius:10px;border:1px solid var(--border);margin-bottom:28px;overflow:hidden;}
+  .card-header{padding:14px 24px;display:flex;align-items:center;gap:10px;color:#fff;}
+  .card-header h2{font-size:1.05rem;font-weight:700;}
+  .card-body{padding:24px;}
+  .clause{border:1px solid var(--border);border-radius:8px;margin-bottom:16px;overflow:hidden;}
+  .clause-header{background:#f8faff;border-bottom:1px solid var(--border);padding:11px 16px;display:flex;align-items:center;gap:10px;}
+  .clause-num{min-width:28px;height:28px;background:var(--brand);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.8rem;flex-shrink:0;}
+  .clause-title{font-weight:700;font-size:.92rem;color:var(--brand);}
+  .clause-body{padding:14px 16px;font-size:.88rem;color:#333;line-height:1.7;}
+  .clause-body strong{color:var(--text);}
+  .callout{border-left:4px solid var(--brand);background:var(--brand-light);border-radius:0 8px 8px 0;padding:11px 15px;margin:10px 0;font-size:.85rem;}
+  .callout.success{border-color:var(--success);background:#e8f5e9;}
+  .callout.warn{border-color:#f59e0b;background:#fff8e1;}
+  .callout.danger{border-color:var(--danger);background:#fdecea;}
+  table{width:100%;border-collapse:collapse;margin-top:10px;}
+  th{background:var(--brand);color:#fff;padding:9px 14px;font-size:.83rem;text-align:left;}
+  td{padding:9px 14px;border-bottom:1px solid var(--border);font-size:.87rem;vertical-align:top;}
+  tr:nth-child(even) td{background:#f9faff;}
+  tr:last-child td{border-bottom:none;}
+  .sig-flow{display:grid;grid-template-columns:1fr auto 1fr;gap:16px;align-items:center;margin:16px 0;}
+  .sig-box{border:2px solid #c5cefc;border-radius:10px;padding:18px;text-align:center;background:#f8faff;}
+  .sig-box .role{font-size:.75rem;font-weight:700;color:var(--brand);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;}
+  .sig-box .steps{font-size:.8rem;color:#444;text-align:left;margin-top:10px;}
+  .sig-box .steps li{margin-bottom:4px;padding-left:12px;position:relative;}
+  .sig-box .steps li::before{content:"•";position:absolute;left:0;color:var(--brand);}
+  .sig-arrow{text-align:center;font-size:2rem;color:var(--muted);}
+  .footer{text-align:center;padding:28px;color:var(--muted);font-size:.83rem;border-top:1px solid var(--border);margin-top:10px;}
+  @media print{body{background:#fff;}.cover{-webkit-print-color-adjust:exact;print-color-adjust:exact;}.card-header{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="logo">EMURIA</div>
+  <h1>Service Agreement Template Guide</h1>
+  <p>A clause-by-clause explanation of the Client Job Approval &amp; Service Agreement — what each section means and what both parties are agreeing to.</p>
+</div>
+
+<div class="container">
+
+  <!-- OVERVIEW -->
+  <div class="card">
+    <div class="card-header" style="background:#1f2f98;"><span style="font-size:1.4rem;">📄</span><h2>What Is the Service Agreement?</h2></div>
+    <div class="card-body">
+      <p>The <strong>Client Job Approval &amp; Service Agreement</strong> is the legally binding contract between the Client and EMURIA Regenerative Property Care. It is generated automatically by the system after the PHAR assessment is complete and the client's finding selection has been approved.</p>
+      <div class="callout" style="margin-top:14px;">
+        The agreement is <strong>digital-first</strong>: the client signs via the platform, and an authorised Emuria representative countersigns. Both signatures — including uploaded signature images — are embedded in the PDF record.
+      </div>
+      <h3 style="margin:20px 0 12px;color:var(--brand);">Signing Flow</h3>
+      <div class="sig-flow">
+        <div class="sig-box">
+          <div class="role">Step 1 — Client Signs</div>
+          <ul class="steps">
+            <li>Client reviews the full agreement online</li>
+            <li>Enters their full legal name</li>
+            <li>Checks the confirmation checkbox</li>
+            <li>Clicks "Sign Agreement"</li>
+            <li>Profile signature image is embedded automatically</li>
+          </ul>
+        </div>
+        <div class="sig-arrow">→</div>
+        <div class="sig-box">
+          <div class="role">Step 2 — Emuria Countersigns</div>
+          <ul class="steps">
+            <li>Admin assigns tools and sets visit schedule</li>
+            <li>Opens Ready to Countersign queue</li>
+            <li>Enters their full legal name</li>
+            <li>Clicks "Countersign"</li>
+            <li>Profile signature image embedded automatically</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout success">After both parties have signed, the project moves to Active status and work may commence on the scheduled visit dates.</div>
+    </div>
+  </div>
+
+  <!-- CLAUSE BY CLAUSE -->
+  <div class="card">
+    <div class="card-header" style="background:#374151;"><span style="font-size:1.4rem;">📋</span><h2>Clause-by-Clause Explanation</h2></div>
+    <div class="card-body">
+
+      <div class="clause">
+        <div class="clause-header"><div class="clause-num">1</div><div class="clause-title">Parties to the Agreement</div></div>
+        <div class="clause-body">
+          Identifies the two parties entering the contract:<br>
+          — <strong>Client:</strong> The registered property owner as identified in the EMURIA system<br>
+          — <strong>Service Provider:</strong> EMURIA Regenerative Property Care (Etogo)<br><br>
+          Both parties are identified by their system-registered names. The agreement date is automatically set to the date of client signature.
+        </div>
+      </div>
+
+      <div class="clause">
+        <div class="clause-header"><div class="clause-num">2</div><div class="clause-title">Property Description</div></div>
+        <div class="clause-body">
+          Specifies the exact property that is the subject of the agreement — including the property name, address, type, and size as registered in the system. This ensures the agreement is property-specific and cannot be applied to another property.
+        </div>
+      </div>
+
+      <div class="clause">
+        <div class="clause-header"><div class="clause-num">3</div><div class="clause-title">Approved Findings &amp; Scope of Work</div></div>
+        <div class="clause-body">
+          Lists all approved findings from the PHAR assessment — the specific defects, systems, and conditions that the remediation programme will address. This is the <strong>agreed scope of work</strong>.<br><br>
+          <strong>Important:</strong> Only the findings selected and approved by the client during the quotation review process are included. No work outside this agreed scope will be carried out without a separate Change Order.<br><br>
+          The scope is <strong>immutable</strong> after both parties sign — it cannot be changed without a signed amendment.
+          <div class="callout warn">If additional issues are discovered during fieldwork, they are raised as a new Change Order and require fresh agreement from both parties before any additional work begins.</div>
+        </div>
+      </div>
+
+      <div class="clause">
+        <div class="clause-header"><div class="clause-num">4</div><div class="clause-title">Annual Recurring Price (ARP) &amp; Payment Terms</div></div>
+        <div class="clause-body">
+          States the agreed total project price — the <strong>ARP (Annual Recurring Price)</strong> — calculated by the PHAR pricing engine as: BDC + FRLC + FMC.<br><br>
+          <strong>Payment schedule:</strong>
+          <table style="margin-top:10px;">
+            <tr><th>Payment</th><th>Amount</th><th>Timing</th></tr>
+            <tr><td>50% Deposit</td><td>ARP ÷ 2</td><td>Due at agreement signing — before work commences</td></tr>
+            <tr><td>Remaining 50%</td><td>ARP ÷ 2</td><td>Per the chosen payment plan (Full / Per Visit / Installment)</td></tr>
+          </table>
+          <div class="callout danger" style="margin-top:10px;"><strong>Work does not begin until the 50% deposit is confirmed paid in the system.</strong></div>
+        </div>
+      </div>
+
+      <div class="clause">
+        <div class="clause-header"><div class="clause-num">5</div><div class="clause-title">Work Schedule &amp; Visit Dates</div></div>
+        <div class="clause-body">
+          Specifies the planned work visit dates as set by the Project Manager in the Pre-Sign Setup stage.<br><br>
+          — <strong>Project Start Date:</strong> Date of the first scheduled work visit<br>
+          — <strong>Target Completion Date:</strong> Date of the last scheduled work visit<br>
+          — Visits are scheduled Monday–Saturday, 7:00 AM–6:00 PM only<br><br>
+          The client agrees to provide reasonable access to the property on scheduled visit days. Advance notice of at least 24 hours will be given for each visit.
+          <div class="callout">Schedule changes after signing require notification to both parties and are updated in the system's Visit Schedule tab.</div>
+        </div>
+      </div>
+
+      <div class="clause">
+        <div class="clause-header"><div class="clause-num">6</div><div class="clause-title">Service Tier &amp; Service Level</div></div>
+        <div class="clause-body">
+          States the client's assigned service tier — <strong>Essentials, Premium, White-Glove, or Critical Care</strong> — as determined by the dual-gate CPI/ARP assessment.<br><br>
+          The tier defines the service intensity, response times, and quality standards that apply throughout the programme. Higher tiers involve more frequent visits, more comprehensive remediation, and stricter SLAs.
+        </div>
+      </div>
+
+      <div class="clause">
+        <div class="clause-header"><div class="clause-num">7</div><div class="clause-title">Client Obligations</div></div>
+        <div class="clause-body">
+          The client agrees to:<br>
+          — Provide safe access to the property on all scheduled visit days<br>
+          — Ensure utilities (water, electricity) are accessible to the Emuria team<br>
+          — Make payments on the agreed schedule<br>
+          — Notify Emuria immediately if access conditions change or emergency issues arise<br>
+          — Not instruct any third-party contractors to work on the same approved findings without notifying Emuria
+        </div>
+      </div>
+
+      <div class="clause">
+        <div class="clause-header"><div class="clause-num">8</div><div class="clause-title">EMURIA Obligations</div></div>
+        <div class="clause-body">
+          EMURIA agrees to:<br>
+          — Carry out all approved remediation work with reasonable skill and care<br>
+          — Deploy qualified and vetted field technicians on all visits<br>
+          — Maintain comprehensive work logs for every visit<br>
+          — Notify the client at least 24 hours before each visit<br>
+          — Provide photographic evidence of work completed<br>
+          — Respond to emergency service requests within the tier SLA
+        </div>
+      </div>
+
+      <div class="clause">
+        <div class="clause-header"><div class="clause-num">9</div><div class="clause-title">Digital Signature &amp; Legal Validity</div></div>
+        <div class="clause-body">
+          Both parties agree that electronic signatures applied through the EMURIA platform constitute legally valid signatures equivalent to handwritten signatures for the purposes of this agreement.<br><br>
+          Each signature is recorded with:<br>
+          — The signatory's full printed name<br>
+          — Date and time of signing (server timestamp)<br>
+          — Signature image (if uploaded to the signatory's profile)<br>
+          — System user account record<br><br>
+          <strong>"Digitally Signed"</strong> text always appears on the agreement regardless of whether a signature image has been uploaded.
+        </div>
+      </div>
+
+      <div class="clause">
+        <div class="clause-header"><div class="clause-num">10</div><div class="clause-title">Termination &amp; Cancellation</div></div>
+        <div class="clause-body">
+          Either party may request termination of the agreement with written notice.<br><br>
+          — If the client cancels after the 50% deposit is paid but before work begins, a cancellation fee may apply<br>
+          — If work is partially complete at cancellation, payment is due for work actually completed, pro-rated to the percentage of approved findings addressed<br>
+          — EMURIA may suspend service if payment obligations are not met after two written notices
+          <div class="callout warn">Cancellation requests must be submitted through the system via a Change Order or by contacting your account manager directly.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- FAQ -->
+  <div class="card">
+    <div class="card-header" style="background:#0e7490;"><span style="font-size:1.4rem;">❓</span><h2>Frequently Asked Questions</h2></div>
+    <div class="card-body">
+      <table>
+        <tr><th>Question</th><th>Answer</th></tr>
+        <tr><td>Can a client sign without uploading a signature image?</td><td>Yes. The "Digitally Signed" text will appear on the contract regardless. The image is optional but strongly recommended for professionalism.</td></tr>
+        <tr><td>Can the scope of work be changed after signing?</td><td>Only via a formal Change Order that both parties must sign. The original agreement is immutable.</td></tr>
+        <tr><td>What if the client wants to add findings that weren't in the original assessment?</td><td>A new assessment or a Change Order is required. These are treated as a separate contract amendment.</td></tr>
+        <tr><td>Can Emuria start work before the client pays the 50% deposit?</td><td>No. The system blocks the project from being countersigned until the deposit payment is confirmed.</td></tr>
+        <tr><td>Where is the signed PDF stored?</td><td>The PDF is generated on demand and can be downloaded from the inspection/project detail page at any time by both the client and admin.</td></tr>
+        <tr><td>What happens if the countersigning admin leaves the company?</td><td>The PDF record preserves the signature at the time of signing. A new agreement would only be needed for new projects. Historical agreements remain legally valid.</td></tr>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">
+  <strong>EMURIA Regenerative Property Care</strong> — Service Agreement Guide · May 2026<br>
+  <a href="user-guide.html">← Back to User Guide</a>
+</div>
+
+</body>
+</html>

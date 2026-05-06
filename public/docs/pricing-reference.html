@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pricing & BDC Calculation Reference — EMURIA</title>
+<style>
+  :root { --brand:#1f2f98; --brand-dark:#14206a; --brand-light:#e8ecff; --accent:#f5a623; --success:#198754; --text:#1a1a2e; --muted:#6c757d; --border:#dee2e6; }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Segoe UI',Arial,sans-serif;font-size:14px;color:var(--text);background:#f4f6fb;line-height:1.6;}
+  .cover{background:linear-gradient(135deg,var(--brand),var(--brand-dark));color:#fff;padding:48px 40px 40px;text-align:center;}
+  .cover .logo{font-size:2rem;font-weight:800;}
+  .cover h1{font-size:1.8rem;font-weight:700;margin:16px 0 8px;}
+  .cover p{opacity:.82;max-width:600px;margin:0 auto;}
+  .container{max-width:980px;margin:0 auto;padding:36px 20px 70px;}
+  .card{background:#fff;border-radius:10px;border:1px solid var(--border);margin-bottom:28px;overflow:hidden;}
+  .card-header{padding:14px 24px;display:flex;align-items:center;gap:10px;color:#fff;}
+  .card-header h2{font-size:1.05rem;font-weight:700;}
+  .card-body{padding:24px;}
+  .formula-box{background:#1e293b;color:#e2e8f0;border-radius:8px;padding:16px 20px;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;margin:14px 0;overflow-x:auto;}
+  .formula-box .comment{color:#94a3b8;}
+  .formula-box .key{color:#fbbf24;font-weight:700;}
+  .formula-box .val{color:#86efac;}
+  table{width:100%;border-collapse:collapse;margin-top:10px;}
+  th{background:var(--brand);color:#fff;padding:9px 14px;font-size:.83rem;text-align:left;}
+  td{padding:9px 14px;border-bottom:1px solid var(--border);font-size:.87rem;vertical-align:top;}
+  tr:nth-child(even) td{background:#f9faff;}
+  tr:last-child td{border-bottom:none;}
+  .callout{border-left:4px solid var(--brand);background:var(--brand-light);border-radius:0 8px 8px 0;padding:11px 15px;margin:12px 0;font-size:.88rem;}
+  .callout.success{border-color:var(--success);background:#e8f5e9;}
+  .callout.warn{border-color:#f59e0b;background:#fff8e1;}
+  .step-flow{display:flex;flex-wrap:wrap;gap:0;align-items:center;margin:16px 0;}
+  .step-box{background:var(--brand-light);border:2px solid #c5cefc;color:var(--brand);border-radius:8px;padding:8px 14px;font-size:.8rem;font-weight:700;text-align:center;}
+  .step-arrow{color:var(--muted);font-size:1.2rem;padding:0 6px;align-self:center;}
+  .tier-essentials{background:#e8f5e9;border-left:4px solid #4caf50;padding:8px 14px;border-radius:0 6px 6px 0;margin-bottom:8px;}
+  .tier-premium{background:#e3f2fd;border-left:4px solid #2196f3;padding:8px 14px;border-radius:0 6px 6px 0;margin-bottom:8px;}
+  .tier-white{background:#f3e5f5;border-left:4px solid #9c27b0;padding:8px 14px;border-radius:0 6px 6px 0;margin-bottom:8px;}
+  .tier-critical{background:#fdecea;border-left:4px solid #f44336;padding:8px 14px;border-radius:0 6px 6px 0;margin-bottom:8px;}
+  .badge{display:inline-block;border-radius:20px;padding:2px 10px;font-size:.75rem;font-weight:700;color:#fff;}
+  .badge-green{background:#198754;} .badge-blue{background:#0d6efd;} .badge-purple{background:#7c3aed;} .badge-red{background:#dc3545;}
+  .footer{text-align:center;padding:28px;color:var(--muted);font-size:.83rem;border-top:1px solid var(--border);margin-top:10px;}
+  @media print{body{background:#fff;}.cover{-webkit-print-color-adjust:exact;print-color-adjust:exact;}.card-header{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="logo">EMURIA</div>
+  <h1>Pricing &amp; BDC Calculation Reference</h1>
+  <p>A complete technical reference for how the EMURIA ARP (Annual Recurring Price) is calculated from property inspection data.</p>
+</div>
+
+<div class="container">
+
+  <!-- OVERVIEW -->
+  <div class="card">
+    <div class="card-header" style="background:#1f2f98;">
+      <span style="font-size:1.4rem;">📐</span>
+      <h2>Overview — The 6-Step Pricing Pipeline</h2>
+    </div>
+    <div class="card-body">
+      <div class="step-flow">
+        <div class="step-box">Step 1<br>BDC</div><span class="step-arrow">→</span>
+        <div class="step-box">Step 2<br>Property Size</div><span class="step-arrow">→</span>
+        <div class="step-box">Step 3A<br>CPI Score</div><span class="step-arrow">→</span>
+        <div class="step-box">Step 3B<br>FRLC + FMC</div><span class="step-arrow">→</span>
+        <div class="step-box">Step 4<br>TRC Merge</div><span class="step-arrow">→</span>
+        <div class="step-box">Step 5<br>Tier</div><span class="step-arrow">→</span>
+        <div class="step-box">Step 6<br>ARP Final</div>
+      </div>
+      <div class="callout">
+        All pricing is locked at the time of inspection and is <strong>immutable</strong> after the client approves the quotation. Changes to BDC settings do not retroactively affect existing inspections.
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 1: BDC -->
+  <div class="card">
+    <div class="card-header" style="background:#1565c0;">
+      <span style="font-size:1.4rem;">🚗</span>
+      <h2>Step 1 — Base Deployment Cost (BDC)</h2>
+    </div>
+    <div class="card-body">
+      <p style="margin-bottom:12px;">BDC covers the cost of deploying the Emuria team to the property — travel distance, travel time, and annual frequency.</p>
+      <div class="formula-box">
+<span class="comment">// Per-Visit Calculation</span>
+<span class="key">BDC_per_visit</span> = (distance_km × rate_per_km) + (minutes × rate_per_minute)
+
+<span class="comment">// Example: 40 km, 30 min travel, rate=$1.50/km, $1.65/min</span>
+<span class="key">BDC_per_visit</span> = (40 × 1.50) + (30 × 1.65)
+             = <span class="val">60.00</span> + <span class="val">49.50</span> = <span class="val">$109.50</span>
+
+<span class="comment">// Annual BDC</span>
+<span class="key">BDC_annual</span> = BDC_per_visit × visits_per_year
+          = 109.50 × 24 = <span class="val">$2,628.00/year</span>
+      </div>
+      <table>
+        <tr><th>Input Field</th><th>Description</th><th>Configurable?</th></tr>
+        <tr><td><code>bdc_distance_km</code></td><td>One-way travel distance to the property in km</td><td>Per inspection (inspector enters)</td></tr>
+        <tr><td><code>bdc_time_minutes</code></td><td>One-way travel time in minutes</td><td>Per inspection (inspector enters)</td></tr>
+        <tr><td><code>bdc_visits_per_year</code></td><td>Number of annual visits — auto-derived from total labour hours ÷ 8</td><td>Auto-calculated</td></tr>
+        <tr><td><code>rate_per_km</code></td><td>Cost per km — default $1.50</td><td>BDC Calibration Engine settings</td></tr>
+        <tr><td><code>rate_per_minute</code></td><td>Cost per travel minute — default $1.65</td><td>BDC Calibration Engine settings</td></tr>
+      </table>
+      <div class="callout warn" style="margin-top:14px;">
+        <strong>Admin action:</strong> Go to <strong>System Settings → BDC Calibration Engine</strong> to update rate_per_km and rate_per_minute for all future inspections.
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 3B: FRLC + FMC -->
+  <div class="card">
+    <div class="card-header" style="background:#0f5132;">
+      <span style="font-size:1.4rem;">🔨</span>
+      <h2>Step 3B — FRLC &amp; FMC (From Findings)</h2>
+    </div>
+    <div class="card-body">
+      <p style="margin-bottom:12px;">Each finding entered by the inspector has a labour hours estimate and a material cost. These are summed across all approved findings.</p>
+      <div class="formula-box">
+<span class="comment">// Field Resource Labour Cost (per finding)</span>
+<span class="key">FRLC_finding</span> = phar_labour_hours × labour_rate_per_hour
+
+<span class="comment">// Total FRLC (all approved findings)</span>
+<span class="key">FRLC_annual</span> = SUM(FRLC_finding) for all approved findings
+
+<span class="comment">// Field Material Cost</span>
+<span class="key">FMC_annual</span> = SUM(material_cost) for all approved findings
+
+<span class="comment">// Example: 15 findings, avg 5 hrs each @ $125.40/hr, avg $72 materials</span>
+<span class="key">FRLC_annual</span> = 15 × 5 × 125.40 = <span class="val">$9,405.00</span>
+<span class="key">FMC_annual</span>  = 15 × 72          = <span class="val">$1,080.00</span>
+      </div>
+      <div class="callout">
+        Labour rates per hour are configured in <strong>System Settings → FMC Material Settings</strong>. Material costs are set per-finding in the <strong>Findings Template Settings</strong>.
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 4: TRC -->
+  <div class="card">
+    <div class="card-header" style="background:#7c3aed;">
+      <span style="font-size:1.4rem;">➕</span>
+      <h2>Step 4 — TRC (Total Remediation Cost) — Merge Bridge</h2>
+    </div>
+    <div class="card-body">
+      <div class="formula-box">
+<span class="comment">// Total Remediation Cost</span>
+<span class="key">TRC_annual</span>  = BDC_annual + FRLC_annual + FMC_annual
+            = 2,628 + 9,405 + 1,080 = <span class="val">$13,113.00/year</span>
+
+<span class="key">TRC_monthly</span> = TRC_annual / 12 = <span class="val">$1,092.75/month</span>
+
+<span class="key">TRC_per_visit</span> = TRC_annual / visits_per_year
+
+<span class="comment">// ARP = TRC (the client-facing Annual Recurring Price)</span>
+<span class="key">ARP</span> = TRC_annual = <span class="val">$13,113.00</span>
+      </div>
+      <div class="callout success">
+        <strong>ARP is the final project price.</strong> The client sees this as their total project cost. The 50% deposit = ARP ÷ 2.
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 5: TIER -->
+  <div class="card">
+    <div class="card-header" style="background:#c2410c;">
+      <span style="font-size:1.4rem;">🏷️</span>
+      <h2>Step 5 — Service Tier Assignment (Dual-Gate)</h2>
+    </div>
+    <div class="card-body">
+      <p style="margin-bottom:14px;">The service tier is determined by <strong>two gates</strong> — whichever gate produces the higher tier wins.</p>
+      <div class="formula-box">
+<span class="comment">// Gate 1: Condition Score (from CPI assessment)</span>
+<span class="comment">// Score 0–100 (lower = worse condition)</span>
+if condition_score &lt;= 30  → Tier_Score = <span class="val">"Critical Care"</span>
+if condition_score &lt;= 50  → Tier_Score = <span class="val">"White-Glove"</span>
+if condition_score &lt;= 70  → Tier_Score = <span class="val">"Premium"</span>
+else                       → Tier_Score = <span class="val">"Essentials"</span>
+
+<span class="comment">// Gate 2: Cost Pressure (ARP vs base package prices)</span>
+if ARP_monthly >= 1800 → Tier_ARP = <span class="val">"Critical Care"</span>
+if ARP_monthly >= 1200 → Tier_ARP = <span class="val">"White-Glove"</span>
+if ARP_monthly >= 703  → Tier_ARP = <span class="val">"Premium"</span>
+else                   → Tier_ARP = <span class="val">"Essentials"</span>
+
+<span class="comment">// Final Tier = highest of the two gates</span>
+<span class="key">Tier_Final</span> = MAX(Tier_Score, Tier_ARP)
+      </div>
+
+      <div class="tier-essentials"><span class="badge badge-green">Essentials</span> &nbsp; Condition score 71–100 &nbsp;|&nbsp; ARP &lt; $703/month &nbsp;|&nbsp; Multiplier: <strong>1.00×</strong></div>
+      <div class="tier-premium"><span class="badge badge-blue">Premium</span> &nbsp; Condition score 51–70 &nbsp;|&nbsp; ARP $703–$1,199/month &nbsp;|&nbsp; Multiplier: <strong>1.15×</strong></div>
+      <div class="tier-white"><span class="badge badge-purple">White-Glove</span> &nbsp; Condition score 31–50 &nbsp;|&nbsp; ARP $1,200–$1,799/month &nbsp;|&nbsp; Multiplier: <strong>1.35×</strong></div>
+      <div class="tier-critical"><span class="badge badge-red">Critical Care</span> &nbsp; Condition score 0–30 &nbsp;|&nbsp; ARP ≥ $1,800/month &nbsp;|&nbsp; Multiplier: <strong>1.55×</strong></div>
+    </div>
+  </div>
+
+  <!-- STEP 6: MULTIPLIER -->
+  <div class="card">
+    <div class="card-header" style="background:#856404;">
+      <span style="font-size:1.4rem;">✖️</span>
+      <h2>Step 6 — Multiplier Application (ARP Equivalent Final)</h2>
+    </div>
+    <div class="card-body">
+      <div class="formula-box">
+<span class="comment">// Apply tier multiplier to arrive at the final ARP equivalent</span>
+<span class="key">ARP_Equivalent_Final</span> = ARP_monthly × Multiplier_Final
+
+<span class="comment">// Example: White-Glove tier, ARP $1,092.75</span>
+<span class="key">ARP_Equivalent_Final</span> = 1,092.75 × 1.35 = <span class="val">$1,475.21/month</span>
+
+<span class="comment">// Floor rule: never below base package price for the tier</span>
+<span class="key">Scientific_Final</span> = MAX(ARP_Equivalent_Final, base_package_price)
+      </div>
+      <div class="callout warn">
+        The multiplier reflects the service complexity and commitment level of that tier. Clients at Critical Care tier receive the most intensive service regime and the highest SLA.
+      </div>
+    </div>
+  </div>
+
+  <!-- PAYMENT PLANS -->
+  <div class="card">
+    <div class="card-header" style="background:#374151;">
+      <span style="font-size:1.4rem;">💳</span>
+      <h2>Payment Plans</h2>
+    </div>
+    <div class="card-body">
+      <table>
+        <tr><th>Plan</th><th>Description</th><th>50% Deposit</th><th>Remaining</th></tr>
+        <tr><td><strong>Full Payment</strong></td><td>Client pays 100% upfront</td><td>50% at signing</td><td>50% before work commences</td></tr>
+        <tr><td><strong>Per Visit</strong></td><td>Client pays per scheduled visit</td><td>50% at signing</td><td>Invoiced per visit completed</td></tr>
+        <tr><td><strong>Installment</strong></td><td>Split into agreed installments</td><td>50% at signing</td><td>Per agreed milestone schedule</td></tr>
+      </table>
+      <div class="callout success" style="margin-top:14px;">
+        <strong>Rule:</strong> Work cannot begin until the 50% deposit is confirmed AND the agreement is countersigned by Emuria.
+      </div>
+    </div>
+  </div>
+
+  <!-- FIELD REFERENCE -->
+  <div class="card">
+    <div class="card-header" style="background:#1b4f72;">
+      <span style="font-size:1.4rem;">🗄️</span>
+      <h2>Database Field Reference</h2>
+    </div>
+    <div class="card-body">
+      <table>
+        <tr><th>Field (inspections table)</th><th>Meaning</th></tr>
+        <tr><td><code>bdc_distance_km</code></td><td>One-way travel distance to property</td></tr>
+        <tr><td><code>bdc_time_minutes</code></td><td>One-way travel time in minutes</td></tr>
+        <tr><td><code>bdc_rate_per_km</code></td><td>Rate per km snapshot at time of inspection</td></tr>
+        <tr><td><code>bdc_rate_per_minute</code></td><td>Rate per minute snapshot at time of inspection</td></tr>
+        <tr><td><code>bdc_per_visit</code></td><td>Calculated BDC cost per single visit</td></tr>
+        <tr><td><code>bdc_annual</code></td><td>bdc_per_visit × bdc_visits_per_year</td></tr>
+        <tr><td><code>bdc_visits_per_year</code></td><td>Auto-derived: ceil(total_labour_hours ÷ 8)</td></tr>
+        <tr><td><code>frlc_annual</code></td><td>Field Resource Labour Cost — sum of all findings</td></tr>
+        <tr><td><code>fmc_annual</code></td><td>Field Material Cost — sum of all findings</td></tr>
+        <tr><td><code>trc_annual</code></td><td>BDC + FRLC + FMC — the total project cost (= ARP)</td></tr>
+        <tr><td><code>trc_monthly</code></td><td>TRC ÷ 12</td></tr>
+        <tr><td><code>trc_per_visit</code></td><td>TRC ÷ visits_per_year</td></tr>
+        <tr><td><code>arp_monthly</code></td><td>Monthly ARP rate (= trc_monthly)</td></tr>
+        <tr><td><code>tier_score</code></td><td>Tier from CPI condition score (Gate 1)</td></tr>
+        <tr><td><code>tier_arp</code></td><td>Tier from ARP cost pressure (Gate 2)</td></tr>
+        <tr><td><code>tier_final</code></td><td>Highest of tier_score and tier_arp</td></tr>
+        <tr><td><code>arp_equivalent_final</code></td><td>ARP after multiplier applied</td></tr>
+        <tr><td><code>base_package_price_snapshot</code></td><td>Base package price at time of inspection (floor)</td></tr>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">
+  <strong>EMURIA Regenerative Property Care</strong> — Pricing &amp; BDC Reference · May 2026<br>
+  <a href="user-guide.html">← Back to User Guide</a>
+</div>
+
+</body>
+</html>

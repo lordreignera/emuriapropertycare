@@ -131,6 +131,21 @@
                 <a class="client-sublink {{ request()->routeIs('client.support') ? 'is-active' : '' }}" href="{{ route('client.support') }}">Contact Support</a>
             </div>
         </details>
+
+        <details class="client-group">
+            <summary class="client-link">
+                <span class="client-summary-left">
+                    <i class="mdi mdi-book-open-page-variant icon-success"></i>
+                    <span>Resources</span>
+                </span>
+                <span class="client-arrow">▾</span>
+            </summary>
+            <div class="client-submenu">
+                <a class="client-sublink" href="{{ asset('docs/client-welcome.html') }}" target="_blank" rel="noopener noreferrer">✉️ Welcome Letter</a>
+                <a class="client-sublink" href="{{ asset('docs/client-guide.html') }}" target="_blank" rel="noopener noreferrer">📖 Client Guide</a>
+                <a class="client-sublink" href="{{ asset('docs/agreement-guide.html') }}" target="_blank" rel="noopener noreferrer">📄 Agreement Guide</a>
+            </div>
+        </details>
     </div>
 </nav>
 

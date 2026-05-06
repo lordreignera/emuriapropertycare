@@ -479,6 +479,13 @@
                     <a class="admin-client-sublink {{ request()->routeIs('admin.recommendation-settings.*') ? 'is-active' : '' }}" href="{{ route('admin.recommendation-settings.index') }}"><span class="admin-client-sublabel">Recommendation Settings</span></a>
                     <a class="admin-client-sublink {{ request()->routeIs('admin.tool-settings.*') ? 'is-active' : '' }}" href="{{ route('admin.tool-settings.index') }}"><span class="admin-client-sublabel">Tool Settings</span></a>
                     <a class="admin-client-sublink {{ request()->routeIs('admin.property-types.*') ? 'is-active' : '' }}" href="{{ route('admin.property-types.index') }}"><span class="admin-client-sublabel">Property Types</span></a>
+                    <a class="admin-client-sublink" href="{{ asset('docs/user-guide.html') }}" target="_blank" rel="noopener noreferrer"><span class="admin-client-sublabel">📖 User Guide</span></a>
+                    <a class="admin-client-sublink" href="{{ asset('docs/pricing-reference.html') }}" target="_blank" rel="noopener noreferrer"><span class="admin-client-sublabel">📊 Pricing Reference</span></a>
+                    <a class="admin-client-sublink" href="{{ asset('docs/inspector-checklist.html') }}" target="_blank" rel="noopener noreferrer"><span class="admin-client-sublabel">📋 Inspector Checklist</span></a>
+                    <a class="admin-client-sublink" href="{{ asset('docs/client-welcome.html') }}" target="_blank" rel="noopener noreferrer"><span class="admin-client-sublabel">✉️ Client Welcome Letter</span></a>
+                    <a class="admin-client-sublink" href="{{ asset('docs/admin-onboarding.html') }}" target="_blank" rel="noopener noreferrer"><span class="admin-client-sublabel">🚀 Admin Onboarding</span></a>
+                    <a class="admin-client-sublink" href="{{ asset('docs/agreement-guide.html') }}" target="_blank" rel="noopener noreferrer"><span class="admin-client-sublabel">📄 Agreement Guide</span></a>
+                    <a class="admin-client-sublink" href="{{ asset('docs/finance-reference.html') }}" target="_blank" rel="noopener noreferrer"><span class="admin-client-sublabel">💰 Finance Reference</span></a>
                 </div>
             </details>
 

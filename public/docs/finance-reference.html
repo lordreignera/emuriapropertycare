@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Finance &amp; Invoicing Reference — EMURIA</title>
+<style>
+  :root{--brand:#1b5e20;--brand-light:#e8f5e9;--accent:#f5a623;--success:#198754;--danger:#dc3545;--border:#dee2e6;--text:#1a1a2e;--muted:#6c757d;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:'Segoe UI',Arial,sans-serif;font-size:14px;color:var(--text);background:#f4f6fb;line-height:1.65;}
+  .cover{background:linear-gradient(135deg,#1b5e20,#2e7d32);color:#fff;padding:48px 40px 40px;text-align:center;}
+  .cover .logo{font-size:2rem;font-weight:800;}
+  .cover h1{font-size:1.8rem;font-weight:700;margin:16px 0 8px;}
+  .cover p{opacity:.82;max-width:600px;margin:0 auto;}
+  .container{max-width:980px;margin:0 auto;padding:36px 20px 70px;}
+  .card{background:#fff;border-radius:10px;border:1px solid var(--border);margin-bottom:28px;overflow:hidden;}
+  .card-header{padding:14px 24px;display:flex;align-items:center;gap:10px;color:#fff;}
+  .card-header h2{font-size:1.05rem;font-weight:700;}
+  .card-body{padding:24px;}
+  .callout{border-left:4px solid var(--brand);background:var(--brand-light);border-radius:0 8px 8px 0;padding:11px 15px;margin:12px 0;font-size:.88rem;}
+  .callout.warn{border-color:#f59e0b;background:#fff8e1;}
+  .callout.danger{border-color:var(--danger);background:#fdecea;}
+  .callout.info{border-color:#0d6efd;background:#e3f2fd;}
+  table{width:100%;border-collapse:collapse;margin-top:10px;}
+  th{background:var(--brand);color:#fff;padding:9px 14px;font-size:.83rem;text-align:left;}
+  td{padding:9px 14px;border-bottom:1px solid var(--border);font-size:.87rem;vertical-align:top;}
+  tr:nth-child(even) td{background:#f9fff9;}
+  tr:last-child td{border-bottom:none;}
+  .flow{display:flex;flex-wrap:wrap;gap:0;align-items:center;margin:16px 0;}
+  .flow-step{background:var(--brand-light);border:2px solid #a5d6a7;color:#1b5e20;border-radius:8px;padding:9px 14px;font-size:.8rem;font-weight:700;text-align:center;min-width:105px;}
+  .flow-arrow{color:var(--muted);font-size:1.2rem;padding:0 6px;align-self:center;}
+  .plan-card{border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:12px;}
+  .plan-card h4{color:var(--brand);font-size:.92rem;font-weight:700;margin-bottom:8px;}
+  .plan-card p{font-size:.87rem;color:#444;}
+  .plan-card .plan-detail{margin-top:8px;font-size:.83rem;color:#555;}
+  .badge{display:inline-block;border-radius:20px;padding:2px 10px;font-size:.73rem;font-weight:700;color:#fff;}
+  .badge-g{background:#198754;} .badge-y{background:#f59e0b;color:#000;} .badge-r{background:#dc3545;}
+  .formula-box{background:#1e293b;color:#e2e8f0;border-radius:8px;padding:14px 18px;font-family:'Courier New',monospace;font-size:.83rem;line-height:1.8;margin:12px 0;}
+  .formula-box .key{color:#fbbf24;font-weight:700;}
+  .formula-box .val{color:#86efac;}
+  .formula-box .comment{color:#94a3b8;}
+  .steps{list-style:none;padding:0;}
+  .step-li{display:flex;gap:14px;margin-bottom:18px;align-items:flex-start;}
+  .step-num{min-width:30px;height:30px;background:var(--brand);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.85rem;flex-shrink:0;margin-top:2px;}
+  .step-content h4{font-size:.92rem;font-weight:700;margin-bottom:4px;}
+  .step-content p{color:#444;font-size:.87rem;}
+  .footer{text-align:center;padding:28px;color:var(--muted);font-size:.83rem;border-top:1px solid var(--border);margin-top:10px;}
+  @media print{body{background:#fff;}.cover{-webkit-print-color-adjust:exact;print-color-adjust:exact;}.card-header{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="logo">EMURIA</div>
+  <h1>Finance &amp; Invoicing Reference</h1>
+  <p>Complete reference for Finance Officers and Administrators on invoices, payment plans, Stripe reconciliation, and managing client billing.</p>
+</div>
+
+<div class="container">
+
+  <!-- PAYMENT FLOW -->
+  <div class="card">
+    <div class="card-header" style="background:#1b5e20;"><span style="font-size:1.4rem;">💰</span><h2>The Complete Client Payment Flow</h2></div>
+    <div class="card-body">
+      <div class="flow">
+        <div class="flow-step">Client Registers</div><span class="flow-arrow">→</span>
+        <div class="flow-step">$299 Inspection Fee</div><span class="flow-arrow">→</span>
+        <div class="flow-step">Signs Agreement</div><span class="flow-arrow">→</span>
+        <div class="flow-step">50% Deposit</div><span class="flow-arrow">→</span>
+        <div class="flow-step">Work Begins</div><span class="flow-arrow">→</span>
+        <div class="flow-step">Remaining Balance</div><span class="flow-arrow">→</span>
+        <div class="flow-step">Project Closed</div>
+      </div>
+      <table style="margin-top:16px;">
+        <tr><th>Payment</th><th>Amount</th><th>Trigger</th><th>Invoice Type</th></tr>
+        <tr><td><strong>Inspection Fee</strong></td><td>$299 USD (fixed)</td><td>Client clicks "Pay Inspection Fee" for their property</td><td>Auto-generated on payment</td></tr>
+        <tr><td><strong>50% Deposit</strong></td><td>ARP ÷ 2</td><td>Client clicks "Pay 50% Deposit" after signing the agreement</td><td>Auto-generated on payment</td></tr>
+        <tr><td><strong>Remaining Balance</strong></td><td>ARP ÷ 2 (split per payment plan)</td><td>Per the chosen payment plan after work commences</td><td>Generated by Finance Officer / auto per plan</td></tr>
+      </table>
+      <div class="callout" style="margin-top:14px;">
+        All payments are processed through <strong>Stripe</strong>. The EMURIA system records payment status from Stripe webhook events automatically.
+      </div>
+    </div>
+  </div>
+
+  <!-- PAYMENT PLANS -->
+  <div class="card">
+    <div class="card-header" style="background:#0f5132;"><span style="font-size:1.4rem;">📅</span><h2>Payment Plans Explained</h2></div>
+    <div class="card-body">
+
+      <div class="plan-card">
+        <h4>💳 Full Payment</h4>
+        <p>Client pays 100% of the ARP upfront in two steps.</p>
+        <div class="plan-detail">
+          — Step 1: 50% deposit at agreement signing<br>
+          — Step 2: Remaining 50% before first work visit (or immediately after signing, client's choice)<br>
+          — No ongoing invoices after full payment received
+        </div>
+      </div>
+
+      <div class="plan-card">
+        <h4>📋 Per Visit</h4>
+        <p>Client pays for each work visit as it is completed.</p>
+        <div class="plan-detail">
+          — Step 1: 50% deposit at signing (covers the early visits)<br>
+          — Subsequent invoices: Generated after each completed visit<br>
+          — Amount per visit = TRC ÷ total number of planned visits<br>
+          — Invoice is emailed to client after the visit log is saved
+        </div>
+      </div>
+
+      <div class="plan-card">
+        <h4>🗓️ Installment</h4>
+        <p>Remaining balance is split into agreed regular installments.</p>
+        <div class="plan-detail">
+          — Step 1: 50% deposit at signing<br>
+          — Remaining 50% divided into monthly or milestone-based installments<br>
+          — Installment schedule is agreed during the Pre-Sign Setup stage<br>
+          — Finance Officer generates each installment invoice on schedule
+        </div>
+      </div>
+
+      <div class="callout warn">
+        The payment plan is agreed during contract setup. To change a plan mid-project, a Change Order signed by both parties is required.
+      </div>
+    </div>
+  </div>
+
+  <!-- INVOICE MANAGEMENT -->
+  <div class="card">
+    <div class="card-header" style="background:#1565c0;"><span style="font-size:1.4rem;">🧾</span><h2>Invoice Management</h2></div>
+    <div class="card-body">
+
+      <h3 style="color:#1565c0;margin-bottom:12px;font-size:.95rem;">Invoice Statuses</h3>
+      <table>
+        <tr><th>Status</th><th>Meaning</th><th>Finance Action Required</th></tr>
+        <tr><td><span class="badge badge-y">Pending</span></td><td>Invoice generated but not yet paid</td><td>Follow up with client if overdue</td></tr>
+        <tr><td><span class="badge badge-g">Paid</span></td><td>Payment confirmed from Stripe webhook</td><td>None — record is auto-updated</td></tr>
+        <tr><td><span class="badge badge-r">Overdue</span></td><td>Payment past due date</td><td>Send reminder, escalate if needed</td></tr>
+        <tr><td>Void</td><td>Invoice cancelled (e.g. incorrect amount)</td><td>Create a corrected invoice; note the void reason</td></tr>
+      </table>
+
+      <h3 style="color:#1565c0;margin:20px 0 12px;font-size:.95rem;">Viewing Invoices</h3>
+      <p style="font-size:.88rem;margin-bottom:10px;">Go to <strong>Billing &amp; Finance → Unpaid Invoices</strong> to see only outstanding payments, or <strong>All Invoices</strong> for the complete history. You can filter by client, project, or date range.</p>
+
+      <h3 style="color:#1565c0;margin:20px 0 12px;font-size:.95rem;">Creating a Manual Invoice</h3>
+      <ul class="steps">
+        <li class="step-li"><div class="step-num">1</div><div class="step-content"><h4>Go to Billing &amp; Finance → All Invoices</h4><p>Click <strong>Create Invoice</strong>.</p></div></li>
+        <li class="step-li"><div class="step-num">2</div><div class="step-content"><h4>Select the Client &amp; Project</h4><p>The invoice will be linked to the specific project so the client can see it from their dashboard.</p></div></li>
+        <li class="step-li"><div class="step-num">3</div><div class="step-content"><h4>Set Amount, Description &amp; Due Date</h4><p>Enter the invoice amount, a clear description (e.g. "Installment 2 of 3"), and the payment due date.</p></div></li>
+        <li class="step-li"><div class="step-num">4</div><div class="step-content"><h4>Save &amp; Notify</h4><p>Save the invoice. The client receives a notification and can see the "Pay Now" button appear on their project card and in Billing → Invoices.</p></div></li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- STRIPE -->
+  <div class="card">
+    <div class="card-header" style="background:#6b21a8;"><span style="font-size:1.4rem;">💳</span><h2>Stripe Integration &amp; Reconciliation</h2></div>
+    <div class="card-body">
+      <div class="callout info">
+        EMURIA uses <strong>Stripe</strong> for all client payment processing. The system listens to Stripe webhook events to automatically update invoice and payment status.
+      </div>
+
+      <h3 style="color:#6b21a8;margin:16px 0 10px;font-size:.93rem;">How Payment Updates Work</h3>
+      <div class="formula-box">
+<span class="comment">// Automatic flow (no Finance Officer action needed)</span>
+Client clicks "Pay Now" on their dashboard
+  → Stripe Checkout page opens
+  → Client enters card details
+  → Stripe processes payment
+  → Stripe sends webhook event to EMURIA
+  → Invoice status updated to Paid automatically
+  → Client receives email confirmation
+  → Finance Officer sees updated status in Billing
+      </div>
+
+      <h3 style="color:#6b21a8;margin:16px 0 10px;font-size:.93rem;">Stripe Dashboard Reconciliation</h3>
+      <table>
+        <tr><th>Stripe Event</th><th>What It Means in EMURIA</th></tr>
+        <tr><td><code>checkout.session.completed</code></td><td>Payment successful — invoice marked Paid, project advances</td></tr>
+        <tr><td><code>payment_intent.payment_failed</code></td><td>Card declined — invoice remains Pending, client notified</td></tr>
+        <tr><td><code>charge.refunded</code></td><td>Refund issued — Finance Officer should void the invoice and note reason</td></tr>
+        <tr><td><code>invoice.paid</code></td><td>Subscription payment received (for subscription clients)</td></tr>
+      </table>
+
+      <div class="callout warn" style="margin-top:14px;">
+        <strong>If a payment shows as successful in Stripe but not updated in EMURIA:</strong> Check the webhook logs in the Stripe dashboard for delivery failures. Contact your system administrator to manually trigger a webhook resync.
+      </div>
+
+      <h3 style="color:#6b21a8;margin:16px 0 10px;font-size:.93rem;">Issuing a Refund</h3>
+      <p style="font-size:.87rem;margin-bottom:8px;">Refunds must be processed directly in the <strong>Stripe Dashboard</strong> (stripe.com). After issuing the refund in Stripe:</p>
+      <ol style="padding-left:20px;font-size:.87rem;line-height:2;">
+        <li>Go to Billing &amp; Finance → All Invoices in EMURIA</li>
+        <li>Find the invoice — click Edit → change status to <strong>Void</strong></li>
+        <li>Add a note explaining the refund reason and date</li>
+        <li>Notify the client through the Help &amp; Support system</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- REPORTING -->
+  <div class="card">
+    <div class="card-header" style="background:#374151;"><span style="font-size:1.4rem;">📊</span><h2>Finance Reporting</h2></div>
+    <div class="card-body">
+      <table>
+        <tr><th>Report</th><th>Where to Find It</th><th>Useful For</th></tr>
+        <tr><td>All Invoices Export</td><td>Billing &amp; Finance → All Invoices → Export</td><td>Monthly reconciliation, accountant filing</td></tr>
+        <tr><td>Unpaid Invoice List</td><td>Billing &amp; Finance → Unpaid Invoices</td><td>Daily follow-up on overdue payments</td></tr>
+        <tr><td>Project Budget Overview</td><td>Project Management → Milestones &amp; Budget</td><td>Tracking spend vs. quoted ARP per project</td></tr>
+        <tr><td>Cost &amp; Savings Analysis</td><td>Reports &amp; Savings → Cost &amp; Savings Analysis</td><td>Client-facing ROI reporting, management review</td></tr>
+        <tr><td>Performance Reports</td><td>Reports &amp; Savings → Performance Reports</td><td>Operational KPIs across all active projects</td></tr>
+      </table>
+      <div class="callout" style="margin-top:14px;">
+        For VAT / tax filings or external accounting software exports, use the <strong>All Invoices Export</strong> and import into your accounting package (Xero, QuickBooks, etc.). Each invoice includes the client name, project reference, amount, date, and status.
+      </div>
+    </div>
+  </div>
+
+  <!-- COMMON SCENARIOS -->
+  <div class="card">
+    <div class="card-header" style="background:#b45309;"><span style="font-size:1.4rem;">🛠️</span><h2>Common Finance Scenarios</h2></div>
+    <div class="card-body">
+      <table>
+        <tr><th>Scenario</th><th>Action</th></tr>
+        <tr><td>Client has paid but system still shows "Unpaid"</td><td>Check Stripe webhook delivery in Stripe Dashboard. If confirmed paid in Stripe, manually mark the invoice as Paid in EMURIA and add a note. Contact system admin if webhook is failing.</td></tr>
+        <tr><td>Client paid the wrong amount</td><td>Void the original invoice. Create a new invoice for the correct amount. If client overpaid, issue a partial refund via Stripe for the difference.</td></tr>
+        <tr><td>Project cancelled after 50% deposit paid</td><td>Review cancellation policy. If refund is due, issue via Stripe. Void relevant invoices. Close the project in the system with a cancellation note.</td></tr>
+        <tr><td>Client disputes an invoice amount</td><td>Do not void immediately. Review the ARP calculation in the inspection pricing dashboard. If an error is found, void and reissue. If correct, provide the client with a pricing breakdown from the inspection report.</td></tr>
+        <tr><td>Need to send a payment reminder</td><td>Go to the overdue invoice in EMURIA → use the "Send Reminder" button, or contact the client through Help &amp; Support messaging.</td></tr>
+        <tr><td>Client wants to change their payment plan</td><td>Requires a Change Order signed by both parties. After approval, update the invoice schedule accordingly.</td></tr>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">
+  <strong>EMURIA Regenerative Property Care</strong> — Finance &amp; Invoicing Reference · May 2026<br>
+  <a href="user-guide.html">← Back to User Guide</a>
+</div>
+
+</body>
+</html>
