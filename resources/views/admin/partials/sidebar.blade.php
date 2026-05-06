@@ -510,6 +510,9 @@
             </details>
         @endrole
     </div>
+    <div class="admin-client-version-bar">
+        <span>EMURIA</span> <span class="admin-client-version-badge">v1.0</span>
+    </div>
 </nav>
 
 <style>
@@ -729,5 +732,29 @@ body.light-theme .admin-client-sidebar {
 .admin-client-sidebar .admin-client-sublink:hover,
 .admin-client-sidebar .admin-client-sublink:focus {
     background: transparent !important;
+}
+
+.admin-client-version-bar {
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-top: 1px solid rgba(255,255,255,.12);
+    margin-top: auto;
+    font-size: .72rem;
+    color: rgba(255,255,255,.45);
+    letter-spacing: .04em;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.admin-client-version-badge {
+    background: rgba(255,255,255,.12);
+    color: rgba(255,255,255,.65);
+    border-radius: 20px;
+    padding: 2px 9px;
+    font-size: .7rem;
+    font-weight: 700;
+    letter-spacing: .06em;
 }
 </style>
