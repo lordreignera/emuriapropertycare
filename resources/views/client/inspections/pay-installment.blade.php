@@ -45,12 +45,6 @@
                     </small>
                 </div>
 
-                @if(app()->environment('local', 'development'))
-                <div class="alert alert-warning py-2 px-3" style="font-size:.85rem;">
-                    <strong>Test Mode:</strong> Use card <code>4242 4242 4242 4242</code> &bull; Any future expiry &bull; Any 3-digit CVC
-                </div>
-                @endif
-
                 <form id="installment-payment-form">
                     @csrf
                     <div class="mb-3">

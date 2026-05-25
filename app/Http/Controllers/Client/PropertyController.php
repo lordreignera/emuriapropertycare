@@ -46,7 +46,9 @@ class PropertyController extends Controller
             'year_built' => 'nullable|integer|min:1800|max:' . date('Y'),
             
             // Additional fields for property types
-            'residential_units' => 'nullable|integer|min:1',
+            'residential_units' => 'required|integer|min:1',
+            'has_high_pitched_roof' => 'nullable|boolean',
+            'has_crawl_space' => 'nullable|boolean',
             'mixed_use_commercial_weight' => 'nullable|numeric|min:0|max:100',
             
             // Address
@@ -109,9 +111,11 @@ class PropertyController extends Controller
         $validated['number_of_units'] = (int) ($validated['number_of_units'] ?? 1);
 
         // Normalize booleans from optional checkbox/toggle inputs
-        $validated['has_tenants'] = (bool) ($validated['has_tenants'] ?? false);
-        $validated['has_pets'] = (bool) ($validated['has_pets'] ?? false);
-        $validated['has_kids'] = (bool) ($validated['has_kids'] ?? false);
+        $validated['has_tenants']           = (bool) ($validated['has_tenants'] ?? false);
+        $validated['has_pets']              = (bool) ($validated['has_pets'] ?? false);
+        $validated['has_kids']              = (bool) ($validated['has_kids'] ?? false);
+        $validated['has_high_pitched_roof'] = (bool) ($validated['has_high_pitched_roof'] ?? false);
+        $validated['has_crawl_space']       = (bool) ($validated['has_crawl_space'] ?? false);
 
         // Square footage columns are NOT NULL in the DB with default(0).
         // Validation allows null (optional fields), but we must store 0 instead of null.
@@ -249,7 +253,9 @@ class PropertyController extends Controller
             'type' => 'required|in:residential,commercial,mixed_use',
             'property_subtype' => 'nullable|in:house,townhome,condo,duplex,multi_unit',
             'year_built' => 'nullable|integer|min:1800|max:' . date('Y'),
-            'residential_units' => 'nullable|integer|min:1',
+            'residential_units' => 'required|integer|min:1',
+            'has_high_pitched_roof' => 'nullable|boolean',
+            'has_crawl_space' => 'nullable|boolean',
             'mixed_use_commercial_weight' => 'nullable|numeric|min:0|max:100',
             
             // Address
@@ -311,9 +317,11 @@ class PropertyController extends Controller
         $validated['number_of_units'] = (int) ($validated['number_of_units'] ?? 1);
 
         // Normalize booleans from optional checkbox/toggle inputs
-        $validated['has_tenants'] = (bool) ($validated['has_tenants'] ?? false);
-        $validated['has_pets'] = (bool) ($validated['has_pets'] ?? false);
-        $validated['has_kids'] = (bool) ($validated['has_kids'] ?? false);
+        $validated['has_tenants']           = (bool) ($validated['has_tenants'] ?? false);
+        $validated['has_pets']              = (bool) ($validated['has_pets'] ?? false);
+        $validated['has_kids']              = (bool) ($validated['has_kids'] ?? false);
+        $validated['has_high_pitched_roof'] = (bool) ($validated['has_high_pitched_roof'] ?? false);
+        $validated['has_crawl_space']       = (bool) ($validated['has_crawl_space'] ?? false);
 
         // Square footage columns are NOT NULL in the DB — ensure 0 instead of null.
         $validated['square_footage_interior'] = (float) ($validated['square_footage_interior'] ?? 0);

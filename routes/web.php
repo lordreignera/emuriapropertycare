@@ -15,6 +15,11 @@ Route::post('/logout', function () {
     return redirect('/login')->with('status', 'You have been logged out successfully.');
 })->name('logout');
 
+// ── Stripe Webhooks (CSRF-exempt, signed by Stripe) ────────────────────────
+Route::post('/stripe/webhook', [App\Http\Controllers\StripeWebhookController::class, 'handle'])
+    ->name('stripe.webhook')
+    ->withoutMiddleware('Illuminate\Foundation\Http\Middleware\VerifyCsrfToken');
+
 // Client Registration (Free - No Tier Selection)
 Route::get('/register', function () {
     return view('auth.register');

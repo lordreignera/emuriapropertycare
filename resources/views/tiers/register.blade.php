@@ -159,16 +159,6 @@
             fill: #28a745;
         }
 
-        .test-mode-banner {
-            background: #28a745;
-            color: #fff;
-            padding: 15px;
-            text-align: center;
-            border-radius: 10px;
-            margin-bottom: 30px;
-            font-weight: 600;
-        }
-
         @media (max-width: 768px) {
             .registration-card {
                 padding: 30px 20px;
@@ -185,10 +175,6 @@
         <a href="/tiers" class="back-link">← Back to Plans</a>
         
         <div class="registration-card">
-            <div class="test-mode-banner">
-                🛡️ TEST MODE: No real charges will be made. Use test card: 4242 4242 4242 4242
-            </div>
-
             <div class="header">
                 <h1>Create Your Account</h1>
             </div>

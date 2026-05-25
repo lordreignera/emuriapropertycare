@@ -130,15 +130,7 @@
             border: 2px solid rgba(255, 184, 0, 0.5);
         }
 
-        .test-mode-note {
-            margin-top: 40px;
-            padding: 20px;
-            background: rgba(40, 167, 69, 0.1);
-            border: 2px solid #28a745;
-            border-radius: 10px;
-            color: #28a745;
-            font-weight: 600;
-        }
+
 
         @media (max-width: 768px) {
             h1 {
@@ -181,9 +173,7 @@
             <a href="/dashboard" class="btn">Go to Dashboard</a>
         </div>
 
-        <div class="test-mode-note">
-            ✅ TEST MODE SUCCESSFUL: This was a test transaction. No real charges were made.
-        </div>
+
     </div>
 </body>
 </html>

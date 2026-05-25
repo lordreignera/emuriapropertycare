@@ -27,7 +27,7 @@
                     <div class="card-body p-4">
                         <!-- Property Info Banner -->
                         <div class="bg-light rounded-3 p-3 mb-4 border border-primary border-opacity-25">
-                            <div class="d-flex justify-content-between align-items-center">
+                            <div class="d-flex justify-content-between align-items-start">
                                 <div>
                                     <h5 class="mb-1 fw-bold text-primary">{{ $property->property_name }}</h5>
                                     <div class="text-muted small">
@@ -38,10 +38,30 @@
                                 </div>
                                 <div class="text-end">
                                     <div class="badge bg-success fs-5 px-3 py-2">
-                                        ${{ number_format($inspectionFee, 2) }}
+                                        ${{ number_format($feeData['charge_dollars'], 2) }}
                                     </div>
-                                    <div class="text-muted small mt-1">Inspection Fee</div>
+                                    <div class="text-muted small mt-1">Charged Today</div>
                                 </div>
+                            </div>
+
+                            {{-- Fee breakdown --}}
+                            <div class="mt-3 pt-2 border-top border-secondary border-opacity-25">
+                                <p class="small text-muted mb-1 fw-semibold">Inspection Fee Breakdown:</p>
+                                <ul class="list-unstyled small text-muted mb-1">
+                                    <li>{{ $feeData['units'] }} unit{{ $feeData['units'] > 1 ? 's' : '' }} &times; ${{ number_format($feeData['base_fee'] / $feeData['units'], 0) }} = <strong>${{ number_format($feeData['base_fee'], 0) }}</strong></li>
+                                    @if($feeData['roof_surcharge'] > 0)
+                                    <li>High-pitched roof surcharge: <strong>+${{ number_format($feeData['roof_surcharge'], 0) }}</strong></li>
+                                    @endif
+                                    @if($feeData['crawl_surcharge'] > 0)
+                                    <li>Crawl space surcharge: <strong>+${{ number_format($feeData['crawl_surcharge'], 0) }}</strong></li>
+                                    @endif
+                                    <li class="fw-bold text-dark">Total inspection fee: ${{ number_format($feeData['total_dollars'], 0) }}</li>
+                                </ul>
+                                @if($feeData['is_test_mode'])
+                                <div class="alert alert-warning py-1 px-2 mb-0 small">
+                                    <i class="mdi mdi-test-tube"></i> <strong>Testing mode</strong> — you will be charged <strong>${{ number_format($feeData['charge_dollars'], 2) }}</strong> today instead of the full amount.
+                                </div>
+                                @endif
                             </div>
                         </div>
 
@@ -94,27 +114,6 @@
                                 <i class="mdi mdi-credit-card text-primary me-2"></i>Payment Information
                             </h6>
 
-                            <!-- Test Card Info Alert -->
-                            <div class="alert alert-info border-0 mb-3">
-                                <div class="d-flex align-items-start">
-                                    <i class="mdi mdi-information text-info me-2" style="font-size: 1.5rem;"></i>
-                                    <div>
-                                        <strong class="d-block mb-2">Test Mode - Use Test Cards</strong>
-                                        <div class="small">
-                                            <strong>Valid Test Card:</strong> <code class="bg-white px-2 py-1">4242 4242 4242 4242</code><br>
-                                            <strong>Expiry:</strong> Any future date (e.g., 12/28)<br>
-                                            <strong>CVC:</strong> Any 3 digits (e.g., 123)
-                                        </div>
-                                        <div class="mt-2 small">
-                                            <strong>Other test cards:</strong><br>
-                                            • Visa: <code class="bg-white px-1">4242 4242 4242 4242</code><br>
-                                            • Mastercard: <code class="bg-white px-1">5555 5555 5555 4444</code><br>
-                                            • Amex: <code class="bg-white px-1">3782 822463 10005</code>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
                             <!-- Card Element Container -->
                             <div class="mb-4">
                                 <label class="form-label fw-semibold">Card Details <span class="text-danger">*</span></label>
@@ -127,7 +126,7 @@
                                 <div class="form-check">
                                     <input class="form-check-input" type="checkbox" id="agree_terms" required>
                                     <label class="form-check-label fw-semibold" for="agree_terms">
-                                        I agree to pay the <span class="text-success">${{ number_format($inspectionFee, 2) }}</span> inspection fee via secure payment.
+                                        I agree to pay the <span class="text-success">${{ number_format($feeData['charge_dollars'], 2) }}</span> inspection fee via secure payment.
                                     </label>
                                 </div>
                             </div>

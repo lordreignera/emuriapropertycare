@@ -126,17 +126,17 @@
                             </div>
                         </div>
 
-                        {{-- Residential Units (shown for residential and mixed-use) --}}
+                        {{-- Units (shown for ALL property types) --}}
                         <div class="col-md-6" id="residential_units_wrapper" style="display:none;">
                             <div class="form-group">
-                                <label for="residential_units">Number of Residential Units <span class="text-danger">*</span></label>
+                                <label for="residential_units" id="units_label">Number of Units <span class="text-danger">*</span></label>
                                 <input type="number" class="form-control @error('residential_units') is-invalid @enderror" 
                                     id="residential_units" name="residential_units" value="{{ old('residential_units', 1) }}" 
                                     min="1" placeholder="e.g., 10 units">
                                 @error('residential_units')
                                 <span class="invalid-feedback">{{ $message }}</span>
                                 @enderror
-                                <small class="form-text text-muted">Used to calculate your pricing tier</small>
+                                <small class="form-text text-muted">Used to calculate your inspection fee</small>
                             </div>
                         </div>
 
@@ -156,39 +156,111 @@
                         </div>
                     </div>
 
+                    {{-- Property Characteristics (surcharges) --}}
+                    <div class="row mt-3" id="characteristics_wrapper" style="display:none;">
+                        <div class="col-12">
+                            <h5 class="text-muted mb-3"><i class="mdi mdi-home-alert"></i> Property Characteristics</h5>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check mb-3">
+                                <input type="hidden" name="has_high_pitched_roof" value="0">
+                                <input class="form-check-input" type="checkbox" id="has_high_pitched_roof" name="has_high_pitched_roof" value="1"
+                                    {{ old('has_high_pitched_roof') ? 'checked' : '' }}>
+                                <label class="form-check-label" for="has_high_pitched_roof">
+                                    <strong>High-pitched roof</strong>
+                                    <span class="badge badge-warning ml-1">+$75 inspection surcharge</span>
+                                    <br><small class="text-muted">Requires additional safety equipment and time</small>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check mb-3">
+                                <input type="hidden" name="has_crawl_space" value="0">
+                                <input class="form-check-input" type="checkbox" id="has_crawl_space" name="has_crawl_space" value="1"
+                                    {{ old('has_crawl_space') ? 'checked' : '' }}>
+                                <label class="form-check-label" for="has_crawl_space">
+                                    <strong>Crawl spaces or obstructed areas</strong>
+                                    <span class="badge badge-warning ml-1">+$50 inspection surcharge</span>
+                                    <br><small class="text-muted">Hidden/hard-to-access areas requiring extra inspection time</small>
+                                </label>
+                            </div>
+                        </div>
+
+                        {{-- Live fee estimate --}}
+                        <div class="col-12" id="fee_calculator_wrapper">
+                            <div class="alert alert-info py-2">
+                                <strong><i class="mdi mdi-calculator"></i> Estimated Inspection Fee:</strong>
+                                <span id="fee_breakdown" class="ml-2">—</span>
+                            </div>
+                        </div>
+                    </div>
+
                     <script>
-                        document.getElementById('type').addEventListener('change', function() {
-                            const type = this.value;
-                            const unitsWrapper = document.getElementById('residential_units_wrapper');
-                            const weightWrapper = document.getElementById('commercial_weight_wrapper');
-                            const unitsInput = document.getElementById('residential_units');
-                            
-                            if (type === 'residential') {
-                                unitsWrapper.style.display = 'block';
-                                weightWrapper.style.display = 'none';
-                                unitsInput.required = true;
-                            } else if (type === 'mixed_use') {
-                                unitsWrapper.style.display = 'block';
-                                weightWrapper.style.display = 'block';
-                                unitsInput.required = true;
-                            } else if (type === 'commercial') {
-                                unitsWrapper.style.display = 'none';
-                                weightWrapper.style.display = 'none';
-                                unitsInput.required = false;
-                            } else {
-                                unitsWrapper.style.display = 'none';
-                                weightWrapper.style.display = 'none';
-                                unitsInput.required = false;
+                        (function () {
+                            const BASE_PER_UNIT = 299;
+                            const ROOF_FEE = 75;
+                            const CRAWL_FEE = 50;
+
+                            function updateFeeDisplay() {
+                                const units = Math.max(1, parseInt(document.getElementById('residential_units').value) || 1);
+                                const roof  = document.getElementById('has_high_pitched_roof').checked;
+                                const crawl = document.getElementById('has_crawl_space').checked;
+                                const base  = BASE_PER_UNIT * units;
+                                let total   = base;
+                                let parts   = [units + ' unit' + (units > 1 ? 's' : '') + ' × $' + BASE_PER_UNIT + ' = $' + base];
+                                if (roof)  { total += ROOF_FEE;  parts.push('High-pitched roof: +$' + ROOF_FEE); }
+                                if (crawl) { total += CRAWL_FEE; parts.push('Crawl space: +$' + CRAWL_FEE); }
+                                parts.push('<strong>Total: $' + total + '</strong>');
+                                document.getElementById('fee_breakdown').innerHTML = parts.join(' &nbsp;|&nbsp; ');
                             }
-                        });
-                        
-                        // Trigger on page load if value exists
-                        document.addEventListener('DOMContentLoaded', function() {
-                            const typeSelect = document.getElementById('type');
-                            if (typeSelect.value) {
-                                typeSelect.dispatchEvent(new Event('change'));
-                            }
-                        });
+
+                            document.getElementById('residential_units').addEventListener('input', updateFeeDisplay);
+                            document.getElementById('has_high_pitched_roof').addEventListener('change', updateFeeDisplay);
+                            document.getElementById('has_crawl_space').addEventListener('change', updateFeeDisplay);
+
+                            document.getElementById('type').addEventListener('change', function () {
+                                const type = this.value;
+                                const unitsWrapper  = document.getElementById('residential_units_wrapper');
+                                const weightWrapper = document.getElementById('commercial_weight_wrapper');
+                                const unitsInput    = document.getElementById('residential_units');
+                                const charWrapper   = document.getElementById('characteristics_wrapper');
+                                const unitsLabel    = document.getElementById('units_label');
+
+                                if (type === 'residential') {
+                                    unitsWrapper.style.display  = 'block';
+                                    weightWrapper.style.display = 'none';
+                                    charWrapper.style.display   = 'block';
+                                    unitsInput.required = true;
+                                    unitsLabel.innerHTML = 'Number of Residential Units <span class="text-danger">*</span>';
+                                } else if (type === 'mixed_use') {
+                                    unitsWrapper.style.display  = 'block';
+                                    weightWrapper.style.display = 'block';
+                                    charWrapper.style.display   = 'block';
+                                    unitsInput.required = true;
+                                    unitsLabel.innerHTML = 'Number of Units <span class="text-danger">*</span>';
+                                } else if (type === 'commercial') {
+                                    unitsWrapper.style.display  = 'block';
+                                    weightWrapper.style.display = 'none';
+                                    charWrapper.style.display   = 'block';
+                                    unitsInput.required = true;
+                                    unitsLabel.innerHTML = 'Number of Commercial Units <span class="text-danger">*</span>';
+                                } else {
+                                    unitsWrapper.style.display  = 'none';
+                                    weightWrapper.style.display = 'none';
+                                    charWrapper.style.display   = 'none';
+                                    unitsInput.required = false;
+                                }
+                                updateFeeDisplay();
+                            });
+
+                            document.addEventListener('DOMContentLoaded', function () {
+                                const typeSelect = document.getElementById('type');
+                                if (typeSelect.value) {
+                                    typeSelect.dispatchEvent(new Event('change'));
+                                }
+                                updateFeeDisplay();
+                            });
+                        })();
                     </script>
                     </div>
                 </div>

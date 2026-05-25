@@ -124,4 +124,12 @@ return [
 
     'logger' => env('CASHIER_LOGGER'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | PHAR Stripe Product
+    |--------------------------------------------------------------------------
+    | The Stripe Product ID for the PHAR (Property Health Assessment Report).
+    */
+    'phar_product_id' => env('PHAR_STRIPE_PRODUCT_ID'),
+
 ];

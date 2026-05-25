@@ -4,6 +4,7 @@ namespace App\Notifications;
 
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Notification;
+use Illuminate\Notifications\Messages\MailMessage;
 
 class InspectionFeePaidNotification extends Notification
 {
@@ -21,7 +22,19 @@ class InspectionFeePaidNotification extends Notification
 
     public function via(object $notifiable): array
     {
-        return ['database'];
+        return ['database', 'mail'];
+    }
+
+    public function toMail(object $notifiable): MailMessage
+    {
+        return (new MailMessage)
+            ->subject('💳 Inspection Fee Paid — ' . $this->propertyCode)
+            ->greeting('Payment Received')
+            ->line('Client **' . $this->clientName . '** has paid the inspection fee.')
+            ->line('**Property:** ' . $this->propertyCode . ' — ' . $this->propertyName)
+            ->line('**Amount Paid:** $' . number_format($this->amount, 2))
+            ->action('View Property', route('properties.show', $this->propertyId))
+            ->line('The inspection has been scheduled. Please assign an inspector.');
     }
 
     public function toArray(object $notifiable): array

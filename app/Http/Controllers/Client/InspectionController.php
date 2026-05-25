@@ -9,6 +9,8 @@ use App\Models\InspectionQuotation;
 use App\Models\User;
 use App\Notifications\ClientQuotationApprovedNotification;
 use App\Notifications\InspectionFeePaidNotification;
+use App\Notifications\WorkPaymentReceivedNotification;
+use App\Notifications\InstallmentPaymentReceivedNotification;
 use App\Services\AgreementScheduleService;
 use App\Services\BDCCalculator;
 use App\Services\InspectionInvoiceSyncService;
@@ -21,9 +23,38 @@ use Illuminate\Support\Str;
 
 class InspectionController extends Controller
 {
-    // Inspection fee in cents (for Stripe)
-    private const INSPECTION_FEE_CENTS = 29900; // $299.00
-    private const INSPECTION_FEE_DOLLARS = 299;
+    // Inspection fee components
+    private const BASE_FEE_PER_UNIT       = 299;
+    private const HIGH_PITCHED_ROOF_FEE   = 75;
+    private const CRAWL_SPACE_FEE         = 50;
+    private const TEST_CHARGE_CENTS       = 100; // $1.00 — TEST MODE; remove override when going live
+
+    /**
+     * Calculate inspection fee breakdown for a property.
+     */
+    private function calculateInspectionFee(\App\Models\Property $property): array
+    {
+        $units        = max(1, (int) ($property->residential_units ?? 1));
+        $baseFee      = self::BASE_FEE_PER_UNIT * $units;
+        $roofSurcharge  = $property->has_high_pitched_roof ? self::HIGH_PITCHED_ROOF_FEE : 0;
+        $crawlSurcharge = $property->has_crawl_space       ? self::CRAWL_SPACE_FEE       : 0;
+        $totalFee     = $baseFee + $roofSurcharge + $crawlSurcharge;
+
+        // TEST MODE: always charge $1; remove self::TEST_CHARGE_CENTS line when going live
+        $chargeCents  = self::TEST_CHARGE_CENTS;
+        // $chargeCents = (int) round($totalFee * 100); // ← uncomment when live
+
+        return [
+            'units'           => $units,
+            'base_fee'        => $baseFee,
+            'roof_surcharge'  => $roofSurcharge,
+            'crawl_surcharge' => $crawlSurcharge,
+            'total_dollars'   => $totalFee,
+            'charge_cents'    => $chargeCents,
+            'charge_dollars'  => $chargeCents / 100,
+            'is_test_mode'    => true,
+        ];
+    }
 
     public function __construct(
         private readonly AgreementScheduleService $agreementScheduleService,
@@ -680,6 +711,21 @@ class InspectionController extends Controller
 
             DB::commit();
 
+            // Notify all staff about the work payment
+            $adminRecipients = User::role(['Super Admin', 'Administrator', 'Project Manager'])
+                ->get()->unique('id')->values();
+            if ($adminRecipients->isNotEmpty()) {
+                Notification::send($adminRecipients, new WorkPaymentReceivedNotification(
+                    inspectionId: (int) $inspection->id,
+                    propertyId:   (int) $inspection->property_id,
+                    propertyName: (string) ($inspection->property->property_name ?? 'Property'),
+                    propertyCode: (string) ($inspection->property->property_code ?? 'N/A'),
+                    amount:       round(((float) $paymentIntent->amount_received) / 100, 2),
+                    clientName:   (string) (Auth::user()->name ?? 'Client'),
+                    plan:         $plan,
+                ));
+            }
+
             return response()->json([
                 'success'  => true,
                 'redirect' => route('client.inspections.report', $inspection->id),
@@ -793,13 +839,30 @@ class InspectionController extends Controller
 
             DB::commit();
 
-            $remaining = $total - $paid;
+            $remaining      = $total - $paid;
             $isPerVisitPlan = ($inspection->payment_plan ?? 'full') === 'per_visit';
-            $message   = $paid >= $total
+            $message        = $paid >= $total
                 ? 'Final payment received — project cost fully settled!'
                 : ($isPerVisitPlan
                     ? "Visit {$paid} of {$total} paid. {$remaining} visit(s) remaining."
                     : "Installment {$paid} of {$total} paid. {$remaining} installment(s) remaining.");
+
+            // Notify all staff about the installment/per-visit payment
+            $adminRecipients = User::role(['Super Admin', 'Administrator', 'Project Manager'])
+                ->get()->unique('id')->values();
+            if ($adminRecipients->isNotEmpty()) {
+                Notification::send($adminRecipients, new InstallmentPaymentReceivedNotification(
+                    inspectionId:        (int) $inspection->id,
+                    propertyId:          (int) $inspection->property_id,
+                    propertyName:        (string) ($inspection->property->property_name ?? 'Property'),
+                    propertyCode:        (string) ($inspection->property->property_code ?? 'N/A'),
+                    amount:              round(((float) $paymentIntent->amount_received) / 100, 2),
+                    clientName:          (string) (Auth::user()->name ?? 'Client'),
+                    installmentNumber:   $paid,
+                    totalInstallments:   $total,
+                    plan:                $inspection->payment_plan ?? 'installment',
+                ));
+            }
 
             return response()->json([
                 'success'  => true,
@@ -858,11 +921,13 @@ class InspectionController extends Controller
 
         // Create Stripe Payment Intent
         $stripe = new \Stripe\StripeClient(config('cashier.secret'));
-        
+        $feeData = $this->calculateInspectionFee($property);
+
         $paymentIntent = $stripe->paymentIntents->create([
-            'amount' => self::INSPECTION_FEE_CENTS,
+            'amount' => $feeData['charge_cents'],
             'currency' => 'usd',
             'metadata' => [
+                'payment_type' => 'inspection_fee',
                 'property_id' => $property->id,
                 'user_id' => Auth::id(),
                 'property_name' => $property->property_name,
@@ -871,7 +936,8 @@ class InspectionController extends Controller
 
         return view('client.inspections.schedule', [
             'property' => $property,
-            'inspectionFee' => self::INSPECTION_FEE_DOLLARS,
+            'feeData' => $feeData,
+            'inspectionFee' => $feeData['charge_dollars'],
             'clientSecret' => $paymentIntent->client_secret,
             'stripeKey' => config('cashier.key'),
         ]);
@@ -918,13 +984,14 @@ class InspectionController extends Controller
             );
 
             // Create inspection record with paid status
+            $feeData = $this->calculateInspectionFee($property);
             $inspection = Inspection::create([
                 'property_id' => $property->id,
                 'project_id' => $project->id,
                 'scheduled_date' => $validated['preferred_date'] . ' ' . ($validated['preferred_time'] ?? '09:00'),
                 'status' => 'scheduled',
                 'summary' => $validated['special_notes'] ?? null,
-                'inspection_fee_amount' => self::INSPECTION_FEE_DOLLARS,
+                'inspection_fee_amount' => $feeData['charge_dollars'],
                 'inspection_fee_status' => 'paid',
                 'inspection_fee_paid_at' => now(),
             ]);
@@ -947,7 +1014,7 @@ class InspectionController extends Controller
                     propertyId: (int) $property->id,
                     propertyName: (string) ($property->property_name ?? 'Property'),
                     propertyCode: (string) ($property->property_code ?? 'N/A'),
-                    amount: (float) self::INSPECTION_FEE_DOLLARS,
+                    amount: (float) $feeData['charge_dollars'],
                     clientName: (string) (Auth::user()->name ?? 'Client'),
                 ));
             }
