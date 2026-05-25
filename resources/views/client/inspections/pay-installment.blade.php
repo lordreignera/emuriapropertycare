@@ -95,6 +95,22 @@
         buttonText.classList.add('d-none');
         spinner.classList.remove('d-none');
 
+        // First, validate the card without charging
+        const { error: validationError, paymentMethod } = await stripe.createPaymentMethod({
+            type: 'card',
+            card: cardElement
+        });
+
+        if (validationError) {
+            // Card validation failed - show error WITHOUT charging
+            document.getElementById('card-errors').textContent = 'Card validation failed: ' + validationError.message;
+            submitButton.disabled = false;
+            buttonText.classList.remove('d-none');
+            spinner.classList.add('d-none');
+            return;
+        }
+
+        // Card is valid, now confirm the payment
         const { error, paymentIntent } = await stripe.confirmCardPayment('{{ $clientSecret }}', {
             payment_method: { card: cardElement }
         });
