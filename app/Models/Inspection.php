@@ -42,6 +42,12 @@ class Inspection extends Model
         'inspection_fee_amount',
         'inspection_fee_status',
         'inspection_fee_paid_at',
+        'stripe_payment_intent_id',
+        'specialist_assessment_breakdown',
+        'specialist_trade_cost',
+        'specialist_client_price',
+        'specialist_margin_amount',
+        'specialist_pricing_currency',
         'work_payment_amount',
         'work_payment_status',
         'work_payment_cadence',
@@ -72,6 +78,9 @@ class Inspection extends Model
         'labour_hourly_rate',
         'fmc_annual',
         'fmc_monthly',
+        'trade_cost_annual',
+        'trade_client_price_annual',
+        'trade_margin_annual',
         'trc_annual',
         'trc_monthly',
         'trc_per_visit',
@@ -136,6 +145,10 @@ class Inspection extends Model
         'target_completion_date' => 'date',
         'inspection_fee_amount' => 'decimal:2',
         'inspection_fee_paid_at' => 'datetime',
+        'specialist_assessment_breakdown' => 'array',
+        'specialist_trade_cost' => 'decimal:2',
+        'specialist_client_price' => 'decimal:2',
+        'specialist_margin_amount' => 'decimal:2',
         'work_payment_amount' => 'decimal:2',
         'work_payment_paid_at' => 'datetime',
         'arp_total_locked' => 'decimal:2',
@@ -166,6 +179,9 @@ class Inspection extends Model
         'fmc_annual'             => 'decimal:2',
         'fmc_monthly'            => 'decimal:2',
         'fmc_per_unit_annual'    => 'decimal:2',
+        'trade_cost_annual'      => 'decimal:2',
+        'trade_client_price_annual' => 'decimal:2',
+        'trade_margin_annual'    => 'decimal:2',
         // TRC / ARP
         'trc_annual'             => 'decimal:2',
         'trc_monthly'            => 'decimal:2',
@@ -251,6 +267,11 @@ class Inspection extends Model
     public function materials(): HasMany
     {
         return $this->hasMany(InspectionMaterial::class);
+    }
+
+    public function tradePricingItems(): HasMany
+    {
+        return $this->hasMany(InspectionTradePricingItem::class);
     }
 
     public function toolAssignments(): HasMany

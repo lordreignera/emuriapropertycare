@@ -55,8 +55,16 @@
                                     @if($feeData['crawl_surcharge'] > 0)
                                     <li>Crawl space surcharge: <strong>+${{ number_format($feeData['crawl_surcharge'], 0) }}</strong></li>
                                     @endif
+                                    @if(($feeData['specialist_support_total'] ?? 0) > 0)
+                                    <li>Expanded assessment support: <strong>+${{ number_format($feeData['specialist_support_total'], 0) }}</strong></li>
+                                    @endif
                                     <li class="fw-bold text-dark">Total inspection fee: ${{ number_format($feeData['total_dollars'], 0) }}</li>
                                 </ul>
+                                @if(($feeData['specialist_support_total'] ?? 0) > 0)
+                                <div class="small text-muted mb-2">
+                                    Added because the property details you shared indicate extra assessment complexity in one or more areas.
+                                </div>
+                                @endif
                                 @if($feeData['is_test_mode'])
                                 <div class="alert alert-warning py-1 px-2 mb-0 small">
                                     <i class="mdi mdi-test-tube"></i> <strong>Testing mode</strong> — you will be charged <strong>${{ number_format($feeData['charge_dollars'], 2) }}</strong> today instead of the full amount.

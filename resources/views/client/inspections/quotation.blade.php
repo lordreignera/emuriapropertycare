@@ -9,13 +9,15 @@
     $preSelected = collect(old('approved_finding_ids', $approvedIds ?? []))->map(fn ($v) => (int) $v)->all();
     $initialLabour = 0;
     $initialMaterial = 0;
+    $initialSpecialist = 0;
     foreach ($snapshotFindings as $finding) {
         if (in_array((int) ($finding['id'] ?? 0), $preSelected, true)) {
             $initialLabour += (float) ($finding['labour_cost'] ?? 0);
             $initialMaterial += (float) ($finding['material_cost'] ?? 0);
+            $initialSpecialist += (float) ($finding['trade_client_price'] ?? data_get($finding, 'trade_pricing.etogo_client_price', 0));
         }
     }
-    $initialTotal = $initialLabour + $initialMaterial;
+    $initialTotal = $initialLabour + $initialMaterial + $initialSpecialist;
 @endphp
 
 <div class="row justify-content-center">
@@ -96,6 +98,7 @@
                     $isChecked = in_array($findingId, $preSelected, true);
                     $labourCost = (float) ($finding['labour_cost'] ?? 0);
                     $materialCost = (float) ($finding['material_cost'] ?? 0);
+                    $specialistCost = (float) ($finding['trade_client_price'] ?? data_get($finding, 'trade_pricing.etogo_client_price', 0));
                     $severity = (string) ($finding['priority'] ?? '2');
                     $severityLabel = $severity === '1' ? 'High' : ($severity === '2' ? 'Medium' : 'Low');
                     $badgeClass = $severity === '1' ? 'bg-danger' : ($severity === '2' ? 'bg-warning text-dark' : 'bg-success');
@@ -113,6 +116,7 @@
                                         id="finding-{{ $findingId }}"
                                         data-labour="{{ number_format($labourCost, 2, '.', '') }}"
                                         data-material="{{ number_format($materialCost, 2, '.', '') }}"
+                                        data-specialist="{{ number_format($specialistCost, 2, '.', '') }}"
                                         {{ $isChecked ? 'checked' : '' }}
                                         {{ $isLocked ? 'disabled' : '' }}
                                     >
@@ -210,7 +214,10 @@
                             <div class="text-end">
                                 <div><small class="text-muted">Labour</small> <strong>${{ number_format($labourCost, 2) }}</strong></div>
                                 <div><small class="text-muted">Material</small> <strong>${{ number_format($materialCost, 2) }}</strong></div>
-                                <div class="border-top mt-1 pt-1"><small class="text-muted">Subtotal</small> <strong>${{ number_format($labourCost + $materialCost, 2) }}</strong></div>
+                                @if($specialistCost > 0)
+                                <div><small class="text-muted">Specialist work</small> <strong>${{ number_format($specialistCost, 2) }}</strong></div>
+                                @endif
+                                <div class="border-top mt-1 pt-1"><small class="text-muted">Subtotal</small> <strong>${{ number_format($labourCost + $materialCost + $specialistCost, 2) }}</strong></div>
                             </div>
                         </div>
                     </div>
@@ -225,15 +232,19 @@
                 </div>
                 <div class="card-body">
                     <div class="row text-center">
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <small class="text-muted d-block">Labour</small>
                             <strong id="sum-labour">${{ number_format($initialLabour, 2) }}</strong>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
                             <small class="text-muted d-block">Materials</small>
                             <strong id="sum-material">${{ number_format($initialMaterial, 2) }}</strong>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3">
+                            <small class="text-muted d-block">Specialist Work</small>
+                            <strong id="sum-specialist">${{ number_format($initialSpecialist, 2) }}</strong>
+                        </div>
+                        <div class="col-md-3">
                             <small class="text-muted d-block">Total</small>
                             <strong class="text-success" id="sum-total">${{ number_format($initialTotal, 2) }}</strong>
                         </div>
@@ -277,6 +288,7 @@
     const selectedCountEl = document.getElementById('selected-count');
     const labourEl = document.getElementById('sum-labour');
     const materialEl = document.getElementById('sum-material');
+    const specialistEl = document.getElementById('sum-specialist');
     const totalEl = document.getElementById('sum-total');
     const submitBtn = document.getElementById('submit-quotation-btn');
 
@@ -287,6 +299,7 @@
     function refreshSummary() {
         let labour = 0;
         let material = 0;
+        let specialist = 0;
         let count = 0;
 
         checkboxes.forEach((checkbox) => {
@@ -294,14 +307,16 @@
                 count += 1;
                 labour += Number(checkbox.dataset.labour || 0);
                 material += Number(checkbox.dataset.material || 0);
+                specialist += Number(checkbox.dataset.specialist || 0);
             }
         });
 
-        const total = labour + material;
+        const total = labour + material + specialist;
 
         selectedCountEl.textContent = String(count);
         labourEl.textContent = formatCurrency(labour);
         materialEl.textContent = formatCurrency(material);
+        specialistEl.textContent = formatCurrency(specialist);
         totalEl.textContent = formatCurrency(total);
 
         if (submitBtn) {

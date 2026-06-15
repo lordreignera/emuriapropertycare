@@ -10,6 +10,7 @@ use App\Models\Project;
 use App\Models\Invoice;
 use App\Models\Subscription;
 use App\Models\ToolSetting;
+use App\Models\TradeApplication;
 
 class DashboardController extends Controller
 {
@@ -99,6 +100,12 @@ class DashboardController extends Controller
                 ->count();
 
             $invoicesCount = Invoice::count();
+            $openTradeApplicationsCount = $user->hasRole(['Super Admin', 'Administrator'])
+                ? TradeApplication::whereIn('status', ['submitted', 'ready_for_review', 'needs_more_information', 'conditionally_approved'])->count()
+                : 0;
+            $approvedTradeApplicationsCount = $user->hasRole(['Super Admin', 'Administrator'])
+                ? TradeApplication::where('status', 'approved')->count()
+                : 0;
             
             // Get active subscription
             $subscription = Subscription::where('user_id', $user->id)
@@ -183,6 +190,8 @@ class DashboardController extends Controller
                 'completedInspectionsCount',
                 'projectsCount',
                 'invoicesCount',
+                'openTradeApplicationsCount',
+                'approvedTradeApplicationsCount',
                 'subscription',
                 'recentActivities'
             ));
@@ -339,6 +348,8 @@ class DashboardController extends Controller
         $completedInspectionsCount = 0;
         $projectsCount = 0;
         $invoicesCount = 0;
+        $openTradeApplicationsCount = 0;
+        $approvedTradeApplicationsCount = 0;
         $subscription = null;
         $recentActivities = collect();
 
@@ -349,6 +360,8 @@ class DashboardController extends Controller
             'completedInspectionsCount',
             'projectsCount',
             'invoicesCount',
+            'openTradeApplicationsCount',
+            'approvedTradeApplicationsCount',
             'subscription',
             'recentActivities'
         ));

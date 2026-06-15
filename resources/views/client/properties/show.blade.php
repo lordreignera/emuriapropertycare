@@ -369,11 +369,26 @@
                 <div class="mb-3">
                     <h6><strong>Known Problems/Issues:</strong></h6>
                         @php
-                            $knownProblemsList = is_array($property->known_problems)
-                                ? $property->known_problems
-                                : array_values(array_filter(array_map('trim', preg_split('/[,\n]+/', (string) $property->known_problems))));
+                            $knownProblemDetails = collect($property->known_problem_details ?? [])
+                                ->filter(fn($item) => is_array($item) && !empty($item['issue']))
+                                ->values();
+                            $knownProblemsList = $knownProblemDetails->isNotEmpty()
+                                ? []
+                                : (is_array($property->known_problems)
+                                    ? $property->known_problems
+                                    : array_values(array_filter(array_map('trim', preg_split('/[,\n]+/', (string) $property->known_problems)))));
                         @endphp
-                        @if(!empty($knownProblemsList))
+                        @if($knownProblemDetails->isNotEmpty())
+                            <ul class="list-unstyled mb-0">
+                                @foreach($knownProblemDetails as $knownProblem)
+                                <li>
+                                    <i class="mdi mdi-alert-circle-outline text-warning"></i>
+                                    <strong>{{ $knownProblem['area'] ?? 'Unknown / not sure' }}:</strong>
+                                    {{ $knownProblem['issue'] ?? '' }}
+                                </li>
+                                @endforeach
+                            </ul>
+                        @elseif(!empty($knownProblemsList))
                             <ul class="list-unstyled mb-0">
                                 @foreach($knownProblemsList as $knownProblem)
                                 <li><i class="mdi mdi-alert-circle-outline text-warning"></i> {{ $knownProblem }}</li>

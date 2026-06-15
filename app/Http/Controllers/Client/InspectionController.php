@@ -14,6 +14,7 @@ use App\Notifications\InstallmentPaymentReceivedNotification;
 use App\Services\AgreementScheduleService;
 use App\Services\BDCCalculator;
 use App\Services\InspectionInvoiceSyncService;
+use App\Services\InspectionSpecialistAssessmentService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -38,7 +39,9 @@ class InspectionController extends Controller
         $baseFee      = self::BASE_FEE_PER_UNIT * $units;
         $roofSurcharge  = $property->has_high_pitched_roof ? self::HIGH_PITCHED_ROOF_FEE : 0;
         $crawlSurcharge = $property->has_crawl_space       ? self::CRAWL_SPACE_FEE       : 0;
-        $totalFee     = $baseFee + $roofSurcharge + $crawlSurcharge;
+        $specialistAssessment = $this->specialistAssessmentService->forProperty($property);
+        $specialistSupportTotal = (float) ($specialistAssessment['client_price_total'] ?? 0);
+        $totalFee     = $baseFee + $roofSurcharge + $crawlSurcharge + $specialistSupportTotal;
 
         // TEST MODE: always charge $1; remove self::TEST_CHARGE_CENTS line when going live
         $chargeCents  = self::TEST_CHARGE_CENTS;
@@ -49,6 +52,11 @@ class InspectionController extends Controller
             'base_fee'        => $baseFee,
             'roof_surcharge'  => $roofSurcharge,
             'crawl_surcharge' => $crawlSurcharge,
+            'specialist_assessment' => $specialistAssessment,
+            'specialist_support_total' => $specialistSupportTotal,
+            'specialist_trade_cost' => (float) ($specialistAssessment['trade_cost_total'] ?? 0),
+            'specialist_margin' => (float) ($specialistAssessment['margin_total'] ?? 0),
+            'currency' => strtoupper((string) config('cashier.currency', 'usd')),
             'total_dollars'   => $totalFee,
             'charge_cents'    => $chargeCents,
             'charge_dollars'  => $chargeCents / 100,
@@ -59,6 +67,7 @@ class InspectionController extends Controller
     public function __construct(
         private readonly AgreementScheduleService $agreementScheduleService,
         private readonly InspectionInvoiceSyncService $inspectionInvoiceSyncService,
+        private readonly InspectionSpecialistAssessmentService $specialistAssessmentService,
     )
     {
     }
@@ -496,6 +505,9 @@ class InspectionController extends Controller
 
         $approvedLabour = round((float) $approvedFindings->sum(fn ($f) => (float) ($f['labour_cost'] ?? 0)), 2);
         $approvedMaterial = round((float) $approvedFindings->sum(fn ($f) => (float) ($f['material_cost'] ?? 0)), 2);
+        $approvedTradeCost = round((float) $approvedFindings->sum(fn ($f) => (float) ($f['trade_cost'] ?? data_get($f, 'trade_pricing.trade_total_cost', 0))), 2);
+        $approvedTradeClientPrice = round((float) $approvedFindings->sum(fn ($f) => (float) ($f['trade_client_price'] ?? data_get($f, 'trade_pricing.etogo_client_price', 0))), 2);
+        $approvedTradeMargin = round((float) $approvedFindings->sum(fn ($f) => (float) ($f['trade_margin'] ?? data_get($f, 'trade_pricing.etogo_margin_amount', 0))), 2);
         
         // Recalculate visits from approved labour hours (1 visit = 11 working hours)
         // This ensures BDC is derived from approved findings scope, not original all-findings scope.
@@ -516,7 +528,7 @@ class InspectionController extends Controller
         ]);
         $approvedBdc = round((float) ($bdcResult['bdc_annual'] ?? 0), 2);
         
-        $approvedTotal = round($approvedLabour + $approvedMaterial + $approvedBdc, 2);
+        $approvedTotal = round($approvedLabour + $approvedMaterial + $approvedTradeClientPrice + $approvedBdc, 2);
 
         $quotationStatus = 'approved';
         $inspectionQuotationStatus = 'approved';
@@ -528,6 +540,9 @@ class InspectionController extends Controller
             $deferredIds,
             $approvedLabour,
             $approvedMaterial,
+            $approvedTradeCost,
+            $approvedTradeClientPrice,
+            $approvedTradeMargin,
             $approvedBdc,
             $approvedTotal,
             $quotationStatus,
@@ -542,6 +557,9 @@ class InspectionController extends Controller
                 'deferred_finding_ids' => $deferredIds->all(),
                 'approved_labour_cost' => $approvedLabour,
                 'approved_material_cost' => $approvedMaterial,
+                'approved_trade_cost' => $approvedTradeCost,
+                'approved_trade_client_price' => $approvedTradeClientPrice,
+                'approved_trade_margin' => $approvedTradeMargin,
                 'approved_bdc_cost' => $approvedBdc,
                 'approved_total' => $approvedTotal,
                 'client_notes' => $validated['client_notes'] ?? null,
@@ -553,6 +571,9 @@ class InspectionController extends Controller
             $inspection->update([
                 'frlc_annual' => $approvedLabour,
                 'fmc_annual' => $approvedMaterial,
+                'trade_cost_annual' => $approvedTradeCost,
+                'trade_client_price_annual' => $approvedTradeClientPrice,
+                'trade_margin_annual' => $approvedTradeMargin,
                 'bdc_annual' => $approvedBdc,
                 'trc_annual' => $approvedTotal,
                 'trc_monthly' => $approvedTotal,
@@ -925,12 +946,14 @@ class InspectionController extends Controller
 
         $paymentIntent = $stripe->paymentIntents->create([
             'amount' => $feeData['charge_cents'],
-            'currency' => 'usd',
+            'currency' => strtolower((string) config('cashier.currency', 'usd')),
             'metadata' => [
                 'payment_type' => 'inspection_fee',
                 'property_id' => $property->id,
                 'user_id' => Auth::id(),
                 'property_name' => $property->property_name,
+                'inspection_full_amount' => number_format((float) $feeData['total_dollars'], 2, '.', ''),
+                'specialist_support_total' => number_format((float) $feeData['specialist_support_total'], 2, '.', ''),
             ],
         ]);
 
@@ -994,6 +1017,12 @@ class InspectionController extends Controller
                 'inspection_fee_amount' => $feeData['charge_dollars'],
                 'inspection_fee_status' => 'paid',
                 'inspection_fee_paid_at' => now(),
+                'stripe_payment_intent_id' => $paymentIntent->id,
+                'specialist_assessment_breakdown' => $feeData['specialist_assessment'],
+                'specialist_trade_cost' => $feeData['specialist_trade_cost'],
+                'specialist_client_price' => $feeData['specialist_support_total'],
+                'specialist_margin_amount' => $feeData['specialist_margin'],
+                'specialist_pricing_currency' => $feeData['currency'],
             ]);
 
             $this->ensureInspectionFeeInvoice($inspection->fresh(['property', 'project']));

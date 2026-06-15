@@ -698,18 +698,45 @@
                                             $oldKnownProblemsList = array_values(array_filter(array_map('trim', preg_split('/[,\n]+/', $oldKnownProblemsRaw))));
                                         }
                                     }
+                                    $oldKnownProblemDetailsRaw = old('known_problem_details', $property->known_problem_details ?? []);
+                                    $oldKnownProblemDetails = [];
+                                    if (is_string($oldKnownProblemDetailsRaw) && trim($oldKnownProblemDetailsRaw) !== '') {
+                                        $decodedKnownProblemDetails = json_decode($oldKnownProblemDetailsRaw, true);
+                                        $oldKnownProblemDetails = is_array($decodedKnownProblemDetails) ? $decodedKnownProblemDetails : [];
+                                    } elseif (is_array($oldKnownProblemDetailsRaw)) {
+                                        $oldKnownProblemDetails = $oldKnownProblemDetailsRaw;
+                                    }
+                                    if (empty($oldKnownProblemDetails)) {
+                                        $oldKnownProblemDetails = collect($oldKnownProblemsList)->map(fn($issue) => [
+                                            'area' => 'Unknown / not sure',
+                                            'issue' => $issue,
+                                        ])->values()->all();
+                                    }
                                 @endphp
 
-                                <div class="d-flex gap-2 mb-2">
+                                <div class="row g-2 mb-2">
+                                    <div class="col-md-4">
+                                        <select class="form-control" id="known_problem_area">
+                                            @foreach(($issueAreas ?? ['Unknown / not sure', 'Other']) as $issueArea)
+                                                <option value="{{ $issueArea }}">{{ $issueArea }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6">
                                     <input type="text" class="form-control" id="known_problem_input" placeholder="Type an issue and click Add">
+                                    </div>
+                                    <div class="col-md-2">
                                     <button type="button" class="btn btn-outline-primary" id="add_known_problem_btn">
                                         <i class="mdi mdi-plus"></i> Add
                                     </button>
+                                    </div>
                                 </div>
 
                                 <input type="hidden" name="known_problems" id="known_problems" value="{{ is_array(old('known_problems', $property->known_problems)) ? implode(', ', old('known_problems', $property->known_problems)) : old('known_problems', $property->known_problems) }}">
+                                <input type="hidden" name="known_problem_details" id="known_problem_details" value="{{ e(json_encode($oldKnownProblemDetails)) }}">
 
                                 <div id="known_problems_list" class="list-input-container"></div>
+                                <small class="form-text text-muted d-block mt-1">Share specific symptoms like roof leaks, outlet sparks, pipe leaks, cracks, stains, or moisture so we can prepare the right assessment support.</small>
 
                                 <div class="mt-3">
                                     <label for="known_problem_images" class="form-label">Upload issue images <small class="text-muted">(optional)</small></label>
@@ -1317,18 +1344,39 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Dynamic list inputs for known problems and sensitivities
     const knownProblemsHidden = document.getElementById('known_problems');
+    const knownProblemDetailsHidden = document.getElementById('known_problem_details');
+    const knownProblemAreaSelect = document.getElementById('known_problem_area');
     const knownProblemsInput = document.getElementById('known_problem_input');
     const knownProblemsList = document.getElementById('known_problems_list');
     const addKnownProblemBtn = document.getElementById('add_known_problem_btn');
 
-    const knownProblemsItems = @json($oldKnownProblemsList ?? []);
+    const knownProblemsItems = (@json($oldKnownProblemDetails ?? []) || []).map(item => {
+        if (typeof item === 'string') {
+            return { area: 'Unknown / not sure', issue: item };
+        }
+
+        return {
+            area: String(item.area || 'Unknown / not sure'),
+            issue: String(item.issue || '').trim()
+        };
+    }).filter(item => item.issue);
 
     function normalizeValue(value) {
         return String(value || '').trim();
     }
 
     function syncHiddenField(hiddenField, items) {
-        hiddenField.value = items.join(', ');
+        hiddenField.value = items.map(item => item.issue).join(', ');
+        knownProblemDetailsHidden.value = JSON.stringify(items);
+    }
+
+    function escapeHtml(value) {
+        return String(value || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
     }
 
     function renderItems(container, items, onRemove) {
@@ -1346,7 +1394,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const badge = document.createElement('div');
             badge.className = 'list-item-badge';
             badge.innerHTML = `
-                <span>${item}</span>
+                <span><strong>${escapeHtml(item.area || 'Unknown / not sure')}:</strong> ${escapeHtml(item.issue)}</span>
                 <button type="button" class="btn btn-sm btn-link text-danger p-0 ms-2" data-index="${index}" aria-label="Remove item">
                     <i class="mdi mdi-close-circle"></i>
                 </button>
@@ -1360,16 +1408,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
     function addItem(input, items, hiddenField, container) {
         const value = normalizeValue(input.value);
+        const area = normalizeValue(knownProblemAreaSelect.value) || 'Unknown / not sure';
         if (!value) {
             return;
         }
 
-        const exists = items.some(item => item.toLowerCase() === value.toLowerCase());
+        const exists = items.some(item => item.issue.toLowerCase() === value.toLowerCase() && item.area.toLowerCase() === area.toLowerCase());
         if (!exists) {
-            items.push(value);
+            items.push({ area, issue: value });
         }
 
         input.value = '';
+        knownProblemAreaSelect.value = 'Unknown / not sure';
         syncHiddenField(hiddenField, items);
         render();
     }

@@ -1796,6 +1796,614 @@
 
 </style>
 
+{{-- EMURIA admin design refresh: final layer over the legacy template --}}
+<style>
+    :root {
+        --emuria-bg: #f5f7fb;
+        --emuria-surface: #ffffff;
+        --emuria-ink: #172033;
+        --emuria-muted: #667085;
+        --emuria-line: #dfe5ef;
+        --emuria-blue: #263a96;
+        --emuria-blue-2: #4452b4;
+        --emuria-gold: #ffc33a;
+        --emuria-green: #1f9d55;
+        --emuria-radius: 8px;
+    }
+
+    body.light-theme,
+    body.light-theme .container-scroller,
+    body.light-theme .page-body-wrapper,
+    body.light-theme .main-panel,
+    body.light-theme .content-wrapper {
+        background: var(--emuria-bg) !important;
+        color: var(--emuria-ink) !important;
+    }
+
+    .content-wrapper {
+        padding: 24px !important;
+    }
+
+    .page-header {
+        background: transparent !important;
+        border: 0 !important;
+        margin: 0 0 18px !important;
+        padding: 0 !important;
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+    }
+
+    .page-title {
+        color: var(--emuria-ink) !important;
+        font-size: 1.35rem !important;
+        font-weight: 800 !important;
+        letter-spacing: 0 !important;
+        margin: 0 !important;
+    }
+
+    .breadcrumb {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    .breadcrumb-item,
+    .breadcrumb-item a {
+        color: var(--emuria-muted) !important;
+        font-size: .85rem;
+    }
+
+    .navbar.fixed-top {
+        left: 280px !important;
+        width: calc(100% - 280px) !important;
+        height: 68px;
+        background: rgba(255,255,255,.96) !important;
+        border-bottom: 1px solid var(--emuria-line) !important;
+        box-shadow: 0 8px 22px rgba(16, 24, 40, 0.08) !important;
+        backdrop-filter: blur(10px);
+    }
+
+    .navbar .form-control {
+        max-width: 820px;
+        height: 38px;
+        border-radius: 7px !important;
+        background: #fff !important;
+        border-color: #ccd5e3 !important;
+    }
+
+    .main-panel {
+        padding-top: 68px;
+    }
+
+    .card {
+        border: 1px solid var(--emuria-line) !important;
+        border-radius: var(--emuria-radius) !important;
+        box-shadow: 0 10px 28px rgba(16, 24, 40, 0.06) !important;
+        overflow: hidden;
+    }
+
+    .card:hover,
+    .table tbody tr:hover,
+    .btn:hover {
+        transform: none !important;
+    }
+
+    .card-body {
+        padding: 22px 24px !important;
+    }
+
+    .card-title {
+        color: var(--emuria-ink) !important;
+        font-size: 1.05rem !important;
+        font-weight: 800 !important;
+        letter-spacing: 0 !important;
+    }
+
+    .text-muted,
+    small.text-muted {
+        color: var(--emuria-muted) !important;
+    }
+
+    .table {
+        margin-bottom: 0 !important;
+        border-collapse: separate !important;
+        border-spacing: 0 !important;
+    }
+
+    .table thead th {
+        background: #f3f6fb !important;
+        color: #263244 !important;
+        font-size: .76rem !important;
+        font-weight: 800 !important;
+        letter-spacing: .06em !important;
+        border: 0 !important;
+        padding: 14px 16px !important;
+    }
+
+    .table tbody td {
+        background: #fff !important;
+        border-top: 1px solid #edf1f7 !important;
+        padding: 14px 16px !important;
+        font-size: .9rem !important;
+        color: var(--emuria-ink) !important;
+    }
+
+    .table tbody tr:hover,
+    .light-theme .table tbody tr:hover,
+    .light-theme .table tbody tr:hover td {
+        background: #f8fafc !important;
+        box-shadow: none !important;
+        color: var(--emuria-ink) !important;
+    }
+
+    .btn {
+        border-radius: 7px !important;
+        box-shadow: none !important;
+        font-weight: 700 !important;
+        letter-spacing: 0 !important;
+    }
+
+    .btn-outline-primary,
+    .btn-outline-info,
+    .btn-outline-success,
+    .btn-outline-warning,
+    .btn-outline-secondary {
+        background: #fff !important;
+        border: 1px solid #cdd6e5 !important;
+        color: var(--emuria-blue) !important;
+    }
+
+    .btn-primary,
+    .btn-success {
+        border: 0 !important;
+    }
+
+    .badge {
+        border-radius: 999px !important;
+        font-weight: 800 !important;
+        letter-spacing: 0 !important;
+    }
+
+    .nav-pills {
+        gap: 10px;
+    }
+
+    .nav-pills .nav-link {
+        border: 1px solid #cdd6e5;
+        border-radius: 7px !important;
+        color: var(--emuria-blue) !important;
+        background: #fff;
+        font-weight: 800;
+    }
+
+    .nav-pills .nav-link.active {
+        background: var(--emuria-blue-2) !important;
+        color: #fff !important;
+        border-color: var(--emuria-blue-2) !important;
+    }
+
+    .emuria-dashboard-card {
+        min-height: 132px;
+        background: #ffffff !important;
+        color: var(--emuria-ink) !important;
+        border: 1px solid var(--emuria-line) !important;
+        border-left-width: 4px !important;
+        border-radius: var(--emuria-radius) !important;
+        box-shadow: 0 12px 28px rgba(16, 24, 40, .08) !important;
+    }
+
+    .emuria-dashboard-card.bg-gradient-danger {
+        border-left-color: #d92d20 !important;
+    }
+
+    .emuria-dashboard-card.bg-gradient-info {
+        border-left-color: #088ab2 !important;
+    }
+
+    .emuria-dashboard-card.bg-gradient-success {
+        border-left-color: #1f9d55 !important;
+    }
+
+    .emuria-dashboard-card.bg-gradient-warning {
+        border-left-color: #d99a00 !important;
+    }
+
+    .emuria-dashboard-card .card-body {
+        padding: 20px !important;
+    }
+
+    .emuria-dashboard-card h6 {
+        color: var(--emuria-muted) !important;
+        font-size: .78rem;
+        text-transform: uppercase;
+        letter-spacing: .06em;
+        opacity: 1;
+    }
+
+    .emuria-dashboard-card h2 {
+        color: var(--emuria-ink) !important;
+        font-size: 2rem;
+        line-height: 1;
+        font-weight: 900;
+    }
+
+    .emuria-dashboard-card p,
+    .emuria-dashboard-card .text-white-50 {
+        color: var(--emuria-muted) !important;
+    }
+
+    .emuria-dashboard-card i.mdi-48px {
+        width: 48px;
+        height: 48px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        font-size: 1.6rem !important;
+        opacity: 1 !important;
+        background: #eef3ff;
+        color: var(--emuria-blue) !important;
+    }
+
+    .emuria-dashboard-card.bg-gradient-danger i.mdi-48px {
+        background: #fff1f0;
+        color: #b42318 !important;
+    }
+
+    .emuria-dashboard-card.bg-gradient-info i.mdi-48px {
+        background: #e6f7fb;
+        color: #0e7490 !important;
+    }
+
+    .emuria-dashboard-card.bg-gradient-success i.mdi-48px {
+        background: #eaf7ef;
+        color: #157347 !important;
+    }
+
+    .emuria-dashboard-card.bg-gradient-warning i.mdi-48px {
+        background: #fff6dc;
+        color: #a15c00 !important;
+    }
+
+    .emuria-queue-link {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 0;
+        border-bottom: 1px solid #edf1f7;
+        color: var(--emuria-ink) !important;
+        text-decoration: none !important;
+    }
+
+    .emuria-queue-link:last-child {
+        border-bottom: 0;
+        padding-bottom: 0;
+    }
+
+    .emuria-queue-link:hover {
+        color: var(--emuria-blue) !important;
+    }
+
+    @media (max-width: 991.98px) {
+        .navbar.fixed-top {
+            left: 0 !important;
+            width: 100% !important;
+        }
+
+        .content-wrapper {
+            padding: 16px !important;
+        }
+    }
+
+    /* Layout correction: navbar lives inside the content wrapper, not double-offset from viewport */
+    .navbar.fixed-top,
+    .navbar {
+        position: sticky !important;
+        top: 0 !important;
+        left: auto !important;
+        right: auto !important;
+        width: 100% !important;
+        height: 68px !important;
+        margin: 0 !important;
+        border-radius: 0 !important;
+    }
+
+    .main-panel {
+        padding-top: 0 !important;
+    }
+
+    .page-body-wrapper {
+        padding-top: 0 !important;
+    }
+
+    .navbar .navbar-menu-wrapper {
+        padding-left: 24px !important;
+        padding-right: 24px !important;
+    }
+
+    .navbar .navbar-toggler {
+        margin-right: 16px !important;
+        width: 36px;
+        height: 36px;
+        border: 1px solid #d9e0ec !important;
+        border-radius: 7px !important;
+        background: #fff !important;
+    }
+
+    .navbar .navbar-nav.w-100 {
+        max-width: 720px;
+    }
+
+    .admin-navbar-logo-mini {
+        display: block;
+        width: 38px;
+        height: 38px;
+        object-fit: contain;
+        background: #ffffff;
+        border-radius: 8px;
+        padding: 4px;
+    }
+
+    @media (max-width: 991.98px) {
+        .navbar .navbar-menu-wrapper {
+            padding-left: 12px !important;
+            padding-right: 12px !important;
+        }
+    }
+</style>
+
+{{-- ETOGO clean operations interface: final visual layer --}}
+<style>
+    :root {
+        --etogo-page: #f4f7fb;
+        --etogo-sidebar: #eaf4ff;
+        --etogo-sidebar-line: #c8dff4;
+        --etogo-card: #ffffff;
+        --etogo-ink: #071426;
+        --etogo-text: #172033;
+        --etogo-muted: #667085;
+        --etogo-line: #dfe6ef;
+        --etogo-blue: #2458d6;
+        --etogo-blue-soft: #e8f0ff;
+        --etogo-radius: 8px;
+    }
+
+    body,
+    body.light-theme,
+    body.light-theme .container-scroller,
+    body.light-theme .page-body-wrapper,
+    body.light-theme .main-panel,
+    body.light-theme .content-wrapper {
+        background: var(--etogo-page) !important;
+        color: var(--etogo-text) !important;
+        letter-spacing: 0 !important;
+    }
+
+    .content-wrapper {
+        padding: 24px 28px !important;
+    }
+
+    .page-header {
+        background: var(--etogo-card) !important;
+        border: 1px solid var(--etogo-line) !important;
+        border-radius: var(--etogo-radius) !important;
+        box-shadow: 0 4px 14px rgba(16, 24, 40, .05) !important;
+        padding: 18px 22px !important;
+        margin-bottom: 26px !important;
+        align-items: center !important;
+    }
+
+    .page-title {
+        color: var(--etogo-ink) !important;
+        font-size: 1.45rem !important;
+        font-weight: 850 !important;
+        line-height: 1.2 !important;
+    }
+
+    .breadcrumb-item,
+    .breadcrumb-item a {
+        color: var(--etogo-muted) !important;
+        font-weight: 650 !important;
+    }
+
+    .navbar,
+    .navbar.fixed-top {
+        height: 72px !important;
+        background: rgba(255,255,255,.98) !important;
+        border-bottom: 1px solid var(--etogo-line) !important;
+        box-shadow: 0 8px 22px rgba(16, 24, 40, .07) !important;
+    }
+
+    .navbar .navbar-toggler {
+        border-color: var(--etogo-line) !important;
+        color: var(--etogo-muted) !important;
+    }
+
+    .navbar .form-control {
+        height: 40px !important;
+        border-radius: 7px !important;
+        border-color: #cfd8e6 !important;
+        color: var(--etogo-text) !important;
+    }
+
+    .navbar .create-new-button,
+    .navbar .btn-success {
+        background: var(--etogo-blue) !important;
+        color: #fff !important;
+        border-radius: 7px !important;
+        min-height: 38px !important;
+        padding: 0 18px !important;
+    }
+
+    .card {
+        border: 1px solid var(--etogo-line) !important;
+        border-radius: var(--etogo-radius) !important;
+        box-shadow: 0 6px 18px rgba(16, 24, 40, .055) !important;
+        background: var(--etogo-card) !important;
+    }
+
+    .card-body {
+        color: var(--etogo-text) !important;
+    }
+
+    .card-title {
+        color: var(--etogo-ink) !important;
+        font-size: 1rem !important;
+        font-weight: 820 !important;
+        text-transform: none !important;
+    }
+
+    .emuria-dashboard-card,
+    .emuria-dashboard-card.bg-gradient-danger,
+    .emuria-dashboard-card.bg-gradient-info,
+    .emuria-dashboard-card.bg-gradient-success,
+    .emuria-dashboard-card.bg-gradient-warning {
+        background: #fff !important;
+        color: var(--etogo-ink) !important;
+        border: 1px solid var(--etogo-line) !important;
+        border-radius: var(--etogo-radius) !important;
+        box-shadow: 0 6px 18px rgba(16, 24, 40, .055) !important;
+        min-height: 142px;
+    }
+
+    .emuria-dashboard-card h6 {
+        color: var(--etogo-ink) !important;
+        font-size: .8rem !important;
+        font-weight: 850 !important;
+        letter-spacing: .045em !important;
+        text-transform: uppercase !important;
+    }
+
+    .emuria-dashboard-card h2 {
+        color: #020817 !important;
+        font-size: 2.1rem !important;
+        font-weight: 900 !important;
+    }
+
+    .emuria-dashboard-card p,
+    .emuria-dashboard-card .text-white-50 {
+        color: var(--etogo-muted) !important;
+    }
+
+    .emuria-dashboard-card i.mdi-48px {
+        width: 50px !important;
+        height: 50px !important;
+        border-radius: 8px !important;
+        background: #f3f6fa !important;
+        color: #0b1b33 !important;
+        font-size: 1.55rem !important;
+    }
+
+    .admin-client-sidebar,
+    body .admin-client-sidebar,
+    body.light-theme .admin-client-sidebar {
+        background: var(--etogo-sidebar) !important;
+        border-right: 1px solid var(--etogo-sidebar-line) !important;
+        box-shadow: 8px 0 22px rgba(28, 58, 92, .07) !important;
+    }
+
+    .admin-client-sidebar .admin-client-sidebar-inner {
+        padding: 18px 12px 16px !important;
+    }
+
+    .admin-client-sidebar .admin-client-brand {
+        justify-content: center !important;
+        padding: 0 0 18px !important;
+    }
+
+    .admin-client-sidebar .admin-client-brand a {
+        width: 68px !important;
+        height: 68px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border-radius: 8px !important;
+        background: #fff !important;
+        box-shadow: 0 5px 16px rgba(28, 58, 92, .10) !important;
+    }
+
+    .admin-client-sidebar .admin-client-brand-logo {
+        width: 44px !important;
+    }
+
+    .admin-client-sidebar .admin-client-user {
+        background: rgba(255,255,255,.76) !important;
+        border: 1px solid #d5e6f6 !important;
+        border-radius: 8px !important;
+        padding: 12px !important;
+    }
+
+    .admin-client-sidebar .admin-client-name,
+    .admin-client-sidebar .admin-client-link,
+    .admin-client-sidebar .admin-client-link span,
+    .admin-client-sidebar .admin-client-sublink,
+    .admin-client-sidebar .admin-client-arrow {
+        color: #12233d !important;
+        font-weight: 760 !important;
+    }
+
+    .admin-client-sidebar .admin-client-role,
+    .admin-client-sidebar .admin-client-section-title {
+        color: #51677f !important;
+    }
+
+    .admin-client-sidebar .admin-client-section-title {
+        font-size: .68rem !important;
+        letter-spacing: .16em !important;
+        font-weight: 850 !important;
+    }
+
+    .admin-client-sidebar .admin-client-link,
+    .admin-client-sidebar .admin-client-sublink {
+        border-radius: 7px !important;
+        box-shadow: none !important;
+    }
+
+    .admin-client-sidebar .admin-client-link.is-active,
+    .admin-client-sidebar .admin-client-sublink.is-active {
+        background: #fff !important;
+        color: var(--etogo-blue) !important;
+        border-left: 3px solid var(--etogo-blue) !important;
+        box-shadow: 0 5px 14px rgba(28, 58, 92, .07) !important;
+    }
+
+    .admin-client-sidebar .admin-client-icon,
+    .admin-client-sidebar .admin-client-icon-dashboard,
+    .admin-client-sidebar .admin-client-icon-property,
+    .admin-client-sidebar .admin-client-icon-services,
+    .admin-client-sidebar .admin-client-icon-projects,
+    .admin-client-sidebar .admin-client-icon-billing,
+    .admin-client-sidebar .admin-client-icon-reports,
+    .admin-client-sidebar .admin-client-icon-access,
+    .admin-client-sidebar .admin-client-icon-settings {
+        background: #d8e9fa !important;
+        color: #173859 !important;
+        border-radius: 7px !important;
+    }
+
+    .admin-client-sidebar .admin-client-link.is-active .admin-client-icon,
+    .admin-client-sidebar .admin-client-link:hover .admin-client-icon {
+        background: var(--etogo-blue) !important;
+        color: #fff !important;
+    }
+
+    .table thead th {
+        background: #f3f6fa !important;
+        color: #344054 !important;
+        font-weight: 850 !important;
+    }
+
+    .table tbody td {
+        color: var(--etogo-text) !important;
+    }
+
+    .btn:hover,
+    .card:hover,
+    .table tbody tr:hover {
+        transform: none !important;
+    }
+</style>
+
 {{-- Custom Page Styles --}}
 @stack('styles')
 

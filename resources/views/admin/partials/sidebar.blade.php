@@ -228,12 +228,18 @@
 
     $openServiceRequestsCount = \App\Models\ServiceRequest::whereIn('status', ['submitted', 'triaged', 'awaiting_assessment'])
         ->count();
+
+    $openTradeApplicationsCount = $user->hasRole(['Super Admin', 'Administrator'])
+        ? \App\Models\TradeApplication::whereIn('status', ['submitted', 'ready_for_review', 'needs_more_information', 'conditionally_approved'])->count()
+        : 0;
 @endphp
 
 <nav class="sidebar sidebar-offcanvas admin-client-sidebar" id="sidebar">
     <div class="admin-client-sidebar-inner">
         <div class="admin-client-brand">
-            <a href="{{ route('dashboard') }}">EMURIA</a>
+            <a href="{{ route('dashboard') }}" aria-label="ETOGO dashboard">
+                <img src="{{ asset('etogo%20log.png') }}" alt="ETOGO" class="admin-client-brand-logo">
+            </a>
         </div>
 
         <div class="admin-client-user">
@@ -299,6 +305,18 @@
                     @endif
                 </div>
             </details>
+
+            @role('Super Admin|Administrator')
+                <a class="admin-client-link {{ request()->routeIs('admin.trade-applications.*') ? 'is-active' : '' }}" href="{{ route('admin.trade-applications.index') }}">
+                    <span class="admin-client-summary-left">
+                        <i class="mdi mdi-account-hard-hat admin-client-icon admin-client-icon-services"></i>
+                        <span>Trade Applications</span>
+                    </span>
+                    @if($openTradeApplicationsCount > 0)
+                        <span class="admin-client-badge">{{ $openTradeApplicationsCount }}</span>
+                    @endif
+                </a>
+            @endrole
         @endif
 
         @if($user->hasRole(['Technician', 'Project Manager', 'Super Admin', 'Administrator', 'Store Manager']) || $user->can('view-all-projects'))
@@ -519,242 +537,227 @@
 .admin-client-sidebar,
 body .admin-client-sidebar,
 body.light-theme .admin-client-sidebar {
-    background: linear-gradient(180deg, #1f2f98 0%, #1a2a86 55%, #183075 100%) !important;
-    border: none !important;
-    box-shadow: none !important;
+    width: 280px !important;
+    background: #eaf4ff !important;
+    border-right: 1px solid #c8dff4 !important;
+    box-shadow: 4px 0 14px rgba(28, 58, 92, .045) !important;
 }
 
 .admin-client-sidebar,
-.admin-client-sidebar *,
-.admin-client-sidebar *::before,
-.admin-client-sidebar *::after {
-    border: none !important;
-    box-shadow: none !important;
+.admin-client-sidebar * {
+    letter-spacing: 0 !important;
 }
 
 .admin-client-sidebar .admin-client-sidebar-inner {
-    padding: 0.7rem 0.85rem 1rem;
+    padding: 18px 12px 16px !important;
 }
 
 .admin-client-sidebar .admin-client-brand {
-    padding: 0.35rem 0.55rem 0.95rem;
+    display: flex !important;
+    justify-content: center !important;
+    padding: 0 0 18px !important;
 }
 
 .admin-client-sidebar .admin-client-brand a {
-    color: #ffffff !important;
-    text-decoration: underline;
-    font-size: 2rem;
-    font-weight: 700;
-    letter-spacing: 0.5px;
-    line-height: 1;
+    width: 64px !important;
+    height: 64px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: #fff !important;
+    border-radius: 8px !important;
+    box-shadow: 0 3px 10px rgba(28, 58, 92, .08) !important;
+    text-decoration: none !important;
+}
+
+.admin-client-sidebar .admin-client-brand-logo {
+    width: 40px !important;
+    height: auto !important;
+    object-fit: contain !important;
 }
 
 .admin-client-sidebar .admin-client-user {
-    display: flex;
-    align-items: center;
-    gap: 0.7rem;
-    padding: 0.4rem 0.5rem 0.9rem;
+    display: flex !important;
+    align-items: center !important;
+    gap: .7rem !important;
+    margin-bottom: .6rem !important;
+    padding: 12px !important;
+    background: rgba(255,255,255,.68) !important;
+    border: 1px solid #d7e7f7 !important;
+    border-radius: 8px !important;
+    box-shadow: none !important;
 }
 
 .admin-client-sidebar .admin-client-avatar {
-    width: 38px;
-    height: 38px;
-    border-radius: 999px;
-    object-fit: cover;
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 999px !important;
+    object-fit: cover !important;
 }
 
 .admin-client-sidebar .admin-client-name {
-    color: #ffffff;
-    font-size: 1.02rem;
-    font-weight: 600;
-    line-height: 1.1;
+    color: #172033 !important;
+    font-size: .9rem !important;
+    font-weight: 800 !important;
+    line-height: 1.15 !important;
+}
+
+.admin-client-sidebar .admin-client-role,
+.admin-client-sidebar .admin-client-section-title {
+    color: #667085 !important;
 }
 
 .admin-client-sidebar .admin-client-role {
-    color: #ffffff;
-    font-size: 0.95rem;
-    opacity: 1;
+    font-size: .8rem !important;
+    line-height: 1.2 !important;
 }
 
 .admin-client-sidebar .admin-client-section-title {
-    color: #ffffff;
-    text-transform: uppercase;
-    letter-spacing: 1.6px;
-    font-size: 0.77rem;
-    font-weight: 700;
-    padding: 0.85rem 0.55rem 0.45rem;
+    padding: 1rem .55rem .45rem !important;
+    font-size: .68rem !important;
+    font-weight: 850 !important;
+    text-transform: uppercase !important;
+    letter-spacing: .16em !important;
+}
+
+.admin-client-sidebar .admin-client-link,
+.admin-client-sidebar .admin-client-sublink {
+    display: flex !important;
+    align-items: center !important;
+    gap: .7rem !important;
+    color: #172033 !important;
+    text-decoration: none !important;
+    border-radius: 7px !important;
+    box-shadow: none !important;
+    font-weight: 700 !important;
 }
 
 .admin-client-sidebar .admin-client-link {
-    color: #ffffff !important;
-    text-decoration: none !important;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.65rem;
-    padding: 0.72rem 0.6rem;
-    border-radius: 0.6rem;
-    background: transparent !important;
+    min-height: 44px !important;
+    padding: .55rem !important;
+    justify-content: flex-start !important;
 }
 
-.admin-client-sidebar .admin-client-link i {
-    color: #ffffff !important;
-    font-size: 1rem;
-    width: 20px;
-    text-align: center;
-}
-
-.admin-client-sidebar .admin-client-icon {
-    width: 32px !important;
-    height: 32px;
-    display: inline-flex !important;
-    align-items: center;
-    justify-content: center;
-    border-radius: 10px;
-    font-size: 1rem;
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 8px 18px rgba(5, 10, 30, 0.18) !important;
-}
-
-.admin-client-sidebar .admin-client-icon-dashboard {
-    background: linear-gradient(135deg, #ffb347, #ff7a18) !important;
-}
-
-.admin-client-sidebar .admin-client-icon-property {
-    background: linear-gradient(135deg, #4dd0e1, #1e88e5) !important;
-}
-
-.admin-client-sidebar .admin-client-icon-services {
-    background: linear-gradient(135deg, #81c784, #2e7d32) !important;
-}
-
-.admin-client-sidebar .admin-client-icon-projects {
-    background: linear-gradient(135deg, #f48fb1, #d81b60) !important;
-}
-
-.admin-client-sidebar .admin-client-icon-billing {
-    background: linear-gradient(135deg, #ffd54f, #fb8c00) !important;
-}
-
-.admin-client-sidebar .admin-client-icon-reports {
-    background: linear-gradient(135deg, #9575cd, #5e35b1) !important;
-}
-
-.admin-client-sidebar .admin-client-icon-access {
-    background: linear-gradient(135deg, #90a4ae, #546e7a) !important;
-}
-
-.admin-client-sidebar .admin-client-icon-settings {
-    background: linear-gradient(135deg, #aed581, #7cb342) !important;
+.admin-client-sidebar .admin-client-summary-left {
+    display: flex !important;
+    align-items: center !important;
+    gap: .7rem !important;
+    flex: 1 !important;
+    min-width: 0 !important;
 }
 
 .admin-client-sidebar .admin-client-link span,
 .admin-client-sidebar .admin-client-sublink,
 .admin-client-sidebar .admin-client-sublink:visited,
-.admin-client-sidebar .admin-client-sublink:focus,
-.admin-client-sidebar .admin-client-sublink:hover {
-    color: #ffffff !important;
-    text-decoration: none !important;
+.admin-client-sidebar .admin-client-arrow {
+    color: #172033 !important;
 }
 
-.admin-client-sidebar .admin-client-summary-left {
-    display: flex;
-    align-items: center;
-    gap: 0.65rem;
+.admin-client-sidebar .admin-client-icon,
+.admin-client-sidebar .admin-client-icon-dashboard,
+.admin-client-sidebar .admin-client-icon-property,
+.admin-client-sidebar .admin-client-icon-services,
+.admin-client-sidebar .admin-client-icon-projects,
+.admin-client-sidebar .admin-client-icon-billing,
+.admin-client-sidebar .admin-client-icon-reports,
+.admin-client-sidebar .admin-client-icon-access,
+.admin-client-sidebar .admin-client-icon-settings {
+    width: 30px !important;
+    height: 30px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+    background: #dbeafa !important;
+    color: #344054 !important;
+    border-radius: 7px !important;
+    box-shadow: none !important;
 }
 
 .admin-client-sidebar .admin-client-group {
-    margin: 0;
+    margin: 0 !important;
 }
 
 .admin-client-sidebar .admin-client-group summary {
-    list-style: none;
-    cursor: pointer;
+    list-style: none !important;
+    cursor: pointer !important;
 }
 
 .admin-client-sidebar .admin-client-group summary::-webkit-details-marker {
-    display: none;
+    display: none !important;
 }
 
 .admin-client-sidebar .admin-client-arrow {
-    color: #ffffff;
-    transition: transform 0.15s ease;
-    font-size: 0.9rem;
-    line-height: 1;
+    margin-left: auto !important;
+    opacity: .72 !important;
+    transition: transform .15s ease !important;
 }
 
 .admin-client-sidebar details[open] .admin-client-arrow {
-    transform: rotate(180deg);
+    transform: rotate(180deg) !important;
 }
 
 .admin-client-sidebar .admin-client-submenu {
-    padding: 0.18rem 0 0.52rem 0;
+    padding: .18rem 0 .52rem 0 !important;
 }
 
 .admin-client-sidebar .admin-client-sublink {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
-    margin-left: 2rem;
-    padding: 0.44rem 0.55rem;
-    border-radius: 0.5rem;
-    background: transparent !important;
-}
-
-.admin-client-sidebar .admin-client-sublabel {
-    display: inline-block;
-    line-height: 1.2;
-}
-
-.admin-client-sidebar .admin-client-badge {
-    min-width: 20px;
-    height: 20px;
-    padding: 0 0.45rem;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    margin-left: auto;
-    line-height: 20px;
-    flex-shrink: 0;
-    border-radius: 999px;
-    background: #ffffff !important;
-    color: #1f2f98 !important;
-    font-size: 0.74rem;
-    font-weight: 700;
-}
-
-.admin-client-sidebar .is-active {
-    background: rgba(255, 255, 255, 0.12) !important;
+    justify-content: space-between !important;
+    margin-left: 2.65rem !important;
+    padding: .42rem .5rem !important;
+    font-size: .86rem !important;
+    color: #344054 !important;
 }
 
 .admin-client-sidebar .admin-client-link:hover,
-.admin-client-sidebar .admin-client-link:focus,
-.admin-client-sidebar .admin-client-sublink:hover,
-.admin-client-sidebar .admin-client-sublink:focus {
-    background: transparent !important;
+.admin-client-sidebar .admin-client-sublink:hover {
+    background: rgba(255,255,255,.58) !important;
+}
+
+.admin-client-sidebar .admin-client-link.is-active,
+.admin-client-sidebar .admin-client-sublink.is-active {
+    background: #ffffff !important;
+    color: #172033 !important;
+    border-left: 3px solid #2458d6 !important;
+    box-shadow: 0 3px 10px rgba(28, 58, 92, .055) !important;
+}
+
+.admin-client-sidebar .admin-client-link.is-active .admin-client-icon,
+.admin-client-sidebar .admin-client-link:hover .admin-client-icon {
+    background: #ffffff !important;
+    color: #2458d6 !important;
+}
+
+.admin-client-sidebar .admin-client-badge {
+    min-width: 20px !important;
+    height: 20px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 .45rem !important;
+    border-radius: 999px !important;
+    background: #2458d6 !important;
+    color: #ffffff !important;
+    font-size: .72rem !important;
+    font-weight: 800 !important;
 }
 
 .admin-client-version-bar {
-    padding: 10px 14px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    border-top: 1px solid rgba(255,255,255,.12);
-    margin-top: auto;
-    font-size: .72rem;
-    color: rgba(255,255,255,.45);
-    letter-spacing: .04em;
-    font-weight: 600;
-    text-transform: uppercase;
+    padding: 10px 14px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    border-top: 1px solid #c8dff4 !important;
+    color: #667085 !important;
+    font-size: .72rem !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
 }
 
 .admin-client-version-badge {
-    background: rgba(255,255,255,.12);
-    color: rgba(255,255,255,.65);
-    border-radius: 20px;
-    padding: 2px 9px;
-    font-size: .7rem;
-    font-weight: 700;
-    letter-spacing: .06em;
+    background: #dbeafa !important;
+    color: #344054 !important;
+    border-radius: 999px !important;
+    padding: 2px 9px !important;
 }
 </style>

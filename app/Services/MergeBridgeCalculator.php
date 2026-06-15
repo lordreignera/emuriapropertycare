@@ -81,14 +81,21 @@ class MergeBridgeCalculator
                 'annual' => (float) ($approvedQuotation->approved_material_cost ?? 0),
                 'monthly' => (float) ($approvedQuotation->approved_material_cost ?? 0),
             ];
+
+            $tradeCalculation = [
+                'cost' => (float) ($approvedQuotation->approved_trade_cost ?? 0),
+                'client_price' => (float) ($approvedQuotation->approved_trade_client_price ?? 0),
+                'margin' => (float) ($approvedQuotation->approved_trade_margin ?? 0),
+            ];
         } else {
             $findings        = PHARFinding::where('inspection_id', $inspection->id)->get();
             $frlcCalculation = $this->calculateFRLC($findings, $labourHourlyRate);
             $fmcCalculation  = $this->calculateFMC($inspection);
+            $tradeCalculation = $this->calculateTradePricing($inspection);
         }
 
         // Step 3: TRC (Total Remediation Cost)
-        $trcAnnual   = $bdcAnnual + $frlcCalculation['annual'] + $fmcCalculation['annual'];
+        $trcAnnual   = $bdcAnnual + $frlcCalculation['annual'] + $fmcCalculation['annual'] + $tradeCalculation['client_price'];
         $trcMonthly  = $trcAnnual;
         $visitsPerYear = max(1, (float) ($bdcResult['visits_per_year'] ?? $inspection->bdc_visits_per_year ?? 1));
         $trcPerVisit = round($trcAnnual / $visitsPerYear, 2);
@@ -129,6 +136,11 @@ class MergeBridgeCalculator
             // FMC
             'fmc_annual'  => round($fmcCalculation['annual'], 2),
             'fmc_monthly' => round($fmcCalculation['monthly'], 2),
+
+            // Trade Partner Pricing
+            'trade_cost_annual' => round($tradeCalculation['cost'], 2),
+            'trade_client_price_annual' => round($tradeCalculation['client_price'], 2),
+            'trade_margin_annual' => round($tradeCalculation['margin'], 2),
 
             // TRC (always computed; both views available)
             'trc_annual'     => round($trcAnnual, 2),
@@ -183,6 +195,17 @@ class MergeBridgeCalculator
         ];
     }
 
+    protected function calculateTradePricing(Inspection $inspection): array
+    {
+        $items = \App\Models\InspectionTradePricingItem::where('inspection_id', $inspection->id)->get();
+
+        return [
+            'cost' => (float) $items->sum('trade_total_cost'),
+            'client_price' => (float) $items->sum('etogo_client_price'),
+            'margin' => (float) $items->sum('etogo_margin_amount'),
+        ];
+    }
+
     /**
      * Calculate per-unit breakdown
      */
@@ -228,6 +251,9 @@ class MergeBridgeCalculator
             'frlc_monthly'           => $calculation['frlc_monthly'],
             'fmc_annual'             => $calculation['fmc_annual'],
             'fmc_monthly'            => $calculation['fmc_monthly'],
+            'trade_cost_annual'      => $calculation['trade_cost_annual'] ?? 0,
+            'trade_client_price_annual' => $calculation['trade_client_price_annual'] ?? 0,
+            'trade_margin_annual'    => $calculation['trade_margin_annual'] ?? 0,
             'trc_annual'                  => $calculation['trc_annual'],
             'trc_monthly'                 => $calculation['trc_monthly'],
             'trc_per_visit'               => $calculation['trc_per_visit'],

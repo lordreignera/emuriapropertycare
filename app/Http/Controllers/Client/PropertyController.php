@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Client;
 
 use App\Http\Controllers\Controller;
+use App\Models\InspectionSystem;
 use App\Models\Property;
 use App\Models\User;
 use App\Notifications\PropertyRegisteredNotification;
@@ -30,7 +31,9 @@ class PropertyController extends Controller
      */
     public function create()
     {
-        return view('client.properties.create');
+        return view('client.properties.create', [
+            'issueAreas' => $this->issueAreaOptions(),
+        ]);
     }
 
     /**
@@ -86,6 +89,7 @@ class PropertyController extends Controller
             'personality' => 'nullable|in:calm,busy,luxury,high-use',
             'personality_notes' => 'nullable|string|max:2000',
             'known_problems' => 'nullable',
+            'known_problem_details' => 'nullable|string',
             'known_problem_images.*' => 'nullable|image|max:10240',
             'sensitivities' => 'nullable|array',
             'sensitivities.*' => 'string|max:255',
@@ -147,6 +151,10 @@ class PropertyController extends Controller
         
         $knownProblemsList = $this->normalizeListInput($request->input('known_problems'));
         $validated['known_problems'] = !empty($knownProblemsList) ? implode(', ', $knownProblemsList) : null;
+        $validated['known_problem_details'] = $this->normalizeKnownProblemDetails(
+            $request->input('known_problem_details'),
+            $knownProblemsList
+        );
 
         $validated['sensitivities'] = $this->normalizeListInput($request->input('sensitivities'));
         $validated['home_journey'] = array_values(array_filter((array) ($validated['home_journey'] ?? [])));
@@ -227,7 +235,10 @@ class PropertyController extends Controller
                 ->with('info', 'This property is already approved. Please contact support to request changes.');
         }
 
-        return view('client.properties.edit', compact('property'));
+        return view('client.properties.edit', [
+            'property' => $property,
+            'issueAreas' => $this->issueAreaOptions(),
+        ]);
     }
 
     /**
@@ -293,6 +304,7 @@ class PropertyController extends Controller
             'personality' => 'nullable|in:calm,busy,luxury,high-use',
             'personality_notes' => 'nullable|string|max:2000',
             'known_problems' => 'nullable',
+            'known_problem_details' => 'nullable|string',
             'known_problem_images.*' => 'nullable|image|max:10240',
             'sensitivities' => 'nullable|array',
             'sensitivities.*' => 'string|max:255',
@@ -338,6 +350,10 @@ class PropertyController extends Controller
         
         $knownProblemsList = $this->normalizeListInput($request->input('known_problems'));
         $validated['known_problems'] = !empty($knownProblemsList) ? implode(', ', $knownProblemsList) : null;
+        $validated['known_problem_details'] = $this->normalizeKnownProblemDetails(
+            $request->input('known_problem_details'),
+            $knownProblemsList
+        );
 
         $validated['sensitivities'] = $this->normalizeListInput($request->input('sensitivities'));
         $validated['home_journey'] = array_values(array_filter((array) ($validated['home_journey'] ?? [])));
@@ -446,6 +462,73 @@ class PropertyController extends Controller
         }
 
         return array_values(array_filter(array_map('trim', preg_split('/[,\n]+/', $raw)), fn ($item) => $item !== ''));
+    }
+
+    protected function issueAreaOptions(): array
+    {
+        $systems = InspectionSystem::query()
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->pluck('name')
+            ->map(fn ($name) => trim((string) $name))
+            ->filter()
+            ->values()
+            ->all();
+
+        return array_values(array_unique(array_merge(
+            ['Unknown / not sure'],
+            $systems,
+            ['Other']
+        )));
+    }
+
+    protected function normalizeKnownProblemDetails($value, array $knownProblemsList): array
+    {
+        $decoded = is_string($value) && trim($value) !== ''
+            ? json_decode($value, true)
+            : (is_array($value) ? $value : []);
+
+        if (!is_array($decoded)) {
+            $decoded = [];
+        }
+
+        $allowedAreas = $this->issueAreaOptions();
+        $details = collect($decoded)
+            ->filter(fn ($item) => is_array($item))
+            ->map(function (array $item) use ($allowedAreas) {
+                $issue = trim((string) ($item['issue'] ?? ''));
+                $area = trim((string) ($item['area'] ?? 'Unknown / not sure'));
+
+                if ($issue === '') {
+                    return null;
+                }
+
+                if (!in_array($area, $allowedAreas, true)) {
+                    $area = 'Unknown / not sure';
+                }
+
+                return [
+                    'area' => $area,
+                    'issue' => $issue,
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
+
+        if ($details !== []) {
+            return $details;
+        }
+
+        return collect($knownProblemsList)
+            ->map(fn ($issue) => [
+                'area' => 'Unknown / not sure',
+                'issue' => trim((string) $issue),
+            ])
+            ->filter(fn ($item) => $item['issue'] !== '')
+            ->values()
+            ->all();
     }
 
     protected function validateBlueprintQuality(Request $request): ?string

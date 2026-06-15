@@ -158,12 +158,18 @@
                         </h5>
                     </div>
                     <div class="card-body">
-                        <p class="text-muted mb-3">Add findings per system — each finding is a card showing all fields at a glance.</p>
+                        <p class="text-muted mb-3">Add findings per system. Each finding is a card showing all fields at a glance.</p>
 
-                        @if(!empty($serviceRequest))
+                        @if(!empty($serviceRequest) || !empty($seededSystemFindings))
                             <div class="alert alert-info">
-                                <strong>Seeded from Service Request:</strong> {{ $serviceRequest->request_number }}
-                                <div class="small mt-1">Client-reported items are preloaded below as initial findings. Reassign systems/subsystems as needed before saving.</div>
+                                @if(!empty($serviceRequest))
+                                    <strong>Seeded from Service Request:</strong> {{ $serviceRequest->request_number }}
+                                @elseif(($seededFindingsSource ?? null) === 'property_known_issues')
+                                    <strong>Seeded from Property Known Issues</strong>
+                                @else
+                                    <strong>Client-reported items preloaded</strong>
+                                @endif
+                                <div class="small mt-1">Client-reported items are preloaded below as initial findings. Confirm or reassign systems/subsystems before saving.</div>
                             </div>
                         @endif
 
@@ -172,8 +178,28 @@
                                 No systems found. Run database seeding for systems/subsystems first.
                             </div>
                         @else
+                            <div class="cpi-system-picker">
+                                <div class="form-group mb-0">
+                                    <label for="inspectionSystemPicker" class="form-label fw-semibold">Choose a system to inspect</label>
+                                    <select id="inspectionSystemPicker" class="form-control">
+                                        <option value="">Select a system...</option>
+                                        @foreach($systems as $system)
+                                            <option value="{{ $system->id }}">{{ $system->name }}</option>
+                                        @endforeach
+                                    </select>
+                                </div>
+                                <button type="button" class="btn btn-outline-primary" id="addInspectionSystem">
+                                    <i class="mdi mdi-plus"></i> Add System
+                                </button>
+                            </div>
+
+                            <div class="cpi-system-empty" id="inspectionSystemsEmpty">
+                                No systems added yet. Choose a system above to begin recording findings.
+                            </div>
+
+                            <div id="inspectionSelectedSystems">
                             @foreach($systems as $system)
-                                <div class="card mb-3 border">
+                                <div class="card mb-3 border cpi-system-card is-hidden" data-cpi-system="{{ $system->id }}">
                                     <div class="card-header d-flex justify-content-between align-items-center" style="background:#f8f9fc;">
                                         <div>
                                             <strong>{{ $system->name }}</strong>
@@ -181,15 +207,21 @@
                                                 <span class="text-muted ms-2 small">{{ $system->description }}</span>
                                             @endif
                                         </div>
-                                        <button type="button" class="btn btn-sm btn-outline-primary" onclick="addSystemFindingRow({{ $system->id }})">
-                                            <i class="mdi mdi-plus"></i> Add Finding
-                                        </button>
+                                        <div class="d-flex gap-2">
+                                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="removeInspectionSystem({{ $system->id }})">
+                                                Remove System
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="addSystemFindingRow({{ $system->id }})">
+                                                <i class="mdi mdi-plus"></i> Add Finding
+                                            </button>
+                                        </div>
                                     </div>
                                     <div class="card-body p-2" id="system-rows-{{ $system->id }}">
                                         <p class="text-muted small mb-0 px-1" id="system-empty-{{ $system->id }}">No findings added yet. Click <strong>Add Finding</strong> to record an issue.</p>
                                     </div>
                                 </div>
                             @endforeach
+                            </div>
                         @endif
                     </div>
                 </div>
@@ -255,6 +287,40 @@
         </div>
     </div>
 </div>
+
+<style>
+    .cpi-system-picker {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 12px;
+        align-items: end;
+        margin-bottom: 16px;
+    }
+
+    .cpi-system-empty {
+        border: 1px dashed #cfd6e4;
+        border-radius: 8px;
+        background: #f8fafc;
+        color: #667085;
+        padding: 16px;
+        margin-bottom: 16px;
+    }
+
+    .cpi-system-card.is-hidden {
+        display: none;
+    }
+
+    .cpi-system-card.is-selected {
+        border-color: rgba(68, 82, 180, .35) !important;
+        box-shadow: 0 10px 26px rgba(16, 24, 40, .07);
+    }
+
+    @media (max-width: 767.98px) {
+        .cpi-system-picker {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
 
 @php
     $findingTemplatesRaw = \App\Models\FindingTemplateSetting::query()
@@ -365,6 +431,87 @@ const FINDING_PHOTO_URLS = @json($findingPhotoUrls ?? []);
 const FINDING_PHOTO_PATHS = @json(array_map(fn($f) => is_array($f['finding_photos'] ?? null) ? $f['finding_photos'] : [], ($inspection->findings ?? [])));
 function getStoredPhotoPath(findingIdx, photoIdx) {
     return (FINDING_PHOTO_PATHS?.[findingIdx]?.[photoIdx]) ?? '';
+}
+
+function updateInspectionSystemEmptyState() {
+    const empty = document.getElementById('inspectionSystemsEmpty');
+    if (!empty) {
+        return;
+    }
+
+    const hasVisibleSystem = Array.from(document.querySelectorAll('[data-cpi-system]'))
+        .some(card => !card.classList.contains('is-hidden'));
+
+    empty.style.display = hasVisibleSystem ? 'none' : '';
+}
+
+function setInspectionSystemOptionDisabled(systemId, disabled) {
+    const picker = document.getElementById('inspectionSystemPicker');
+    if (!picker) {
+        return;
+    }
+
+    const option = picker.querySelector(`option[value="${systemId}"]`);
+    if (option) {
+        option.disabled = disabled;
+    }
+}
+
+function showInspectionSystem(systemId, options = {}) {
+    if (!systemId) {
+        return null;
+    }
+
+    const card = document.querySelector(`[data-cpi-system="${systemId}"]`);
+    if (!card) {
+        return null;
+    }
+
+    const wasHidden = card.classList.contains('is-hidden');
+    card.classList.remove('is-hidden');
+    card.classList.add('is-selected');
+    setInspectionSystemOptionDisabled(systemId, true);
+
+    const picker = document.getElementById('inspectionSystemPicker');
+    if (picker) {
+        picker.value = '';
+    }
+
+    updateInspectionSystemEmptyState();
+
+    if (wasHidden && options.scroll !== false) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    return card;
+}
+
+function addSelectedInspectionSystem() {
+    const picker = document.getElementById('inspectionSystemPicker');
+    if (!picker || !picker.value) {
+        return;
+    }
+
+    showInspectionSystem(picker.value);
+}
+
+function removeInspectionSystem(systemId) {
+    const card = document.querySelector(`[data-cpi-system="${systemId}"]`);
+    const body = document.getElementById(`system-rows-${systemId}`);
+    if (!card || !body) {
+        return;
+    }
+
+    const findingCount = body.querySelectorAll('.finding-card').length;
+    if (findingCount > 0 && !window.confirm('Remove this system and all findings entered under it?')) {
+        return;
+    }
+
+    body.innerHTML = `<p class="text-muted small mb-0 px-1" id="system-empty-${systemId}">No findings added yet. Click <strong>Add Finding</strong> to record an issue.</p>`;
+    card.classList.add('is-hidden');
+    card.classList.remove('is-selected');
+    setInspectionSystemOptionDisabled(systemId, false);
+    updateInspectionSystemEmptyState();
 }
 
 const initialFindings = @json(old('system_findings', $seededSystemFindings ?? $inspection->findings ?? []));
@@ -555,16 +702,18 @@ function openFindingMediaViewer(items, startIndex) {
     }
 }
 
-function initializeFindingMediaState(card, findingIndexValue) {
+function initializeFindingMediaState(card, findingIndexValue, sourceFindingIndex = findingIndexValue) {
     if (!Array.isArray(card._findingMediaSelectedFiles)) {
         card._findingMediaSelectedFiles = [];
     }
 
+    card._findingMediaSourceIndex = sourceFindingIndex;
+
     if (!Array.isArray(card._findingMediaSavedItems)) {
-        const savedUrls = Array.isArray(FINDING_PHOTO_URLS?.[findingIndexValue]) ? FINDING_PHOTO_URLS[findingIndexValue] : [];
+        const savedUrls = Array.isArray(FINDING_PHOTO_URLS?.[sourceFindingIndex]) ? FINDING_PHOTO_URLS[sourceFindingIndex] : [];
         card._findingMediaSavedItems = savedUrls.map((url, index) => ({
             url,
-            path: getStoredPhotoPath(findingIndexValue, index),
+            path: getStoredPhotoPath(sourceFindingIndex, index),
         }));
     }
 }
@@ -604,14 +753,15 @@ function appendFindingMediaFiles(card, fileList) {
     card._findingMediaSelectedFiles = selected;
 }
 
-function renderFindingMediaGallery(card, findingIndexValue) {
+function renderFindingMediaGallery(card, findingIndexValue, sourceFindingIndex = null) {
     const gallery = card.querySelector('.finding-media-gallery');
     const input = card.querySelector('.finding-media-input');
     if (!gallery || !input) {
         return;
     }
 
-    initializeFindingMediaState(card, findingIndexValue);
+    const resolvedSourceIndex = sourceFindingIndex ?? card._findingMediaSourceIndex ?? findingIndexValue;
+    initializeFindingMediaState(card, findingIndexValue, resolvedSourceIndex);
 
     if (Array.isArray(card._findingMediaBlobUrls)) {
         card._findingMediaBlobUrls.forEach((url) => URL.revokeObjectURL(url));
@@ -1029,11 +1179,15 @@ function addSystemFindingRow(systemId, prefill = {}) {
         return;
     }
 
+    showInspectionSystem(systemId, { scroll: false });
+
     // Hide the empty-state placeholder
     const emptyMsg = document.getElementById(`system-empty-${systemId}`);
     if (emptyMsg) emptyMsg.style.display = 'none';
 
     const currentIndex = findingIndex++;
+    const parsedSourceIndex = Number.parseInt(prefill.__photo_index, 10);
+    const sourceFindingIndex = Number.isFinite(parsedSourceIndex) ? parsedSourceIndex : currentIndex;
     const findingNumber = body.querySelectorAll('.finding-card').length + 1;
     const subsystemOptions = buildSubsystemOptions(systemId, prefill.subsystem_id || '');
     const severityAliasMap = {
@@ -1161,7 +1315,7 @@ function addSystemFindingRow(systemId, prefill = {}) {
                 </label>
                 <div class="finding-media-gallery d-flex flex-wrap gap-2 mb-2"></div>
                 <div class="finding-existing-photos">
-                    ${(Array.isArray(FINDING_PHOTO_URLS?.[currentIndex]) ? FINDING_PHOTO_URLS[currentIndex] : []).map((_url, _pi) => `<input type="hidden" name="existing_finding_photos[${currentIndex}][]" value="${escapeHtml(getStoredPhotoPath(currentIndex, _pi))}">`).join('')}
+                    ${(Array.isArray(FINDING_PHOTO_URLS?.[sourceFindingIndex]) ? FINDING_PHOTO_URLS[sourceFindingIndex] : []).map((_url, _pi) => `<input type="hidden" name="existing_finding_photos[${currentIndex}][]" value="${escapeHtml(getStoredPhotoPath(sourceFindingIndex, _pi))}">`).join('')}
                 </div>
                 <input type="file"
                     name="finding_photos[${currentIndex}][]"
@@ -1257,9 +1411,9 @@ function addSystemFindingRow(systemId, prefill = {}) {
             appendFindingMediaFiles(card, this.files);
             syncFindingMediaInputFiles(card);
             this.value = '';
-            renderFindingMediaGallery(card, currentIndex);
+            renderFindingMediaGallery(card, currentIndex, sourceFindingIndex);
         });
-        renderFindingMediaGallery(card, currentIndex);
+        renderFindingMediaGallery(card, currentIndex, sourceFindingIndex);
     }
 
     // Wire issue preset select → hidden value
@@ -1801,11 +1955,33 @@ function initializeFormAutosave() {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
+    const addSystemButton = document.getElementById('addInspectionSystem');
+    const systemPicker = document.getElementById('inspectionSystemPicker');
+
+    if (addSystemButton) {
+        addSystemButton.addEventListener('click', addSelectedInspectionSystem);
+    }
+
+    if (systemPicker) {
+        systemPicker.addEventListener('change', addSelectedInspectionSystem);
+    }
+
     if (Array.isArray(initialFindings) && initialFindings.length > 0) {
         // Sort by severity priority before rendering so most critical findings appear first
-        const sorted = [...initialFindings].sort((a, b) => {
-            const aOrder = severityOrder[a.severity] ?? 99;
-            const bOrder = severityOrder[b.severity] ?? 99;
+        const indexedFindings = initialFindings.map((finding, originalIndex) => {
+            if (!finding || typeof finding !== 'object') {
+                return finding;
+            }
+
+            return {
+                ...finding,
+                __photo_index: finding.__photo_index ?? originalIndex,
+            };
+        });
+
+        const sorted = [...indexedFindings].sort((a, b) => {
+            const aOrder = severityOrder[a?.severity] ?? 99;
+            const bOrder = severityOrder[b?.severity] ?? 99;
             return aOrder - bOrder;
         });
 
@@ -1818,6 +1994,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    updateInspectionSystemEmptyState();
     initializeFormAutosave();
 });
 

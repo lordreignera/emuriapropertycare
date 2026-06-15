@@ -6,6 +6,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     
     <title>{{ config('app.name', 'EMURIA Property Care') }} - @yield('title', 'Dashboard')</title>
+    <link rel="icon" type="image/png" href="{{ asset('etogo%20log.png') }}">
     
     @include('admin.partials.styles')
     
@@ -18,11 +19,11 @@
         body.light-theme .table-hover tbody tr:hover,
         body.light-theme .table tbody tr:hover td,
         body.light-theme .table-hover tbody tr:hover td {
-            background-color: #f1f5f9 !important;
+            background-color: #f8fafc !important;
             color: #1a202c !important;
-            transform: translateY(-2px) !important;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1) !important;
-            transition: all 0.3s ease !important;
+            transform: none !important;
+            box-shadow: none !important;
+            transition: background-color 0.15s ease !important;
         }
         
         /* Force text color on hover */

@@ -7,6 +7,13 @@ Route::get('/', function () {
     return redirect('/home/index.html');
 });
 
+Route::get('/trade/register', [App\Http\Controllers\TradeApplicationController::class, 'create'])
+    ->name('trade-applications.create');
+Route::post('/trade/register', [App\Http\Controllers\TradeApplicationController::class, 'store'])
+    ->name('trade-applications.store');
+Route::get('/trade/register/thank-you/{tradeApplication}', [App\Http\Controllers\TradeApplicationController::class, 'thankYou'])
+    ->name('trade-applications.thank-you');
+
 // Custom logout route that redirects to login
 Route::post('/logout', function () {
     Auth::logout();
@@ -324,5 +331,13 @@ Route::middleware([
             ->name('service-requests.triage');
         Route::post('/service-requests/{serviceRequest}/assess', [App\Http\Controllers\Admin\ServiceRequestController::class, 'assess'])
             ->name('service-requests.assess');
+
+        // Trade partner onboarding review
+        Route::get('/trade-applications', [App\Http\Controllers\Admin\TradeApplicationController::class, 'index'])
+            ->name('trade-applications.index');
+        Route::get('/trade-applications/{tradeApplication}', [App\Http\Controllers\Admin\TradeApplicationController::class, 'show'])
+            ->name('trade-applications.show');
+        Route::patch('/trade-applications/{tradeApplication}/status', [App\Http\Controllers\Admin\TradeApplicationController::class, 'updateStatus'])
+            ->name('trade-applications.update-status');
     });
 });

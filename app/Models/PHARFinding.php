@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class PHARFinding extends Model
 {
@@ -43,6 +44,11 @@ class PHARFinding extends Model
     public function property(): BelongsTo
     {
         return $this->belongsTo(Property::class);
+    }
+
+    public function tradePricingItems(): HasMany
+    {
+        return $this->hasMany(InspectionTradePricingItem::class, 'phar_finding_id');
     }
 
     /**

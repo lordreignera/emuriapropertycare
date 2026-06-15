@@ -251,6 +251,8 @@ class InspectionController extends Controller
 
         $serviceRequest = null;
         $seededSystemFindings = [];
+        $seededFindingsSource = null;
+        $hasExistingFindings = !empty($inspection?->findings) && is_array($inspection?->findings);
         if ($serviceRequestId) {
             $serviceRequest = ServiceRequest::query()
                 ->where('id', $serviceRequestId)
@@ -262,7 +264,6 @@ class InspectionController extends Controller
                     ->with('error', 'Service request not found for this property.');
             }
 
-            $hasExistingFindings = !empty($inspection?->findings) && is_array($inspection?->findings);
             if (!$hasExistingFindings && $systems->isNotEmpty()) {
                 $defaultSystemId = (int) ($systems->first()->id ?? 0);
                 $urgencyToSeverity = [
@@ -314,7 +315,13 @@ class InspectionController extends Controller
                     ->filter()
                     ->values()
                     ->all();
+                $seededFindingsSource = !empty($seededSystemFindings) ? 'service_request' : null;
             }
+        }
+
+        if (empty($seededSystemFindings) && !$hasExistingFindings && $systems->isNotEmpty()) {
+            $seededSystemFindings = $this->seedFindingsFromPropertyKnownIssues($property, $systems);
+            $seededFindingsSource = !empty($seededSystemFindings) ? 'property_known_issues' : null;
         }
 
         $dbMaterialSettings = \App\Models\FmcMaterialSetting::active()->get([
@@ -368,7 +375,8 @@ class InspectionController extends Controller
             'fmcMaterialSettings',
             'pharCategories',
             'serviceRequest',
-            'seededSystemFindings'
+            'seededSystemFindings',
+            'seededFindingsSource'
         ));
     }
 
@@ -1732,6 +1740,14 @@ class InspectionController extends Controller
             'findings.*.category'               => 'nullable|string',
             'findings.*.notes'                  => 'nullable|string',
             'findings.*.property_id'            => 'nullable|exists:properties,id',
+            'findings.*.requires_trade_pricing' => 'nullable|boolean',
+            'findings.*.fulfillment_type'       => 'nullable|in:etogo_team,trade_partner,decide_later',
+            'findings.*.trade_application_id'   => 'nullable|exists:trade_applications,id',
+            'findings.*.trade_quantity'         => 'nullable|numeric|min:0',
+            'findings.*.trade_unit'             => 'nullable|string|max:30',
+            'findings.*.trade_scope_area'       => 'nullable|string|max:255',
+            'findings.*.trade_duration_hours'   => 'nullable|numeric|min:0',
+            'findings.*.trade_notes'            => 'nullable|string|max:1000',
 
             // Per-finding materials
             'findings.*.materials'              => 'nullable|array',
@@ -1800,6 +1816,22 @@ class InspectionController extends Controller
                 'phar_included_yn'  => isset($phar['included_yn']) ? (bool) $phar['included_yn'] : ($finding['phar_included_yn'] ?? true),
                 'phar_notes'        => $phar['notes'] ?? ($finding['phar_notes'] ?? ''),
                 'phar_materials'    => !empty($pharMaterials) ? $pharMaterials : ($finding['phar_materials'] ?? []),
+                'requires_trade_pricing' => array_key_exists('requires_trade_pricing', $phar)
+                    ? (bool) $phar['requires_trade_pricing']
+                    : ($finding['requires_trade_pricing'] ?? null),
+                'fulfillment_type' => $phar['fulfillment_type'] ?? ($finding['fulfillment_type'] ?? data_get($finding, 'trade_pricing.fulfillment_type', 'decide_later')),
+                'trade_application_id' => !empty($phar['trade_application_id'])
+                    ? (int) $phar['trade_application_id']
+                    : ($finding['trade_application_id'] ?? data_get($finding, 'trade_pricing.trade_application_id')),
+                'trade_quantity' => isset($phar['trade_quantity'])
+                    ? (float) $phar['trade_quantity']
+                    : ($finding['trade_quantity'] ?? data_get($finding, 'trade_pricing.quantity', 1)),
+                'trade_unit' => trim((string) ($phar['trade_unit'] ?? ($finding['trade_unit'] ?? data_get($finding, 'trade_pricing.unit', '')))),
+                'trade_scope_area' => trim((string) ($phar['trade_scope_area'] ?? ($finding['trade_scope_area'] ?? data_get($finding, 'trade_pricing.scope_area', '')))),
+                'trade_duration_hours' => isset($phar['trade_duration_hours'])
+                    ? (float) $phar['trade_duration_hours']
+                    : ($finding['trade_duration_hours'] ?? data_get($finding, 'trade_pricing.estimated_duration_hours')),
+                'trade_notes' => trim((string) ($phar['trade_notes'] ?? ($finding['trade_notes'] ?? ''))),
             ]);
         })->all();
 
@@ -1840,13 +1872,16 @@ class InspectionController extends Controller
         // ==== FINAL SAVE: process into relational tables ====
         $inspection->pharFindings()->delete();
         $inspection->materials()->delete();
+        $inspection->tradePricingItems()->delete();
 
-        foreach ($mergedFindings as $findingData) {
+        $tradePricingService = app(\App\Services\PharTradePricingService::class);
+
+        foreach ($mergedFindings as $findingIndex => $findingData) {
             if (empty($findingData['issue']) && empty($findingData['phar_labour_hours'])) {
                 continue;
             }
 
-            \App\Models\PHARFinding::create([
+            $pharFinding = \App\Models\PHARFinding::create([
                 'inspection_id' => $inspection->id,
                 'property_id'   => $property->id,
                 'task_question' => $findingData['task_question'] ?? ($findingData['issue'] ?? ''),
@@ -1858,6 +1893,31 @@ class InspectionController extends Controller
                 'notes'         => $findingData['phar_notes'] ?? null,
                 'photo_ids'     => !empty($findingData['finding_photos']) ? $findingData['finding_photos'] : null,
             ]);
+
+            if ($tradePricingService->shouldPriceFinding($findingData)) {
+                $tradePricing = $tradePricingService->priceFinding($inspection, $findingData, (int) $findingIndex);
+                $tradePricing['phar_finding_id'] = $pharFinding->id;
+                $tradeItem = \App\Models\InspectionTradePricingItem::create($tradePricing);
+
+                $mergedFindings[$findingIndex]['trade_pricing'] = [
+                    'trade_pricing_item_id' => $tradeItem->id,
+                    'phar_finding_id' => $pharFinding->id,
+                    'trade_application_id' => $tradeItem->trade_application_id,
+                    'trade_company_name' => $tradeItem->trade_company_name,
+                    'fulfillment_type' => $tradeItem->fulfillment_type,
+                    'scope_area' => $tradeItem->scope_area,
+                    'unit' => $tradeItem->unit,
+                    'quantity' => (float) $tradeItem->quantity,
+                    'estimated_duration_hours' => $tradeItem->estimated_duration_hours !== null ? (float) $tradeItem->estimated_duration_hours : null,
+                    'trade_unit_cost' => (float) $tradeItem->trade_unit_cost,
+                    'trade_total_cost' => (float) $tradeItem->trade_total_cost,
+                    'etogo_client_price' => (float) $tradeItem->etogo_client_price,
+                    'etogo_margin_amount' => (float) $tradeItem->etogo_margin_amount,
+                    'pricing_source' => $tradeItem->pricing_source,
+                ];
+            } else {
+                unset($mergedFindings[$findingIndex]['trade_pricing']);
+            }
 
             // Per-finding materials → InspectionMaterial records
             foreach ($findingData['phar_materials'] ?? [] as $materialData) {
@@ -1878,6 +1938,9 @@ class InspectionController extends Controller
                 ]);
             }
         }
+
+        $inspection->findings = array_values($mergedFindings);
+        $inspection->save();
 
         // ==== CALCULATE PRICING PREVIEW (BDC + FRLC + FMC + TIERS) ====
         // Re-compute ASI now that tus_score is persisted
@@ -1928,6 +1991,7 @@ class InspectionController extends Controller
             $labourHours = (float) ($finding->labour_hours ?? 0);
             $materialCost = (float) ($finding->material_cost ?? 0);
             $jsonFinding = $inspectionFindings->get($index, []);
+            $tradePricing = is_array($jsonFinding['trade_pricing'] ?? null) ? $jsonFinding['trade_pricing'] : [];
             $issueText = trim((string) ($jsonFinding['issue'] ?? $finding->task_question ?? ''));
             $issueDescription = trim((string) ($jsonFinding['issue_description'] ?? ''));
             $recommendationDetails = trim((string) ($jsonFinding['recommendation_details'] ?? ''));
@@ -1975,6 +2039,10 @@ class InspectionController extends Controller
                 'labour_hours' => round($labourHours, 2),
                 'labour_cost' => round($labourHours * $hourlyRate, 2),
                 'material_cost' => round($materialCost, 2),
+                'trade_cost' => round((float) ($tradePricing['trade_total_cost'] ?? 0), 2),
+                'trade_client_price' => round((float) ($tradePricing['etogo_client_price'] ?? 0), 2),
+                'trade_margin' => round((float) ($tradePricing['etogo_margin_amount'] ?? 0), 2),
+                'trade_pricing' => $tradePricing,
                 'notes' => $finding->notes,
                 'materials' => $materials,
                 'photo_ids' => is_array($finding->photo_ids) ? array_values($finding->photo_ids) : [],
@@ -2056,6 +2124,104 @@ class InspectionController extends Controller
         return $quoteNumber;
     }
 
+    private function seedFindingsFromPropertyKnownIssues(Property $property, $systems): array
+    {
+        $defaultSystemId = (int) (optional($systems->firstWhere('name', 'General'))->id
+            ?? optional($systems->first())->id
+            ?? 0);
+
+        if ($defaultSystemId <= 0) {
+            return [];
+        }
+
+        $details = collect($property->known_problem_details ?? [])
+            ->filter(fn ($item) => is_array($item) && trim((string) ($item['issue'] ?? '')) !== '')
+            ->map(fn ($item) => [
+                'area' => trim((string) ($item['area'] ?? 'Unknown / not sure')),
+                'issue' => trim((string) ($item['issue'] ?? '')),
+            ])
+            ->values();
+
+        if ($details->isEmpty()) {
+            $details = collect($this->normalizeKnownIssueText($property->known_problems))
+                ->map(fn ($issue) => [
+                    'area' => 'Unknown / not sure',
+                    'issue' => $issue,
+                ]);
+        }
+
+        return $details
+            ->map(function (array $item) use ($systems, $defaultSystemId) {
+                $area = trim((string) ($item['area'] ?? 'Unknown / not sure'));
+                $issue = trim((string) ($item['issue'] ?? ''));
+                if ($issue === '') {
+                    return null;
+                }
+
+                $areaLabel = $area !== '' ? $area : 'Unknown / not sure';
+
+                return [
+                    'system_id' => $this->resolveKnownIssueSystemId($areaLabel, $systems, $defaultSystemId),
+                    'subsystem_id' => null,
+                    'issue' => $issue,
+                    'issue_description' => 'Client reported under ' . $areaLabel . ': ' . $issue,
+                    'location' => $areaLabel === 'Unknown / not sure' ? '' : $areaLabel,
+                    'spot' => '',
+                    'severity' => 'medium',
+                    'notes' => 'Seeded from property known issues. Confirm system, subsystem, severity, labour, and materials on site.',
+                    'recommendations' => [],
+                    'risk_impact' => '',
+                    'phar_labour_hours' => 0,
+                    'phar_category' => '',
+                    'phar_included_yn' => true,
+                    'phar_notes' => '',
+                    'materials' => [],
+                ];
+            })
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    private function resolveKnownIssueSystemId(string $area, $systems, int $defaultSystemId): int
+    {
+        $normalizedArea = Str::of($area)->lower()->trim()->toString();
+        if ($normalizedArea === '' || $normalizedArea === 'unknown / not sure') {
+            return $defaultSystemId;
+        }
+
+        $exact = $systems->first(function ($system) use ($normalizedArea) {
+            return Str::of((string) $system->name)->lower()->trim()->toString() === $normalizedArea;
+        });
+
+        if ($exact) {
+            return (int) $exact->id;
+        }
+
+        $partial = $systems->first(function ($system) use ($normalizedArea) {
+            $systemName = Str::of((string) $system->name)->lower()->trim()->toString();
+
+            return Str::contains($systemName, $normalizedArea)
+                || Str::contains($normalizedArea, $systemName);
+        });
+
+        return (int) ($partial->id ?? $defaultSystemId);
+    }
+
+    private function normalizeKnownIssueText($value): array
+    {
+        if (is_array($value)) {
+            return array_values(array_filter(array_map('trim', $value), fn ($item) => $item !== ''));
+        }
+
+        $raw = trim((string) $value);
+        if ($raw === '' || strtolower($raw) === 'null') {
+            return [];
+        }
+
+        return array_values(array_filter(array_map('trim', preg_split('/[,\n]+/', $raw)), fn ($item) => $item !== ''));
+    }
+
     /**
      * Create a shared quotation record with default totals and validity.
      *
@@ -2081,6 +2247,9 @@ class InspectionController extends Controller
                 'deferred_finding_ids' => [],
                 'approved_labour_cost' => 0,
                 'approved_material_cost' => 0,
+                'approved_trade_cost' => 0,
+                'approved_trade_client_price' => 0,
+                'approved_trade_margin' => 0,
                 'approved_bdc_cost' => 0,
                 'approved_total' => 0,
                 'shared_at' => $now,
@@ -2400,6 +2569,9 @@ class InspectionController extends Controller
         $approvedFindings = $snapshot->filter(fn($f) => $approvedIds->contains((int) ($f['id'] ?? 0)))->values();
         $approvedLabour = round((float) $approvedFindings->sum(fn($f) => (float) ($f['labour_cost'] ?? 0)), 2);
         $approvedMaterial = round((float) $approvedFindings->sum(fn($f) => (float) ($f['material_cost'] ?? 0)), 2);
+        $approvedTradeCost = round((float) $approvedFindings->sum(fn($f) => (float) ($f['trade_cost'] ?? data_get($f, 'trade_pricing.trade_total_cost', 0))), 2);
+        $approvedTradeClientPrice = round((float) $approvedFindings->sum(fn($f) => (float) ($f['trade_client_price'] ?? data_get($f, 'trade_pricing.etogo_client_price', 0))), 2);
+        $approvedTradeMargin = round((float) $approvedFindings->sum(fn($f) => (float) ($f['trade_margin'] ?? data_get($f, 'trade_pricing.etogo_margin_amount', 0))), 2);
 
         // Fallback for legacy quotations where snapshot values may be incomplete.
         if ($approvedLabour <= 0) {
@@ -2407,6 +2579,11 @@ class InspectionController extends Controller
         }
         if ($approvedMaterial <= 0 && (float) ($quotation->approved_material_cost ?? 0) > 0) {
             $approvedMaterial = round((float) $quotation->approved_material_cost, 2);
+        }
+        if ($approvedTradeClientPrice <= 0 && (float) ($quotation->approved_trade_client_price ?? 0) > 0) {
+            $approvedTradeCost = round((float) ($quotation->approved_trade_cost ?? 0), 2);
+            $approvedTradeClientPrice = round((float) $quotation->approved_trade_client_price, 2);
+            $approvedTradeMargin = round((float) ($quotation->approved_trade_margin ?? 0), 2);
         }
 
         // Recalculate visits and BDC from approved labour hours (1 visit = 11 working hours)
@@ -2427,11 +2604,14 @@ class InspectionController extends Controller
         ]);
         $approvedBdc = round((float) ($bdcResult['bdc_annual'] ?? 0), 2);
 
-        $approvedTotal = round($approvedLabour + $approvedMaterial + $approvedBdc, 2);
+        $approvedTotal = round($approvedLabour + $approvedMaterial + $approvedTradeClientPrice + $approvedBdc, 2);
 
         $quotation->update([
             'approved_labour_cost' => $approvedLabour,
             'approved_material_cost' => $approvedMaterial,
+            'approved_trade_cost' => $approvedTradeCost,
+            'approved_trade_client_price' => $approvedTradeClientPrice,
+            'approved_trade_margin' => $approvedTradeMargin,
             'approved_bdc_cost' => $approvedBdc,
             'approved_total' => $approvedTotal,
         ]);
@@ -2439,6 +2619,9 @@ class InspectionController extends Controller
         $inspection->update([
             'frlc_annual' => $approvedLabour,
             'fmc_annual' => $approvedMaterial,
+            'trade_cost_annual' => $approvedTradeCost,
+            'trade_client_price_annual' => $approvedTradeClientPrice,
+            'trade_margin_annual' => $approvedTradeMargin,
             'bdc_annual' => $approvedBdc,
             'bdc_visits_per_year' => $approvedVisits,
             'estimated_task_hours' => $approvedLabourHours,
@@ -2486,9 +2669,16 @@ class InspectionController extends Controller
 
         $bdc    = $result['bdc_annual'];
         $visits = max(1.0, (float) ($inspection->bdc_visits_per_year ?? 1));
+        $tradeClientPrice = (float) \App\Models\InspectionTradePricingItem::where('inspection_id', $inspection->id)
+            ->sum('etogo_client_price');
+        $tradeCost = (float) \App\Models\InspectionTradePricingItem::where('inspection_id', $inspection->id)
+            ->sum('trade_total_cost');
+        $tradeMargin = (float) \App\Models\InspectionTradePricingItem::where('inspection_id', $inspection->id)
+            ->sum('etogo_margin_amount');
         $trc    = $bdc
             + (float) ($inspection->frlc_annual ?? 0)
-            + (float) ($inspection->fmc_annual  ?? 0);
+            + (float) ($inspection->fmc_annual  ?? 0)
+            + $tradeClientPrice;
 
         if ($onlyIfChanged && round((float) $inspection->bdc_annual, 2) === round($bdc, 2)) {
             return;
@@ -2497,6 +2687,9 @@ class InspectionController extends Controller
         $inspection->update([
             'bdc_annual'                  => $bdc,
             'bdc_per_visit'               => round($bdc / $visits, 2),
+            'trade_cost_annual'           => $tradeCost,
+            'trade_client_price_annual'   => $tradeClientPrice,
+            'trade_margin_annual'         => $tradeMargin,
             'trc_annual'                  => $trc,
             'trc_per_visit'               => round($trc / $visits, 2),
             'trc_monthly'                 => $trc,

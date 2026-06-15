@@ -62,35 +62,119 @@
     
 
 		<!-- ========== SECTION: NAVIGATION MENU ========== -->
-		<nav class="navbar navbar-expand-lg navbar-dark ftco_navbar ftco-navbar-light" id="ftco-navbar" style="background: linear-gradient(180deg, #5b67ca 0%, #4854b8 100%) !important;">
-      <div class="col">
-					<a class="navbar-brand" href="index.html" style="font-size: 1.5rem; font-weight: 700;">
-						<span style="color: #ffffff;">EMURIA</span><span style="color: #FFB800;">PropertyCare</span>
-					</a>
-				</div>
+		<style>
+			.emuria-navbar {
+				background: linear-gradient(180deg, #5260c6 0%, #4452b4 100%) !important;
+				border-top: 4px solid #b5162b;
+				min-height: 76px;
+				padding: 0.75rem 0;
+			}
+
+			.emuria-navbar .container {
+				max-width: 1200px;
+				display: flex;
+				align-items: center;
+			}
+
+			.emuria-navbar .navbar-brand {
+				font-size: 1.45rem;
+				font-weight: 800;
+				letter-spacing: -0.2px;
+				margin-right: 2rem;
+				white-space: nowrap;
+			}
+
+			.emuria-navbar .navbar-collapse {
+				align-items: center;
+			}
+
+			.emuria-navbar .navbar-nav.main-links {
+				gap: 0.25rem;
+			}
+
+			.emuria-navbar .nav-link {
+				color: #ffffff !important;
+				font-weight: 700;
+				font-size: 0.93rem;
+				padding: 0.85rem 1rem !important;
+				border-radius: 6px;
+			}
+
+			.emuria-navbar .nav-item.active .nav-link,
+			.emuria-navbar .main-links .nav-link:hover {
+				background: #ffc33a;
+				color: #111827 !important;
+			}
+
+			.emuria-navbar .action-links {
+				gap: 0.55rem;
+				align-items: center;
+			}
+
+			.emuria-navbar .action-link {
+				min-height: 44px;
+				display: inline-flex;
+				align-items: center;
+				justify-content: center;
+				border-radius: 6px;
+				padding: 0.65rem 1.1rem !important;
+				line-height: 1.1;
+			}
+
+			.emuria-navbar .action-trade {
+				background: #ffc107;
+				color: #111827 !important;
+			}
+
+			.emuria-navbar .action-start {
+				background: #1fa843;
+				color: #ffffff !important;
+			}
+
+			.emuria-navbar .action-login {
+				background: #ffc33a;
+				color: #ffffff !important;
+			}
+
+			@media (max-width: 991.98px) {
+				.emuria-navbar .container {
+					display: block;
+				}
+
+				.emuria-navbar .navbar-brand {
+					display: inline-block;
+					margin-right: 0;
+				}
+
+				.emuria-navbar .navbar-collapse {
+					margin-top: 0.75rem;
+				}
+
+				.emuria-navbar .action-links {
+					margin-top: 0.75rem;
+				}
+			}
+		</style>
+		<nav class="navbar navbar-expand-lg navbar-dark ftco_navbar ftco-navbar-light emuria-navbar" id="ftco-navbar">
 	    <div class="container">
+				<a class="navbar-brand" href="index.html">
+					<span style="color: #ffffff;">EMURIA</span><span style="color: #FFB800;">PropertyCare</span>
+				</a>
 	      <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#ftco-nav" aria-controls="ftco-nav" aria-expanded="false" aria-label="Toggle navigation">
 	        <span class="fa fa-bars"></span> Menu
 	      </button>
 	      <div class="collapse navbar-collapse" id="ftco-nav">
-	        <ul class="navbar-nav mr-auto">
+	        <ul class="navbar-nav main-links mr-auto">
 	        	<li class="nav-item active"><a href="#home" class="nav-link">Home</a></li>
 	        	<li class="nav-item"><a href="#about" class="nav-link">About</a></li>
 	        	<li class="nav-item"><a href="#services" class="nav-link">Services</a></li>
 	        	<li class="nav-item"><a href="#how-it-works" class="nav-link">How It Works</a></li>
 	          <li class="nav-item"><a href="#contact" class="nav-link">Contact</a></li>
 	        </ul>
-          <div class="social-media">
-		    		<p class="mb-0 d-flex">
-		    			<a href="#" class="d-flex align-items-center justify-content-center"><span class="fa fa-facebook"><i class="sr-only">Facebook</i></span></a>
-		    			<a href="#" class="d-flex align-items-center justify-content-center"><span class="fa fa-twitter"><i class="sr-only">Twitter</i></span></a>
-		    			<a href="#" class="d-flex align-items-center justify-content-center"><span class="fa fa-instagram"><i class="sr-only">Instagram</i></span></a>
-		    			<a href="#" class="d-flex align-items-center justify-content-center"><span class="fa fa-linkedin"><i class="sr-only">LinkedIn</i></span></a>
-		    		</p>
-	        </div>
-	        <ul class="navbar-nav ml-auto">
-	        	<li class="nav-item"><a href="/register" class="nav-link btn btn-success text-white px-3 mr-2">Get Started FREE</a></li>
-	        	<li class="nav-item"><a href="/login" class="nav-link btn btn-primary text-white px-3">Login</a></li>
+	        <ul class="navbar-nav action-links ml-auto">
+	        	<li class="nav-item"><a href="/trade/register" class="nav-link action-link action-trade">Trade Partner</a></li>
+	        	<li class="nav-item"><a href="/register" class="nav-link action-link action-start">Get Started<br><small>FREE</small></a></li>
+	        	<li class="nav-item"><a href="/login" class="nav-link action-link action-login">Login</a></li>
 	        </ul>
 	      </div>
 	    </div>
@@ -139,6 +223,22 @@
 		          		<h2>Sustainable Property Management</h2>
 			            <h1 class="mb-3">Regenerative Care Solutions</h1>
 			            <p><a href="/register" class="btn btn-primary btn-lg px-5 py-3">Start Your FREE Assessment</a></p>
+		            </div>
+		          </div>
+		        </div>
+	        </div>
+	      </div>
+
+	      <div class="slider-item" style="background-image:url(images/work-10.jpg);">
+	      	<div class="overlay"></div>
+	        <div class="container">
+	          <div class="row no-gutters slider-text align-items-center justify-content-center">
+		          <div class="col-md-12 ftco-animate">
+		          	<div class="text w-100 text-center">
+		          		<h2>Trade Partner Network</h2>
+			            <h1 class="mb-3">Skilled Trades, Clear Scopes, Better Projects</h1>
+			            <p class="mb-4" style="color: #ffffff; font-weight: 600;">Join EMURIA's approved partner network and receive work backed by verified property assessments, documented scopes, and transparent standards.</p>
+			            <p><a href="/trade/register" class="btn btn-primary btn-lg px-5 py-3">Apply as a Trade Partner</a></p>
 		            </div>
 		          </div>
 		        </div>

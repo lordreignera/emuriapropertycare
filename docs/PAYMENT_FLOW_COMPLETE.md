@@ -21,9 +21,9 @@ All payments use Stripe's PaymentIntents API with client confirmation, pre-fligh
 ### Process
 1. **Client registers property** with:
    - Property type (residential, commercial, mixed_use)
-   - Number of residential units (required for residential/mixed-use)
-   - Has high-pitched roof? (boolean, +$75 surcharge)
-   - Has crawl spaces? (boolean, +$50 surcharge)
+   - Number of residential units (required for residential/mixed-use properties)
+   - **Has high-pitched roof?** (boolean, +$75 surcharge) — **Asked for ALL property types**
+   - **Has crawl spaces?** (boolean, +$50 surcharge) — **Asked for ALL property types**
 
 2. **Database Schema** (migration):
    ```sql
@@ -45,7 +45,9 @@ All payments use Stripe's PaymentIntents API with client confirmation, pre-fligh
 
 5. **Live Fee Calculator** (frontend):
    - Shows real-time fee estimate as user enters data
-   - Formula: `($units × $299) + ($75 if roof) + ($50 if crawl) = Total`
+   - Units field: Required for residential/mixed-use, also available for commercial
+   - Surcharge fields: **Shown for ALL property types** (residential, commercial, mixed-use)
+   - Formula: `($units × $299 CAD) + ($75 CAD if roof) + ($50 CAD if crawl) = Total`
 
 ---
 
@@ -66,8 +68,8 @@ GET /inspections/schedule/{property}
   ├─ Calculate fee: calculateInspectionFee(property)
   │  └─ Returns: {units, base_fee, roof_surcharge, crawl_surcharge, total_dollars, charge_cents}
   ├─ Create PaymentIntent with Stripe:
-  │  ├─ Amount: $1.00 (test mode, will be live total later)
-  │  ├─ Currency: USD
+  │  ├─ Amount: $1.00 CAD (test mode, will be live total later)
+  │  ├─ Currency: CAD
   │  ├─ Metadata: {payment_type: 'inspection_fee', property_id, user_id}
   │  └─ Customer: Auth::user()->stripe_id (Cashier customer)
   └─ Pass feeData & clientSecret to view
@@ -80,9 +82,9 @@ $feeData = $this->calculateInspectionFee($property);
 
 // Create Stripe PaymentIntent
 $paymentIntent = auth()->user()->createPaymentIntent(
-    (int)($feeData['charge_cents']),  // Always $1.00 test for now
+    (int)($feeData['charge_cents']),  // Always $1.00 CAD test for now
     [
-        'currency' => 'usd',
+        'currency' => 'cad',
         'metadata' => [
             'payment_type' => 'inspection_fee',
             'property_id' => $property->id,
@@ -115,10 +117,10 @@ View: resources/views/client/inspections/schedule.blade.php
    })
 
 3. Fee breakdown displayed:
-   - X unit(s) × $299 = $X
-   - High-pitched roof surcharge: +$75 (if checked)
-   - Crawl space surcharge: +$50 (if checked)
-   - Total: $X
+   - X unit(s) × $299 CAD = $X
+   - High-pitched roof surcharge: +$75 CAD (if checked)
+   - Crawl space surcharge: +$50 CAD (if checked)
+   - Total: $X CAD
 ```
 
 #### Step 3: Client Submits Payment Form
@@ -393,7 +395,7 @@ Subject: "💳 Inspection Fee Paid — PROP-001"
 Body:
   Property: 123 Main St, Springfield
   Owner: John Doe
-  Inspection Fee: $449 (1 unit × $299 + $75 roof + $75 crawl)
+  Inspection Fee: $449 CAD (1 unit × $299 + $75 roof + $75 crawl)
   Scheduled: May 26, 2026 10:00 AM
   [Assign Inspector Button]
 
@@ -401,8 +403,8 @@ WorkPaymentReceivedNotification:
 Subject: "💰 Work Payment Received — PROP-001"
 Body:
   Property: 123 Main St
-  Plan: Full Payment ($4,250)
-  Amount Received: $4,250.00
+  Plan: Full Payment ($4,250 CAD)
+  Amount Received: $4,250.00 CAD
   Status: Work can begin
 
 InstallmentPaymentReceivedNotification:
@@ -410,15 +412,15 @@ Subject: "✅ Visit 1 of 5 Payment Received — PROP-001"
 Body:
   Property: 123 Main St
   Visit: 1 of 5
-  Amount: $850.00
-  Remaining Balance: $3,400.00
+  Amount: $850.00 CAD
+  Remaining Balance: $3,400.00 CAD
   Next Visit: May 28, 2026
 
 PaymentFailedNotification:
 Subject: "⚠️ Payment Failed — 123 Main St"
 Body:
   Reason: Card declined (insufficient funds)
-  Amount Attempted: $449
+  Amount Attempted: $449 CAD
   Action Required: Contact customer to retry payment
 ```
 

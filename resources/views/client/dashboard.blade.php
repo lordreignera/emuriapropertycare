@@ -6,15 +6,15 @@
 <!-- Welcome Header -->
 <div class="row mb-4">
     <div class="col-12">
-        <div class="card border-0 shadow-lg" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-            <div class="card-body text-white p-4">
+        <div class="card border-0 shadow-sm client-welcome-card">
+            <div class="card-body p-4">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
                         <h2 class="fw-bold mb-2">Welcome back, {{ Auth::user()->name }}! 👋</h2>
-                        <p class="mb-0 opacity-75 fs-5">Here's what's happening with your properties today</p>
+                        <p class="mb-0 text-muted fs-5">Here's what's happening with your properties today</p>
                     </div>
                     <div>
-                        <a href="{{ route('client.properties.create') }}" class="btn btn-light btn-lg shadow-sm">
+                        <a href="{{ route('client.properties.create') }}" class="btn btn-primary btn-lg shadow-sm">
                             <i class="mdi mdi-home-plus me-2"></i> Add Property
                         </a>
                     </div>
@@ -53,19 +53,19 @@
 <div class="row g-4 mb-4">
     <!-- Properties Card -->
     <div class="col-xl-3 col-md-6">
-        <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #28a745 !important;">
+        <div class="card border-0 shadow-sm h-100 client-kpi-card">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
                         <p class="text-muted mb-2 fw-semibold text-uppercase small">My Properties</p>
                         <h2 class="fw-bold mb-0">{{ $propertiesCount }}</h2>
                     </div>
-                    <div class="rounded-3 p-3" style="background-color: rgba(40, 167, 69, 0.1);">
-                        <i class="mdi mdi-home-modern text-success" style="font-size: 2rem;"></i>
+                    <div class="client-kpi-icon">
+                        <i class="mdi mdi-home-modern"></i>
                     </div>
                 </div>
                 <div class="mt-3">
-                    <a href="{{ route('client.properties.index') }}" class="text-success text-decoration-none fw-semibold small">
+                    <a href="{{ route('client.properties.index') }}" class="client-kpi-link">
                         View all properties <i class="mdi mdi-arrow-right"></i>
                     </a>
                 </div>
@@ -75,7 +75,7 @@
 
     <!-- Inspections Card -->
     <div class="col-xl-3 col-md-6">
-        <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #ffc107 !important;">
+        <div class="card border-0 shadow-sm h-100 client-kpi-card">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
@@ -94,12 +94,12 @@
                         <span class="badge bg-warning text-dark mt-2">{{ $paidPendingInspectionsCount }} Paid Pending</span>
                         @endif
                     </div>
-                    <div class="rounded-3 p-3" style="background-color: rgba(255, 193, 7, 0.1);">
-                        <i class="mdi mdi-clipboard-check text-warning" style="font-size: 2rem;"></i>
+                    <div class="client-kpi-icon">
+                        <i class="mdi mdi-clipboard-check"></i>
                     </div>
                 </div>
                 <div class="mt-3">
-                    <a href="{{ route('client.inspections.index') }}" class="text-warning text-decoration-none fw-semibold small">
+                    <a href="{{ route('client.inspections.index') }}" class="client-kpi-link">
                         View inspections <i class="mdi mdi-arrow-right"></i>
                     </a>
                 </div>
@@ -109,7 +109,7 @@
 
     <!-- Projects Card -->
     <div class="col-xl-3 col-md-6">
-        <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #17a2b8 !important;">
+        <div class="card border-0 shadow-sm h-100 client-kpi-card">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
@@ -119,8 +119,8 @@
                         <span class="badge bg-info text-dark mt-2">Active</span>
                         @endif
                     </div>
-                    <div class="rounded-3 p-3" style="background-color: rgba(23, 162, 184, 0.1);">
-                        <i class="mdi mdi-briefcase text-info" style="font-size: 2rem;"></i>
+                    <div class="client-kpi-icon">
+                        <i class="mdi mdi-briefcase"></i>
                     </div>
                 </div>
                 <div class="mt-3">
@@ -132,7 +132,7 @@
 
     <!-- Invoices Card -->
     <div class="col-xl-3 col-md-6">
-        <div class="card border-0 shadow-sm h-100" style="border-left: 4px solid #dc3545 !important;">
+        <div class="card border-0 shadow-sm h-100 client-kpi-card">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-start">
                     <div>
@@ -152,12 +152,12 @@
                         <span class="badge bg-success mt-2">All Paid</span>
                         @endif
                     </div>
-                    <div class="rounded-3 p-3" style="background-color: rgba(220, 53, 69, 0.1);">
-                        <i class="mdi mdi-file-document text-danger" style="font-size: 2rem;"></i>
+                    <div class="client-kpi-icon">
+                        <i class="mdi mdi-file-document"></i>
                     </div>
                 </div>
                 <div class="mt-3">
-                    <a href="{{ route('client.invoices.index') }}" class="text-danger text-decoration-none fw-semibold small">
+                    <a href="{{ route('client.invoices.index') }}" class="client-kpi-link">
                         View invoices <i class="mdi mdi-arrow-right"></i>
                     </a>
                 </div>
@@ -258,8 +258,8 @@
                 <div class="d-flex flex-column gap-3">
                     <a href="{{ route('client.properties.create') }}" class="text-decoration-none">
                         <div class="d-flex align-items-center p-3 rounded-3 border-2 hover-shadow transition">
-                            <div class="rounded-3 p-3 me-3" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
-                                <i class="mdi mdi-home-plus text-white" style="font-size: 1.75rem;"></i>
+                            <div class="client-action-icon">
+                                <i class="mdi mdi-home-plus"></i>
                             </div>
                             <div class="flex-grow-1">
                                 <h6 class="mb-0 fw-semibold text-dark">Add New Property</h6>
@@ -271,8 +271,8 @@
                     
                     <a href="{{ route('client.inspections.index') }}" class="text-decoration-none">
                         <div class="d-flex align-items-center p-3 rounded-3 border-2 hover-shadow transition">
-                            <div class="rounded-3 p-3 me-3" style="background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%);">
-                                <i class="mdi mdi-clipboard-check text-white" style="font-size: 1.75rem;"></i>
+                            <div class="client-action-icon">
+                                <i class="mdi mdi-clipboard-check"></i>
                             </div>
                             <div class="flex-grow-1">
                                 <h6 class="mb-0 fw-semibold text-dark">Schedule Inspection</h6>
@@ -284,8 +284,8 @@
                     
                     <a href="{{ route('client.invoices.index') }}" class="text-decoration-none">
                         <div class="d-flex align-items-center p-3 rounded-3 border-2 hover-shadow transition">
-                            <div class="rounded-3 p-3 me-3" style="background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);">
-                                <i class="mdi mdi-file-document text-white" style="font-size: 1.75rem;"></i>
+                            <div class="client-action-icon">
+                                <i class="mdi mdi-file-document"></i>
                             </div>
                             <div class="flex-grow-1">
                                 <h6 class="mb-0 fw-semibold text-dark">View Invoices</h6>
@@ -297,8 +297,8 @@
                     
                     <a href="{{ route('client.support') }}" class="text-decoration-none">
                         <div class="d-flex align-items-center p-3 rounded-3 border-2 hover-shadow transition">
-                            <div class="rounded-3 p-3 me-3" style="background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);">
-                                <i class="mdi mdi-help-circle text-white" style="font-size: 1.75rem;"></i>
+                            <div class="client-action-icon">
+                                <i class="mdi mdi-help-circle"></i>
                             </div>
                             <div class="flex-grow-1">
                                 <h6 class="mb-0 fw-semibold text-dark">Get Support</h6>
@@ -310,8 +310,8 @@
 
                     <a href="{{ route('client.service-requests.create') }}" class="text-decoration-none">
                         <div class="d-flex align-items-center p-3 rounded-3 border-2 hover-shadow transition">
-                            <div class="rounded-3 p-3 me-3" style="background: linear-gradient(135deg, #dc3545 0%, #b02a37 100%);">
-                                <i class="mdi mdi-alert-circle text-white" style="font-size: 1.75rem;"></i>
+                            <div class="client-action-icon">
+                                <i class="mdi mdi-alert-circle"></i>
                             </div>
                             <div class="flex-grow-1">
                                 <h6 class="mb-0 fw-semibold text-dark">Report Issue</h6>
@@ -514,15 +514,96 @@
 @endif
 
 <style>
-.hover-shadow {
-    transition: all 0.3s ease;
+.client-welcome-card,
+.client-kpi-card,
+.card {
+    background: #ffffff !important;
+    border: 1px solid #dfe6ef !important;
+    border-left: 1px solid #dfe6ef !important;
+    border-radius: 8px !important;
+    box-shadow: 0 4px 12px rgba(16, 24, 40, .045) !important;
+    color: #172033 !important;
 }
-.hover-shadow:hover {
-    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
-    transform: translateY(-2px);
+
+.client-welcome-card h2,
+.client-kpi-card h2,
+.card-title,
+.card h4,
+.card h5 {
+    color: #071426 !important;
+    letter-spacing: 0 !important;
 }
+
+.client-kpi-card h2 {
+    font-size: 2rem !important;
+    font-weight: 900 !important;
+}
+
+.client-kpi-card p,
+.client-welcome-card p,
+.text-muted {
+    color: #667085 !important;
+}
+
+.client-kpi-icon,
+.client-action-icon {
+    width: 48px !important;
+    height: 48px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+    border-radius: 8px !important;
+    background: #f3f6fa !important;
+    color: #344054 !important;
+    box-shadow: none !important;
+}
+
+.client-kpi-icon i,
+.client-action-icon i {
+    color: #344054 !important;
+    font-size: 1.55rem !important;
+}
+
+.client-action-icon {
+    margin-right: 1rem !important;
+}
+
+.client-kpi-link {
+    color: #2458d6 !important;
+    text-decoration: none !important;
+    font-weight: 700 !important;
+    font-size: .875rem !important;
+}
+
+.table thead th {
+    background: #f3f6fa !important;
+    color: #344054 !important;
+    border-bottom: 1px solid #dfe6ef !important;
+}
+
+.table tbody td {
+    background: #ffffff !important;
+    color: #172033 !important;
+    border-top: 1px solid #eef2f6 !important;
+}
+
+.table-hover tbody tr:hover td {
+    background: #f8fafc !important;
+    box-shadow: none !important;
+    transform: none !important;
+}
+
+.hover-shadow,
 .transition {
-    transition: all 0.3s ease;
+    transition: background-color .15s ease, border-color .15s ease, color .15s ease !important;
+}
+
+.hover-shadow:hover,
+.card:hover,
+.btn:hover {
+    box-shadow: 0 4px 12px rgba(16, 24, 40, .045) !important;
+    transform: none !important;
 }
 </style>
 @endsection
