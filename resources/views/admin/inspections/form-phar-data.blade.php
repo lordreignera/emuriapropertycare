@@ -167,6 +167,26 @@
     font-weight: 600;
 }
 .phar-col-third { grid-column: span 12; }
+.trade-pricing-box {
+    background: #fbfdff;
+    border-color: #dbe7f7 !important;
+}
+.trade-partner-fields.is-disabled {
+    opacity: .5;
+    pointer-events: none;
+}
+.trade-rate-note,
+.trade-live-estimate {
+    border: 1px solid #e2e8f0;
+    background: #f8fafc;
+    border-radius: .45rem;
+    padding: .45rem .55rem;
+    color: #475569;
+    font-size: .72rem;
+}
+.trade-live-estimate strong {
+    color: #0f172a;
+}
 @media (min-width: 768px) {
     .phar-col-third { grid-column: span 6; }
 }
@@ -231,11 +251,26 @@
                 $approvedFindings2 = $scopedFindings2->filter(fn($f) => !empty($f['__approved_scope']))->values();
                 $deferredFindings2 = $scopedFindings2->reject(fn($f) => !empty($f['__approved_scope']))->values();
 
+                $findingFrc2 = function ($finding) use ($loadedRate) {
+                    $trade = is_array($finding['trade_pricing'] ?? null) ? $finding['trade_pricing'] : [];
+                    $tradeClient = (float) ($trade['etogo_client_price'] ?? 0);
+                    return $tradeClient > 0
+                        ? $tradeClient
+                        : ((float) ($finding['phar_labour_hours'] ?? 0) * $loadedRate);
+                };
+                $findingMaterialsIncludedByPartner2 = function ($finding) {
+                    $trade = is_array($finding['trade_pricing'] ?? null) ? $finding['trade_pricing'] : [];
+                    return (bool) ($finding['trade_materials_included'] ?? ($trade['materials_included'] ?? false));
+                };
+
                 $totalLabourHrs2 = 0; $totalFRLC2 = 0; $totalMatCost2 = 0; $totalMatItems2 = 0;
                 foreach ($scopedFindings2 as $sf2) {
                     $hrs2 = (float)($sf2['phar_labour_hours'] ?? 0);
                     $totalLabourHrs2 += $hrs2;
-                    $totalFRLC2 += $hrs2 * $loadedRate;
+                    $totalFRLC2 += $findingFrc2($sf2);
+                    if ($findingMaterialsIncludedByPartner2($sf2)) {
+                        continue;
+                    }
                     foreach (($sf2['phar_materials'] ?? []) as $m2) {
                         $totalMatItems2++;
                         $totalMatCost2 += (float)($m2['line_total'] ?? 0);
@@ -243,9 +278,9 @@
                 }
 
                 $approvedLabourHrs2 = round((float) $approvedFindings2->sum(fn($f) => (float) ($f['phar_labour_hours'] ?? 0)), 2);
-                $approvedFRLC2 = round((float) ($approvedLabourHrs2 * $loadedRate), 2);
-                $approvedMatItems2 = (int) $approvedFindings2->sum(fn($f) => count($f['phar_materials'] ?? []));
-                $approvedMatCost2 = round((float) $approvedFindings2->sum(fn($f) => collect($f['phar_materials'] ?? [])->sum(fn($m) => (float) ($m['line_total'] ?? 0))), 2);
+                $approvedFRLC2 = round((float) $approvedFindings2->sum(fn($f) => $findingFrc2($f)), 2);
+                $approvedMatItems2 = (int) $approvedFindings2->sum(fn($f) => $findingMaterialsIncludedByPartner2($f) ? 0 : count($f['phar_materials'] ?? []));
+                $approvedMatCost2 = round((float) $approvedFindings2->sum(fn($f) => $findingMaterialsIncludedByPartner2($f) ? 0 : collect($f['phar_materials'] ?? [])->sum(fn($m) => (float) ($m['line_total'] ?? 0))), 2);
 
                 $sevCount2 = ['critical'=>0,'high'=>0,'noi_protection'=>0,'medium'=>0,'low'=>0];
                 $sevApprovedCount2 = ['critical'=>0,'high'=>0,'noi_protection'=>0,'medium'=>0,'low'=>0];
@@ -262,9 +297,10 @@
 
                 $summaryLabourHrs2 = $isApprovedScopeLocked ? $approvedLabourHrs2 : $totalLabourHrs2;
                 $approvedTradeApplications2 = \App\Models\TradeApplication::query()
-                    ->where('status', \App\Models\TradeApplication::STATUS_APPROVED)
+                    ->with('tradePartner')
+                    ->whereHas('tradePartner', fn($query) => $query->where('status', \App\Models\TradePartner::STATUS_ACTIVE))
                     ->orderBy('company_name')
-                    ->get(['id', 'company_name', 'system_ids', 'system_pricing']);
+                    ->get(['id', 'company_name', 'system_ids', 'subsystem_ids', 'system_pricing', 'subsystem_pricing', 'agreed_subsystem_pricing']);
             @endphp
 
             {{-- Progress / stage banner --}}
@@ -387,7 +423,7 @@
 
             <div class="card">
                 <div class="card-body">
-                    @if ($errors->any())
+                    @if (isset($errors) && $errors->any())
                         <div class="alert alert-danger">
                             <strong>Validation Errors:</strong>
                             <ul class="mb-0">
@@ -595,7 +631,11 @@
                                                         $tradeScope2 = old("findings.$fi.trade_scope_area", $finding['trade_scope_area'] ?? ($trade2['scope_area'] ?? ($finding['location'] ?? '')));
                                                         $tradeDuration2 = old("findings.$fi.trade_duration_hours", $finding['trade_duration_hours'] ?? ($trade2['estimated_duration_hours'] ?? ''));
                                                         $tradeNotes2 = old("findings.$fi.trade_notes", $finding['trade_notes'] ?? '');
+                                                        $tradeMaterialsIncluded2 = old("findings.$fi.trade_materials_included", (int) ($finding['trade_materials_included'] ?? ($trade2['materials_included'] ?? 0)));
                                                         $tradeUnits2 = [
+                                                            'sf' => 'Per square foot',
+                                                            'lf' => 'Per linear foot',
+                                                            'hr' => 'Per hour',
                                                             'ls' => 'Lump sum',
                                                             'hour' => 'Per hour',
                                                             'sqm' => 'Per sq metre',
@@ -603,8 +643,10 @@
                                                             'ea' => 'Each',
                                                             'visit' => 'Per visit',
                                                             'day' => 'Per day',
+                                                            'ton' => 'Per ton',
                                                         ];
                                                         $findingSystemId2 = (int) ($finding['system_id'] ?? 0);
+                                                        $findingSubsystemId2 = (int) ($finding['subsystem_id'] ?? 0);
                                                         $matchingTradeApps2 = $approvedTradeApplications2
                                                             ->filter(fn($app) => $findingSystemId2 > 0 && in_array($findingSystemId2, array_map('intval', $app->system_ids ?? []), true))
                                                             ->values();
@@ -676,57 +718,89 @@
                                                         </td>
                                                         <td class="text-end" style="font-size:.8rem;">
                                                             @unless($isApprovedScopeLocked)
-                                                                <div class="text-start border rounded p-2 mb-2" style="background:#fffdf7;">
+                                                                <div class="text-start border rounded p-2 mb-2 trade-pricing-box" data-trade-pricing-box>
                                                                     <input type="hidden" name="findings[{{ $fi }}][requires_trade_pricing]" value="{{ (int) $tradeChecked2 }}">
                                                                     <div class="row g-2">
                                                                         <div class="col-12">
                                                                             <label class="form-label mb-1 text-muted" style="font-size:.7rem;">Work handled by</label>
-                                                                            <select class="form-select form-select-sm" name="findings[{{ $fi }}][fulfillment_type]">
+                                                                            <select class="form-select form-select-sm" name="findings[{{ $fi }}][fulfillment_type]" data-fulfillment-select>
                                                                                 <option value="etogo_team" @selected($fulfillmentType2 === 'etogo_team')>ETOGO team</option>
                                                                                 <option value="trade_partner" @selected($fulfillmentType2 === 'trade_partner')>Trade partner</option>
                                                                                 <option value="decide_later" @selected($fulfillmentType2 === 'decide_later')>Decide later</option>
                                                                             </select>
                                                                         </div>
-                                                                        <div class="col-12">
+                                                                        <div class="col-12 trade-partner-fields" data-trade-partner-fields>
                                                                             <label class="form-label mb-1 text-muted" style="font-size:.7rem;">Approved partner</label>
-                                                                            <select class="form-select form-select-sm" name="findings[{{ $fi }}][trade_application_id]">
-                                                                                <option value="">Auto / not assigned</option>
+                                                                            <select class="form-select form-select-sm" name="findings[{{ $fi }}][trade_application_id]" data-partner-select>
+                                                                                <option value="" data-rate="" data-unit="" data-min="" data-max="">Auto / not assigned</option>
                                                                                 @foreach($matchingTradeApps2 as $tradeApp2)
                                                                                     @php
-                                                                                        $tradePricing2 = $tradeApp2->system_pricing[(string) $findingSystemId2] ?? $tradeApp2->system_pricing[$findingSystemId2] ?? [];
+                                                                                        $tradePricing2 = [];
+                                                                                        if ($findingSubsystemId2 > 0 && in_array($findingSubsystemId2, array_map('intval', $tradeApp2->subsystem_ids ?? []), true)) {
+                                                                                            $agreedTradePricingRows2 = $tradeApp2->agreed_subsystem_pricing ?? [];
+                                                                                            $submittedTradePricingRows2 = $tradeApp2->subsystem_pricing ?? [];
+                                                                                            $agreedTradePricing2 = $agreedTradePricingRows2[(string) $findingSubsystemId2] ?? $agreedTradePricingRows2[$findingSubsystemId2] ?? [];
+                                                                                            $submittedTradePricing2 = $submittedTradePricingRows2[(string) $findingSubsystemId2] ?? $submittedTradePricingRows2[$findingSubsystemId2] ?? [];
+                                                                                            $tradePricing2 = $agreedTradePricing2 ?: $submittedTradePricing2;
+                                                                                        }
+                                                                                        if (empty($tradePricing2)) {
+                                                                                            $tradePricing2 = $tradeApp2->system_pricing[(string) $findingSystemId2] ?? $tradeApp2->system_pricing[$findingSystemId2] ?? [];
+                                                                                        }
                                                                                         $tradeRateLabel2 = !empty($tradePricing2['typical_rate'])
-                                                                                            ? ' - CAD ' . number_format((float) $tradePricing2['typical_rate'], 2) . ' / ' . ($tradePricing2['rate_unit'] ?? 'unit')
+                                                                                            ? ' - CAD ' . number_format((float) $tradePricing2['typical_rate'], 2) . ' / ' . ($tradePricing2['pricing_unit'] ?? $tradePricing2['rate_unit'] ?? 'unit')
                                                                                             : '';
+                                                                                        $tradeOptionUnit2 = $tradePricing2['pricing_unit'] ?? $tradePricing2['rate_unit'] ?? '';
+                                                                                        $tradeOptionMin2 = $tradePricing2['minimum_charge'] ?? '';
+                                                                                        $tradeOptionMax2 = $tradePricing2['maximum_charge'] ?? '';
                                                                                     @endphp
-                                                                                    <option value="{{ $tradeApp2->id }}" @selected((string) $selectedTradeApp2 === (string) $tradeApp2->id)>{{ $tradeApp2->company_name }}{{ $tradeRateLabel2 }}</option>
+                                                                                    <option
+                                                                                        value="{{ $tradeApp2->id }}"
+                                                                                        data-rate="{{ $tradePricing2['typical_rate'] ?? '' }}"
+                                                                                        data-unit="{{ $tradeOptionUnit2 }}"
+                                                                                        data-min="{{ $tradeOptionMin2 }}"
+                                                                                        data-max="{{ $tradeOptionMax2 }}"
+                                                                                        data-company="{{ $tradeApp2->company_name }}"
+                                                                                        @selected((string) $selectedTradeApp2 === (string) $tradeApp2->id)
+                                                                                    >{{ $tradeApp2->tradePartner?->partner_number }} - {{ $tradeApp2->company_name }}{{ $tradeRateLabel2 }}</option>
                                                                                 @endforeach
                                                                             </select>
+                                                                            <div class="trade-rate-note mt-2" data-rate-note>No approved partner selected yet.</div>
                                                                         </div>
-                                                                        <div class="col-12">
+                                                                        <div class="col-12 trade-partner-fields" data-trade-partner-fields>
                                                                             <label class="form-label mb-1 text-muted" style="font-size:.7rem;">Work area / scope</label>
-                                                                            <input class="form-control form-control-sm" name="findings[{{ $fi }}][trade_scope_area]" value="{{ $tradeScope2 }}" placeholder="e.g. south roof slope, panel room">
+                                                                            <input class="form-control form-control-sm" name="findings[{{ $fi }}][trade_scope_area]" value="{{ $tradeScope2 }}" placeholder="e.g. south roof slope, panel room" data-partner-input>
                                                                         </div>
-                                                                        <div class="col-5">
-                                                                            <label class="form-label mb-1 text-muted" style="font-size:.7rem;">Billing amount</label>
-                                                                            <input type="number" min="0" step="0.01" class="form-control form-control-sm" name="findings[{{ $fi }}][trade_quantity]" value="{{ $tradeQty2 }}">
+                                                                        <div class="col-5 trade-partner-fields" data-trade-partner-fields>
+                                                                            <label class="form-label mb-1 text-muted" style="font-size:.7rem;">Quantity / time</label>
+                                                                            <input type="number" min="0" step="0.01" class="form-control form-control-sm" name="findings[{{ $fi }}][trade_quantity]" value="{{ $tradeQty2 }}" data-trade-quantity data-partner-input>
                                                                         </div>
-                                                                        <div class="col-7">
+                                                                        <div class="col-7 trade-partner-fields" data-trade-partner-fields>
                                                                             <label class="form-label mb-1 text-muted" style="font-size:.7rem;">Billing basis</label>
-                                                                            <select class="form-select form-select-sm" name="findings[{{ $fi }}][trade_unit]">
+                                                                            <select class="form-select form-select-sm" name="findings[{{ $fi }}][trade_unit]" data-trade-unit data-partner-input>
                                                                                 @foreach($tradeUnits2 as $unitValue2 => $unitLabel2)
                                                                                     <option value="{{ $unitValue2 }}" @selected($tradeUnit2 === $unitValue2)>{{ $unitLabel2 }}</option>
                                                                                 @endforeach
                                                                             </select>
                                                                         </div>
-                                                                        <div class="col-12">
-                                                                            <label class="form-label mb-1 text-muted" style="font-size:.7rem;">Estimated work hours</label>
-                                                                            <input type="number" min="0" step="0.25" class="form-control form-control-sm" name="findings[{{ $fi }}][trade_duration_hours]" value="{{ $tradeDuration2 }}" placeholder="Time expected on site">
+                                                                        <div class="col-12 trade-partner-fields" data-trade-partner-fields>
+                                                                            <div class="trade-live-estimate" data-live-estimate>Choose a partner and enter quantity to preview the partner/client amount.</div>
                                                                         </div>
-                                                                        <div class="col-12">
-                                                                            <input class="form-control form-control-sm" name="findings[{{ $fi }}][trade_notes]" value="{{ $tradeNotes2 }}" placeholder="Internal measure note">
+                                                                        <div class="col-12 trade-partner-fields" data-trade-partner-fields>
+                                                                            <label class="form-label mb-1 text-muted" style="font-size:.7rem;">Estimated work hours</label>
+                                                                            <input type="number" min="0" step="0.25" class="form-control form-control-sm" name="findings[{{ $fi }}][trade_duration_hours]" value="{{ $tradeDuration2 }}" placeholder="Time expected on site" data-partner-input>
+                                                                        </div>
+                                                                        <div class="col-12 trade-partner-fields" data-trade-partner-fields>
+                                                                            <label class="form-label mb-1 text-muted" style="font-size:.7rem;">Partner price includes materials?</label>
+                                                                            <select class="form-select form-select-sm" name="findings[{{ $fi }}][trade_materials_included]" data-partner-input>
+                                                                                <option value="0" @selected((string) $tradeMaterialsIncluded2 !== '1')>No - add FMC separately</option>
+                                                                                <option value="1" @selected((string) $tradeMaterialsIncluded2 === '1')>Yes - do not add FMC for this finding</option>
+                                                                            </select>
+                                                                        </div>
+                                                                        <div class="col-12 trade-partner-fields" data-trade-partner-fields>
+                                                                            <input class="form-control form-control-sm" name="findings[{{ $fi }}][trade_notes]" value="{{ $tradeNotes2 }}" placeholder="Internal measure note" data-partner-input>
                                                                         </div>
                                                                     </div>
-                                                                    <div class="text-muted mt-1" style="font-size:.68rem;">Different from material quantity. This is the work coverage or time basis used by the trader.</div>
+                                                                    <div class="text-muted mt-1" style="font-size:.68rem;">Quantity / time is the work coverage used by the partner, such as hours, square metres, days, or each item. Final pricing is recalculated when you save and review costs.</div>
                                                                 </div>
                                                             @endunless
                                                             @if($tradeClient2 > 0)
@@ -1559,8 +1633,115 @@ document.addEventListener('DOMContentLoaded', function() {
         if (trcPerVisitEl) trcPerVisitEl.textContent = '$' + trcPerVisit.toFixed(2);
         if (trcVisitsLabelEl) trcVisitsLabelEl.textContent = Math.round(visits);
     }
+
+    function normalizeTradeUnit(unit) {
+        return String(unit || 'ls').trim() || 'ls';
+    }
+
+    function tradeUnitLabel(unit) {
+        const labels = {
+            ls: 'lump sum',
+            sf: 'square foot',
+            lf: 'linear foot',
+            hr: 'hour',
+            hour: 'hour',
+            sqm: 'sq metre',
+            linear_m: 'linear metre',
+            ea: 'item',
+            visit: 'visit',
+            day: 'day',
+            ton: 'ton'
+        };
+
+        return labels[normalizeTradeUnit(unit)] || normalizeTradeUnit(unit);
+    }
+
+    function updateTradePricingBox(box) {
+        const fulfillment = box.querySelector('[data-fulfillment-select]');
+        const partnerSelect = box.querySelector('[data-partner-select]');
+        const quantityInput = box.querySelector('[data-trade-quantity]');
+        const unitSelect = box.querySelector('[data-trade-unit]');
+        const partnerFields = box.querySelectorAll('[data-trade-partner-fields]');
+        const partnerInputs = box.querySelectorAll('[data-partner-input], [data-partner-select]');
+        const rateNote = box.querySelector('[data-rate-note]');
+        const liveEstimate = box.querySelector('[data-live-estimate]');
+        const isPartner = fulfillment?.value === 'trade_partner';
+
+        partnerFields.forEach((field) => field.classList.toggle('is-disabled', !isPartner));
+        partnerInputs.forEach((input) => {
+            input.disabled = !isPartner;
+        });
+
+        if (!isPartner) {
+            if (rateNote) {
+                rateNote.textContent = fulfillment?.value === 'etogo_team'
+                    ? 'ETOGO team selected. Partner pricing fields are not needed for this finding.'
+                    : 'Choose Trade partner if this finding should use an approved partner rate.';
+            }
+            if (liveEstimate) {
+                liveEstimate.textContent = 'No partner client price will be added while this is handled by ETOGO team.';
+            }
+            return;
+        }
+
+        const selected = partnerSelect?.selectedOptions?.[0];
+        const rate = parseFloat(selected?.dataset.rate || '0') || 0;
+        const min = parseFloat(selected?.dataset.min || '0') || 0;
+        const max = parseFloat(selected?.dataset.max || '0') || 0;
+        const registeredUnit = normalizeTradeUnit(selected?.dataset.unit || unitSelect?.value);
+        const quantity = Math.max(0, parseFloat(quantityInput?.value || '0') || 0);
+
+        if (registeredUnit && unitSelect) {
+            unitSelect.value = registeredUnit;
+        }
+
+        if (!selected || !selected.value || rate <= 0) {
+            if (rateNote) {
+                rateNote.textContent = 'Select an approved partner to see their registered/agreed CAD rate.';
+            }
+            if (liveEstimate) {
+                liveEstimate.textContent = 'Choose a partner and enter quantity to preview the partner/client amount.';
+            }
+            return;
+        }
+
+        const rawPartnerCost = rate * Math.max(quantity, 1);
+        let partnerCost = rawPartnerCost;
+        if (min > 0) partnerCost = Math.max(partnerCost, min);
+        if (max > 0) partnerCost = Math.min(partnerCost, max);
+        const clientPrice = partnerCost / 0.65;
+
+        if (rateNote) {
+            const limits = [
+                min > 0 ? `minimum CAD ${min.toFixed(2)}` : null,
+                max > 0 ? `maximum CAD ${max.toFixed(2)}` : null
+            ].filter(Boolean).join(', ');
+            rateNote.textContent = `Registered/agreed rate: CAD ${rate.toFixed(2)} per ${tradeUnitLabel(registeredUnit)}${limits ? ` (${limits})` : ''}.`;
+        }
+
+        if (liveEstimate) {
+            liveEstimate.innerHTML = `<strong>Preview:</strong> partner cost CAD ${partnerCost.toFixed(2)}; estimated client price CAD ${clientPrice.toFixed(2)} after ETOGO margin. Save & review costs to lock the official calculation.`;
+        }
+    }
+
+    function initializeTradePricingBoxes() {
+        document.querySelectorAll('[data-trade-pricing-box]').forEach((box) => {
+            const fulfillment = box.querySelector('[data-fulfillment-select]');
+            const partnerSelect = box.querySelector('[data-partner-select]');
+            const quantityInput = box.querySelector('[data-trade-quantity]');
+            const unitSelect = box.querySelector('[data-trade-unit]');
+
+            [fulfillment, partnerSelect, quantityInput, unitSelect].forEach((input) => {
+                input?.addEventListener('change', () => updateTradePricingBox(box));
+                input?.addEventListener('input', () => updateTradePricingBox(box));
+            });
+
+            updateTradePricingBox(box);
+        });
+    }
     
     // ===== INITIALIZATION =====
+    initializeTradePricingBoxes();
     calculateBDCFromTravel();
     updateCalculationSummary();
 });

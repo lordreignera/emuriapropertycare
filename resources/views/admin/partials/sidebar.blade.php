@@ -242,14 +242,6 @@
             </a>
         </div>
 
-        <div class="admin-client-user">
-            <img class="admin-client-avatar" src="{{ $user->profile_photo_url }}" alt="{{ $user->name }}">
-            <div>
-                <div class="admin-client-name">{{ $user->name }}</div>
-                <div class="admin-client-role">{{ $roleLabel }}</div>
-            </div>
-        </div>
-
         <div class="admin-client-section-title">Main Navigation</div>
         <a class="admin-client-link {{ request()->routeIs('dashboard') ? 'is-active' : '' }}" href="{{ route('dashboard') }}">
             <i class="mdi mdi-view-dashboard admin-client-icon admin-client-icon-dashboard"></i>
@@ -315,6 +307,12 @@
                     @if($openTradeApplicationsCount > 0)
                         <span class="admin-client-badge">{{ $openTradeApplicationsCount }}</span>
                     @endif
+                </a>
+                <a class="admin-client-link {{ request()->routeIs('admin.trade-partners.*') ? 'is-active' : '' }}" href="{{ route('admin.trade-partners.index') }}">
+                    <span class="admin-client-summary-left">
+                        <i class="mdi mdi-account-check admin-client-icon admin-client-icon-services"></i>
+                        <span>Approved Partners</span>
+                    </span>
                 </a>
             @endrole
         @endif

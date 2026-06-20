@@ -77,6 +77,7 @@
                         <thead>
                             <tr>
                                 <th>Application #</th>
+                                <th>Partner ID</th>
                                 <th>Company</th>
                                 <th>Contact</th>
                                 <th>Service Area</th>
@@ -89,6 +90,13 @@
                             @forelse($applications as $application)
                                 <tr>
                                     <td class="fw-semibold">{{ $application->application_number }}</td>
+                                    <td>
+                                        @if($application->tradePartner)
+                                            <span class="badge bg-success">{{ $application->tradePartner->partner_number }}</span>
+                                        @else
+                                            <span class="text-muted">Pending approval</span>
+                                        @endif
+                                    </td>
                                     <td>{{ $application->company_name }}</td>
                                     <td>
                                         <div>{{ $application->contact_person }}</div>
@@ -103,7 +111,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="7" class="text-center text-muted py-4">No trade applications found.</td>
+                                    <td colspan="8" class="text-center text-muted py-4">No trade applications found.</td>
                                 </tr>
                             @endforelse
                         </tbody>

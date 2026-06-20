@@ -3,10 +3,6 @@
 @section('title', 'Inspection Report & Pricing Breakdown')
 
 @section('content')
-@php
-    $specialistBreakdown = $inspection->specialist_assessment_breakdown ?? [];
-    $specialistAddons = collect($specialistBreakdown['addons'] ?? []);
-@endphp
 <div class="row">
     <div class="col-lg-12 grid-margin stretch-card">
         <div class="card">
@@ -111,78 +107,6 @@
                     @endif
                 </div>
             </div>
-
-            @if((float) ($inspection->specialist_client_price ?? 0) > 0)
-            <div class="card mb-4 border-info">
-                <div class="card-header bg-info text-white d-flex justify-content-between align-items-center">
-                    <h5 class="mb-0"><i class="mdi mdi-account-hard-hat me-2"></i>Specialist Assessment Support - Internal</h5>
-                    <small>{{ $inspection->specialist_pricing_currency ?: data_get($specialistBreakdown, 'currency', 'USD') }}</small>
-                </div>
-                <div class="card-body">
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-4">
-                            <div class="border rounded p-3 h-100">
-                                <div class="text-muted small">Trade cost</div>
-                                <div class="fw-bold">${{ number_format((float) $inspection->specialist_trade_cost, 2) }}</div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="border rounded p-3 h-100">
-                                <div class="text-muted small">Client-facing support price</div>
-                                <div class="fw-bold">${{ number_format((float) $inspection->specialist_client_price, 2) }}</div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="border rounded p-3 h-100">
-                                <div class="text-muted small">ETOGO margin</div>
-                                <div class="fw-bold">${{ number_format((float) $inspection->specialist_margin_amount, 2) }}</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="table-responsive">
-                        <table class="table table-sm table-bordered align-middle mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Internal category</th>
-                                    <th>Triggered by</th>
-                                    <th>Matched trade</th>
-                                    <th class="text-end">Trade cost</th>
-                                    <th class="text-end">ETOGO price</th>
-                                    <th class="text-end">Margin</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @foreach($specialistAddons as $addon)
-                                <tr>
-                                    <td>
-                                        <strong>{{ $addon['internal_label'] ?? ucfirst(str_replace('_', ' ', $addon['category'] ?? 'Support')) }}</strong>
-                                        <div class="text-muted small">{{ $addon['matched_system_name'] ?? 'No system match' }}</div>
-                                    </td>
-                                    <td class="small">
-                                        {{ collect($addon['triggered_by'] ?? [])->take(3)->join(', ') ?: 'Property intake' }}
-                                    </td>
-                                    <td>
-                                        {{ $addon['matched_trade_company'] ?? 'Default internal rate' }}
-                                        <div class="text-muted small">{{ $addon['source'] ?? 'default_rule' }}</div>
-                                    </td>
-                                    <td class="text-end">${{ number_format((float) ($addon['trade_cost'] ?? 0), 2) }}</td>
-                                    <td class="text-end">${{ number_format((float) ($addon['client_price'] ?? 0), 2) }}</td>
-                                    <td class="text-end">${{ number_format((float) ($addon['margin_amount'] ?? 0), 2) }}</td>
-                                </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    </div>
-
-                    @if(data_get($specialistBreakdown, 'requires_manual_review'))
-                    <div class="alert alert-warning mb-0 mt-3">
-                        More categories were detected than the automatic pricing cap. Review the intake before dispatching support.
-                    </div>
-                    @endif
-                </div>
-            </div>
-            @endif
 
             {{-- ====== WORK VISIT SCHEDULE ====== --}}
             @if($inspection->approved_by_client && ($inspection->work_payment_status ?? 'pending') === 'paid')

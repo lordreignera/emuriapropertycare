@@ -11,6 +11,7 @@ use App\Models\Invoice;
 use App\Models\Subscription;
 use App\Models\ToolSetting;
 use App\Models\TradeApplication;
+use App\Models\TradePartner;
 
 class DashboardController extends Controller
 {
@@ -104,7 +105,7 @@ class DashboardController extends Controller
                 ? TradeApplication::whereIn('status', ['submitted', 'ready_for_review', 'needs_more_information', 'conditionally_approved'])->count()
                 : 0;
             $approvedTradeApplicationsCount = $user->hasRole(['Super Admin', 'Administrator'])
-                ? TradeApplication::where('status', 'approved')->count()
+                ? TradePartner::where('status', TradePartner::STATUS_ACTIVE)->count()
                 : 0;
             
             // Get active subscription

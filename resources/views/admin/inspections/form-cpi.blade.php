@@ -36,7 +36,7 @@
                 <input type="hidden" name="service_request_id" value="{{ old('service_request_id', $serviceRequest->id ?? '') }}">
                 <input type="hidden" name="status" value="in_progress">
 
-                @if($errors->any())
+                @if(isset($errors) && $errors->any())
                     <div class="alert alert-danger">
                         <strong>We could not save the inspection form.</strong>
                         <ul class="mb-0 mt-2">
@@ -425,6 +425,7 @@ const FMC_MATERIAL_SETTINGS = @json($fmcMaterialSettings ?? []);
 const PHAR_CATEGORIES = @json($pharCategories ?? []);
 const PHAR_FINDING_CATALOG = @json($pharFindingCatalog ?? []);
 const RECOMMENDATION_CONFIG = @json($recommendationConfig ?? ['global' => [], 'system' => [], 'subsystem' => []]);
+const ACTIVE_TRADE_PARTNERS = @json($activeTradePartners ?? []);
 // Photo URLs pre-resolved server-side (works for local disk and private S3 signed URLs)
 const FINDING_PHOTO_URLS = @json($findingPhotoUrls ?? []);
 // Stored paths (for hidden input preservation on re-submit — keyed by [findingIndex][photoIndex])
@@ -888,6 +889,94 @@ function getSubsystemConfig(systemId, subsystemId) {
     return system.subsystems.find(subsystem => String(subsystem.id) === String(subsystemId)) || null;
 }
 
+function getMatchingTradePartners(systemId, subsystemId = '') {
+    const sysId = Number.parseInt(systemId, 10);
+    const subId = Number.parseInt(subsystemId, 10);
+    const hasSubsystem = Number.isFinite(subId) && subId > 0;
+
+    return (Array.isArray(ACTIVE_TRADE_PARTNERS) ? ACTIVE_TRADE_PARTNERS : []).filter(partner => {
+        const partnerSystems = Array.isArray(partner.system_ids) ? partner.system_ids.map(Number) : [];
+        const partnerSubsystems = Array.isArray(partner.subsystem_ids) ? partner.subsystem_ids.map(Number) : [];
+
+        if (!partnerSystems.includes(sysId)) {
+            return false;
+        }
+
+        return hasSubsystem ? partnerSubsystems.includes(subId) : true;
+    });
+}
+
+function getTradePartnerPricing(partner, subsystemId = '') {
+    const pricing = partner?.pricing || {};
+    if (!subsystemId) {
+        return {};
+    }
+
+    return pricing[String(subsystemId)] || pricing[Number(subsystemId)] || {};
+}
+
+function normalizeTradeUnit(unit) {
+    return String(unit || 'ls').trim() || 'ls';
+}
+
+function tradeUnitLabel(unit) {
+    const labels = {
+        sf: 'square foot',
+        lf: 'linear foot',
+        ea: 'item',
+        hr: 'hour',
+        day: 'day',
+        ls: 'lump sum',
+        ton: 'ton',
+        hour: 'hour',
+        sqm: 'sq metre',
+        linear_m: 'linear metre',
+        visit: 'visit'
+    };
+
+    return labels[normalizeTradeUnit(unit)] || normalizeTradeUnit(unit);
+}
+
+function formatTradePartnerRate(partner, subsystemId = '') {
+    const row = getTradePartnerPricing(partner, subsystemId);
+    const rate = row?.typical_rate;
+    const unit = row?.pricing_unit || row?.rate_unit || 'unit';
+
+    if (rate === undefined || rate === null || rate === '') {
+        return '';
+    }
+
+    const amount = Number(rate);
+    if (!Number.isFinite(amount)) {
+        return '';
+    }
+
+    return ` - CAD ${amount.toFixed(2)} / ${escapeHtml(unit)}`;
+}
+
+function buildTradePartnerOptions(systemId, subsystemId = '', selectedApplicationId = '') {
+    let options = '<option value="">Auto / not assigned</option>';
+    const selected = String(selectedApplicationId || '');
+
+    getMatchingTradePartners(systemId, subsystemId).forEach(partner => {
+        const value = String(partner.trade_application_id || '');
+        if (!value) {
+            return;
+        }
+
+        const label = `${partner.partner_number || 'Partner'} - ${partner.company_name || 'Approved partner'}${formatTradePartnerRate(partner, subsystemId)}`;
+        const pricing = getTradePartnerPricing(partner, subsystemId);
+        options += `<option value="${escapeHtml(value)}"
+            data-rate="${escapeHtml(pricing?.typical_rate ?? '')}"
+            data-unit="${escapeHtml(pricing?.pricing_unit || pricing?.rate_unit || '')}"
+            data-min="${escapeHtml(pricing?.minimum_charge ?? '')}"
+            data-max="${escapeHtml(pricing?.maximum_charge ?? '')}"
+            ${value === selected ? 'selected' : ''}>${escapeHtml(label)}</option>`;
+    });
+
+    return options;
+}
+
 function collectRecommendationOptions(systemId, subsystemId = '') {
     const system = getSystemConfig(systemId);
     const subsystem = subsystemId ? getSubsystemConfig(systemId, subsystemId) : null;
@@ -1213,6 +1302,33 @@ function addSystemFindingRow(systemId, prefill = {}) {
         medium:          'Value Depreciation',
         low:             'Non-Urgent'
     };
+    const allowedFulfillmentTypes = ['etogo_team', 'trade_partner', 'decide_later'];
+    const fulfillmentType = allowedFulfillmentTypes.includes(prefill.fulfillment_type)
+        ? prefill.fulfillment_type
+        : (allowedFulfillmentTypes.includes(prefill.trade_pricing?.fulfillment_type) ? prefill.trade_pricing.fulfillment_type : 'decide_later');
+    const selectedTradeApplicationId = prefill.trade_application_id || prefill.trade_pricing?.trade_application_id || '';
+    const tradeScopeArea = prefill.trade_scope_area || prefill.trade_pricing?.scope_area || prefill.location || '';
+    const tradeNotes = prefill.trade_notes || prefill.trade_pricing?.notes || '';
+    const tradeQuantity = prefill.trade_quantity || prefill.trade_pricing?.quantity || 1;
+    const tradeUnit = prefill.trade_unit || prefill.trade_pricing?.unit || 'ls';
+    const tradeDurationHours = prefill.trade_duration_hours || prefill.trade_pricing?.estimated_duration_hours || '';
+    const tradeMaterialsIncluded = String(Number(Boolean(prefill.trade_materials_included || prefill.trade_pricing?.materials_included)));
+    const tradeUnitOptions = {
+        sf: 'Per square foot',
+        lf: 'Per linear foot',
+        ea: 'Each',
+        hr: 'Per hour',
+        day: 'Per day',
+        ls: 'Lump sum',
+        ton: 'Per ton',
+        hour: 'Per hour',
+        sqm: 'Per sq metre',
+        linear_m: 'Per linear metre',
+        visit: 'Per visit'
+    };
+    const tradeUnitOptionsHtml = Object.entries(tradeUnitOptions)
+        .map(([value, label]) => `<option value="${escapeHtml(value)}" ${String(tradeUnit) === value ? 'selected' : ''}>${escapeHtml(label)}</option>`)
+        .join('');
 
     const card = document.createElement('div');
     card.className = 'finding-card border rounded mb-2 bg-white';
@@ -1276,6 +1392,56 @@ function addSystemFindingRow(systemId, prefill = {}) {
             <div class="col-md-6">
                 <label class="form-label small fw-semibold text-muted mb-1">Spot</label>
                 <input type="text" name="system_findings[${currentIndex}][spot]" class="form-control form-control-sm" value="${escapeHtml(prefill.spot || '')}" placeholder="e.g. Top-left corner">
+            </div>
+        </div>
+        <!-- Row 2b: Internal fulfilment planning -->
+        <div class="row g-2 px-3 pt-2 pb-3 finding-trade-box" style="background:#f8fbff;border-top:1px solid #e7edf8;border-bottom:1px solid #e7edf8;">
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold text-muted mb-1">Work handled by</label>
+                <select name="system_findings[${currentIndex}][fulfillment_type]" class="form-select form-select-sm finding-fulfillment-type">
+                    <option value="decide_later" ${fulfillmentType === 'decide_later' ? 'selected' : ''}>Decide later</option>
+                    <option value="etogo_team" ${fulfillmentType === 'etogo_team' ? 'selected' : ''}>ETOGO team</option>
+                    <option value="trade_partner" ${fulfillmentType === 'trade_partner' ? 'selected' : ''}>Trade partner</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small fw-semibold text-muted mb-1">Approved partner</label>
+                <select name="system_findings[${currentIndex}][trade_application_id]" class="form-select form-select-sm finding-trade-partner">
+                    ${buildTradePartnerOptions(systemId, prefill.subsystem_id || '', selectedTradeApplicationId)}
+                </select>
+                <div class="form-text small finding-trade-rate-note">Only active partners approved for this system/subsystem appear here.</div>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold text-muted mb-1">Work area / scope</label>
+                <input type="text" name="system_findings[${currentIndex}][trade_scope_area]" class="form-control form-control-sm finding-trade-dependent" value="${escapeHtml(tradeScopeArea)}" placeholder="e.g. south roof slope">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold text-muted mb-1">Internal notes</label>
+                <input type="text" name="system_findings[${currentIndex}][trade_notes]" class="form-control form-control-sm finding-trade-dependent" value="${escapeHtml(tradeNotes)}" placeholder="Pricing notes">
+            </div>
+            <div class="col-md-2 finding-trade-dependent-wrap">
+                <label class="form-label small fw-semibold text-muted mb-1">Quantity / time</label>
+                <input type="number" min="0" step="0.01" name="system_findings[${currentIndex}][trade_quantity]" class="form-control form-control-sm finding-trade-quantity finding-trade-dependent" value="${escapeHtml(tradeQuantity)}">
+            </div>
+            <div class="col-md-3 finding-trade-dependent-wrap">
+                <label class="form-label small fw-semibold text-muted mb-1">Billing basis</label>
+                <select name="system_findings[${currentIndex}][trade_unit]" class="form-select form-select-sm finding-trade-unit finding-trade-dependent">
+                    ${tradeUnitOptionsHtml}
+                </select>
+            </div>
+            <div class="col-md-3 finding-trade-dependent-wrap">
+                <label class="form-label small fw-semibold text-muted mb-1">Expected hours</label>
+                <input type="number" min="0" step="0.25" name="system_findings[${currentIndex}][trade_duration_hours]" class="form-control form-control-sm finding-trade-dependent" value="${escapeHtml(tradeDurationHours)}" placeholder="Optional">
+            </div>
+            <div class="col-md-3 finding-trade-dependent-wrap">
+                <label class="form-label small fw-semibold text-muted mb-1">Partner includes materials?</label>
+                <select name="system_findings[${currentIndex}][trade_materials_included]" class="form-select form-select-sm finding-trade-dependent">
+                    <option value="0" ${tradeMaterialsIncluded !== '1' ? 'selected' : ''}>No - add FMC</option>
+                    <option value="1" ${tradeMaterialsIncluded === '1' ? 'selected' : ''}>Yes - no FMC</option>
+                </select>
+            </div>
+            <div class="col-md-6 finding-trade-dependent-wrap">
+                <div class="small border rounded px-2 py-2 finding-trade-preview" style="background:#fff;">Choose a trade partner to preview the partner/client amount.</div>
             </div>
         </div>
         <!-- Row 3: Recommendations | Notes -->
@@ -1405,6 +1571,113 @@ function addSystemFindingRow(systemId, prefill = {}) {
 
     body.appendChild(card);
 
+    const fulfillmentSelect = card.querySelector(`select[name="system_findings[${currentIndex}][fulfillment_type]"]`);
+    const tradePartnerSelect = card.querySelector(`select[name="system_findings[${currentIndex}][trade_application_id]"]`);
+    const subsystemSelForTrade = card.querySelector(`select[name="system_findings[${currentIndex}][subsystem_id]"]`);
+    const tradeQuantityInput = card.querySelector(`input[name="system_findings[${currentIndex}][trade_quantity]"]`);
+    const tradeUnitSelect = card.querySelector(`select[name="system_findings[${currentIndex}][trade_unit]"]`);
+    const tradePreview = card.querySelector('.finding-trade-preview');
+    const tradeRateNote = card.querySelector('.finding-trade-rate-note');
+    const tradeDependentInputs = card.querySelectorAll('.finding-trade-dependent, .finding-trade-partner');
+    const tradeDependentWraps = card.querySelectorAll('.finding-trade-dependent-wrap');
+
+    function updateFindingTradeUi() {
+        const isTradePartner = fulfillmentSelect?.value === 'trade_partner';
+        const selectedOption = tradePartnerSelect?.selectedOptions?.[0];
+        const rate = parseFloat(selectedOption?.dataset.rate || '0') || 0;
+        const min = parseFloat(selectedOption?.dataset.min || '0') || 0;
+        const max = parseFloat(selectedOption?.dataset.max || '0') || 0;
+        const registeredUnit = normalizeTradeUnit(selectedOption?.dataset.unit || tradeUnitSelect?.value);
+        const quantity = Math.max(0, parseFloat(tradeQuantityInput?.value || '0') || 0);
+
+        tradeDependentInputs.forEach(input => {
+            input.disabled = !isTradePartner;
+        });
+        tradeDependentWraps.forEach(wrap => {
+            wrap.style.opacity = isTradePartner ? '1' : '.5';
+        });
+
+        if (!isTradePartner) {
+            if (tradePartnerSelect) {
+                tradePartnerSelect.value = '';
+            }
+            if (tradeRateNote) {
+                tradeRateNote.textContent = fulfillmentSelect?.value === 'etogo_team'
+                    ? 'ETOGO team selected. Partner fields are not needed for this finding.'
+                    : 'Choose Trade partner if this finding should use an approved partner rate.';
+            }
+            if (tradePreview) {
+                tradePreview.textContent = 'No partner client price will be added unless Trade partner is selected.';
+            }
+            return;
+        }
+
+        if (registeredUnit && tradeUnitSelect) {
+            tradeUnitSelect.value = registeredUnit;
+        }
+
+        if (!selectedOption || !selectedOption.value || rate <= 0) {
+            if (tradeRateNote) {
+                tradeRateNote.textContent = 'Only active partners approved for this system/subsystem appear here.';
+            }
+            if (tradePreview) {
+                tradePreview.textContent = 'Choose a trade partner to preview the partner/client amount.';
+            }
+            return;
+        }
+
+        let partnerCost = rate * Math.max(quantity, 1);
+        if (min > 0) partnerCost = Math.max(partnerCost, min);
+        if (max > 0) partnerCost = Math.min(partnerCost, max);
+        const clientPrice = partnerCost / 0.65;
+        const limits = [
+            min > 0 ? `minimum CAD ${min.toFixed(2)}` : null,
+            max > 0 ? `maximum CAD ${max.toFixed(2)}` : null
+        ].filter(Boolean).join(', ');
+
+        if (tradeRateNote) {
+            tradeRateNote.textContent = `Partner rate: CAD ${rate.toFixed(2)} per ${tradeUnitLabel(registeredUnit)}${limits ? ` (${limits})` : ''}.`;
+        }
+        if (tradePreview) {
+            tradePreview.innerHTML = `<strong>Preview:</strong> partner cost CAD ${partnerCost.toFixed(2)}; client price CAD ${clientPrice.toFixed(2)} after ETOGO margin.`;
+        }
+    }
+
+    function refreshFindingTradePartnerOptions() {
+        if (!tradePartnerSelect) {
+            return;
+        }
+
+        const currentValue = tradePartnerSelect.value || selectedTradeApplicationId;
+        const subsystemId = subsystemSelForTrade ? subsystemSelForTrade.value : '';
+        tradePartnerSelect.innerHTML = buildTradePartnerOptions(systemId, subsystemId, currentValue);
+
+        if (currentValue && Array.from(tradePartnerSelect.options).some(option => option.value === String(currentValue))) {
+            tradePartnerSelect.value = String(currentValue);
+        } else {
+            tradePartnerSelect.value = '';
+        }
+
+        updateFindingTradeUi();
+    }
+
+    if (fulfillmentSelect && tradePartnerSelect) {
+        fulfillmentSelect.addEventListener('change', function () {
+            updateFindingTradeUi();
+        });
+
+        tradePartnerSelect.addEventListener('change', function () {
+            if (this.value && fulfillmentSelect.value !== 'trade_partner') {
+                fulfillmentSelect.value = 'trade_partner';
+            }
+            updateFindingTradeUi();
+        });
+    }
+
+    tradeQuantityInput?.addEventListener('input', updateFindingTradeUi);
+    tradeUnitSelect?.addEventListener('change', updateFindingTradeUi);
+    updateFindingTradeUi();
+
     const findingMediaInput = card.querySelector('.finding-media-input');
     if (findingMediaInput) {
         findingMediaInput.addEventListener('change', function () {
@@ -1467,6 +1740,7 @@ function addSystemFindingRow(systemId, prefill = {}) {
                     issueCustomText.style.display = 'none';
                     issueHiddenValue.value = issuePresetSelect.value;
                 }
+                refreshFindingTradePartnerOptions();
             });
         }
     }
@@ -1799,7 +2073,7 @@ function collectAutosavePayload(form) {
     const fields = form.querySelectorAll('input[name], select[name], textarea[name]');
 
     fields.forEach((field) => {
-        if (field.disabled || !field.name || field.type === 'file') {
+        if (field.disabled || !field.name || field.name === '_token' || field.type === 'file') {
             return;
         }
 
@@ -1837,7 +2111,7 @@ function applyAutosavePayload(form, payload) {
     const arrayIndexByName = {};
 
     fields.forEach((field) => {
-        if (!field.name || !Object.prototype.hasOwnProperty.call(payload, field.name)) {
+        if (!field.name || field.name === '_token' || !Object.prototype.hasOwnProperty.call(payload, field.name)) {
             return;
         }
 

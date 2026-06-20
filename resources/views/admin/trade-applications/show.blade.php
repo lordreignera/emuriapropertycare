@@ -14,6 +14,15 @@
         'rejected' => 'Rejected',
         'suspended' => 'Suspended',
     ];
+    $pricingUnitOptions = [
+        'sf' => 'SF',
+        'lf' => 'LF',
+        'ea' => 'EA',
+        'hr' => 'HR',
+        'day' => 'DAY',
+        'ls' => 'LS',
+        'ton' => 'TON',
+    ];
 @endphp
 
 <div class="row">
@@ -24,6 +33,12 @@
                     <div>
                         <h4 class="card-title mb-1">{{ $application->company_name }}</h4>
                         <p class="text-muted mb-0">{{ $application->application_number }} | {{ $application->statusLabel() }}</p>
+                        @if($application->tradePartner)
+                            <div class="mt-2">
+                                <span class="badge bg-success">Trade Partner ID: {{ $application->tradePartner->partner_number }}</span>
+                                <span class="badge bg-light text-dark border">{{ ucwords($application->tradePartner->status) }}</span>
+                            </div>
+                        @endif
                     </div>
                     <a href="{{ route('admin.trade-applications.index') }}" class="btn btn-sm btn-outline-secondary">Back</a>
                 </div>
@@ -45,8 +60,13 @@
                     @forelse($systems as $system)
                         <span class="badge bg-primary me-1 mb-1">{{ $system->name }}</span>
                     @empty
-                        <span class="text-muted">None selected</span>
+                        @if(empty($application->custom_coverage))
+                            <span class="text-muted">None selected</span>
+                        @endif
                     @endforelse
+                    @foreach($application->custom_coverage ?? [] as $coverage)
+                        <span class="badge bg-info text-dark me-1 mb-1">Other: {{ $coverage['system_name'] ?? 'N/A' }}</span>
+                    @endforeach
                 </div>
 
                 <h5>Selected Subsystems</h5>
@@ -54,8 +74,96 @@
                     @forelse($subsystems as $subsystem)
                         <span class="badge bg-secondary me-1 mb-1">{{ $subsystem->system?->name }} / {{ $subsystem->name }}</span>
                     @empty
-                        <span class="text-muted">None selected</span>
+                        @if(empty($application->custom_coverage))
+                            <span class="text-muted">None selected</span>
+                        @endif
                     @endforelse
+                    @foreach($application->custom_coverage ?? [] as $coverage)
+                        <span class="badge bg-light text-dark border me-1 mb-1">{{ $coverage['system_name'] ?? 'Other' }} / {{ $coverage['subsystem_name'] ?? 'N/A' }}</span>
+                    @endforeach
+                </div>
+
+                <h5>Submitted Pricing</h5>
+                <div class="table-responsive mb-4">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>System / Subsystem</th>
+                                <th>Submitted Rate</th>
+                                <th>Agreed Rate</th>
+                                <th>Submitted Max</th>
+                                <th>Agreed Max</th>
+                                <th>Duration</th>
+                                <th>Notes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($subsystems as $subsystem)
+                                @php
+                                    $pricing = $application->subsystem_pricing[$subsystem->id] ?? $application->subsystem_pricing[(string) $subsystem->id] ?? [];
+                                    $agreedPricing = $application->agreed_subsystem_pricing[$subsystem->id] ?? $application->agreed_subsystem_pricing[(string) $subsystem->id] ?? [];
+                                    $typicalRate = isset($pricing['typical_rate']) ? (float) $pricing['typical_rate'] : null;
+                                    $unit = $pricing['pricing_unit'] ?? null;
+                                    $agreedRate = isset($agreedPricing['typical_rate']) ? (float) $agreedPricing['typical_rate'] : null;
+                                    $agreedUnit = $agreedPricing['pricing_unit'] ?? null;
+                                @endphp
+                                <tr>
+                                    <td>{{ $subsystem->system?->name }} / {{ $subsystem->name }}</td>
+                                    <td>
+                                        @if($typicalRate !== null)
+                                            CAD ${{ number_format($typicalRate, 2) }}{{ $unit ? ' / ' . strtoupper($unit) : '' }}
+                                        @else
+                                            N/A
+                                        @endif
+                                    </td>
+                                    <td>
+                                        @if($agreedRate !== null)
+                                            CAD ${{ number_format($agreedRate, 2) }}{{ $agreedUnit ? ' / ' . strtoupper($agreedUnit) : '' }}
+                                        @else
+                                            <span class="text-muted">Not agreed yet</span>
+                                        @endif
+                                    </td>
+                                    <td>{{ isset($pricing['maximum_charge']) ? 'CAD $' . number_format((float) $pricing['maximum_charge'], 2) : 'N/A' }}</td>
+                                    <td>{{ isset($agreedPricing['maximum_charge']) ? 'CAD $' . number_format((float) $agreedPricing['maximum_charge'], 2) : 'N/A' }}</td>
+                                    <td>{{ $agreedPricing['estimated_duration'] ?? ($pricing['estimated_duration'] ?? 'N/A') }}</td>
+                                    <td>{{ $agreedPricing['notes'] ?? ($pricing['notes'] ?? 'N/A') }}</td>
+                                </tr>
+                            @endforeach
+                            @foreach($application->custom_coverage ?? [] as $coverageIndex => $coverage)
+                                @php
+                                    $agreedCoverage = $application->agreed_custom_coverage[$coverageIndex] ?? [];
+                                    $typicalRate = isset($coverage['typical_rate']) ? (float) $coverage['typical_rate'] : null;
+                                    $unit = $coverage['pricing_unit'] ?? null;
+                                    $agreedRate = isset($agreedCoverage['typical_rate']) ? (float) $agreedCoverage['typical_rate'] : null;
+                                    $agreedUnit = $agreedCoverage['pricing_unit'] ?? null;
+                                @endphp
+                                <tr>
+                                    <td>Other: {{ $coverage['system_name'] ?? 'N/A' }} / {{ $coverage['subsystem_name'] ?? 'N/A' }}</td>
+                                    <td>
+                                        @if($typicalRate !== null)
+                                            CAD ${{ number_format($typicalRate, 2) }}{{ $unit ? ' / ' . strtoupper($unit) : '' }}
+                                        @else
+                                            N/A
+                                        @endif
+                                    </td>
+                                    <td>
+                                        @if($agreedRate !== null)
+                                            CAD ${{ number_format($agreedRate, 2) }}{{ $agreedUnit ? ' / ' . strtoupper($agreedUnit) : '' }}
+                                        @else
+                                            <span class="text-muted">Not agreed yet</span>
+                                        @endif
+                                    </td>
+                                    <td>{{ isset($coverage['maximum_charge']) ? 'CAD $' . number_format((float) $coverage['maximum_charge'], 2) : 'N/A' }}</td>
+                                    <td>{{ isset($agreedCoverage['maximum_charge']) ? 'CAD $' . number_format((float) $agreedCoverage['maximum_charge'], 2) : 'N/A' }}</td>
+                                    <td>{{ $agreedCoverage['estimated_duration'] ?? ($coverage['estimated_duration'] ?? 'N/A') }}</td>
+                                    <td>{{ $agreedCoverage['notes'] ?? ($coverage['notes'] ?? 'N/A') }}</td>
+                                </tr>
+                            @endforeach
+                            @if($subsystems->isEmpty() && empty($application->custom_coverage))
+                                <tr><td colspan="7" class="text-muted">No subsystem pricing submitted.</td></tr>
+                            @endif
+                        </tbody>
+                    </table>
                 </div>
 
                 <h5>System Pricing</h5>
@@ -202,6 +310,94 @@
                             <option value="{{ $value }}" @selected($application->status === $value)>{{ $label }}</option>
                         @endforeach
                     </select>
+
+                    <div class="border rounded p-3 mb-3" style="background:#f8fafc;">
+                        <h5 class="mb-2">Agreed Pricing</h5>
+                        <p class="text-muted small mb-3">Use this after calling the trade partner. Submitted pricing stays saved; these agreed values are what approved PHAR pricing will use.</p>
+
+                        @foreach($subsystems as $subsystem)
+                            @php
+                                $submitted = $application->subsystem_pricing[$subsystem->id] ?? $application->subsystem_pricing[(string) $subsystem->id] ?? [];
+                                $agreed = $application->agreed_subsystem_pricing[$subsystem->id] ?? $application->agreed_subsystem_pricing[(string) $subsystem->id] ?? $submitted;
+                            @endphp
+                            <div class="border rounded p-2 mb-2 bg-white">
+                                <div class="fw-semibold mb-2">{{ $subsystem->system?->name }} / {{ $subsystem->name }}</div>
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        <label class="form-label small mb-1">Unit</label>
+                                        <select name="agreed_subsystem_pricing[{{ $subsystem->id }}][pricing_unit]" class="form-control form-control-sm">
+                                            <option value="">Select</option>
+                                            @foreach($pricingUnitOptions as $value => $label)
+                                                <option value="{{ $value }}" @selected(($agreed['pricing_unit'] ?? '') === $value)>{{ $label }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small mb-1">Rate CAD</label>
+                                        <input type="number" min="0" step="0.01" name="agreed_subsystem_pricing[{{ $subsystem->id }}][typical_rate]" class="form-control form-control-sm" value="{{ $agreed['typical_rate'] ?? '' }}">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small mb-1">Max CAD</label>
+                                        <input type="number" min="0" step="0.01" name="agreed_subsystem_pricing[{{ $subsystem->id }}][maximum_charge]" class="form-control form-control-sm" value="{{ $agreed['maximum_charge'] ?? '' }}">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small mb-1">Duration</label>
+                                        <input name="agreed_subsystem_pricing[{{ $subsystem->id }}][estimated_duration]" class="form-control form-control-sm" value="{{ $agreed['estimated_duration'] ?? '' }}">
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label small mb-1">Notes</label>
+                                        <input name="agreed_subsystem_pricing[{{ $subsystem->id }}][notes]" class="form-control form-control-sm" value="{{ $agreed['notes'] ?? '' }}">
+                                    </div>
+                                </div>
+                            </div>
+                        @endforeach
+
+                        @foreach($application->custom_coverage ?? [] as $coverageIndex => $coverage)
+                            @php
+                                $agreed = $application->agreed_custom_coverage[$coverageIndex] ?? $coverage;
+                            @endphp
+                            <div class="border rounded p-2 mb-2 bg-white">
+                                <div class="fw-semibold mb-2">Other: {{ $coverage['system_name'] ?? 'N/A' }} / {{ $coverage['subsystem_name'] ?? 'N/A' }}</div>
+                                <input type="hidden" name="agreed_custom_coverage[{{ $coverageIndex }}][system_name]" value="{{ $coverage['system_name'] ?? '' }}">
+                                <input type="hidden" name="agreed_custom_coverage[{{ $coverageIndex }}][subsystem_name]" value="{{ $coverage['subsystem_name'] ?? '' }}">
+                                <div class="row g-2">
+                                    <div class="col-6">
+                                        <label class="form-label small mb-1">Unit</label>
+                                        <select name="agreed_custom_coverage[{{ $coverageIndex }}][pricing_unit]" class="form-control form-control-sm">
+                                            <option value="">Select</option>
+                                            @foreach($pricingUnitOptions as $value => $label)
+                                                <option value="{{ $value }}" @selected(($agreed['pricing_unit'] ?? '') === $value)>{{ $label }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small mb-1">Rate CAD</label>
+                                        <input type="number" min="0" step="0.01" name="agreed_custom_coverage[{{ $coverageIndex }}][typical_rate]" class="form-control form-control-sm" value="{{ $agreed['typical_rate'] ?? '' }}">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small mb-1">Max CAD</label>
+                                        <input type="number" min="0" step="0.01" name="agreed_custom_coverage[{{ $coverageIndex }}][maximum_charge]" class="form-control form-control-sm" value="{{ $agreed['maximum_charge'] ?? '' }}">
+                                    </div>
+                                    <div class="col-6">
+                                        <label class="form-label small mb-1">Duration</label>
+                                        <input name="agreed_custom_coverage[{{ $coverageIndex }}][estimated_duration]" class="form-control form-control-sm" value="{{ $agreed['estimated_duration'] ?? '' }}">
+                                    </div>
+                                    <div class="col-12">
+                                        <label class="form-label small mb-1">Notes</label>
+                                        <input name="agreed_custom_coverage[{{ $coverageIndex }}][notes]" class="form-control form-control-sm" value="{{ $agreed['notes'] ?? '' }}">
+                                    </div>
+                                </div>
+                            </div>
+                        @endforeach
+
+                        @if($subsystems->isEmpty() && empty($application->custom_coverage))
+                            <p class="text-muted small mb-0">No submitted pricing rows to agree.</p>
+                        @endif
+
+                        @if($application->pricing_agreed_at)
+                            <p class="text-muted small mb-0">Last pricing agreement saved {{ $application->pricing_agreed_at->format('M d, Y h:i A') }}.</p>
+                        @endif
+                    </div>
 
                     <label class="form-label">Admin notes</label>
                     <textarea name="admin_notes" rows="7" class="form-control mb-3">{{ old('admin_notes', $application->admin_notes) }}</textarea>

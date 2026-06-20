@@ -333,6 +333,10 @@ Route::middleware([
             ->name('service-requests.assess');
 
         // Trade partner onboarding review
+        Route::get('/trade-partners', [App\Http\Controllers\Admin\TradePartnerController::class, 'index'])
+            ->name('trade-partners.index');
+        Route::get('/trade-partners/{tradePartner}', [App\Http\Controllers\Admin\TradePartnerController::class, 'show'])
+            ->name('trade-partners.show');
         Route::get('/trade-applications', [App\Http\Controllers\Admin\TradeApplicationController::class, 'index'])
             ->name('trade-applications.index');
         Route::get('/trade-applications/{tradeApplication}', [App\Http\Controllers\Admin\TradeApplicationController::class, 'show'])

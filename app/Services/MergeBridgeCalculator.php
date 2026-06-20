@@ -89,13 +89,15 @@ class MergeBridgeCalculator
             ];
         } else {
             $findings        = PHARFinding::where('inspection_id', $inspection->id)->get();
-            $frlcCalculation = $this->calculateFRLC($findings, $labourHourlyRate);
-            $fmcCalculation  = $this->calculateFMC($inspection);
             $tradeCalculation = $this->calculateTradePricing($inspection);
+            $frlcCalculation = $this->calculateFRLC($findings, $labourHourlyRate, $tradeCalculation['client_price_by_finding']);
+            $fmcCalculation  = $this->calculateFMC($inspection);
         }
 
         // Step 3: TRC (Total Remediation Cost)
-        $trcAnnual   = $bdcAnnual + $frlcCalculation['annual'] + $fmcCalculation['annual'] + $tradeCalculation['client_price'];
+        // Trade partner client pricing is treated as the finding labour/service cost
+        // inside FRLC, so it must not be added again as a fourth TRC component.
+        $trcAnnual   = $bdcAnnual + $frlcCalculation['annual'] + $fmcCalculation['annual'];
         $trcMonthly  = $trcAnnual;
         $visitsPerYear = max(1, (float) ($bdcResult['visits_per_year'] ?? $inspection->bdc_visits_per_year ?? 1));
         $trcPerVisit = round($trcAnnual / $visitsPerYear, 2);
@@ -166,10 +168,22 @@ class MergeBridgeCalculator
     /**
      * Calculate FRLC (Findings Remediation Labour Cost)
      */
-    protected function calculateFRLC($findings, $hourlyRate): array
+    protected function calculateFRLC($findings, $hourlyRate, array $tradeClientPriceByFinding = []): array
     {
-        $totalHours = $findings->sum('labour_hours');
-        $annualCost = $totalHours * $hourlyRate;
+        $totalHours = 0.0;
+        $annualCost = 0.0;
+
+        foreach ($findings as $finding) {
+            $findingId = (int) $finding->id;
+            if (array_key_exists($findingId, $tradeClientPriceByFinding)) {
+                $annualCost += (float) $tradeClientPriceByFinding[$findingId];
+                continue;
+            }
+
+            $hours = (float) ($finding->labour_hours ?? 0);
+            $totalHours += $hours;
+            $annualCost += $hours * $hourlyRate;
+        }
         
         return [
             'total_hours' => $totalHours,
@@ -198,11 +212,17 @@ class MergeBridgeCalculator
     protected function calculateTradePricing(Inspection $inspection): array
     {
         $items = \App\Models\InspectionTradePricingItem::where('inspection_id', $inspection->id)->get();
+        $clientPriceByFinding = $items
+            ->filter(fn ($item) => !empty($item->phar_finding_id))
+            ->groupBy('phar_finding_id')
+            ->map(fn ($rows) => (float) $rows->sum('etogo_client_price'))
+            ->all();
 
         return [
             'cost' => (float) $items->sum('trade_total_cost'),
             'client_price' => (float) $items->sum('etogo_client_price'),
             'margin' => (float) $items->sum('etogo_margin_amount'),
+            'client_price_by_finding' => $clientPriceByFinding,
         ];
     }
 

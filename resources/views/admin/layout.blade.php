@@ -110,7 +110,7 @@
                     </div>
                     @endif
 
-                    @if($errors->any())
+                    @if(isset($errors) && $errors->any())
                     <div class="alert alert-danger alert-dismissible fade show" role="alert">
                         <strong>Whoops!</strong> There were some problems with your input.
                         <ul class="mb-0">

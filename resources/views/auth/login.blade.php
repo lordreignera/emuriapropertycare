@@ -21,7 +21,7 @@
 
         body {
             font-family: 'Inter', sans-serif;
-            background: #ffffff;
+            background: #eef4fb;
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -34,16 +34,17 @@
             max-width: 1000px;
             width: 100%;
             background: white;
-            border-radius: 20px;
+            border: 1px solid #dbe6f3;
+            border-radius: 8px;
             overflow: hidden;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 18px 42px rgba(15, 23, 42, 0.10);
         }
 
         .login-left {
-            flex: 1;
-            background: linear-gradient(135deg, #5b67ca 0%, #4854b8 100%);
+            flex: .92;
+            background: #eaf4ff;
             padding: 60px 40px;
-            color: white;
+            color: #172033;
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -58,13 +59,7 @@
             right: -50%;
             width: 200%;
             height: 200%;
-            background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
-            animation: pulse 15s ease-in-out infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.1); }
+            display: none;
         }
 
         .login-left-content {
@@ -73,21 +68,35 @@
         }
 
         .logo {
-            font-size: 2.5rem;
-            font-weight: 700;
-            margin-bottom: 20px;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            font-size: 1.55rem;
+            font-weight: 800;
+            margin-bottom: 18px;
+            text-shadow: none;
         }
 
         .logo .highlight {
-            color: #FFB800;
+            color: #2458d6;
+        }
+
+        .login-logo-mark {
+            width: 64px;
+            height: 64px;
+            object-fit: contain;
+            background: #ffffff;
+            border: 1px solid #d7e7f7;
+            border-radius: 8px;
+            padding: 10px;
         }
 
         .tagline {
-            font-size: 1.2rem;
-            font-weight: 300;
+            font-size: 1rem;
+            font-weight: 500;
             margin-bottom: 30px;
-            opacity: 0.95;
+            color: #475467;
+            opacity: 1;
         }
 
         .features {
@@ -99,14 +108,22 @@
             display: flex;
             align-items: center;
             margin-bottom: 20px;
-            font-size: 1rem;
-            opacity: 0.9;
+            font-size: .96rem;
+            color: #344054;
+            opacity: 1;
         }
 
         .features li i {
-            font-size: 1.5rem;
+            width: 30px;
+            height: 30px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 7px;
+            background: #dbeafa;
+            font-size: .95rem;
             margin-right: 15px;
-            color: #FFB800;
+            color: #2458d6;
         }
 
         .login-right {
@@ -122,13 +139,13 @@
         }
 
         .login-header h2 {
-            font-size: 2rem;
-            color: #2d3748;
+            font-size: 1.85rem;
+            color: #172033;
             margin-bottom: 10px;
         }
 
         .login-header p {
-            color: #718096;
+            color: #667085;
             font-size: 0.95rem;
         }
 
@@ -184,11 +201,11 @@
         .form-control {
             width: 100%;
             padding: 14px 15px 14px 45px;
-            border: 2px solid #e2e8f0;
-            border-radius: 10px;
+            border: 1px solid #cfd8e3;
+            border-radius: 7px;
             font-size: 1rem;
-            transition: all 0.3s ease;
-            background: #f7fafc;
+            transition: border-color 0.18s ease, box-shadow 0.18s ease;
+            background: #ffffff;
         }
 
         .password-field {
@@ -197,9 +214,9 @@
 
         .form-control:focus {
             outline: none;
-            border-color: #5b67ca;
+            border-color: #2458d6;
             background: white;
-            box-shadow: 0 0 0 3px rgba(91, 103, 202, 0.1);
+            box-shadow: 0 0 0 3px rgba(36, 88, 214, 0.10);
         }
 
         .password-toggle {
@@ -223,7 +240,7 @@
         }
 
         .password-toggle:hover {
-            color: #5b67ca;
+            color: #2458d6;
         }
 
         .password-toggle:active {
@@ -241,7 +258,7 @@
             height: 18px;
             margin-right: 10px;
             cursor: pointer;
-            accent-color: #5b67ca;
+            accent-color: #2458d6;
         }
 
         .checkbox-wrapper label {
@@ -254,20 +271,21 @@
         .btn-login {
             width: 100%;
             padding: 16px;
-            background: linear-gradient(135deg, #5b67ca 0%, #4854b8 100%);
+            background: #2458d6;
             color: white;
             border: none;
-            border-radius: 10px;
+            border-radius: 7px;
             font-size: 1rem;
             font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(91, 103, 202, 0.3);
+            transition: background 0.18s ease, box-shadow 0.18s ease;
+            box-shadow: 0 8px 18px rgba(36, 88, 214, 0.22);
         }
 
         .btn-login:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(91, 103, 202, 0.4);
+            background: #1f4fc4;
+            transform: none;
+            box-shadow: 0 10px 22px rgba(36, 88, 214, 0.26);
         }
 
         .btn-login:active {
@@ -280,7 +298,7 @@
         }
 
         .form-footer a {
-            color: #5b67ca;
+            color: #2458d6;
             text-decoration: none;
             font-weight: 500;
             font-size: 0.9rem;
@@ -288,7 +306,7 @@
         }
 
         .form-footer a:hover {
-            color: #4854b8;
+            color: #1f4fc4;
             text-decoration: underline;
         }
 
@@ -320,7 +338,7 @@
         }
 
         .register-link a {
-            color: #5b67ca;
+            color: #2458d6;
             font-weight: 600;
             text-decoration: none;
             margin: 0 3px;
@@ -364,7 +382,8 @@
         <div class="login-left">
             <div class="login-left-content">
                 <div class="logo">
-                    EMURIA<span class="highlight">PropertyCare</span>
+                    <img class="login-logo-mark" src="{{ asset('etogo%20log.png') }}" alt="ETOGO">
+                    <span>ETOGO<span class="highlight"> PropertyCare</span></span>
                 </div>
                 <p class="tagline">
                     Regenerative Property Management Platform

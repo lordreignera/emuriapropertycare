@@ -3,8 +3,7 @@
 namespace App\Services;
 
 use App\Models\Inspection;
-use App\Models\InspectionSystem;
-use App\Models\TradeApplication;
+use App\Models\TradePartner;
 use Illuminate\Support\Str;
 
 class PharTradePricingService
@@ -44,13 +43,19 @@ class PharTradePricingService
             ? max(0.0, (float) $finding['trade_duration_hours'])
             : null;
 
-        $rate = $this->approvedTradeRate($systemId, $selectedTradeApplicationId);
+        $rate = $this->approvedTradeRate($systemId, $subsystemId, $selectedTradeApplicationId);
         if (!$rate) {
             $rate = $this->defaultRate($systemName);
         }
 
         $tradeUnitCost = round((float) $rate['trade_unit_cost'], 2);
         $tradeTotalCost = round($tradeUnitCost * $quantity, 2);
+        if (!empty($rate['minimum_charge'])) {
+            $tradeTotalCost = max($tradeTotalCost, round((float) $rate['minimum_charge'], 2));
+        }
+        if (!empty($rate['maximum_charge'])) {
+            $tradeTotalCost = min($tradeTotalCost, round((float) $rate['maximum_charge'], 2));
+        }
         $clientPrice = $this->applyMargin($tradeTotalCost);
 
         return [
@@ -121,42 +126,70 @@ class PharTradePricingService
         ]);
     }
 
-    private function approvedTradeRate(?int $systemId, ?int $selectedTradeApplicationId = null): ?array
+    private function approvedTradeRate(?int $systemId, ?int $subsystemId = null, ?int $selectedTradeApplicationId = null): ?array
     {
         if (!$systemId) {
             return null;
         }
 
-        $applications = TradeApplication::query()
-            ->where('status', TradeApplication::STATUS_APPROVED)
-            ->when($selectedTradeApplicationId, fn ($query) => $query->where('id', $selectedTradeApplicationId))
+        $partners = TradePartner::query()
+            ->with('application')
+            ->where('status', TradePartner::STATUS_ACTIVE)
+            ->when($selectedTradeApplicationId, fn ($query) => $query->where('trade_application_id', $selectedTradeApplicationId))
             ->get()
-            ->filter(fn (TradeApplication $application) => in_array($systemId, array_map('intval', $application->system_ids ?? []), true));
+            ->filter(fn (TradePartner $partner) => in_array($systemId, array_map('intval', $partner->system_ids ?? []), true));
 
         $candidates = [];
-        foreach ($applications as $application) {
-            $pricing = $application->system_pricing[(string) $systemId]
-                ?? $application->system_pricing[$systemId]
-                ?? [];
+        foreach ($partners as $partner) {
+            $pricing = [];
+            $source = 'active_trade_partner';
+            $application = $partner->application;
+            $agreedSubsystemPricing = $partner->agreed_subsystem_pricing ?? [];
+            $submittedSubsystemPricing = $application?->subsystem_pricing ?? [];
+            $submittedSystemPricing = $application?->system_pricing ?? [];
 
-            $rate = isset($pricing['typical_rate']) ? (float) $pricing['typical_rate'] : 0.0;
-            $minimum = max(
-                isset($pricing['minimum_charge']) ? (float) $pricing['minimum_charge'] : 0.0,
-                (float) ($application->minimum_service_charge ?? 0)
-            );
+            if ($subsystemId && in_array($subsystemId, array_map('intval', $partner->subsystem_ids ?? []), true)) {
+                $agreedPricing = $agreedSubsystemPricing[(string) $subsystemId]
+                    ?? $agreedSubsystemPricing[$subsystemId]
+                    ?? [];
+                $submittedPricing = $submittedSubsystemPricing[(string) $subsystemId]
+                    ?? $submittedSubsystemPricing[$subsystemId]
+                    ?? [];
+                $pricing = $agreedPricing ?: $submittedPricing;
 
-            $unitCost = max($rate, $minimum);
+                if (!empty($pricing)) {
+                    $source = !empty($agreedPricing)
+                        ? 'agreed_trade_subsystem_pricing'
+                        : 'approved_trade_subsystem_pricing';
+                }
+            }
+
+            if (empty($pricing)) {
+                $pricing = $submittedSystemPricing[(string) $systemId]
+                    ?? $submittedSystemPricing[$systemId]
+                    ?? [];
+            }
+
+            $unitCost = isset($pricing['typical_rate']) ? (float) $pricing['typical_rate'] : 0.0;
             if ($unitCost <= 0) {
                 continue;
             }
 
+            $minimum = max(
+                isset($pricing['minimum_charge']) ? (float) $pricing['minimum_charge'] : 0.0,
+                (float) ($application?->minimum_service_charge ?? 0)
+            );
+            $maximum = isset($pricing['maximum_charge']) ? (float) $pricing['maximum_charge'] : 0.0;
+
             $candidates[] = [
                 'trade_unit_cost' => $unitCost,
-                'unit' => $pricing['rate_unit'] ?? 'ls',
-                'source' => 'approved_trade_application',
-                'trade_application_id' => $application->id,
-                'trade_company_name' => $application->company_name,
-                'notes' => trim((string) ($pricing['notes'] ?? $application->pricing_notes ?? '')),
+                'minimum_charge' => $minimum,
+                'maximum_charge' => $maximum,
+                'unit' => $pricing['pricing_unit'] ?? $pricing['rate_unit'] ?? 'ls',
+                'source' => $source,
+                'trade_application_id' => $partner->trade_application_id,
+                'trade_company_name' => $partner->company_name,
+                'notes' => trim((string) ($pricing['notes'] ?? $application?->pricing_notes ?? '')),
             ];
         }
 

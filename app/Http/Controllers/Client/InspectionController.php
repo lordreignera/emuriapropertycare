@@ -14,7 +14,6 @@ use App\Notifications\InstallmentPaymentReceivedNotification;
 use App\Services\AgreementScheduleService;
 use App\Services\BDCCalculator;
 use App\Services\InspectionInvoiceSyncService;
-use App\Services\InspectionSpecialistAssessmentService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -39,9 +38,7 @@ class InspectionController extends Controller
         $baseFee      = self::BASE_FEE_PER_UNIT * $units;
         $roofSurcharge  = $property->has_high_pitched_roof ? self::HIGH_PITCHED_ROOF_FEE : 0;
         $crawlSurcharge = $property->has_crawl_space       ? self::CRAWL_SPACE_FEE       : 0;
-        $specialistAssessment = $this->specialistAssessmentService->forProperty($property);
-        $specialistSupportTotal = (float) ($specialistAssessment['client_price_total'] ?? 0);
-        $totalFee     = $baseFee + $roofSurcharge + $crawlSurcharge + $specialistSupportTotal;
+        $totalFee     = $baseFee + $roofSurcharge + $crawlSurcharge;
 
         // TEST MODE: always charge $1; remove self::TEST_CHARGE_CENTS line when going live
         $chargeCents  = self::TEST_CHARGE_CENTS;
@@ -52,10 +49,6 @@ class InspectionController extends Controller
             'base_fee'        => $baseFee,
             'roof_surcharge'  => $roofSurcharge,
             'crawl_surcharge' => $crawlSurcharge,
-            'specialist_assessment' => $specialistAssessment,
-            'specialist_support_total' => $specialistSupportTotal,
-            'specialist_trade_cost' => (float) ($specialistAssessment['trade_cost_total'] ?? 0),
-            'specialist_margin' => (float) ($specialistAssessment['margin_total'] ?? 0),
             'currency' => strtoupper((string) config('cashier.currency', 'usd')),
             'total_dollars'   => $totalFee,
             'charge_cents'    => $chargeCents,
@@ -67,7 +60,6 @@ class InspectionController extends Controller
     public function __construct(
         private readonly AgreementScheduleService $agreementScheduleService,
         private readonly InspectionInvoiceSyncService $inspectionInvoiceSyncService,
-        private readonly InspectionSpecialistAssessmentService $specialistAssessmentService,
     )
     {
     }
@@ -351,6 +343,15 @@ class InspectionController extends Controller
 
             $snapshotFindings = $snapshotFindings->values()->map(function ($finding, $index) use ($pharMaterialById, $inspectionFindings) {
                 $materialCost = (float) ($finding['material_cost'] ?? 0);
+                $jsonFinding = $inspectionFindings->get($index, []);
+                $tradePricing = is_array($finding['trade_pricing'] ?? null) ? $finding['trade_pricing'] : [];
+                $tradeMaterialsIncluded = (bool) ($tradePricing['materials_included'] ?? $jsonFinding['trade_materials_included'] ?? false);
+
+                if ($tradeMaterialsIncluded) {
+                    $finding['material_cost'] = 0.0;
+                    $finding['materials'] = [];
+                    return $finding;
+                }
 
                 if ($materialCost <= 0) {
                     $findingId = (int) ($finding['id'] ?? 0);
@@ -358,7 +359,6 @@ class InspectionController extends Controller
                 }
 
                 if ($materialCost <= 0) {
-                    $jsonFinding = $inspectionFindings->get($index, []);
                     $materialCost = (float) collect($jsonFinding['phar_materials'] ?? [])
                         ->sum(fn($m) => (float) ($m['line_total'] ?? 0));
                 }
@@ -388,6 +388,12 @@ class InspectionController extends Controller
                 ->all();
 
             $materialCost = (float) ($finding['material_cost'] ?? 0);
+            $tradePricing = is_array($finding['trade_pricing'] ?? null) ? $finding['trade_pricing'] : [];
+            $tradeMaterialsIncluded = (bool) ($tradePricing['materials_included'] ?? $jsonFinding['trade_materials_included'] ?? false);
+            if ($tradeMaterialsIncluded) {
+                $materials = [];
+                $materialCost = 0.0;
+            }
             if ($materialCost <= 0 && !empty($materials)) {
                 $materialCost = (float) collect($materials)->sum(fn ($material) => (float) ($material['line_total'] ?? 0));
             }
@@ -528,7 +534,7 @@ class InspectionController extends Controller
         ]);
         $approvedBdc = round((float) ($bdcResult['bdc_annual'] ?? 0), 2);
         
-        $approvedTotal = round($approvedLabour + $approvedMaterial + $approvedTradeClientPrice + $approvedBdc, 2);
+        $approvedTotal = round($approvedLabour + $approvedMaterial + $approvedBdc, 2);
 
         $quotationStatus = 'approved';
         $inspectionQuotationStatus = 'approved';
@@ -953,7 +959,6 @@ class InspectionController extends Controller
                 'user_id' => Auth::id(),
                 'property_name' => $property->property_name,
                 'inspection_full_amount' => number_format((float) $feeData['total_dollars'], 2, '.', ''),
-                'specialist_support_total' => number_format((float) $feeData['specialist_support_total'], 2, '.', ''),
             ],
         ]);
 
@@ -1018,11 +1023,11 @@ class InspectionController extends Controller
                 'inspection_fee_status' => 'paid',
                 'inspection_fee_paid_at' => now(),
                 'stripe_payment_intent_id' => $paymentIntent->id,
-                'specialist_assessment_breakdown' => $feeData['specialist_assessment'],
-                'specialist_trade_cost' => $feeData['specialist_trade_cost'],
-                'specialist_client_price' => $feeData['specialist_support_total'],
-                'specialist_margin_amount' => $feeData['specialist_margin'],
-                'specialist_pricing_currency' => $feeData['currency'],
+                'specialist_assessment_breakdown' => null,
+                'specialist_trade_cost' => 0,
+                'specialist_client_price' => 0,
+                'specialist_margin_amount' => 0,
+                'specialist_pricing_currency' => null,
             ]);
 
             $this->ensureInspectionFeeInvoice($inspection->fresh(['property', 'project']));

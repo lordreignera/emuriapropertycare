@@ -19,6 +19,7 @@ use App\Models\InspectionSystem;
 use App\Models\InspectionQuotation;
 use App\Models\PHARFinding;
 use App\Models\ServiceRequest;
+use App\Models\TradePartner;
 use App\Notifications\AssessmentCompletedNotification;
 use App\Notifications\AssessmentScheduleUpdatedNotification;
 use App\Notifications\QuotationSharedNotification;
@@ -367,6 +368,23 @@ class InspectionController extends Controller
             PharCatalog::categories()
         )));
 
+        $activeTradePartners = TradePartner::query()
+            ->where('status', TradePartner::STATUS_ACTIVE)
+            ->orderBy('company_name')
+            ->get(['id', 'partner_number', 'trade_application_id', 'company_name', 'system_ids', 'subsystem_ids', 'agreed_subsystem_pricing'])
+            ->map(function (TradePartner $partner) {
+                return [
+                    'id' => $partner->id,
+                    'partner_number' => $partner->partner_number,
+                    'trade_application_id' => $partner->trade_application_id,
+                    'company_name' => $partner->company_name,
+                    'system_ids' => array_map('intval', $partner->system_ids ?? []),
+                    'subsystem_ids' => array_map('intval', $partner->subsystem_ids ?? []),
+                    'pricing' => $partner->agreed_subsystem_pricing ?? [],
+                ];
+            })
+            ->values();
+
         return view('admin.inspections.form-cpi', compact(
             'property',
             'inspection',
@@ -376,7 +394,8 @@ class InspectionController extends Controller
             'pharCategories',
             'serviceRequest',
             'seededSystemFindings',
-            'seededFindingsSource'
+            'seededFindingsSource',
+            'activeTradePartners'
         ));
     }
 
@@ -445,6 +464,14 @@ class InspectionController extends Controller
             'system_findings.*.phar_category' => 'nullable|string|max:255',
             'system_findings.*.phar_included_yn' => 'nullable|boolean',
             'system_findings.*.phar_notes' => 'nullable|string',
+            'system_findings.*.fulfillment_type' => 'nullable|in:etogo_team,trade_partner,decide_later',
+            'system_findings.*.trade_application_id' => 'nullable|exists:trade_applications,id',
+            'system_findings.*.trade_quantity' => 'nullable|numeric|min:0',
+            'system_findings.*.trade_unit' => 'nullable|string|max:50',
+            'system_findings.*.trade_scope_area' => 'nullable|string|max:255',
+            'system_findings.*.trade_duration_hours' => 'nullable|numeric|min:0',
+            'system_findings.*.trade_materials_included' => 'nullable|boolean',
+            'system_findings.*.trade_notes' => 'nullable|string|max:1000',
             'system_findings.*.materials' => 'nullable|array',
             'system_findings.*.materials.*.material_name' => 'nullable|string|max:255',
             'system_findings.*.materials.*.quantity' => 'nullable|numeric|min:0',
@@ -579,6 +606,16 @@ class InspectionController extends Controller
                     'phar_category' => trim((string) ($finding['phar_category'] ?? '')),
                     'phar_included_yn' => isset($finding['phar_included_yn']) ? (bool) $finding['phar_included_yn'] : true,
                     'phar_notes' => trim((string) ($finding['phar_notes'] ?? '')),
+                    'fulfillment_type' => in_array(($finding['fulfillment_type'] ?? ''), ['etogo_team', 'trade_partner', 'decide_later'], true)
+                        ? $finding['fulfillment_type']
+                        : 'decide_later',
+                    'trade_application_id' => ($finding['fulfillment_type'] ?? '') === 'trade_partner' && !empty($finding['trade_application_id']) ? (int) $finding['trade_application_id'] : null,
+                    'trade_quantity' => ($finding['fulfillment_type'] ?? '') === 'trade_partner' ? (float) ($finding['trade_quantity'] ?? 1) : 1,
+                    'trade_unit' => ($finding['fulfillment_type'] ?? '') === 'trade_partner' ? trim((string) ($finding['trade_unit'] ?? '')) : '',
+                    'trade_scope_area' => ($finding['fulfillment_type'] ?? '') === 'trade_partner' ? trim((string) ($finding['trade_scope_area'] ?? '')) : '',
+                    'trade_duration_hours' => ($finding['fulfillment_type'] ?? '') === 'trade_partner' && isset($finding['trade_duration_hours']) ? (float) $finding['trade_duration_hours'] : null,
+                    'trade_materials_included' => ($finding['fulfillment_type'] ?? '') === 'trade_partner' ? (bool) ($finding['trade_materials_included'] ?? false) : false,
+                    'trade_notes' => ($finding['fulfillment_type'] ?? '') === 'trade_partner' ? trim((string) ($finding['trade_notes'] ?? '')) : '',
                     'phar_materials' => collect($finding['materials'] ?? [])
                         ->filter(fn($material) => !empty($material['material_name']))
                         ->map(fn($material) => [
@@ -685,6 +722,14 @@ class InspectionController extends Controller
             'system_findings.*.phar_category'                  => 'nullable|string|max:255',
             'system_findings.*.phar_included_yn'               => 'nullable|boolean',
             'system_findings.*.phar_notes'                     => 'nullable|string',
+            'system_findings.*.fulfillment_type'                => 'nullable|in:etogo_team,trade_partner,decide_later',
+            'system_findings.*.trade_application_id'            => 'nullable|exists:trade_applications,id',
+            'system_findings.*.trade_quantity'                  => 'nullable|numeric|min:0',
+            'system_findings.*.trade_unit'                      => 'nullable|string|max:50',
+            'system_findings.*.trade_scope_area'                => 'nullable|string|max:255',
+            'system_findings.*.trade_duration_hours'            => 'nullable|numeric|min:0',
+            'system_findings.*.trade_materials_included'        => 'nullable|boolean',
+            'system_findings.*.trade_notes'                     => 'nullable|string|max:1000',
         ]);
 
         $property = Property::findOrFail($validated['property_id']);
@@ -868,6 +913,16 @@ class InspectionController extends Controller
                     'phar_category'     => trim((string) ($finding['phar_category'] ?? '')),
                     'phar_included_yn'  => isset($finding['phar_included_yn']) ? (bool) $finding['phar_included_yn'] : true,
                     'phar_notes'        => trim((string) ($finding['phar_notes'] ?? '')),
+                    'fulfillment_type' => in_array(($finding['fulfillment_type'] ?? ''), ['etogo_team', 'trade_partner', 'decide_later'], true)
+                        ? $finding['fulfillment_type']
+                        : 'decide_later',
+                    'trade_application_id' => ($finding['fulfillment_type'] ?? '') === 'trade_partner' && !empty($finding['trade_application_id']) ? (int) $finding['trade_application_id'] : null,
+                    'trade_quantity' => ($finding['fulfillment_type'] ?? '') === 'trade_partner' ? (float) ($finding['trade_quantity'] ?? 1) : 1,
+                    'trade_unit' => ($finding['fulfillment_type'] ?? '') === 'trade_partner' ? trim((string) ($finding['trade_unit'] ?? '')) : '',
+                    'trade_scope_area' => ($finding['fulfillment_type'] ?? '') === 'trade_partner' ? trim((string) ($finding['trade_scope_area'] ?? '')) : '',
+                    'trade_duration_hours' => ($finding['fulfillment_type'] ?? '') === 'trade_partner' && isset($finding['trade_duration_hours']) ? (float) $finding['trade_duration_hours'] : null,
+                    'trade_materials_included' => ($finding['fulfillment_type'] ?? '') === 'trade_partner' ? (bool) ($finding['trade_materials_included'] ?? false) : false,
+                    'trade_notes' => ($finding['fulfillment_type'] ?? '') === 'trade_partner' ? trim((string) ($finding['trade_notes'] ?? '')) : '',
                     'phar_materials'    => collect($finding['materials'] ?? [])
                         ->filter(fn($m) => !empty($m['material_name']))
                         ->map(fn($m) => [
@@ -1748,6 +1803,7 @@ class InspectionController extends Controller
             'findings.*.trade_scope_area'       => 'nullable|string|max:255',
             'findings.*.trade_duration_hours'   => 'nullable|numeric|min:0',
             'findings.*.trade_notes'            => 'nullable|string|max:1000',
+            'findings.*.trade_materials_included' => 'nullable|boolean',
 
             // Per-finding materials
             'findings.*.materials'              => 'nullable|array',
@@ -1805,6 +1861,8 @@ class InspectionController extends Controller
 
         $mergedFindings = $currentFindings->map(function ($finding, $index) use ($submittedFindings) {
             $phar = $submittedFindings->get($index, []);
+            $fulfillmentType = $phar['fulfillment_type'] ?? ($finding['fulfillment_type'] ?? data_get($finding, 'trade_pricing.fulfillment_type', 'decide_later'));
+            $isTradePartnerFulfillment = $fulfillmentType === 'trade_partner';
             $pharMaterials = collect($phar['materials'] ?? [])
                 ->filter(fn($m) => !empty($m['material_name']))
                 ->values()
@@ -1819,19 +1877,22 @@ class InspectionController extends Controller
                 'requires_trade_pricing' => array_key_exists('requires_trade_pricing', $phar)
                     ? (bool) $phar['requires_trade_pricing']
                     : ($finding['requires_trade_pricing'] ?? null),
-                'fulfillment_type' => $phar['fulfillment_type'] ?? ($finding['fulfillment_type'] ?? data_get($finding, 'trade_pricing.fulfillment_type', 'decide_later')),
-                'trade_application_id' => !empty($phar['trade_application_id'])
+                'fulfillment_type' => $fulfillmentType,
+                'trade_application_id' => $isTradePartnerFulfillment && !empty($phar['trade_application_id'])
                     ? (int) $phar['trade_application_id']
-                    : ($finding['trade_application_id'] ?? data_get($finding, 'trade_pricing.trade_application_id')),
-                'trade_quantity' => isset($phar['trade_quantity'])
+                    : ($isTradePartnerFulfillment ? ($finding['trade_application_id'] ?? data_get($finding, 'trade_pricing.trade_application_id')) : null),
+                'trade_quantity' => $isTradePartnerFulfillment && isset($phar['trade_quantity'])
                     ? (float) $phar['trade_quantity']
-                    : ($finding['trade_quantity'] ?? data_get($finding, 'trade_pricing.quantity', 1)),
-                'trade_unit' => trim((string) ($phar['trade_unit'] ?? ($finding['trade_unit'] ?? data_get($finding, 'trade_pricing.unit', '')))),
-                'trade_scope_area' => trim((string) ($phar['trade_scope_area'] ?? ($finding['trade_scope_area'] ?? data_get($finding, 'trade_pricing.scope_area', '')))),
-                'trade_duration_hours' => isset($phar['trade_duration_hours'])
+                    : ($isTradePartnerFulfillment ? ($finding['trade_quantity'] ?? data_get($finding, 'trade_pricing.quantity', 1)) : 1),
+                'trade_unit' => $isTradePartnerFulfillment ? trim((string) ($phar['trade_unit'] ?? ($finding['trade_unit'] ?? data_get($finding, 'trade_pricing.unit', '')))) : '',
+                'trade_scope_area' => $isTradePartnerFulfillment ? trim((string) ($phar['trade_scope_area'] ?? ($finding['trade_scope_area'] ?? data_get($finding, 'trade_pricing.scope_area', '')))) : '',
+                'trade_duration_hours' => $isTradePartnerFulfillment && isset($phar['trade_duration_hours'])
                     ? (float) $phar['trade_duration_hours']
-                    : ($finding['trade_duration_hours'] ?? data_get($finding, 'trade_pricing.estimated_duration_hours')),
-                'trade_notes' => trim((string) ($phar['trade_notes'] ?? ($finding['trade_notes'] ?? ''))),
+                    : ($isTradePartnerFulfillment ? ($finding['trade_duration_hours'] ?? data_get($finding, 'trade_pricing.estimated_duration_hours')) : null),
+                'trade_notes' => $isTradePartnerFulfillment ? trim((string) ($phar['trade_notes'] ?? ($finding['trade_notes'] ?? ''))) : '',
+                'trade_materials_included' => $isTradePartnerFulfillment && array_key_exists('trade_materials_included', $phar)
+                    ? (bool) $phar['trade_materials_included']
+                    : ($isTradePartnerFulfillment ? (bool) ($finding['trade_materials_included'] ?? data_get($finding, 'trade_pricing.materials_included', false)) : false),
             ]);
         })->all();
 
@@ -1881,6 +1942,10 @@ class InspectionController extends Controller
                 continue;
             }
 
+            $isTradePartnerFinding = $tradePricingService->shouldPriceFinding($findingData);
+            $tradeMaterialsIncluded = $isTradePartnerFinding && (bool) ($findingData['trade_materials_included'] ?? false);
+            $billableMaterials = $tradeMaterialsIncluded ? [] : ($findingData['phar_materials'] ?? []);
+
             $pharFinding = \App\Models\PHARFinding::create([
                 'inspection_id' => $inspection->id,
                 'property_id'   => $property->id,
@@ -1889,12 +1954,12 @@ class InspectionController extends Controller
                 'priority'      => $findingData['priority'] ?? 3,
                 'included_yn'   => $findingData['phar_included_yn'] ?? true,
                 'labour_hours'  => $findingData['phar_labour_hours'] ?? 0,
-                'material_cost' => collect($findingData['phar_materials'] ?? [])->sum(fn($m) => (float) ($m['line_total'] ?? 0)),
+                'material_cost' => collect($billableMaterials)->sum(fn($m) => (float) ($m['line_total'] ?? 0)),
                 'notes'         => $findingData['phar_notes'] ?? null,
                 'photo_ids'     => !empty($findingData['finding_photos']) ? $findingData['finding_photos'] : null,
             ]);
 
-            if ($tradePricingService->shouldPriceFinding($findingData)) {
+            if ($isTradePartnerFinding) {
                 $tradePricing = $tradePricingService->priceFinding($inspection, $findingData, (int) $findingIndex);
                 $tradePricing['phar_finding_id'] = $pharFinding->id;
                 $tradeItem = \App\Models\InspectionTradePricingItem::create($tradePricing);
@@ -1913,6 +1978,7 @@ class InspectionController extends Controller
                     'trade_total_cost' => (float) $tradeItem->trade_total_cost,
                     'etogo_client_price' => (float) $tradeItem->etogo_client_price,
                     'etogo_margin_amount' => (float) $tradeItem->etogo_margin_amount,
+                    'materials_included' => $tradeMaterialsIncluded,
                     'pricing_source' => $tradeItem->pricing_source,
                 ];
             } else {
@@ -1920,7 +1986,7 @@ class InspectionController extends Controller
             }
 
             // Per-finding materials → InspectionMaterial records
-            foreach ($findingData['phar_materials'] ?? [] as $materialData) {
+            foreach ($billableMaterials as $materialData) {
                 if (empty($materialData['material_name'])) {
                     continue;
                 }
@@ -2025,6 +2091,16 @@ class InspectionController extends Controller
                     ->sum(fn($m) => (float) ($m['line_total'] ?? 0));
             }
 
+            $tradeClientPrice = round((float) ($tradePricing['etogo_client_price'] ?? 0), 2);
+            $tradeMaterialsIncluded = (bool) ($tradePricing['materials_included'] ?? $jsonFinding['trade_materials_included'] ?? false);
+            $clientLabourCost = $tradeClientPrice > 0
+                ? $tradeClientPrice
+                : round($labourHours * $hourlyRate, 2);
+            if ($tradeMaterialsIncluded) {
+                $materialCost = 0.0;
+                $materials = [];
+            }
+
             return [
                 'id' => (int) $finding->id,
                 'task_question' => $issueText !== '' ? $issueText : $finding->task_question,
@@ -2037,10 +2113,10 @@ class InspectionController extends Controller
                 'priority' => $finding->priority,
                 'included_yn' => (bool) $finding->included_yn,
                 'labour_hours' => round($labourHours, 2),
-                'labour_cost' => round($labourHours * $hourlyRate, 2),
+                'labour_cost' => $clientLabourCost,
                 'material_cost' => round($materialCost, 2),
                 'trade_cost' => round((float) ($tradePricing['trade_total_cost'] ?? 0), 2),
-                'trade_client_price' => round((float) ($tradePricing['etogo_client_price'] ?? 0), 2),
+                'trade_client_price' => $tradeClientPrice,
                 'trade_margin' => round((float) ($tradePricing['etogo_margin_amount'] ?? 0), 2),
                 'trade_pricing' => $tradePricing,
                 'notes' => $finding->notes,
@@ -2549,6 +2625,15 @@ class InspectionController extends Controller
 
             $snapshot = $snapshot->values()->map(function ($finding, $index) use ($pharMaterialById, $inspectionFindings) {
                 $materialCost = (float) ($finding['material_cost'] ?? 0);
+                $jsonFinding = $inspectionFindings->get($index, []);
+                $tradePricing = is_array($finding['trade_pricing'] ?? null) ? $finding['trade_pricing'] : [];
+                $tradeMaterialsIncluded = (bool) ($tradePricing['materials_included'] ?? $jsonFinding['trade_materials_included'] ?? false);
+
+                if ($tradeMaterialsIncluded) {
+                    $finding['material_cost'] = 0.0;
+                    $finding['materials'] = [];
+                    return $finding;
+                }
 
                 if ($materialCost <= 0) {
                     $findingId = (int) ($finding['id'] ?? 0);
@@ -2556,7 +2641,6 @@ class InspectionController extends Controller
                 }
 
                 if ($materialCost <= 0) {
-                    $jsonFinding = $inspectionFindings->get($index, []);
                     $materialCost = (float) collect($jsonFinding['phar_materials'] ?? [])
                         ->sum(fn($m) => (float) ($m['line_total'] ?? 0));
                 }
@@ -2604,7 +2688,7 @@ class InspectionController extends Controller
         ]);
         $approvedBdc = round((float) ($bdcResult['bdc_annual'] ?? 0), 2);
 
-        $approvedTotal = round($approvedLabour + $approvedMaterial + $approvedTradeClientPrice + $approvedBdc, 2);
+        $approvedTotal = round($approvedLabour + $approvedMaterial + $approvedBdc, 2);
 
         $quotation->update([
             'approved_labour_cost' => $approvedLabour,
@@ -2669,16 +2753,20 @@ class InspectionController extends Controller
 
         $bdc    = $result['bdc_annual'];
         $visits = max(1.0, (float) ($inspection->bdc_visits_per_year ?? 1));
-        $tradeClientPrice = (float) \App\Models\InspectionTradePricingItem::where('inspection_id', $inspection->id)
-            ->sum('etogo_client_price');
-        $tradeCost = (float) \App\Models\InspectionTradePricingItem::where('inspection_id', $inspection->id)
-            ->sum('trade_total_cost');
-        $tradeMargin = (float) \App\Models\InspectionTradePricingItem::where('inspection_id', $inspection->id)
-            ->sum('etogo_margin_amount');
-        $trc    = $bdc
-            + (float) ($inspection->frlc_annual ?? 0)
-            + (float) ($inspection->fmc_annual  ?? 0)
-            + $tradeClientPrice;
+        $tradeItems = \App\Models\InspectionTradePricingItem::where('inspection_id', $inspection->id)->get();
+        $tradeClientPrice = (float) $tradeItems->sum('etogo_client_price');
+        $tradeCost = (float) $tradeItems->sum('trade_total_cost');
+        $tradeMargin = (float) $tradeItems->sum('etogo_margin_amount');
+        $tradePharFindingIds = $tradeItems->pluck('phar_finding_id')->filter()->map(fn ($id) => (int) $id)->unique();
+        $hourlyRate = (float) ($inspection->labour_hourly_rate ?? \App\Models\BDCSetting::getValue('loaded_hourly_rate', 165) ?? 165);
+        $nonTradeLabour = (float) \App\Models\PHARFinding::where('inspection_id', $inspection->id)
+            ->when($tradePharFindingIds->isNotEmpty(), fn ($query) => $query->whereNotIn('id', $tradePharFindingIds))
+            ->get()
+            ->sum(fn ($finding) => (float) ($finding->labour_hours ?? 0) * $hourlyRate);
+        $frlc = $tradeItems->isNotEmpty()
+            ? round($nonTradeLabour + $tradeClientPrice, 2)
+            : (float) ($inspection->frlc_annual ?? 0);
+        $trc = $bdc + $frlc + (float) ($inspection->fmc_annual ?? 0);
 
         if ($onlyIfChanged && round((float) $inspection->bdc_annual, 2) === round($bdc, 2)) {
             return;
@@ -2690,6 +2778,8 @@ class InspectionController extends Controller
             'trade_cost_annual'           => $tradeCost,
             'trade_client_price_annual'   => $tradeClientPrice,
             'trade_margin_annual'         => $tradeMargin,
+            'frlc_annual'                 => $frlc,
+            'frlc_monthly'                => $frlc,
             'trc_annual'                  => $trc,
             'trc_per_visit'               => round($trc / $visits, 2),
             'trc_monthly'                 => $trc,

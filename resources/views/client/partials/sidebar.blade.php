@@ -30,15 +30,9 @@
 <nav class="sidebar sidebar-offcanvas client-clean-sidebar" id="sidebar">
     <div class="client-sidebar-inner">
         <div class="client-brand">
-            <a href="{{ route('dashboard') }}">EMURIA</a>
-        </div>
-
-        <div class="client-user">
-            <img class="client-avatar" src="{{ Auth::user()->profile_photo_url }}" alt="{{ Auth::user()->name }}">
-            <div>
-                <div class="client-name">{{ Auth::user()->name }}</div>
-                <div class="client-role">Client Dashboard</div>
-            </div>
+            <a href="{{ route('dashboard') }}" aria-label="ETOGO dashboard">
+                <img class="client-brand-logo" src="{{ asset('etogo%20log.png') }}" alt="ETOGO">
+            </a>
         </div>
 
         <a class="client-link {{ request()->routeIs('dashboard') ? 'is-active' : '' }}" href="{{ route('dashboard') }}">

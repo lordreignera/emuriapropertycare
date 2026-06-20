@@ -289,6 +289,64 @@
             margin-bottom: 10px;
         }
 
+        .subsystem-pricing-list {
+            display: grid;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .subsystem-pricing-row {
+            border: 1px solid #e5e9f2;
+            border-radius: 8px;
+            background: #fbfcff;
+            padding: 14px;
+        }
+
+        .subsystem-pricing-row[hidden] {
+            display: none;
+        }
+
+        .custom-coverage-card {
+            margin-top: 18px;
+            border: 1px dashed #c6d0e3;
+            border-radius: 8px;
+            background: #f8fafc;
+            padding: 16px;
+        }
+
+        .subsystem-pricing-head {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .subsystem-pricing-head strong {
+            color: #26337f;
+        }
+
+        .currency-note {
+            color: var(--muted);
+            font-size: 0.78rem;
+            font-weight: 800;
+        }
+
+        .field-error,
+        .client-error {
+            color: #b42318;
+            font-size: 0.78rem;
+            font-weight: 800;
+            margin-top: 6px;
+        }
+
+        .field input.is-invalid,
+        .field select.is-invalid,
+        .field textarea.is-invalid {
+            border-color: #ef4444;
+            background: #fff7f7;
+        }
+
         .mini-grid {
             display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -445,6 +503,19 @@
                         'ls' => '(LS) Lump Sum',
                         'ton' => '(TON) Ton',
                     ];
+                    $errorKeys = collect(array_keys($errors->getMessages()));
+                    $initialStep = 0;
+                    if ($errors->any()) {
+                        if ($errorKeys->contains(fn($key) => in_array($key, ['system_ids', 'subsystem_ids'], true) || str_starts_with($key, 'system_pricing.') || str_starts_with($key, 'subsystem_pricing.') || str_starts_with($key, 'custom_coverage.'))) {
+                            $initialStep = 1;
+                        } elseif ($errorKeys->contains(fn($key) => str_contains($key, 'licence') || str_contains($key, 'insurance') || str_contains($key, 'worksafebc') || str_contains($key, 'gst'))) {
+                            $initialStep = 2;
+                        } elseif ($errorKeys->contains(fn($key) => str_contains($key, 'policy') || str_contains($key, 'pricing') || str_contains($key, 'references') || str_contains($key, 'availability') || str_contains($key, 'minimum_service_charge') || str_contains($key, 'additional_documents'))) {
+                            $initialStep = 3;
+                        } elseif ($errorKeys->contains(fn($key) => str_contains($key, 'terms_accepted'))) {
+                            $initialStep = 4;
+                        }
+                    }
                 @endphp
 
                 <div class="wizard-top">
@@ -492,7 +563,8 @@
                             @php
                                 $selectedSystemIds = collect(old('system_ids', []))->map(fn($id) => (string) $id)->all();
                                 $selectedSubsystemIds = collect(old('subsystem_ids', []))->map(fn($id) => (string) $id)->all();
-                                $oldSystemPricing = old('system_pricing', []);
+                                $oldSubsystemPricing = old('subsystem_pricing', []);
+                                $oldCustomCoverage = old('custom_coverage', [[]]);
                             @endphp
 
                             <div class="coverage-picker">
@@ -528,56 +600,133 @@
                                         <div class="check-grid">
                                             @foreach($system->subsystems as $subsystem)
                                                 <label class="check-tile">
-                                                    <input type="checkbox" name="subsystem_ids[]" value="{{ $subsystem->id }}" {{ in_array((string) $subsystem->id, $selectedSubsystemIds, true) ? 'checked' : '' }}>
+                                                    <input type="checkbox" name="subsystem_ids[]" value="{{ $subsystem->id }}" data-subsystem-checkbox="{{ $subsystem->id }}" {{ in_array((string) $subsystem->id, $selectedSubsystemIds, true) ? 'checked' : '' }}>
                                                     <span>{{ $subsystem->name }}</span>
                                                 </label>
+                                            @endforeach
+                                        </div>
+                                        <div class="subsystem-pricing-list">
+                                            @foreach($system->subsystems as $subsystem)
+                                                @php
+                                                    $subsystemPricing = $oldSubsystemPricing[$subsystem->id] ?? $oldSubsystemPricing[(string) $subsystem->id] ?? [];
+                                                    $subsystemSelected = in_array((string) $subsystem->id, $selectedSubsystemIds, true);
+                                                @endphp
+                                                <div class="subsystem-pricing-row" data-subsystem-pricing="{{ $subsystem->id }}" {{ $subsystemSelected ? '' : 'hidden' }}>
+                                                    <div class="subsystem-pricing-head">
+                                                        <strong>{{ $system->name }} / {{ $subsystem->name }}</strong>
+                                                        <span class="currency-note">All rates in CAD</span>
+                                                    </div>
+                                                    <div class="mini-grid">
+                                                        <div class="field">
+                                                            <label>Pricing unit</label>
+                                                            <select name="subsystem_pricing[{{ $subsystem->id }}][pricing_unit]" data-subsystem-required="{{ $subsystem->id }}">
+                                                                <option value="">Select</option>
+                                                                @foreach($pricingUnitOptions as $value => $label)
+                                                                    <option value="{{ $value }}" @selected(($subsystemPricing['pricing_unit'] ?? '') === $value)>{{ $label }}</option>
+                                                                @endforeach
+                                                            </select>
+                                                            @error("subsystem_pricing.$subsystem->id.pricing_unit")
+                                                                <div class="field-error">{{ $message }}</div>
+                                                            @enderror
+                                                        </div>
+                                                        <div class="field">
+                                                            <label>Typical trade rate (CAD)</label>
+                                                            <input type="number" min="0" step="0.01" name="subsystem_pricing[{{ $subsystem->id }}][typical_rate]" value="{{ $subsystemPricing['typical_rate'] ?? '' }}" placeholder="Example: 100.00" data-subsystem-required="{{ $subsystem->id }}">
+                                                            @error("subsystem_pricing.$subsystem->id.typical_rate")
+                                                                <div class="field-error">{{ $message }}</div>
+                                                            @enderror
+                                                        </div>
+                                                        <div class="field">
+                                                            <label>Maximum charge (CAD)</label>
+                                                            <input type="number" min="0" step="0.01" name="subsystem_pricing[{{ $subsystem->id }}][maximum_charge]" value="{{ $subsystemPricing['maximum_charge'] ?? '' }}" placeholder="Optional">
+                                                            @error("subsystem_pricing.$subsystem->id.maximum_charge")
+                                                                <div class="field-error">{{ $message }}</div>
+                                                            @enderror
+                                                        </div>
+                                                        <div class="field">
+                                                            <label>Estimated duration</label>
+                                                            <input name="subsystem_pricing[{{ $subsystem->id }}][estimated_duration]" value="{{ $subsystemPricing['estimated_duration'] ?? '' }}" placeholder="Example: 3 days, 4 hours">
+                                                        </div>
+                                                        <div class="field" style="grid-column: span 2;">
+                                                            <label>Pricing notes</label>
+                                                            <input name="subsystem_pricing[{{ $subsystem->id }}][notes]" value="{{ $subsystemPricing['notes'] ?? '' }}" placeholder="Materials, exclusions, access rules, warranty limits">
+                                                        </div>
+                                                    </div>
+                                                </div>
                                             @endforeach
                                         </div>
                                     @else
                                         <p style="color: #667085; margin: 12px 0 0;">No active subsystems are listed for this system.</p>
                                     @endif
+                                    </div>
+                                @endforeach
+                            </div>
 
-                                        @php
-                                            $systemPricing = $oldSystemPricing[$system->id] ?? [];
-                                            $systemPricingUnits = collect($systemPricing['units'] ?? [])->map(fn($unit) => (string) $unit)->all();
-                                        @endphp
-                                        <div class="system-pricing-panel">
-                                            <div class="system-pricing-title">How do you usually price {{ $system->name }} work?</div>
-                                            <div class="check-grid">
-                                                @foreach($pricingUnitOptions as $value => $label)
-                                                    <label class="check-tile">
-                                                        <input type="checkbox" name="system_pricing[{{ $system->id }}][units][]" value="{{ $value }}" {{ in_array($value, $systemPricingUnits, true) ? 'checked' : '' }}>
-                                                        <span>{{ $label }}</span>
-                                                    </label>
-                                                @endforeach
-                                            </div>
+                            <div class="custom-coverage-card">
+                                <div class="subsystem-pricing-head">
+                                    <strong>Other system or subsystem not listed</strong>
+                                    <span class="currency-note">Optional, all rates in CAD</span>
+                                </div>
+                                <p class="step-copy" style="margin-bottom: 14px;">Use this when your trade covers work that is not yet in our system list.</p>
 
+                                <div id="customCoverageRows">
+                                    @foreach(array_values($oldCustomCoverage ?: [[]]) as $customIndex => $customCoverage)
+                                        <div class="subsystem-pricing-row" data-custom-coverage-row>
                                             <div class="mini-grid">
                                                 <div class="field">
-                                                    <label>Typical trade rate (CAD)</label>
-                                                    <input type="number" min="0" step="0.01" name="system_pricing[{{ $system->id }}][typical_rate]" value="{{ $systemPricing['typical_rate'] ?? '' }}" placeholder="CAD 0.00">
+                                                    <label>System name</label>
+                                                    <input name="custom_coverage[{{ $customIndex }}][system_name]" value="{{ $customCoverage['system_name'] ?? '' }}" placeholder="Example: Masonry">
+                                                    @error("custom_coverage.$customIndex.system_name")
+                                                        <div class="field-error">{{ $message }}</div>
+                                                    @enderror
                                                 </div>
                                                 <div class="field">
-                                                    <label>Rate unit</label>
-                                                    <select name="system_pricing[{{ $system->id }}][rate_unit]">
+                                                    <label>Subsystem / work type</label>
+                                                    <input name="custom_coverage[{{ $customIndex }}][subsystem_name]" value="{{ $customCoverage['subsystem_name'] ?? '' }}" placeholder="Example: Chimney repair">
+                                                    @error("custom_coverage.$customIndex.subsystem_name")
+                                                        <div class="field-error">{{ $message }}</div>
+                                                    @enderror
+                                                </div>
+                                                <div class="field">
+                                                    <label>Pricing unit</label>
+                                                    <select name="custom_coverage[{{ $customIndex }}][pricing_unit]">
                                                         <option value="">Select</option>
-                                                        @foreach(['sf' => 'SF', 'lf' => 'LF', 'ea' => 'EA', 'hr' => 'HR', 'day' => 'DAY', 'ls' => 'LS', 'ton' => 'TON'] as $value => $label)
-                                                            <option value="{{ $value }}" @selected(($systemPricing['rate_unit'] ?? '') === $value)>{{ $label }}</option>
+                                                        @foreach($pricingUnitOptions as $value => $label)
+                                                            <option value="{{ $value }}" @selected(($customCoverage['pricing_unit'] ?? '') === $value)>{{ $label }}</option>
                                                         @endforeach
                                                     </select>
+                                                    @error("custom_coverage.$customIndex.pricing_unit")
+                                                        <div class="field-error">{{ $message }}</div>
+                                                    @enderror
                                                 </div>
                                                 <div class="field">
-                                                    <label>Minimum charge (CAD)</label>
-                                                    <input type="number" min="0" step="0.01" name="system_pricing[{{ $system->id }}][minimum_charge]" value="{{ $systemPricing['minimum_charge'] ?? '' }}" placeholder="CAD 0.00">
+                                                    <label>Typical trade rate (CAD)</label>
+                                                    <input type="number" min="0" step="0.01" name="custom_coverage[{{ $customIndex }}][typical_rate]" value="{{ $customCoverage['typical_rate'] ?? '' }}" placeholder="Example: 100.00">
+                                                    @error("custom_coverage.$customIndex.typical_rate")
+                                                        <div class="field-error">{{ $message }}</div>
+                                                    @enderror
                                                 </div>
                                                 <div class="field">
+                                                    <label>Maximum charge (CAD)</label>
+                                                    <input type="number" min="0" step="0.01" name="custom_coverage[{{ $customIndex }}][maximum_charge]" value="{{ $customCoverage['maximum_charge'] ?? '' }}" placeholder="Optional">
+                                                    @error("custom_coverage.$customIndex.maximum_charge")
+                                                        <div class="field-error">{{ $message }}</div>
+                                                    @enderror
+                                                </div>
+                                                <div class="field">
+                                                    <label>Estimated duration</label>
+                                                    <input name="custom_coverage[{{ $customIndex }}][estimated_duration]" value="{{ $customCoverage['estimated_duration'] ?? '' }}" placeholder="Example: 2 days">
+                                                </div>
+                                                <div class="field" style="grid-column: span 2;">
                                                     <label>Pricing notes</label>
-                                                    <input name="system_pricing[{{ $system->id }}][notes]" value="{{ $systemPricing['notes'] ?? '' }}" placeholder="Materials, exclusions, call-out rules">
+                                                    <input name="custom_coverage[{{ $customIndex }}][notes]" value="{{ $customCoverage['notes'] ?? '' }}" placeholder="Materials, exclusions, access rules">
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
-                                @endforeach
+                                    @endforeach
+                                </div>
+
+                                <button type="button" class="btn-wizard btn-secondary" id="addCustomCoverage" style="margin-top: 12px;">Add Another Other Coverage</button>
                             </div>
                         </section>
 
@@ -711,10 +860,14 @@
             var prev = document.getElementById('prevStep');
             var next = document.getElementById('nextStep');
             var submit = document.getElementById('submitWizard');
+            var form = document.getElementById('tradeWizard');
             var coveragePicker = document.getElementById('coverageSystemPicker');
             var addCoverageSystem = document.getElementById('addCoverageSystem');
             var coverageEmpty = document.getElementById('coverageEmpty');
             var coverageCards = Array.prototype.slice.call(document.querySelectorAll('[data-coverage-system]'));
+            var customCoverageRows = document.getElementById('customCoverageRows');
+            var addCustomCoverage = document.getElementById('addCustomCoverage');
+            var initialStep = {{ (int) $initialStep }};
 
             function showStep(index) {
                 currentStep = Math.max(0, Math.min(index, steps.length - 1));
@@ -776,6 +929,7 @@
                     coveragePicker.value = '';
                 }
                 updateCoverageEmptyState();
+                syncSubsystemPricing();
                 card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }
 
@@ -800,6 +954,201 @@
 
                 setPickerOptionDisabled(systemId, false);
                 updateCoverageEmptyState();
+                syncSubsystemPricing();
+            }
+
+            function clearClientErrors(scope) {
+                scope.querySelectorAll('.client-error').forEach(function (node) {
+                    node.remove();
+                });
+                scope.querySelectorAll('.is-invalid').forEach(function (field) {
+                    field.classList.remove('is-invalid');
+                });
+            }
+
+            function addClientError(field, message) {
+                field.classList.add('is-invalid');
+                if (!field.parentElement.querySelector('.client-error')) {
+                    var error = document.createElement('div');
+                    error.className = 'client-error';
+                    error.textContent = message;
+                    field.parentElement.appendChild(error);
+                }
+            }
+
+            function syncSubsystemPricing() {
+                document.querySelectorAll('[data-subsystem-checkbox]').forEach(function (checkbox) {
+                    var subsystemId = checkbox.getAttribute('data-subsystem-checkbox');
+                    var row = document.querySelector('[data-subsystem-pricing="' + subsystemId + '"]');
+                    if (!row) {
+                        return;
+                    }
+
+                    row.hidden = !checkbox.checked;
+                    if (!checkbox.checked) {
+                        row.querySelectorAll('input, select, textarea').forEach(function (field) {
+                            field.classList.remove('is-invalid');
+                        });
+                        row.querySelectorAll('.client-error').forEach(function (node) {
+                            node.remove();
+                        });
+                    }
+                });
+            }
+
+            function rowHasAnyValue(row) {
+                return Array.prototype.slice.call(row.querySelectorAll('input, select, textarea')).some(function (field) {
+                    return String(field.value || '').trim() !== '';
+                });
+            }
+
+            function addCustomCoverageRow() {
+                if (!customCoverageRows) {
+                    return;
+                }
+
+                var rows = customCoverageRows.querySelectorAll('[data-custom-coverage-row]');
+                var template = rows[rows.length - 1];
+                if (!template) {
+                    return;
+                }
+
+                var nextIndex = rows.length;
+                var clone = template.cloneNode(true);
+                clone.querySelectorAll('input, select, textarea').forEach(function (field) {
+                    field.value = '';
+                    field.classList.remove('is-invalid');
+                    field.name = field.name.replace(/custom_coverage\[\d+\]/, 'custom_coverage[' + nextIndex + ']');
+                });
+                clone.querySelectorAll('.field-error, .client-error').forEach(function (node) {
+                    node.remove();
+                });
+
+                customCoverageRows.appendChild(clone);
+                clone.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+
+            function validateCustomCoverageRows() {
+                var firstInvalid = null;
+                var hasCompleteCustomCoverage = false;
+
+                document.querySelectorAll('[data-custom-coverage-row]').forEach(function (row) {
+                    if (!rowHasAnyValue(row)) {
+                        return;
+                    }
+
+                    var systemField = row.querySelector('input[name$="[system_name]"]');
+                    var subsystemField = row.querySelector('input[name$="[subsystem_name]"]');
+                    var unitField = row.querySelector('select[name$="[pricing_unit]"]');
+                    var rateField = row.querySelector('input[name$="[typical_rate]"]');
+                    var maximumField = row.querySelector('input[name$="[maximum_charge]"]');
+                    var rowComplete = true;
+
+                    [
+                        [systemField, 'Enter the other system name.'],
+                        [subsystemField, 'Enter the other subsystem or work type.'],
+                        [unitField, 'Choose the pricing unit for this other coverage.'],
+                        [rateField, 'Enter the typical CAD rate for this other coverage.']
+                    ].forEach(function (pair) {
+                        if (pair[0] && !pair[0].value) {
+                            addClientError(pair[0], pair[1]);
+                            firstInvalid = firstInvalid || pair[0];
+                            rowComplete = false;
+                        }
+                    });
+
+                    if (maximumField && maximumField.value && rateField && rateField.value && parseFloat(maximumField.value) < parseFloat(rateField.value)) {
+                        addClientError(maximumField, 'Maximum charge must be greater than the typical trade rate.');
+                        firstInvalid = firstInvalid || maximumField;
+                        rowComplete = false;
+                    }
+
+                    if (rowComplete) {
+                        hasCompleteCustomCoverage = true;
+                    }
+                });
+
+                return {
+                    firstInvalid: firstInvalid,
+                    hasCompleteCustomCoverage: hasCompleteCustomCoverage
+                };
+            }
+
+            function validateCurrentStep() {
+                var step = steps[currentStep];
+                var firstInvalid = null;
+                clearClientErrors(step);
+
+                step.querySelectorAll('input, select, textarea').forEach(function (field) {
+                    if (field.offsetParent === null || field.disabled) {
+                        return;
+                    }
+
+                    if (!field.checkValidity()) {
+                        firstInvalid = firstInvalid || field;
+                    }
+                });
+
+                if (currentStep === 1) {
+                    var selectedSystems = document.querySelectorAll('input[name="system_ids[]"]:checked');
+                    var selectedSubsystems = document.querySelectorAll('input[name="subsystem_ids[]"]:checked');
+                    var customCoverageValidation = validateCustomCoverageRows();
+                    var hasCustomCoverage = customCoverageValidation.hasCompleteCustomCoverage;
+
+                    if (selectedSystems.length === 0 && !hasCustomCoverage) {
+                        var picker = document.getElementById('coverageSystemPicker');
+                        addClientError(picker, 'Choose a listed system or complete the other system/subsystem section.');
+                        firstInvalid = firstInvalid || picker;
+                    }
+
+                    if (selectedSubsystems.length === 0 && !hasCustomCoverage) {
+                        var systemCard = document.querySelector('[data-coverage-system]:not(.is-hidden)');
+                        if (systemCard) {
+                            var message = document.createElement('div');
+                            message.className = 'client-error';
+                            message.textContent = 'Choose at least one subsystem and add its CAD pricing, or complete the other coverage section.';
+                            systemCard.appendChild(message);
+                        }
+                        firstInvalid = firstInvalid || systemCard || customCoverageRows;
+                    }
+
+                    firstInvalid = firstInvalid || customCoverageValidation.firstInvalid;
+
+                    selectedSubsystems.forEach(function (checkbox) {
+                        var subsystemId = checkbox.value;
+                        var row = document.querySelector('[data-subsystem-pricing="' + subsystemId + '"]');
+                        if (!row) {
+                            return;
+                        }
+
+                        row.hidden = false;
+                        row.querySelectorAll('[data-subsystem-required="' + subsystemId + '"]').forEach(function (field) {
+                            if (!field.value) {
+                                addClientError(field, field.tagName === 'SELECT'
+                                    ? 'Choose the pricing unit for this subsystem.'
+                                    : 'Enter the typical CAD rate for this subsystem.');
+                                firstInvalid = firstInvalid || field;
+                            }
+                        });
+                    });
+                }
+
+                if (firstInvalid && firstInvalid.focus) {
+                    firstInvalid.focus({ preventScroll: true });
+                    firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    return false;
+                }
+
+                return true;
+            }
+
+            function showStepForField(field) {
+                var step = field.closest('.form-step');
+                if (!step) {
+                    return;
+                }
+
+                showStep(steps.indexOf(step));
             }
 
             indicators.forEach(function (indicator) {
@@ -813,7 +1162,9 @@
             });
 
             next.addEventListener('click', function () {
-                showStep(currentStep + 1);
+                if (validateCurrentStep()) {
+                    showStep(currentStep + 1);
+                }
             });
 
             if (addCoverageSystem && coveragePicker) {
@@ -832,8 +1183,37 @@
                 });
             });
 
+            document.querySelectorAll('[data-subsystem-checkbox]').forEach(function (checkbox) {
+                checkbox.addEventListener('change', syncSubsystemPricing);
+            });
+
+            if (addCustomCoverage) {
+                addCustomCoverage.addEventListener('click', addCustomCoverageRow);
+            }
+
+            if (form) {
+                form.addEventListener('submit', function (event) {
+                    syncSubsystemPricing();
+                    for (var i = 0; i < steps.length; i++) {
+                        showStep(i);
+                        if (!validateCurrentStep()) {
+                            event.preventDefault();
+                            return;
+                        }
+                    }
+
+                    var invalidField = form.querySelector(':invalid');
+                    if (invalidField) {
+                        event.preventDefault();
+                        showStepForField(invalidField);
+                        invalidField.reportValidity();
+                    }
+                });
+            }
+
             updateCoverageEmptyState();
-            showStep(0);
+            syncSubsystemPricing();
+            showStep(initialStep);
         })();
     </script>
 </body>

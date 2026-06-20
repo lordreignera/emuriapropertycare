@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
@@ -33,6 +34,10 @@ class TradeApplication extends Model
         'system_ids',
         'subsystem_ids',
         'system_pricing',
+        'subsystem_pricing',
+        'agreed_subsystem_pricing',
+        'custom_coverage',
+        'agreed_custom_coverage',
         'availability',
         'pricing_units',
         'minimum_service_charge',
@@ -73,12 +78,17 @@ class TradeApplication extends Model
         'reviewed_by',
         'submitted_at',
         'reviewed_at',
+        'pricing_agreed_at',
     ];
 
     protected $casts = [
         'system_ids' => 'array',
         'subsystem_ids' => 'array',
         'system_pricing' => 'array',
+        'subsystem_pricing' => 'array',
+        'agreed_subsystem_pricing' => 'array',
+        'custom_coverage' => 'array',
+        'agreed_custom_coverage' => 'array',
         'availability' => 'array',
         'pricing_units' => 'array',
         'minimum_service_charge' => 'decimal:2',
@@ -90,6 +100,7 @@ class TradeApplication extends Model
         'worksafebc_expiry' => 'date',
         'submitted_at' => 'datetime',
         'reviewed_at' => 'datetime',
+        'pricing_agreed_at' => 'datetime',
     ];
 
     protected static function booted(): void
@@ -110,6 +121,11 @@ class TradeApplication extends Model
     public function reviewer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewed_by');
+    }
+
+    public function tradePartner(): HasOne
+    {
+        return $this->hasOne(TradePartner::class);
     }
 
     public function selectedSystems()
