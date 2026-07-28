@@ -9,15 +9,27 @@
     $preSelected = collect(old('approved_finding_ids', $approvedIds ?? []))->map(fn ($v) => (int) $v)->all();
     $initialLabour = 0;
     $initialMaterial = 0;
-    $initialSpecialist = 0;
+    $initialTradePartner = 0;
+    $initialLabourHours = 0;
     foreach ($snapshotFindings as $finding) {
         if (in_array((int) ($finding['id'] ?? 0), $preSelected, true)) {
             $initialLabour += (float) ($finding['labour_cost'] ?? 0);
             $initialMaterial += (float) ($finding['material_cost'] ?? 0);
-            $initialSpecialist += (float) ($finding['trade_client_price'] ?? data_get($finding, 'trade_pricing.etogo_client_price', 0));
+            $initialTradePartner += (float) ($finding['trade_client_price'] ?? data_get($finding, 'trade_pricing.etogo_client_price', 0));
+            $initialLabourHours += (float) ($finding['labour_hours'] ?? 0);
         }
     }
-    $initialTotal = $initialLabour + $initialMaterial + $initialSpecialist;
+    if ($initialLabourHours <= 0 && $initialLabour > 0) {
+        $initialLabourHours = $initialLabour / max(0.01, (float) ($inspection->labour_hourly_rate ?? 165));
+    }
+    $initialVisits = count($preSelected) > 0 ? max(1, (int) ceil($initialLabourHours / 11)) : 0;
+    $bdcPerVisit = round(
+        ((float) ($inspection->bdc_distance_km ?? 0) * (float) ($inspection->bdc_rate_per_km ?? 1.50))
+        + ((float) ($inspection->bdc_time_minutes ?? 0) * (float) ($inspection->bdc_rate_per_minute ?? 1.65)),
+        2
+    );
+    $initialBdc = round($bdcPerVisit * $initialVisits, 2);
+    $initialTotal = $initialLabour + $initialMaterial + $initialTradePartner + $initialBdc;
 @endphp
 
 <div class="row justify-content-center">
@@ -51,7 +63,7 @@
                 @else
                     <div class="alert alert-warning mb-0">
                         <strong>Approval Notice:</strong> The findings you select and approve below are the exact work items that will be charged.
-                        Labour and materials in your selected findings form your approved project cost.
+                        Labour, materials, trade partner work, and travel-based BDC in your selected findings form your approved project cost.
                     </div>
                 @endif
             </div>
@@ -98,7 +110,7 @@
                     $isChecked = in_array($findingId, $preSelected, true);
                     $labourCost = (float) ($finding['labour_cost'] ?? 0);
                     $materialCost = (float) ($finding['material_cost'] ?? 0);
-                    $specialistCost = (float) ($finding['trade_client_price'] ?? data_get($finding, 'trade_pricing.etogo_client_price', 0));
+                    $tradePartnerCost = (float) ($finding['trade_client_price'] ?? data_get($finding, 'trade_pricing.etogo_client_price', 0));
                     $severity = (string) ($finding['priority'] ?? '2');
                     $severityLabel = $severity === '1' ? 'High' : ($severity === '2' ? 'Medium' : 'Low');
                     $badgeClass = $severity === '1' ? 'bg-danger' : ($severity === '2' ? 'bg-warning text-dark' : 'bg-success');
@@ -115,8 +127,9 @@
                                         value="{{ $findingId }}"
                                         id="finding-{{ $findingId }}"
                                         data-labour="{{ number_format($labourCost, 2, '.', '') }}"
+                                        data-labour-hours="{{ number_format((float) ($finding['labour_hours'] ?? 0), 2, '.', '') }}"
                                         data-material="{{ number_format($materialCost, 2, '.', '') }}"
-                                        data-specialist="{{ number_format($specialistCost, 2, '.', '') }}"
+                                        data-trade-partner="{{ number_format($tradePartnerCost, 2, '.', '') }}"
                                         {{ $isChecked ? 'checked' : '' }}
                                         {{ $isLocked ? 'disabled' : '' }}
                                     >
@@ -214,10 +227,10 @@
                             <div class="text-end">
                                 <div><small class="text-muted">Labour</small> <strong>${{ number_format($labourCost, 2) }}</strong></div>
                                 <div><small class="text-muted">Material</small> <strong>${{ number_format($materialCost, 2) }}</strong></div>
-                                @if($specialistCost > 0)
-                                <div><small class="text-muted">Specialist work</small> <strong>${{ number_format($specialistCost, 2) }}</strong></div>
+                                @if($tradePartnerCost > 0)
+                                <div><small class="text-muted">Trade partner work</small> <strong>${{ number_format($tradePartnerCost, 2) }}</strong></div>
                                 @endif
-                                <div class="border-top mt-1 pt-1"><small class="text-muted">Subtotal</small> <strong>${{ number_format($labourCost + $materialCost + $specialistCost, 2) }}</strong></div>
+                                <div class="border-top mt-1 pt-1"><small class="text-muted">Subtotal</small> <strong>${{ number_format($labourCost + $materialCost + $tradePartnerCost, 2) }}</strong></div>
                             </div>
                         </div>
                     </div>
@@ -228,23 +241,28 @@
 
             <div class="card mb-3 border-primary">
                 <div class="card-header bg-primary text-white">
-                    <h6 class="mb-0"><i class="mdi mdi-calculator-variant-outline me-1"></i>Selected Pricing Summary</h6>
+                    <h6 class="mb-0"><i class="mdi mdi-calculator-variant-outline me-1"></i>Selected Work Cost Summary</h6>
                 </div>
                 <div class="card-body">
                     <div class="row text-center">
-                        <div class="col-md-3">
+                        <div class="col-md">
                             <small class="text-muted d-block">Labour</small>
                             <strong id="sum-labour">${{ number_format($initialLabour, 2) }}</strong>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md">
                             <small class="text-muted d-block">Materials</small>
                             <strong id="sum-material">${{ number_format($initialMaterial, 2) }}</strong>
                         </div>
-                        <div class="col-md-3">
-                            <small class="text-muted d-block">Specialist Work</small>
-                            <strong id="sum-specialist">${{ number_format($initialSpecialist, 2) }}</strong>
+                        <div class="col-md">
+                            <small class="text-muted d-block">Trade Partner Work</small>
+                            <strong id="sum-trade-partner">${{ number_format($initialTradePartner, 2) }}</strong>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md">
+                            <small class="text-muted d-block">BDC</small>
+                            <strong id="sum-bdc">${{ number_format($initialBdc, 2) }}</strong>
+                            <div class="small text-muted"><span id="sum-visits">{{ $initialVisits }}</span> visit(s)</div>
+                        </div>
+                        <div class="col-md">
                             <small class="text-muted d-block">Total</small>
                             <strong class="text-success" id="sum-total">${{ number_format($initialTotal, 2) }}</strong>
                         </div>
@@ -263,7 +281,7 @@
             </div>
 
             <div class="d-flex justify-content-between mb-4">
-                <a href="{{ route('client.inspections.index') }}" class="btn btn-light">Back to Inspections</a>
+                <a href="{{ route('client.inspections.index') }}" class="btn btn-light">Back to Diagnoses</a>
                 @if(!$isLocked)
                     <button type="submit" class="btn btn-primary" id="submit-quotation-btn">
                         <i class="mdi mdi-check-decagram-outline me-1"></i>Approve Quotation
@@ -288,9 +306,13 @@
     const selectedCountEl = document.getElementById('selected-count');
     const labourEl = document.getElementById('sum-labour');
     const materialEl = document.getElementById('sum-material');
-    const specialistEl = document.getElementById('sum-specialist');
+    const tradePartnerEl = document.getElementById('sum-trade-partner');
+    const bdcEl = document.getElementById('sum-bdc');
+    const visitsEl = document.getElementById('sum-visits');
     const totalEl = document.getElementById('sum-total');
     const submitBtn = document.getElementById('submit-quotation-btn');
+    const bdcPerVisit = {{ json_encode($bdcPerVisit) }};
+    const hourlyRate = {{ json_encode((float) ($inspection->labour_hourly_rate ?? 165)) }};
 
     function formatCurrency(amount) {
         return '$' + amount.toFixed(2);
@@ -298,25 +320,35 @@
 
     function refreshSummary() {
         let labour = 0;
+        let labourHours = 0;
         let material = 0;
-        let specialist = 0;
+        let tradePartner = 0;
         let count = 0;
 
         checkboxes.forEach((checkbox) => {
             if (checkbox.checked) {
                 count += 1;
                 labour += Number(checkbox.dataset.labour || 0);
+                labourHours += Number(checkbox.dataset.labourHours || 0);
                 material += Number(checkbox.dataset.material || 0);
-                specialist += Number(checkbox.dataset.specialist || 0);
+                tradePartner += Number(checkbox.dataset.tradePartner || 0);
             }
         });
 
-        const total = labour + material + specialist;
+        if (labourHours <= 0 && labour > 0) {
+            labourHours = labour / Math.max(0.01, Number(hourlyRate || 165));
+        }
+
+        const visits = count > 0 ? Math.max(1, Math.ceil(labourHours / 11)) : 0;
+        const bdc = Number(bdcPerVisit || 0) * visits;
+        const total = labour + material + tradePartner + bdc;
 
         selectedCountEl.textContent = String(count);
         labourEl.textContent = formatCurrency(labour);
         materialEl.textContent = formatCurrency(material);
-        specialistEl.textContent = formatCurrency(specialist);
+        tradePartnerEl.textContent = formatCurrency(tradePartner);
+        bdcEl.textContent = formatCurrency(bdc);
+        visitsEl.textContent = String(visits);
         totalEl.textContent = formatCurrency(total);
 
         if (submitBtn) {

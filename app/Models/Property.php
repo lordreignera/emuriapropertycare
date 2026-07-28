@@ -63,8 +63,6 @@ class Property extends Model
         'blueprint_file',
         'property_photos',
         'status',
-        'approved_at',
-        'approved_by',
         'current_complexity_score',
         'recommended_tier',
         'project_manager_id',
@@ -91,7 +89,6 @@ class Property extends Model
         'known_problem_details' => 'array',
         'known_problem_images' => 'array',
         'property_photos' => 'array',
-        'approved_at' => 'datetime',
         'assigned_at' => 'datetime',
         'inspection_scheduled_at' => 'datetime',
         'square_footage_interior' => 'decimal:2',
@@ -110,11 +107,6 @@ class Property extends Model
     public function subscription(): BelongsTo
     {
         return $this->belongsTo(Subscription::class);
-    }
-
-    public function approvedBy(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'approved_by');
     }
 
     public function projectManager(): BelongsTo
@@ -152,6 +144,34 @@ class Property extends Model
         return $this->hasMany(PropertyComplexityScore::class);
     }
 
+    public function matterportModels(): HasMany
+    {
+        return $this->hasMany(MatterportModel::class);
+    }
+
+    public function captureSessions(): HasMany
+    {
+        return $this->hasMany(CaptureSession::class);
+    }
+
+    public function spatialModels(): HasMany
+    {
+        return $this->hasMany(SpatialModel::class);
+    }
+
+    public function primarySpatialModel(): HasOne
+    {
+        return $this->hasOne(SpatialModel::class)
+            ->where('status', 'active')
+            ->where('is_primary', true)
+            ->latestOfMany();
+    }
+
+    public function issueMarkers(): HasMany
+    {
+        return $this->hasMany(IssueMarker::class);
+    }
+
     public function inspections(): HasMany
     {
         return $this->hasMany(Inspection::class);
@@ -167,6 +187,36 @@ class Property extends Model
         return $this->hasOne(Inspection::class)
             ->where('status', 'completed')
             ->latestOfMany();
+    }
+
+    public function remediationRoadmaps(): HasMany
+    {
+        return $this->hasMany(RemediationRoadmap::class);
+    }
+
+    public function remediationWorkOrders(): HasMany
+    {
+        return $this->hasMany(RemediationWorkOrder::class);
+    }
+
+    public function verifiedPropertyFacts(): HasMany
+    {
+        return $this->hasMany(VerifiedPropertyFact::class);
+    }
+
+    public function stewardshipPlans(): HasMany
+    {
+        return $this->hasMany(StewardshipPlan::class);
+    }
+
+    public function performanceRecords(): HasMany
+    {
+        return $this->hasMany(PerformanceRecord::class);
+    }
+
+    public function ownerSubmittedUpdates(): HasMany
+    {
+        return $this->hasMany(OwnerSubmittedUpdate::class);
     }
 
     // Helper methods
@@ -216,19 +266,14 @@ class Property extends Model
     {
         return $this->tenants()->where('status', 'active');
     }
-    public function isPendingApproval(): bool
+    public function isRegistered(): bool
     {
-        return $this->status === 'pending_approval';
+        return $this->status === 'registered';
     }
 
-    public function isApproved(): bool
+    public function isAwaitingInspection(): bool
     {
-        return $this->status === 'approved';
-    }
-
-    public function isRejected(): bool
-    {
-        return $this->status === 'rejected';
+        return $this->status === 'awaiting_inspection';
     }
 
     public function getFullAddressAttribute(): string
@@ -237,14 +282,14 @@ class Property extends Model
     }
 
     // Scopes
-    public function scopePendingApproval($query)
+    public function scopeRegistered($query)
     {
-        return $query->where('status', 'pending_approval');
+        return $query->where('status', 'registered');
     }
 
-    public function scopeApproved($query)
+    public function scopeAwaitingInspection($query)
     {
-        return $query->where('status', 'approved');
+        return $query->where('status', 'awaiting_inspection');
     }
 
     public function getStorageUrl(string $path): string

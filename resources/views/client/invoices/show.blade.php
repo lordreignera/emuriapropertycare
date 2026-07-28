@@ -12,7 +12,13 @@
 @section('content')
 @php
     $isInspectionFeeInvoice = ($invoice->type === 'additional');
+    $isFactsDiagnosisInvoice = $isInspectionFeeInvoice
+        && collect($invoice->line_items ?? [])->contains(fn($item) => in_array(($item['purpose'] ?? null), ['property_facts', 'property_diagnosis'], true));
     $isProjectInvoice = ! $isInspectionFeeInvoice;
+    $invoiceBalance = round((float) ($invoice->balance ?? max(0, ((float) ($invoice->total ?? 0)) - ((float) ($invoice->paid_amount ?? 0)))), 2);
+    $canPayInvoice = $isInspectionFeeInvoice
+        && $invoiceBalance > 0
+        && in_array($invoice->status, ['draft', 'sent', 'partial', 'overdue'], true);
 @endphp
 <div class="row mb-4">
     <div class="col-12">
@@ -21,7 +27,15 @@
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
                     <div>
                         <h3 class="fw-bold mb-1">{{ $invoice->invoice_number }}</h3>
-                        <p class="mb-0 opacity-75">{{ $isInspectionFeeInvoice ? 'Pre-inspection fee invoice' : 'Project work invoice breakdown' }}</p>
+                        <p class="mb-0 opacity-75">
+                            @if($isFactsDiagnosisInvoice)
+                                Property facts and diagnosis invoice
+                            @elseif($isInspectionFeeInvoice)
+                                Diagnosis fee invoice
+                            @else
+                                Project work invoice breakdown
+                            @endif
+                        </p>
                     </div>
                     @php
                         $canStartWorkPayment = $isProjectInvoice
@@ -39,7 +53,18 @@
                         <div class="badge bg-light text-dark fs-5 px-3 py-2">
                             Total: ${{ number_format($invoiceTotal, 2) }}
                         </div>
-                        <div class="d-flex gap-2">
+                        <div class="d-flex gap-2 flex-wrap justify-content-end">
+                            @if($canPayInvoice)
+                                <a href="{{ route('client.invoices.payment', ['invoice' => $invoice, 'plan' => '30']) }}" class="btn btn-sm btn-outline-light">
+                                    <i class="mdi mdi-percent-outline me-1"></i>Pay 30%
+                                </a>
+                                <a href="{{ route('client.invoices.payment', ['invoice' => $invoice, 'plan' => '50']) }}" class="btn btn-sm btn-outline-light">
+                                    <i class="mdi mdi-percent me-1"></i>Pay 50%
+                                </a>
+                                <a href="{{ route('client.invoices.payment', ['invoice' => $invoice, 'plan' => 'full']) }}" class="btn btn-sm btn-success">
+                                    <i class="mdi mdi-cash-check me-1"></i>Pay Full
+                                </a>
+                            @endif
                             @if($canStartWorkPayment)
                                 <a href="{{ route('client.inspections.work-payment', $inspection) }}" class="btn btn-sm btn-success">
                                     <i class="mdi mdi-credit-card-outline me-1"></i>Pay Now
@@ -68,7 +93,7 @@
     <div class="col-lg-8">
         <div class="card border-0 shadow-sm h-100">
             <div class="card-header bg-light border-0 py-3">
-                <h5 class="mb-0 fw-semibold">{{ $isInspectionFeeInvoice ? 'Inspection Fee Breakdown' : 'Invoice Amount Breakdown (Annual Project Cost)' }}</h5>
+                <h5 class="mb-0 fw-semibold">{{ $isFactsDiagnosisInvoice ? 'Property Facts & Diagnosis Breakdown' : ($isInspectionFeeInvoice ? 'Diagnosis Fee Breakdown' : 'Invoice Amount Breakdown (Annual Project Cost)') }}</h5>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
@@ -81,14 +106,19 @@
                         </thead>
                         <tbody>
                             @if($isInspectionFeeInvoice)
-                                <tr>
-                                    <td>Pre-Inspection Fee</td>
-                                    <td class="text-end">${{ number_format($invoiceTotal, 2) }}</td>
-                                </tr>
-                                <tr>
-                                    <td>Inspection Scheduling / Assessment Booking</td>
-                                    <td class="text-end">Included</td>
-                                </tr>
+                                @if(is_array($invoice->line_items) && count($invoice->line_items) > 0)
+                                    @foreach($invoice->line_items as $item)
+                                        <tr>
+                                            <td>{{ $item['description'] ?? 'Diagnosis Fee' }}</td>
+                                            <td class="text-end">${{ number_format((float) ($item['total'] ?? 0), 2) }}</td>
+                                        </tr>
+                                    @endforeach
+                                @else
+                                    <tr>
+                                        <td>Property Diagnosis Fee</td>
+                                        <td class="text-end">${{ number_format($invoiceTotal, 2) }}</td>
+                                    </tr>
+                                @endif
                             @else
                                 <tr>
                                     <td>BDC (Baseline Deterioration Cost)</td>
@@ -131,7 +161,7 @@
                 <div class="mb-2"><strong>Property:</strong> {{ $invoice->project?->property?->property_name ?? 'N/A' }}</div>
                 <div class="mb-2"><strong>Property Code:</strong> {{ $invoice->project?->property?->property_code ?? 'N/A' }}</div>
                 @if($isInspectionFeeInvoice)
-                    <div class="mb-2"><strong>Selected Inspection Date:</strong> {{ optional($inspection?->scheduled_date)->format('M d, Y h:i A') ?? 'N/A' }}</div>
+                    <div class="mb-2"><strong>Diagnosis Visit Date:</strong> {{ optional($inspection?->scheduled_date)->format('M d, Y h:i A') ?? 'To be confirmed' }}</div>
                     <div class="mb-2"><strong>Paid By (Client):</strong> {{ $invoice->user?->name ?? ($invoice->project?->property?->user?->name ?? 'N/A') }}</div>
                 @endif
                 <div class="mb-2"><strong>Issue Date:</strong> {{ optional($invoice->issue_date)->format('M d, Y') ?? '-' }}</div>

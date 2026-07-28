@@ -15,10 +15,13 @@ return new class extends Migration
             $table->foreignId('inspection_id')->constrained()->onDelete('cascade');
             $table->foreignId('property_id')->nullable()->constrained()->onDelete('set null');
             $table->foreignId('project_id')->nullable()->constrained()->onDelete('set null');
+            $table->unsignedBigInteger('remediation_roadmap_id')->nullable();
             $table->foreignId('created_by')->constrained('users')->onDelete('restrict');
 
             // ── Identification ─────────────────────────────────────────────
             $table->string('quote_number')->unique();
+            $table->enum('quote_basis', ['approved_findings', 'scheduled_findings', 'financing_review'])
+                ->default('approved_findings');
 
             // ── Workflow Status ────────────────────────────────────────────
             // draft       → admin is building it
@@ -43,6 +46,7 @@ return new class extends Migration
             // even if findings are later edited. Each element mirrors the
             // phar_findings row structure.
             $table->json('findings_snapshot')->nullable();
+            $table->json('decision_snapshot')->nullable();
 
             // ── Client Selection ───────────────────────────────────────────
             // Array of phar_findings IDs the client approved for remediation
@@ -56,6 +60,9 @@ return new class extends Migration
             // ── Computed Totals (from approved findings only) ──────────────
             $table->decimal('approved_labour_cost', 10, 2)->default(0);
             $table->decimal('approved_material_cost', 10, 2)->default(0);
+            $table->decimal('approved_trade_cost', 10, 2)->default(0);
+            $table->decimal('approved_trade_client_price', 10, 2)->default(0);
+            $table->decimal('approved_trade_margin', 10, 2)->default(0);
             $table->decimal('approved_bdc_cost', 10, 2)->default(0);
             $table->decimal('approved_total', 10, 2)->default(0);
 
@@ -70,13 +77,25 @@ return new class extends Migration
             // ── Indexes ────────────────────────────────────────────────────
             $table->index('inspection_id');
             $table->index('property_id');
+            $table->index('remediation_roadmap_id');
             $table->index('status');
             $table->index('shared_at');
+        });
+
+        Schema::table('inspections', function (Blueprint $table) {
+            $table->foreign('active_quotation_id')
+                ->references('id')
+                ->on('inspection_quotations')
+                ->nullOnDelete();
         });
     }
 
     public function down(): void
     {
+        Schema::table('inspections', function (Blueprint $table) {
+            $table->dropForeign(['active_quotation_id']);
+        });
+
         Schema::dropIfExists('inspection_quotations');
     }
 };

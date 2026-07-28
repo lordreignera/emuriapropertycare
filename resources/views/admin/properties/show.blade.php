@@ -16,6 +16,22 @@
                     </p>
                 </div>
                 <div>
+                    @if(Auth::user()->hasRole(['Super Admin', 'Administrator', 'Project Manager']))
+                        @php
+                            $latestInspectionForTwin = $property->inspections()
+                                ->where(function ($query) {
+                                    $query->whereHas('activeSpatialModels')
+                                        ->orWhereHas('activeMatterportModel');
+                                })
+                                ->latest('id')
+                                ->first();
+                        @endphp
+                        @if($latestInspectionForTwin)
+                            <a href="{{ route('inspections.digital-twin', $latestInspectionForTwin) }}" class="btn btn-outline-primary btn-sm">
+                                <i class="mdi mdi-cube-scan me-2"></i>Open Digital Twin
+                            </a>
+                        @endif
+                    @endif
                     <a href="{{ $backUrl ?? route('properties.index') }}" class="btn btn-secondary btn-sm">
                         <i class="mdi mdi-arrow-left me-2"></i>Back to List
                     </a>
@@ -34,7 +50,7 @@
                 <div class="card-body">
                     <div class="row align-items-center">
                         <div class="col-md-6">
-                            <h5 class="mb-2">Inspection Status</h5>
+                            <h5 class="mb-2">Diagnosis Status</h5>
                             @php
                                 $paidInspection = $property->inspections()
                                     ->where('inspection_fee_status', 'paid')
@@ -43,11 +59,11 @@
                             
                             @if($paidInspection)
                                 <span class="badge badge-success fs-6">
-                                    <i class="mdi mdi-check-circle"></i> Scheduled & Paid
+                                    <i class="mdi mdi-check-circle"></i> Diagnosis Paid
                                 </span>
                                 <p class="text-muted mt-2 mb-0">
                                     Paid on {{ $paidInspection->inspection_fee_paid_at->format('M d, Y') }}<br>
-                                    Scheduled for {{ $paidInspection->scheduled_date->format('M d, Y \a\t g:i A') }}
+                                    Scheduled for {{ optional($paidInspection->scheduled_date)->format('M d, Y \a\t g:i A') ?? 'To be confirmed' }}
                                 </p>
                                 @if($paidInspection->inspector_id)
                                     @php
@@ -71,10 +87,10 @@
                                 @endif
                             @else
                                 <span class="badge badge-warning fs-6">
-                                    <i class="mdi mdi-alert-circle-outline"></i> Not Scheduled
+                                    <i class="mdi mdi-alert-circle-outline"></i> Property Onboarding
                                 </span>
                                 <p class="text-muted mt-2 mb-0">
-                                    Awaiting client to schedule and pay for inspection
+                                    Awaiting ETOGO call, site visit, property facts, and diagnosis invoice.
                                 </p>
                             @endif
                         </div>
@@ -329,35 +345,6 @@
                     @endif
                 </div>
             </div>
-        </div>
-    </div>
-</div>
-
-<!-- Rejection Modal -->
-<div class="modal fade" id="rejectModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Reject Property</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <form action="{{ route('properties.update', $property->id) }}" method="POST">
-                @csrf
-                @method('PUT')
-                <input type="hidden" name="status" value="rejected">
-                <div class="modal-body">
-                    <div class="form-group">
-                        <label for="rejection_reason">Reason for Rejection <span class="text-danger">*</span></label>
-                        <textarea name="rejection_reason" id="rejection_reason" 
-                                  class="form-control" rows="4" required
-                                  placeholder="Please provide a reason for rejecting this property..."></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-danger">Reject Property</button>
-                </div>
-            </form>
         </div>
     </div>
 </div>

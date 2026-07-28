@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\Storage;
 
 class Inspection extends Model
@@ -32,6 +33,13 @@ class Inspection extends Model
         'quotation_status',
         'quotation_shared_at',
         'quotation_approved_at',
+        // Assessment / Estimation phase timestamps (ETOGO workflow split)
+        'findings_report_shared_at',
+        'client_committed_at',
+        'estimation_started_at',
+        'estimation_completed_at',
+        'assessment_finalised_at',
+        'assessment_finalised_by',
         'etogo_signed_by',
         'etogo_signed_at',
         'etogo_signature_image_path',
@@ -138,6 +146,13 @@ class Inspection extends Model
         'active_quotation_id' => 'integer',
         'quotation_shared_at' => 'datetime',
         'quotation_approved_at' => 'datetime',
+        // Assessment / Estimation phase timestamps
+        'findings_report_shared_at' => 'datetime',
+        'client_committed_at' => 'datetime',
+        'estimation_started_at' => 'datetime',
+        'estimation_completed_at' => 'datetime',
+        'assessment_finalised_at' => 'datetime',
+        'assessment_finalised_by' => 'integer',
         'etogo_signed_by' => 'integer',
         'etogo_signed_at' => 'datetime',
         'planned_start_date' => 'date',
@@ -249,6 +264,41 @@ class Inspection extends Model
         return $this->hasMany(PHARFinding::class);
     }
 
+    public function captureSessions(): HasMany
+    {
+        return $this->hasMany(CaptureSession::class);
+    }
+
+    public function spatialModels(): HasMany
+    {
+        return $this->hasMany(SpatialModel::class);
+    }
+
+    public function activeSpatialModels(): HasMany
+    {
+        return $this->hasMany(SpatialModel::class)
+            ->where('status', 'active')
+            ->orderByDesc('is_primary')
+            ->latest('id');
+    }
+
+    public function issueMarkers(): HasMany
+    {
+        return $this->hasMany(IssueMarker::class);
+    }
+
+    public function matterportModels(): HasMany
+    {
+        return $this->hasMany(MatterportModel::class);
+    }
+
+    public function activeMatterportModel(): HasOne
+    {
+        return $this->hasOne(MatterportModel::class)
+            ->where('status', 'active')
+            ->latestOfMany();
+    }
+
     public function maintenanceVisitLogs(): HasMany
     {
         return $this->hasMany(MaintenanceVisitLog::class);
@@ -257,6 +307,26 @@ class Inspection extends Model
     public function quotations(): HasMany
     {
         return $this->hasMany(InspectionQuotation::class);
+    }
+
+    public function findingEvidence(): HasMany
+    {
+        return $this->hasMany(FindingEvidence::class);
+    }
+
+    public function clientDecisions(): HasMany
+    {
+        return $this->hasMany(FindingClientDecision::class);
+    }
+
+    public function remediationRoadmaps(): HasMany
+    {
+        return $this->hasMany(RemediationRoadmap::class);
+    }
+
+    public function remediationWorkOrders(): HasMany
+    {
+        return $this->hasMany(RemediationWorkOrder::class);
     }
 
     public function activeQuotation(): BelongsTo
@@ -293,6 +363,45 @@ class Inspection extends Model
     public function isApproved(): bool
     {
         return $this->approved_by_client && $this->status === 'approved';
+    }
+
+    /**
+     * ETOGO inspection phase helpers.
+     * Each method returns true if the inspection has progressed AT LEAST to that phase.
+     */
+    public function hasCapturedFindings(): bool
+    {
+        return in_array($this->status, [
+            'findings_captured', 'findings_shared', 'client_committed',
+            'estimation_in_progress', 'estimation_completed',
+            'quotation_shared', 'quotation_approved',
+            'completed', 'approved',
+        ], true);
+    }
+
+    public function hasSharedFindingsReport(): bool
+    {
+        return $this->findings_report_shared_at !== null;
+    }
+
+    public function hasClientCommitted(): bool
+    {
+        return $this->client_committed_at !== null;
+    }
+
+    public function hasCompletedEstimation(): bool
+    {
+        return $this->estimation_completed_at !== null;
+    }
+
+    public function isAssessmentFinalised(): bool
+    {
+        return $this->assessment_finalised_at !== null;
+    }
+
+    public function finalisedBy()
+    {
+        return $this->belongsTo(User::class, 'assessment_finalised_by');
     }
 
     // Scopes

@@ -16028,7 +16028,7 @@ body,
 html {
   overflow-x: hidden;
   padding-right: 0 !important;
-  background-color: #191c24; }
+  background-color: #f4f7fb; }
 
 *:-moz-full-screen,
 *:-webkit-full-screen,
@@ -16073,7 +16073,7 @@ code {
 
 /* Footer */
 .footer {
-  background: #000000;
+  background: #f4f7fb;
   color: color(dark);
   padding: 20px 1rem;
   transition: all 0.25s ease;
@@ -20828,7 +20828,7 @@ div.tagsinput {
       width: 100%; } }
 
 .content-wrapper {
-  background: #000000;
+  background: #f4f7fb;
   padding: 1.875rem 1.75rem;
   width: 100%;
   -webkit-flex-grow: 1;

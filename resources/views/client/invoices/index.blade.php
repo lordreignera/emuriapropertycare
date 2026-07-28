@@ -109,7 +109,7 @@
                                             <p class="text-muted mb-3">You don't have any invoices at the moment.</p>
                                             <div class="alert alert-info border-0 shadow-sm d-inline-block mx-auto">
                                                 <i class="mdi mdi-information me-2"></i>
-                                                Invoices will appear here after you complete property inspections and accept service offers.
+                                                Invoices will appear here after property facts, diagnosis, or approved service offers are prepared.
                                             </div>
                                         </div>
                                     </td>

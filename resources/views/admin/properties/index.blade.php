@@ -1,6 +1,6 @@
 @extends('admin.layout')
 
-@section('title', 'Property Management')
+@section('title', 'Property Registry')
 
 @section('content')
 <div class="content-wrapper">
@@ -10,8 +10,8 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <div>
-                            <h4 class="card-title mb-0">Property Management</h4>
-                            <p class="text-muted small mb-0">Manage client properties and inspection assignments</p>
+                            <h4 class="card-title mb-0">Property Registry</h4>
+                            <p class="text-muted small mb-0">Manage client properties, inspections, reports, and digital twin sources</p>
                         </div>
                     </div>
 
@@ -34,7 +34,7 @@
                         <li class="nav-item">
                             <a class="nav-link {{ request('status') == 'not_inspected' ? 'active' : '' }}" 
                                href="{{ route('properties.index', ['status' => 'not_inspected']) }}">
-                                <i class="mdi mdi-home-alert"></i> Not Inspected
+                                <i class="mdi mdi-home-alert"></i> Not Yet Assessed
                                 <span class="badge bg-warning ms-1">
                                     {{ \App\Models\Property::whereDoesntHave('inspections', function($query) {
                                             $query->where('status', 'completed');
@@ -46,7 +46,7 @@
                         <li class="nav-item">
                             <a class="nav-link {{ request('status') == 'inspected_completed' ? 'active' : '' }}" 
                                href="{{ route('properties.index', ['status' => 'inspected_completed']) }}">
-                                <i class="mdi mdi-check-decagram"></i> Inspected & Completed
+                                <i class="mdi mdi-check-decagram"></i> Assessed & Completed
                                 <span class="badge bg-success ms-1">
                                     {{ \App\Models\Property::whereHas('inspections', function($query) {
                                             $query->where('status', 'completed');
@@ -58,7 +58,7 @@
                         <li class="nav-item">
                             <a class="nav-link {{ !request('status') ? 'active' : '' }}" 
                                href="{{ route('properties.index') }}">
-                                <i class="mdi mdi-view-list"></i> All Properties
+                                <i class="mdi mdi-view-list"></i> Property Registry
                             </a>
                         </li>
                     </ul>
@@ -130,27 +130,27 @@
                                         @if($latestInspection)
                                             @if($latestInspection->status === 'completed')
                                                 <span class="badge badge-success">
-                                                    <i class="mdi mdi-check-circle"></i> Inspected & Completed
+                                                    <i class="mdi mdi-check-circle"></i> Assessed & Completed
                                                 </span>
                                                 <br><small class="text-muted">{{ optional($latestInspection->completed_date)->format('M d, Y') ?? 'Completion date unavailable' }}</small>
                                             @else
                                                 <span class="badge badge-warning">
-                                                    <i class="mdi mdi-clock-outline"></i> Not Inspected
+                                                    <i class="mdi mdi-clock-outline"></i> Not Yet Assessed
                                                 </span>
                                                 <br><small class="text-muted">Inspection status: {{ ucfirst(str_replace('_', ' ', $latestInspection->status)) }}</small>
                                             @endif
 
                                             <br>
                                             @if($latestInspection->inspection_fee_status === 'paid')
-                                                <small class="text-success"><i class="mdi mdi-cash-check"></i> Paid</small>
+                                                <small class="text-success"><i class="mdi mdi-cash-check"></i> Diagnosis invoice paid</small>
                                             @else
-                                                <small class="text-danger"><i class="mdi mdi-cash-remove"></i> Not Paid</small>
+                                                <small class="text-muted"><i class="mdi mdi-receipt-clock-outline"></i> Invoice pending / unpaid</small>
                                             @endif
                                         @else
                                             <span class="badge badge-warning">
-                                                <i class="mdi mdi-alert-circle-outline"></i> Not Inspected
+                                                <i class="mdi mdi-alert-circle-outline"></i> Not Yet Assessed
                                             </span>
-                                            <br><small class="text-danger"><i class="mdi mdi-cash-remove"></i> Not Paid</small>
+                                            <br><small class="text-muted"><i class="mdi mdi-phone-in-talk-outline"></i> Awaiting client call</small>
                                         @endif
                                     </td>
                                     <td>{{ $property->created_at->format('M d, Y') }}</td>
@@ -168,6 +168,34 @@
                                                     && !empty($completedInspection->client_signature)
                                                     && !empty($completedInspection->etogo_signed_at);
                                             @endphp
+
+                                            @php
+                                                $diagnosisPricing = $diagnosisPricingByPropertyId[$property->id] ?? ['invoice_dollars' => 0];
+                                            @endphp
+
+                                            @if(!$completedInspection)
+                                                <a href="{{ route('properties.digital-twin', $property) }}"
+                                                   class="btn btn-sm btn-outline-primary"
+                                                   title="Open Property Facts & Digital Twin">
+                                                    <i class="mdi mdi-cube-scan me-1"></i>Twin
+                                                </a>
+                                                <button type="button"
+                                                        class="btn btn-sm btn-warning text-dark"
+                                                        data-action-url="{{ route('properties.diagnosis-invoice.store', $property) }}"
+                                                        data-property-name="{{ $property->property_name }}"
+                                                        data-diagnosis-amount="{{ number_format((float) ($diagnosisPricing['invoice_dollars'] ?? 0), 2, '.', '') }}"
+                                                        onclick="openDiagnosisInvoiceModal(this)"
+                                                        title="Prepare Property Facts & Diagnosis Invoice">
+                                                    <i class="mdi mdi-receipt-text-plus me-1"></i>Invoice
+                                                </button>
+                                            @endif
+
+                                            @if($completedInspection?->activeSpatialModels?->isNotEmpty() || $completedInspection?->activeMatterportModel)
+                                                <a href="{{ route('inspections.digital-twin', $completedInspection->id) }}"
+                                                   class="btn btn-sm btn-outline-primary" title="Open Digital Twin">
+                                                    <i class="mdi mdi-cube-scan me-1"></i>Twin
+                                                </a>
+                                            @endif
 
                                             @if($completedInspection)
                                                 <a href="{{ route('inspections.preview-report', $completedInspection->id) }}"
@@ -196,14 +224,12 @@
                                             @endif
                                             
                                             @php
-                                                $paidInspection = $property->inspections()
-                                                    ->where('inspection_fee_status', 'paid')
-                                                    ->where('status', 'scheduled')
+                                                $openDiagnosis = $property->inspections()
+                                                    ->whereIn('status', ['scheduled', 'in_progress'])
                                                     ->first();
-                                                $hasInspectorAssigned = $paidInspection && $paidInspection->inspector_id;
+                                                $hasInspectorAssigned = $openDiagnosis && $openDiagnosis->inspector_id;
                                                 $startableInspection = $property->inspections->first(function ($inspection) {
-                                                    return ($inspection->inspection_fee_status ?? null) === 'paid'
-                                                        && in_array($inspection->status, ['scheduled', 'in_progress'], true);
+                                                    return in_array($inspection->status, ['scheduled', 'in_progress'], true);
                                                 });
                                                 $canInspectorStart = $startableInspection
                                                     && auth()->user()->hasRole('Inspector')
@@ -212,7 +238,7 @@
                                                         || (int) ($property->inspector_id ?? 0) === (int) auth()->id()
                                                         || auth()->user()->can('create inspections')
                                                     );
-                                                $canAdminStart = $startableInspection
+                                                $canAdminStart = !$completedInspection
                                                     && !auth()->user()->hasRole('Inspector')
                                                     && (
                                                         auth()->user()->can('create inspections')
@@ -223,15 +249,15 @@
                                             @if($canInspectorStart || $canAdminStart)
                                                 <a href="{{ route('inspections.create', ['property_id' => $property->id]) }}"
                                                    class="btn btn-sm btn-success fw-bold"
-                                                   title="Start Inspection">
-                                                    <i class="mdi mdi-clipboard-check me-1"></i> Start Inspection
+                                                   title="Start Diagnosis">
+                                                    <i class="mdi mdi-clipboard-check me-1"></i> Start Diagnosis
                                                 </a>
                                             @endif
                                             
-                                            @if($paidInspection && !$hasInspectorAssigned)
+                                            @if(!$completedInspection && !$hasInspectorAssigned)
                                                 <button type="button" class="btn btn-sm btn-primary" 
                                                         onclick="assignStaff({{ $property->id }})" 
-                                                        title="Assign Inspector">
+                                                        title="Assign Diagnosis Team">
                                                     <i class="mdi mdi-account-plus"></i>
                                                 </button>
                                             @endif
@@ -274,42 +300,6 @@
     </div>
 </div>
 
-<!-- Approval Form (Hidden) -->
-<form id="approveForm" method="POST" style="display: none;">
-    @csrf
-    @method('PUT')
-    <input type="hidden" name="status" value="approved">
-</form>
-
-<!-- Rejection Modal -->
-<div class="modal fade" id="rejectModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Reject Property</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <form id="rejectForm" method="POST">
-                @csrf
-                @method('PUT')
-                <input type="hidden" name="status" value="rejected">
-                <div class="modal-body">
-                    <div class="form-group">
-                        <label for="rejection_reason">Reason for Rejection <span class="text-danger">*</span></label>
-                        <textarea name="rejection_reason" id="rejection_reason" 
-                                  class="form-control" rows="4" required
-                                  placeholder="Please provide a reason for rejecting this property..."></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-danger">Reject Property</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
 <!-- Assign Project Manager & Inspector Modal -->
 <div class="modal fade" id="assignModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
@@ -325,7 +315,7 @@
                 <div class="modal-body" style="background-color: #ffffff !important; color: #000000 !important;">
                     <div class="alert alert-info" style="background-color: #e7f3ff !important; border-color: #b3d9ff !important; color: #004085 !important;">
                         <i class="mdi mdi-information"></i> 
-                        The client has already scheduled and paid for this inspection.
+                        Assign the team after the client registers the property. Payment is handled later through the property facts and diagnosis invoice.
                     </div>
 
                     <!-- Display scheduled date from client -->
@@ -373,22 +363,72 @@
         </div>
     </div>
 </div>
+
+<!-- Property Facts & Diagnosis Invoice Modal -->
+<div class="modal fade" id="diagnosisInvoiceModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content" style="background-color: #ffffff !important;">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title">
+                    <i class="mdi mdi-receipt-text-plus me-2"></i>Prepare Invoice
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="diagnosisInvoiceForm" method="POST">
+                @csrf
+                <div class="modal-body">
+                    <p class="text-muted mb-3">
+                        Create a client invoice after property facts/site scope are clear.
+                        The diagnosis amount uses the existing computed pricing formula.
+                    </p>
+                    <div class="mb-3">
+                        <label class="form-label">Property</label>
+                        <input type="text" id="diagnosisInvoicePropertyName" class="form-control" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label for="property_facts_amount" class="form-label">Property Facts / Digital Twin Amount</label>
+                        <input type="number" min="0" step="0.01" name="property_facts_amount" id="property_facts_amount" class="form-control" value="0.00">
+                        <small class="text-muted">Use this for floor plan, capture session, digital twin/model preparation, or onsite property facts work.</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="diagnosis_amount" class="form-label">Diagnosis Amount</label>
+                        <input type="number" min="0" step="0.01" name="diagnosis_amount" id="diagnosis_amount" class="form-control" required>
+                        <small class="text-muted">Defaults to the former inspection fee calculation.</small>
+                    </div>
+                    <div class="mb-0">
+                        <label for="diagnosis_due_date" class="form-label">Due Date</label>
+                        <input type="date" name="due_date" id="diagnosis_due_date" class="form-control">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning text-dark">
+                        <i class="mdi mdi-send me-1"></i>Create Invoice
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 @endsection
 
 @push('scripts')
 <script>
-function approveProperty(propertyId) {
-    if (confirm('Are you sure you want to approve this property?')) {
-        const form = document.getElementById('approveForm');
-        form.action = '/properties/' + propertyId;
-        form.submit();
-    }
-}
+function openDiagnosisInvoiceModal(button) {
+    const form = document.getElementById('diagnosisInvoiceForm');
+    const propertyName = document.getElementById('diagnosisInvoicePropertyName');
+    const diagnosisAmount = document.getElementById('diagnosis_amount');
+    const dueDate = document.getElementById('diagnosis_due_date');
 
-function rejectProperty(propertyId) {
-    const form = document.getElementById('rejectForm');
-    form.action = '/properties/' + propertyId;
-    const modal = new bootstrap.Modal(document.getElementById('rejectModal'));
+    form.action = button.getAttribute('data-action-url');
+    propertyName.value = button.getAttribute('data-property-name') || 'Property';
+    diagnosisAmount.value = button.getAttribute('data-diagnosis-amount') || '0.00';
+
+    const defaultDue = new Date();
+    defaultDue.setDate(defaultDue.getDate() + 14);
+    dueDate.value = defaultDue.toISOString().slice(0, 10);
+
+    const modal = new bootstrap.Modal(document.getElementById('diagnosisInvoiceModal'));
     modal.show();
 }
 
@@ -401,7 +441,7 @@ function assignStaff(propertyId) {
                 // Show inspection details
                 document.getElementById('inspectionDetails').style.display = 'block';
                 document.getElementById('scheduledDate').textContent = 'Scheduled: ' + data.inspection.scheduled_date;
-                document.getElementById('feePaid').textContent = 'Fee Paid: $' + data.inspection.fee_amount;
+                document.getElementById('feePaid').textContent = 'Diagnosis amount: $' + data.inspection.fee_amount;
                 
                 if (data.inspection.notes) {
                     document.getElementById('notesSection').style.display = 'block';

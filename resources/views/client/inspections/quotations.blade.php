@@ -1,6 +1,6 @@
 @extends('client.layout')
 
-@section('title', 'My Quotations')
+@section('title', 'Remediation Proposals')
 
 @section('content')
 <div class="row">
@@ -8,7 +8,7 @@
         <div class="card">
             <div class="card-header bg-primary text-white d-flex align-items-center justify-content-between">
                 <h5 class="mb-0">
-                    <i class="mdi mdi-file-check-outline me-2"></i>My Quotations
+                    <i class="mdi mdi-file-check-outline me-2"></i>Remediation Proposals
                 </h5>
             </div>
 
@@ -18,7 +18,7 @@
                     <li class="nav-item">
                         <a class="nav-link {{ $filter === 'all' ? 'active' : '' }}"
                            href="{{ route('client.inspections.quotations', ['filter' => 'all']) }}">
-                            All Quotations
+                            All Proposals
                         </a>
                     </li>
                     <li class="nav-item">
@@ -42,9 +42,9 @@
                         <thead class="table-light">
                             <tr>
                                 <th>Property</th>
-                                <th>Quotation Status</th>
+                            <th>Proposal Status</th>
                                 <th>Shared On</th>
-                                <th>Inspection Status</th>
+                                <th>PHAR Status</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -88,12 +88,12 @@
                                         @if(($inspection->quotation_status ?? '') === 'approved')
                                             <a href="{{ route('client.inspections.quotation', $inspection->id) }}"
                                                class="btn btn-sm btn-success">
-                                                <i class="mdi mdi-eye me-1"></i>View Approved Quotation
+                                                <i class="mdi mdi-eye me-1"></i>View Approved Proposal
                                             </a>
                                         @else
                                             <a href="{{ route('client.inspections.quotation', $inspection->id) }}"
                                                class="btn btn-sm btn-primary">
-                                                <i class="mdi mdi-file-check-outline me-1"></i>Review &amp; Approve Quotation
+                                                <i class="mdi mdi-file-check-outline me-1"></i>Review &amp; Approve Proposal
                                             </a>
                                         @endif
                                     </td>
@@ -102,11 +102,11 @@
                                 <tr>
                                     <td colspan="5" class="text-center text-muted py-4">
                                         @if($filter === 'pending')
-                                            No quotations awaiting approval.
+                                            No proposals awaiting approval.
                                         @elseif($filter === 'approved')
-                                            No approved quotations yet.
+                                            No approved proposals yet.
                                         @else
-                                            No quotations available yet.
+                                            No remediation proposals available yet.
                                         @endif
                                     </td>
                                 </tr>

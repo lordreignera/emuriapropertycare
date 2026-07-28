@@ -24,35 +24,30 @@
                         <!-- Status Selection -->
                         <div class="card mb-3">
                             <div class="card-body">
-                                <h5 class="mb-3">Property Status</h5>
+                                <h5 class="mb-3">Property Lifecycle</h5>
                                 <div class="form-group">
                                     <label for="status">Status <span class="text-danger">*</span></label>
                                     <select name="status" id="status" class="form-control @error('status') is-invalid @enderror" required>
-                                        <option value="pending_approval" {{ $property->status == 'pending_approval' ? 'selected' : '' }}>
-                                            Pending Approval
+                                        <option value="registered" {{ $property->status == 'registered' ? 'selected' : '' }}>
+                                            Registered
                                         </option>
-                                        <option value="approved" {{ $property->status == 'approved' ? 'selected' : '' }}>
-                                            Approved
+                                        <option value="awaiting_inspection" {{ $property->status == 'awaiting_inspection' ? 'selected' : '' }}>
+                                            Awaiting Inspection
                                         </option>
-                                        <option value="rejected" {{ $property->status == 'rejected' ? 'selected' : '' }}>
-                                            Rejected
+                                        <option value="in_assessment" {{ $property->status == 'in_assessment' ? 'selected' : '' }}>
+                                            In Assessment
+                                        </option>
+                                        <option value="assessed" {{ $property->status == 'assessed' ? 'selected' : '' }}>
+                                            Assessed
+                                        </option>
+                                        <option value="archived" {{ $property->status == 'archived' ? 'selected' : '' }}>
+                                            Archived
                                         </option>
                                     </select>
+                                    <small class="text-muted d-block mt-1">Property registration no longer requires admin approval. Use this only to clean up lifecycle state.</small>
                                     @error('status')
                                     <span class="invalid-feedback">{{ $message }}</span>
                                     @enderror
-                                </div>
-
-                                <div id="rejection-reason-group" style="{{ $property->status == 'rejected' ? '' : 'display: none;' }}">
-                                    <div class="form-group mt-3">
-                                        <label for="rejection_reason">Rejection Reason</label>
-                                        <textarea name="rejection_reason" id="rejection_reason" 
-                                                  class="form-control @error('rejection_reason') is-invalid @enderror" 
-                                                  rows="3">{{ old('rejection_reason', $property->rejection_reason) }}</textarea>
-                                        @error('rejection_reason')
-                                        <span class="invalid-feedback">{{ $message }}</span>
-                                        @enderror
-                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -74,18 +69,3 @@
 </div>
 @endsection
 
-@push('scripts')
-<script>
-$(document).ready(function() {
-    $('#status').on('change', function() {
-        if ($(this).val() === 'rejected') {
-            $('#rejection-reason-group').slideDown();
-            $('#rejection_reason').attr('required', true);
-        } else {
-            $('#rejection-reason-group').slideUp();
-            $('#rejection_reason').attr('required', false);
-        }
-    });
-});
-</script>
-@endpush

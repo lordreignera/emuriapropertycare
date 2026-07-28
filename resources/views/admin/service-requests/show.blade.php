@@ -20,6 +20,14 @@
                         <div class="alert alert-success">{{ session('success') }}</div>
                     @endif
 
+                    @if($serviceRequest->request_type === 'change_request')
+                        <div class="alert alert-primary border-primary" style="border-left:4px solid #0d6efd;">
+                            <i class="mdi mdi-file-plus-outline me-1"></i>
+                            This is an add-on request. Convert it to assessment so the requested items become findings,
+                            then finalise the PHAR report and continue into quotation after client commitment.
+                        </div>
+                    @endif
+
                     <p><strong>Property:</strong> {{ $serviceRequest->property?->property_name }} ({{ $serviceRequest->property?->property_code }})</p>
                     <p><strong>Urgency:</strong> {{ ucfirst($serviceRequest->urgency) }}</p>
                     <p><strong>Title:</strong> {{ $serviceRequest->title }}</p>
@@ -103,7 +111,8 @@
                     <form method="POST" action="{{ route('admin.service-requests.assess', $serviceRequest) }}" class="mt-3">
                         @csrf
                         <button type="submit" class="btn btn-success w-100">
-                            <i class="mdi mdi-clipboard-check me-1"></i> Convert To Assessment
+                            <i class="mdi mdi-clipboard-check me-1"></i>
+                            {{ $serviceRequest->request_type === 'change_request' ? 'Assess Add-on for Quotation' : 'Convert To Assessment' }}
                         </button>
                     </form>
                 </div>

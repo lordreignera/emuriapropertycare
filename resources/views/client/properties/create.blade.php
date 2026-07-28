@@ -136,7 +136,7 @@
                                 @error('residential_units')
                                 <span class="invalid-feedback">{{ $message }}</span>
                                 @enderror
-                                <small class="form-text text-muted">Used to calculate your inspection fee</small>
+                                <small class="form-text text-muted">Used to calculate your diagnosis invoice</small>
                             </div>
                         </div>
 
@@ -168,7 +168,7 @@
                                     {{ old('has_high_pitched_roof') ? 'checked' : '' }}>
                                 <label class="form-check-label" for="has_high_pitched_roof">
                                     <strong>High-pitched roof</strong>
-                                    <span class="badge badge-warning ml-1">+$75 inspection surcharge</span>
+                                    <span class="badge badge-warning ml-1">+$75 diagnosis surcharge</span>
                                     <br><small class="text-muted">Requires additional safety equipment and time</small>
                                 </label>
                             </div>
@@ -180,8 +180,8 @@
                                     {{ old('has_crawl_space') ? 'checked' : '' }}>
                                 <label class="form-check-label" for="has_crawl_space">
                                     <strong>Crawl spaces or obstructed areas</strong>
-                                    <span class="badge badge-warning ml-1">+$50 inspection surcharge</span>
-                                    <br><small class="text-muted">Hidden/hard-to-access areas requiring extra inspection time</small>
+                                    <span class="badge badge-warning ml-1">+$50 diagnosis surcharge</span>
+                                    <br><small class="text-muted">Hidden/hard-to-access areas requiring extra diagnosis time</small>
                                 </label>
                             </div>
                         </div>
@@ -189,7 +189,7 @@
                         {{-- Live fee estimate --}}
                         <div class="col-12" id="fee_calculator_wrapper">
                             <div class="alert alert-info py-2">
-                                <strong><i class="mdi mdi-calculator"></i> Estimated Inspection Fee:</strong>
+                                <strong><i class="mdi mdi-calculator"></i> Estimated Diagnosis Fee:</strong>
                                 <span id="fee_breakdown" class="ml-2">—</span>
                             </div>
                         </div>
@@ -774,7 +774,7 @@
                                 <div class="form-check"><input class="form-check-input" type="checkbox" name="home_journey[]" id="hj_value" value="maintain_property_value" {{ in_array('maintain_property_value', $oldHomeJourney) ? 'checked' : '' }}><label class="form-check-label" for="hj_value">I want to maintain/increase property value</label></div>
                                 <div class="form-check"><input class="form-check-input" type="checkbox" name="home_journey[]" id="hj_repairs" value="support_repairs_and_renovations" {{ in_array('support_repairs_and_renovations', $oldHomeJourney) ? 'checked' : '' }}><label class="form-check-label" for="hj_repairs">I need support managing repairs, trades, and renovations</label></div>
                                 <div class="form-check"><input class="form-check-input" type="checkbox" name="home_journey[]" id="hj_team" value="trusted_team" {{ in_array('trusted_team', $oldHomeJourney) ? 'checked' : '' }}><label class="form-check-label" for="hj_team">I want a trusted team — not random contractors</label></div>
-                                <div class="form-check"><input class="form-check-input" type="checkbox" name="home_journey[]" id="hj_ready" value="guest_ready" {{ in_array('guest_ready', $oldHomeJourney) ? 'checked' : '' }}><label class="form-check-label" for="hj_ready">I want my home to be always guest-ready / inspection-ready</label></div>
+                                <div class="form-check"><input class="form-check-input" type="checkbox" name="home_journey[]" id="hj_ready" value="guest_ready" {{ in_array('guest_ready', $oldHomeJourney) ? 'checked' : '' }}><label class="form-check-label" for="hj_ready">I want my home to be always guest-ready / diagnosis-ready</label></div>
                                 <div class="mt-3">
                                     <label for="custom_home_journey_input" class="form-label">Add custom home journey item</label>
                                     <div class="d-flex gap-2 mb-2">
@@ -1081,7 +1081,7 @@
                             <i class="mdi mdi-arrow-left"></i> Cancel
                         </a>
                         <button type="submit" class="btn btn-primary">
-                            <i class="mdi mdi-check"></i> Submit Property for Approval
+                            <i class="mdi mdi-check"></i> Save
                         </button>
                     </div>
                 </div>

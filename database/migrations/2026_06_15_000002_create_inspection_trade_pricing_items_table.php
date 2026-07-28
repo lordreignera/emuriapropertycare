@@ -18,9 +18,12 @@ return new class extends Migration
             $table->foreignId('subsystem_id')->nullable()->constrained('subsystems')->nullOnDelete();
             $table->foreignId('trade_application_id')->nullable()->constrained('trade_applications')->nullOnDelete();
             $table->string('trade_company_name')->nullable();
+            $table->string('fulfillment_type', 30)->default('trade_partner');
             $table->string('activity')->nullable();
+            $table->string('scope_area')->nullable();
             $table->string('unit', 30)->nullable();
             $table->decimal('quantity', 10, 2)->default(1);
+            $table->decimal('estimated_duration_hours', 10, 2)->nullable();
             $table->decimal('trade_unit_cost', 10, 2)->default(0);
             $table->decimal('trade_total_cost', 10, 2)->default(0);
             $table->decimal('etogo_client_price', 10, 2)->default(0);
@@ -33,6 +36,7 @@ return new class extends Migration
 
             $table->index(['inspection_id', 'finding_index']);
             $table->index(['system_id', 'subsystem_id']);
+            $table->unique(['inspection_id', 'finding_index'], 'inspection_trade_pricing_unique_finding');
         });
     }
 

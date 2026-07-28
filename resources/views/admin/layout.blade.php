@@ -138,21 +138,42 @@
     <script>
         (function () {
             var MOBILE_BREAKPOINT = 992;
+            var STORAGE_KEY = 'etogo.sidebar.minimized';
 
             function isMobile() {
                 return window.innerWidth < MOBILE_BREAKPOINT;
             }
 
-            function openSidebar() {
-                document.body.classList.add('sidebar-mobile-open');
+            function shouldMinimizeSidebar() {
+                try {
+                    return localStorage.getItem(STORAGE_KEY) === '1';
+                } catch (error) {
+                    return false;
+                }
             }
 
             function closeSidebar() {
                 document.body.classList.remove('sidebar-mobile-open');
             }
 
+            function removeLegacySidebarState() {
+                document.body.classList.remove('sidebar-icon-only', 'sidebar-hidden');
+            }
+
+            function applyDesktopSidebarState() {
+                removeLegacySidebarState();
+
+                if (isMobile()) {
+                    document.body.classList.remove('sidebar-minimized');
+                    return;
+                }
+
+                document.body.classList.toggle('sidebar-minimized', shouldMinimizeSidebar());
+            }
+
             document.addEventListener('DOMContentLoaded', function () {
                 var backdrop = document.getElementById('sidebarBackdrop');
+                applyDesktopSidebarState();
 
                 // Mobile-only right toggler (data-toggle="offcanvas")
                 var mobileToggler = document.querySelector('.navbar-toggler[data-toggle="offcanvas"]');
@@ -164,14 +185,25 @@
                     });
                 }
 
-                // Desktop minimize toggler: also handle on mobile if no offcanvas button present
+                // Desktop minimize toggler
                 var desktopToggler = document.querySelector('.navbar-toggler[data-toggle="minimize"]');
-                if (desktopToggler && !mobileToggler) {
+                if (desktopToggler) {
                     desktopToggler.addEventListener('click', function (e) {
+                        e.preventDefault();
+                        e.stopImmediatePropagation();
+
                         if (isMobile()) {
-                            e.preventDefault();
-                            e.stopImmediatePropagation();
                             document.body.classList.toggle('sidebar-mobile-open');
+                            return;
+                        }
+
+                        var minimized = !document.body.classList.contains('sidebar-minimized');
+                        removeLegacySidebarState();
+                        document.body.classList.toggle('sidebar-minimized', minimized);
+                        try {
+                            localStorage.setItem(STORAGE_KEY, minimized ? '1' : '0');
+                        } catch (error) {
+                            // Ignore storage failures; the current page state still changes.
                         }
                     });
                 }
@@ -200,6 +232,7 @@
                 // Close when resizing to desktop
                 window.addEventListener('resize', function () {
                     if (!isMobile()) { closeSidebar(); }
+                    applyDesktopSidebarState();
                 });
             });
         })();

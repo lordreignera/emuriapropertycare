@@ -2,8 +2,8 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
 use App\Models\Property;
+use Illuminate\Console\Command;
 
 class CheckPropertiesStatus extends Command
 {
@@ -12,88 +12,66 @@ class CheckPropertiesStatus extends Command
      *
      * @var string
      */
-    protected $signature = 'properties:check-status {--approve= : Approve property by ID}';
+    protected $signature = 'properties:check-status';
 
     /**
      * The console command description.
      *
      * @var string
      */
-    protected $description = 'Check properties status and optionally approve them';
+    protected $description = 'Check property lifecycle status';
 
     /**
      * Execute the console command.
      */
-    public function handle()
+    public function handle(): int
     {
-        // Check if we need to approve a property
-        if ($propertyId = $this->option('approve')) {
-            $property = Property::find($propertyId);
-            
-            if (!$property) {
-                $this->error("Property with ID {$propertyId} not found!");
-                return 1;
-            }
-            
-            $property->update([
-                'status' => 'approved',
-                'approved_at' => now(),
-            ]);
-            
-            $this->info("✅ Property {$property->property_code} ({$property->property_name}) has been APPROVED!");
-            $this->line("The client can now schedule an inspection.");
-            return 0;
-        }
-        
-        // Display all properties
-        $this->info("=== PROPERTIES STATUS CHECK ===");
+        $this->info('=== PROPERTIES STATUS CHECK ===');
         $this->newLine();
-        
+
         $properties = Property::select('id', 'property_code', 'property_name', 'status', 'user_id')->get();
-        
+
         if ($properties->isEmpty()) {
-            $this->warn("No properties found in database.");
-            return 0;
+            $this->warn('No properties found in database.');
+            return self::SUCCESS;
         }
-        
+
         $this->info("Found {$properties->count()} properties:");
         $this->newLine();
-        
+
         $tableData = [];
         foreach ($properties as $property) {
-            $statusIcon = match($property->status) {
-                'approved' => '✅',
-                'pending_approval' => '⏳',
-                'rejected' => '❌',
-                'awaiting_inspection' => '🔍',
-                default => '❓',
+            $statusIcon = match ($property->status) {
+                'registered' => '[registered]',
+                'awaiting_inspection' => '[awaiting]',
+                'in_assessment' => '[assessment]',
+                'assessed' => '[assessed]',
+                'archived' => '[archived]',
+                default => '[unknown]',
             };
-            
+
             $tableData[] = [
                 $property->id,
                 $property->property_code,
                 $property->property_name,
-                $statusIcon . ' ' . $property->status,
+                $statusIcon . ' ' . str_replace('_', ' ', (string) $property->status),
                 $property->user_id,
             ];
         }
-        
+
         $this->table(
             ['ID', 'Code', 'Name', 'Status', 'User ID'],
             $tableData
         );
-        
+
         $this->newLine();
-        $this->info("Status Guide:");
-        $this->line("  ⏳ pending_approval - Needs admin approval");
-        $this->line("  ✅ approved - Can schedule inspection");
-        $this->line("  ❌ rejected - Rejected by admin");
-        $this->line("  🔍 awaiting_inspection - Inspection scheduled");
-        
-        $this->newLine();
-        $this->comment("To approve a property, run:");
-        $this->line("  php artisan properties:check-status --approve=[PROPERTY_ID]");
-        
-        return 0;
+        $this->info('Status Guide:');
+        $this->line('  registered - Client added the property and can schedule inspection');
+        $this->line('  awaiting_inspection - Inspection is scheduled and paid');
+        $this->line('  in_assessment - Inspector is assessing the property');
+        $this->line('  assessed - PHAR assessment/report journey is complete');
+        $this->line('  archived - Property is no longer active');
+
+        return self::SUCCESS;
     }
 }

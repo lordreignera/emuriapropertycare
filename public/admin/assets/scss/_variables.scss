@@ -81,10 +81,10 @@ $theme-colors: (
 ////////// COLOR SYSTEM //////////
 
 ////////// COLOR VARIABLES //////////
-$content-bg: #000000;
+$content-bg: #f4f7fb;
 $footer-bg: $content-bg;
 $footer-color: color(dark);
-$border-color: #2c2e33;
+$border-color: #dfe6ef;
 ////////// COLOR VARIABLES //////////
 
 ////////// SOCIAL COLORS //////////
@@ -115,7 +115,7 @@ $font-weight-bold: 700;
 $default-font-size: .875rem; // 14px as base font size
 
 $text-muted: #6c7293;
-$body-color: #ffffff;
+$body-color: #172033;
 
 ////////// FONT VARIABLES //////////
 
@@ -397,5 +397,4 @@ $page-title-color: $body-color;
 ////////   MISC  //////////////
 
 $buy-nowbanner-padding-top:60px;
-
 

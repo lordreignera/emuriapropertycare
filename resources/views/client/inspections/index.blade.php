@@ -1,17 +1,67 @@
 @extends('client.layout')
 
-@section('title', ($viewMode ?? 'inspections') === 'quotations' ? 'My Quotations' : 'My Inspections')
+@section('title', ($viewMode ?? 'inspections') === 'quotations' ? 'Remediation Proposals' : 'PHAR Assessments')
 
 @section('content')
+@if(($viewMode ?? 'inspections') !== 'quotations' && !empty($findingsReadyInspections) && $findingsReadyInspections->isNotEmpty())
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border-0 shadow-sm client-report-ready-card">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+                    <div class="d-flex align-items-start gap-3">
+                        <div class="client-report-ready-icon">
+                            <i class="mdi mdi-file-document-check-outline"></i>
+                        </div>
+                        <div>
+                            <h4 class="mb-1 fw-bold">Your PHAR report is ready</h4>
+                            <p class="text-muted mb-0">
+                                Open the report to review the assessment findings, photos, and plain-language explanation before choosing what should move forward.
+                            </p>
+                        </div>
+                    </div>
+                    @if($findingsReadyInspections->count() === 1)
+                        @php $readyInspection = $findingsReadyInspections->first(); @endphp
+                        <a href="{{ route('client.inspections.findings-report', $readyInspection->id) }}" class="btn btn-primary">
+                            <i class="mdi mdi-open-in-new me-1"></i>
+                            Open PHAR Report
+                        </a>
+                    @endif
+                </div>
+
+                <div class="row g-3">
+                    @foreach($findingsReadyInspections as $inspection)
+                        <div class="col-xl-4 col-md-6">
+                            <div class="client-report-ready-item">
+                                <div class="fw-semibold text-dark">{{ $inspection->property?->property_name ?? 'Property' }}</div>
+                                <div class="small text-muted mb-3">
+                                    {{ $inspection->property?->property_code ?? 'Assessment #' . $inspection->id }}
+                                    <span class="mx-1">.</span>
+                                    {{ (int) ($inspection->phar_findings_count ?? 0) }} finding{{ (int) ($inspection->phar_findings_count ?? 0) === 1 ? '' : 's' }}
+                                </div>
+                                <a href="{{ route('client.inspections.findings-report', $inspection->id) }}" class="btn btn-primary btn-sm w-100">
+                                    <i class="mdi mdi-file-eye-outline me-1"></i>
+                                    Open PHAR Report
+                                </a>
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+@endif
+
 <div class="row">
     <div class="col-12">
         <div class="card">
             <div class="card-header bg-primary text-white">
                 <h5 class="mb-0">
                     @if(($viewMode ?? 'inspections') === 'quotations')
-                        <i class="mdi mdi-file-check-outline me-2"></i>My Quotations
+                        <i class="mdi mdi-file-check-outline me-2"></i>Remediation Proposals
                     @else
-                        <i class="mdi mdi-clipboard-check me-2"></i>My Inspections
+                        <i class="mdi mdi-clipboard-check me-2"></i>PHAR Assessments
                     @endif
                 </h5>
             </div>
@@ -22,10 +72,10 @@
                             <tr>
                                 <th>Property</th>
                                 <th>Status</th>
-                                <th>Inspection Fee</th>
+                                <th>PHAR Fee</th>
                                 <th>Date</th>
-                                <th>Final Monthly</th>
-                                <th>Work Payment</th>
+                                <th>Approved Amount</th>
+                                <th>Remediation Payment</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -40,6 +90,10 @@
                                         @php $status = strtolower((string) ($inspection->status ?? 'pending')); @endphp
                                         @if($status === 'completed')
                                             <span class="badge bg-success">Completed</span>
+                                        @elseif(!empty($inspection->findings_report_shared_at) && empty($inspection->client_committed_at))
+                                            <span class="badge bg-primary">Findings Ready for Review</span>
+                                        @elseif(!empty($inspection->client_committed_at) && empty($inspection->active_quotation_id))
+                                            <span class="badge bg-info text-dark">Proposal Being Prepared</span>
                                         @elseif($status === 'in_progress')
                                             <span class="badge bg-info text-dark">In Progress</span>
                                         @elseif($status === 'scheduled')
@@ -119,6 +173,15 @@
                                         @endif
                                     </td>
                                     <td>
+                                        @if($inspection->activeSpatialModels->isNotEmpty() || $inspection->activeMatterportModel)
+                                            <div class="d-flex flex-wrap gap-1 mb-1">
+                                                <a href="{{ route('inspections.digital-twin', $inspection->id) }}" class="btn btn-sm btn-outline-primary">
+                                                    <i class="mdi mdi-cube-scan"></i>
+                                                    Open Digital Twin
+                                                </a>
+                                            </div>
+                                        @endif
+
                                         @if(($inspection->status ?? null) === 'completed')
                                             <div class="d-flex flex-wrap gap-1">
                                                 <a href="{{ route('client.inspections.report', $inspection->id) }}" class="btn btn-sm btn-info">
@@ -126,7 +189,7 @@
                                                 </a>
                                                 <a href="{{ route('client.inspections.agreement', $inspection->id) }}" class="btn btn-sm {{ $inspection->approved_by_client ? 'btn-success' : 'btn-outline-success' }}">
                                                     <i class="mdi mdi-file-sign"></i>
-                                                    {{ $inspection->etogo_signed_at ? 'Finalized' : ($inspection->approved_by_client ? 'Awaiting Countersign' : 'Sign Agreement') }}
+                                                    {{ $inspection->etogo_signed_at ? 'Finalized' : ($inspection->approved_by_client ? 'Awaiting ETOGO Signoff' : 'Sign Agreement') }}
                                                 </a>
                                                 @if($canPay)
                                                     <a href="{{ route('client.inspections.work-payment', $inspection->id) }}" class="btn btn-sm btn-danger">
@@ -146,19 +209,37 @@
                                                             <i class="mdi mdi-clock-outline me-1"></i>Awaiting Admin Finalization
                                                         </span>
                                                         <a href="{{ route('client.inspections.quotation', $inspection->id) }}" class="btn btn-sm btn-link text-muted p-0">
-                                                            <small>View approved quotation</small>
+                                                            <small>View approved proposal</small>
                                                         </a>
                                                     </div>
                                                 @else
                                                     <a href="{{ route('client.inspections.quotation', $inspection->id) }}" class="btn btn-sm btn-primary">
                                                         <i class="mdi mdi-file-check-outline"></i>
-                                                        Review Quotation
+                                                        Review Proposal
                                                     </a>
+                                                @endif
+                                            </div>
+                                        @elseif(!empty($inspection->findings_report_shared_at))
+                                            <div class="d-flex flex-wrap gap-1">
+                                                @if(empty($inspection->client_committed_at))
+                                                    <a href="{{ route('client.inspections.findings-report', $inspection->id) }}" class="btn btn-sm btn-primary">
+                                                        <i class="mdi mdi-file-eye-outline"></i>
+                                                        Open PHAR Report
+                                                    </a>
+                                                @else
+                                                    <div class="d-flex flex-column gap-1">
+                                                        <span class="badge bg-info text-dark px-2 py-2">
+                                                            <i class="mdi mdi-clock-outline me-1"></i>Proposal Being Prepared
+                                                        </span>
+                                                        <a href="{{ route('client.inspections.findings-report', $inspection->id) }}" class="btn btn-sm btn-link text-muted p-0">
+                                                            <small>View my findings decisions</small>
+                                                        </a>
+                                                    </div>
                                                 @endif
                                             </div>
                                         @else
                                             <button class="btn btn-sm btn-secondary text-white border-0" style="opacity: 1; cursor: not-allowed;" disabled>
-                                                Awaiting quotation/report
+                                                Awaiting proposal/report
                                             </button>
                                         @endif
                                     </td>
@@ -167,9 +248,9 @@
                                 <tr>
                                     <td colspan="7" class="text-center text-muted py-4">
                                         @if(($viewMode ?? 'inspections') === 'quotations')
-                                            No quotations available yet.
+                                            No remediation proposals available yet.
                                         @else
-                                            No inspections yet.
+                                            No PHAR assessments yet.
                                         @endif
                                     </td>
                                 </tr>
@@ -185,4 +266,34 @@
         </div>
     </div>
 </div>
+<style>
+.client-report-ready-card {
+    border-left: 4px solid #1769e8 !important;
+    background: #f8fbff !important;
+}
+
+.client-report-ready-icon {
+    width: 48px !important;
+    height: 48px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex: 0 0 auto !important;
+    border-radius: 8px !important;
+    background: #e8f1ff !important;
+    color: #1769e8 !important;
+}
+
+.client-report-ready-icon i {
+    font-size: 1.5rem !important;
+}
+
+.client-report-ready-item {
+    height: 100% !important;
+    padding: 14px !important;
+    border: 1px solid #dfe6ef !important;
+    border-radius: 8px !important;
+    background: #ffffff !important;
+}
+</style>
 @endsection

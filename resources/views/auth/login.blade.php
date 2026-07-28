@@ -7,7 +7,7 @@
     <title>Login - EMURIA PropertyCare</title>
     
     <!-- Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -20,7 +20,7 @@
         }
 
         body {
-            font-family: 'Inter', sans-serif;
+            font-family: "Intel Clear", "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
             background: #eef4fb;
             min-height: 100vh;
             display: flex;
@@ -42,9 +42,9 @@
 
         .login-left {
             flex: .92;
-            background: #eaf4ff;
+            background: linear-gradient(180deg, rgba(8, 43, 103, .96) 0%, #031b46 42%, #021437 100%);
             padding: 60px 40px;
-            color: #172033;
+            color: #eaf2ff;
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -78,24 +78,25 @@
         }
 
         .logo .highlight {
-            color: #2458d6;
+            color: #8fb7ff;
         }
 
         .login-logo-mark {
             width: 64px;
             height: 64px;
             object-fit: contain;
-            background: #ffffff;
-            border: 1px solid #d7e7f7;
+            background: rgba(255,255,255,.08);
+            border: 1px solid rgba(255,255,255,.12);
             border-radius: 8px;
             padding: 10px;
+            box-shadow: 0 8px 18px rgba(2, 6, 23, .18);
         }
 
         .tagline {
             font-size: 1rem;
             font-weight: 500;
             margin-bottom: 30px;
-            color: #475467;
+            color: #93a8c7;
             opacity: 1;
         }
 
@@ -109,7 +110,7 @@
             align-items: center;
             margin-bottom: 20px;
             font-size: .96rem;
-            color: #344054;
+            color: #eaf2ff;
             opacity: 1;
         }
 
@@ -120,10 +121,10 @@
             align-items: center;
             justify-content: center;
             border-radius: 7px;
-            background: #dbeafa;
+            background: rgba(255,255,255,.10);
             font-size: .95rem;
             margin-right: 15px;
-            color: #2458d6;
+            color: #8fb7ff;
         }
 
         .login-right {
@@ -396,7 +397,7 @@
                     </li>
                     <li>
                         <i class="fas fa-check-circle"></i>
-                        <span>Real-time Inspections & Reports</span>
+                        <span>Real-time Diagnosis & Reports</span>
                     </li>
                     <li>
                         <i class="fas fa-check-circle"></i>

@@ -14,6 +14,12 @@
             ->whereIn('quotation_status', ['shared', 'client_reviewing', 'approved'])
             ->count();
 
+    $findingsReadyCount = \App\Models\Inspection::whereIn('property_id', $clientPropertyIds)
+        ->whereNotNull('findings_report_shared_at')
+        ->whereNull('client_committed_at')
+        ->where('status', '!=', 'completed')
+        ->count();
+
     $unpaidInvoicesCount = \App\Models\Invoice::where('user_id', Auth::id())
         ->whereIn('status', ['draft', 'sent', 'partial', 'overdue'])
         ->count();
@@ -21,8 +27,8 @@
         ->whereNotIn('status', ['resolved', 'cancelled'])
         ->count();
 
-    $propertyOpen = request()->routeIs('client.properties.*') || request()->routeIs('client.tenants.*');
-    $servicesOpen = request()->routeIs('client.inspections.*') || request()->routeIs('client.projects.*') || request()->routeIs('client.service-requests.*');
+    $propertyOpen = request()->routeIs('client.properties.*');
+    $servicesOpen = request()->routeIs('client.inspections.*') || request()->routeIs('inspections.digital-twin') || request()->routeIs('client.projects.*') || request()->routeIs('client.service-requests.*');
     $billingOpen = request()->routeIs('client.invoices.*') || request()->routeIs('client.subscription.*');
     $supportOpen = request()->routeIs('client.complaints.*') || request()->routeIs('client.emergency-reports.*') || request()->routeIs('client.support');
 @endphp
@@ -45,14 +51,13 @@
             <summary class="client-link {{ $propertyOpen ? 'is-active' : '' }}">
                 <span class="client-summary-left">
                     <i class="mdi mdi-home-city icon-primary"></i>
-                    <span>Properties</span>
+                    <span>Property Registry</span>
                 </span>
                 <span class="client-arrow">▾</span>
             </summary>
             <div class="client-submenu">
-                <a class="client-sublink {{ request()->routeIs('client.properties.create') ? 'is-active' : '' }}" href="{{ route('client.properties.create') }}">Add Property</a>
-                <a class="client-sublink {{ request()->routeIs('client.properties.index') || request()->routeIs('client.properties.show') || request()->routeIs('client.properties.edit') ? 'is-active' : '' }}" href="{{ route('client.properties.index') }}">My Properties</a>
-                <a class="client-sublink {{ request()->routeIs('client.tenants.*') ? 'is-active' : '' }}" href="{{ route('client.tenants.index') }}">Tenants</a>
+                <a class="client-sublink {{ request()->routeIs('client.properties.create') ? 'is-active' : '' }}" href="{{ route('client.properties.create') }}">Register Property</a>
+                <a class="client-sublink {{ request()->routeIs('client.properties.index') || request()->routeIs('client.properties.show') || request()->routeIs('client.properties.edit') ? 'is-active' : '' }}" href="{{ route('client.properties.index') }}">My Property Registry</a>
             </div>
         </details>
 
@@ -60,31 +65,42 @@
             <summary class="client-link {{ $servicesOpen ? 'is-active' : '' }}">
                 <span class="client-summary-left">
                     <i class="mdi mdi-clipboard-check icon-info"></i>
-                    <span>Services</span>
+                    <span>Stewardship Workflow</span>
                 </span>
                 <span class="client-arrow">▾</span>
             </summary>
             <div class="client-submenu">
                 <a class="client-sublink {{ request()->routeIs('client.inspections.*') ? 'is-active' : '' }}" href="{{ route('client.inspections.index') }}">
-                    <span class="client-sublabel">Inspections</span>
-                    @if($scheduledInspectionsCount > 0)
+                    <span class="client-sublabel">PHAR Assessments</span>
+                    @if($findingsReadyCount > 0)
+                        <span class="client-badge">{{ $findingsReadyCount }}</span>
+                    @elseif($scheduledInspectionsCount > 0)
                         <span class="client-badge">{{ $scheduledInspectionsCount }}</span>
                     @endif
                 </a>
+                @if($findingsReadyCount > 0)
+                    <a class="client-sublink {{ request()->routeIs('client.inspections.*') ? 'is-active' : '' }}" href="{{ route('client.inspections.index') }}">
+                        <span class="client-sublabel">Findings to Review</span>
+                        <span class="client-badge">{{ $findingsReadyCount }}</span>
+                    </a>
+                @endif
                     <a class="client-sublink {{ request()->routeIs('client.inspections.quotations') ? 'is-active' : '' }}" href="{{ route('client.inspections.quotations') }}">
-                        <span class="client-sublabel">Quotations</span>
+                        <span class="client-sublabel">Remediation Proposals</span>
                         @if($quotationReadyCount > 0)
                             <span class="client-badge">{{ $quotationReadyCount }}</span>
                         @endif
                     </a>
+                <a class="client-sublink {{ request()->fullUrlIs('*service-requests/create*type=addendum*') ? 'is-active' : '' }}" href="{{ route('client.service-requests.create', ['type' => 'addendum']) }}">
+                    <span class="client-sublabel">Owner Update / Add Work</span>
+                </a>
                 <a class="client-sublink {{ request()->routeIs('client.projects.*') ? 'is-active' : '' }}" href="{{ route('client.projects.index') }}">
-                    <span class="client-sublabel">Projects Preview</span>
+                    <span class="client-sublabel">Remediation Projects</span>
                     @if($activeProjectsCount > 0)
                         <span class="client-badge">{{ $activeProjectsCount }}</span>
                     @endif
                 </a>
                 <a class="client-sublink {{ request()->routeIs('client.service-requests.*') ? 'is-active' : '' }}" href="{{ route('client.service-requests.index') }}">
-                    <span class="client-sublabel">Service Requests</span>
+                    <span class="client-sublabel">Owner Requests</span>
                     @if($openServiceRequestsCount > 0)
                         <span class="client-badge">{{ $openServiceRequestsCount }}</span>
                     @endif
@@ -142,233 +158,9 @@
         </details>
     </div>
     <div class="client-version-bar">
-        <span>EMURIA</span> <span class="client-version-badge">v1.0</span>
+        <button type="button" class="client-version-button" aria-label="Application version 1.0">
+            <span class="client-version-label">Version</span>
+            <span class="client-version-badge">1.0</span>
+        </button>
     </div>
 </nav>
-
-<style>
-.client-clean-sidebar,
-body .client-clean-sidebar,
-body.light-theme .client-clean-sidebar {
-    width: 280px !important;
-    background: #eaf4ff !important;
-    border-right: 1px solid #c8dff4 !important;
-    box-shadow: 4px 0 14px rgba(28, 58, 92, .045) !important;
-}
-
-.client-clean-sidebar,
-.client-clean-sidebar * {
-    letter-spacing: 0 !important;
-}
-
-.client-clean-sidebar .client-sidebar-inner {
-    padding: 18px 12px 16px !important;
-}
-
-.client-clean-sidebar .client-brand {
-    display: flex !important;
-    justify-content: center !important;
-    padding: 0 0 18px !important;
-}
-
-.client-clean-sidebar .client-brand a {
-    width: 64px !important;
-    height: 64px !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    background: #fff !important;
-    border-radius: 8px !important;
-    box-shadow: 0 3px 10px rgba(28, 58, 92, .08) !important;
-    text-decoration: none !important;
-}
-
-.client-clean-sidebar .client-brand-logo {
-    width: 40px !important;
-    height: auto !important;
-    object-fit: contain !important;
-}
-
-.client-clean-sidebar .client-user {
-    display: flex !important;
-    align-items: center !important;
-    gap: .7rem !important;
-    margin-bottom: .6rem !important;
-    padding: 12px !important;
-    background: rgba(255,255,255,.68) !important;
-    border: 1px solid #d7e7f7 !important;
-    border-radius: 8px !important;
-    box-shadow: none !important;
-}
-
-.client-clean-sidebar .client-avatar {
-    width: 34px !important;
-    height: 34px !important;
-    border-radius: 999px !important;
-    object-fit: cover !important;
-}
-
-.client-clean-sidebar .client-name {
-    color: #172033 !important;
-    font-size: .9rem !important;
-    font-weight: 800 !important;
-    line-height: 1.15 !important;
-}
-
-.client-clean-sidebar .client-role,
-.client-clean-sidebar .client-section-title {
-    color: #667085 !important;
-}
-
-.client-clean-sidebar .client-role {
-    font-size: .8rem !important;
-    line-height: 1.2 !important;
-}
-
-.client-clean-sidebar .client-section-title {
-    padding: 1rem .55rem .45rem !important;
-    font-size: .68rem !important;
-    font-weight: 850 !important;
-    text-transform: uppercase !important;
-    letter-spacing: .16em !important;
-}
-
-.client-clean-sidebar .client-link,
-.client-clean-sidebar .client-sublink {
-    display: flex !important;
-    align-items: center !important;
-    gap: .7rem !important;
-    color: #172033 !important;
-    text-decoration: none !important;
-    border-radius: 7px !important;
-    box-shadow: none !important;
-    font-weight: 700 !important;
-}
-
-.client-clean-sidebar .client-link {
-    min-height: 44px !important;
-    padding: .55rem !important;
-    justify-content: flex-start !important;
-}
-
-.client-clean-sidebar .client-summary-left {
-    display: flex !important;
-    align-items: center !important;
-    gap: .7rem !important;
-    flex: 1 !important;
-    min-width: 0 !important;
-}
-
-.client-clean-sidebar .client-link span,
-.client-clean-sidebar .client-sublink,
-.client-clean-sidebar .client-sublink:visited,
-.client-clean-sidebar .client-arrow {
-    color: #172033 !important;
-}
-
-.client-clean-sidebar .client-link i,
-.client-clean-sidebar .icon-success,
-.client-clean-sidebar .icon-primary,
-.client-clean-sidebar .icon-info,
-.client-clean-sidebar .icon-warning,
-.client-clean-sidebar .icon-danger {
-    width: 30px !important;
-    height: 30px !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    flex-shrink: 0 !important;
-    background: #dbeafa !important;
-    color: #344054 !important;
-    border-radius: 7px !important;
-    box-shadow: none !important;
-}
-
-.client-clean-sidebar .client-group {
-    margin: 0 !important;
-}
-
-.client-clean-sidebar .client-group summary {
-    list-style: none !important;
-    cursor: pointer !important;
-}
-
-.client-clean-sidebar .client-group summary::-webkit-details-marker {
-    display: none !important;
-}
-
-.client-clean-sidebar .client-arrow {
-    margin-left: auto !important;
-    opacity: .72 !important;
-    transition: transform .15s ease !important;
-}
-
-.client-clean-sidebar details[open] .client-arrow {
-    transform: rotate(180deg) !important;
-}
-
-.client-clean-sidebar .client-submenu {
-    padding: .18rem 0 .52rem 0 !important;
-}
-
-.client-clean-sidebar .client-sublink {
-    justify-content: space-between !important;
-    margin-left: 2.65rem !important;
-    padding: .42rem .5rem !important;
-    font-size: .86rem !important;
-    color: #344054 !important;
-}
-
-.client-clean-sidebar .client-link:hover,
-.client-clean-sidebar .client-sublink:hover {
-    background: rgba(255,255,255,.58) !important;
-}
-
-.client-clean-sidebar .client-link.is-active,
-.client-clean-sidebar .client-sublink.is-active,
-.client-clean-sidebar .is-active {
-    background: #ffffff !important;
-    color: #172033 !important;
-    border-left: 3px solid #2458d6 !important;
-    box-shadow: 0 3px 10px rgba(28, 58, 92, .055) !important;
-}
-
-.client-clean-sidebar .client-link.is-active i,
-.client-clean-sidebar .client-link:hover i {
-    background: #ffffff !important;
-    color: #2458d6 !important;
-}
-
-.client-clean-sidebar .client-badge {
-    min-width: 20px !important;
-    height: 20px !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    padding: 0 .45rem !important;
-    border-radius: 999px !important;
-    background: #2458d6 !important;
-    color: #ffffff !important;
-    font-size: .72rem !important;
-    font-weight: 800 !important;
-}
-
-.client-version-bar {
-    padding: 10px 14px !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: space-between !important;
-    border-top: 1px solid #c8dff4 !important;
-    color: #667085 !important;
-    font-size: .72rem !important;
-    font-weight: 700 !important;
-    text-transform: uppercase !important;
-}
-
-.client-version-badge {
-    background: #dbeafa !important;
-    color: #344054 !important;
-    border-radius: 999px !important;
-    padding: 2px 9px !important;
-}
-</style>

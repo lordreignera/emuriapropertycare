@@ -62,7 +62,14 @@ class BackfillApprovedQuotationPricing extends Command
                 continue;
             }
 
-            [$repairedSnapshot, $approvedLabour, $approvedMaterial] = $this->computeApprovedScopeFromSnapshot($inspection, $quotation);
+            [
+                $repairedSnapshot,
+                $approvedLabour,
+                $approvedMaterial,
+                $approvedTradeCost,
+                $approvedTradeClientPrice,
+                $approvedTradeMargin,
+            ] = $this->computeApprovedScopeFromSnapshot($inspection, $quotation);
 
             // Recalculate visits and BDC from approved labour hours (1 visit = 11 working hours)
             $approvedIds = collect($quotation->approved_finding_ids ?? [])->map(fn($id) => (int) $id);
@@ -86,11 +93,14 @@ class BackfillApprovedQuotationPricing extends Command
             ]);
             $approvedBdc = round((float) ($bdcResult['bdc_annual'] ?? 0), 2);
             
-            $approvedTotal = round($approvedLabour + $approvedMaterial + $approvedBdc, 2);
+            $approvedTotal = round($approvedLabour + $approvedMaterial + $approvedTradeClientPrice + $approvedBdc, 2);
 
             $quotationNeedsUpdate =
                 round((float) ($quotation->approved_labour_cost ?? 0), 2) !== $approvedLabour ||
                 round((float) ($quotation->approved_material_cost ?? 0), 2) !== $approvedMaterial ||
+                round((float) ($quotation->approved_trade_cost ?? 0), 2) !== $approvedTradeCost ||
+                round((float) ($quotation->approved_trade_client_price ?? 0), 2) !== $approvedTradeClientPrice ||
+                round((float) ($quotation->approved_trade_margin ?? 0), 2) !== $approvedTradeMargin ||
                 round((float) ($quotation->approved_bdc_cost ?? 0), 2) !== $approvedBdc ||
                 round((float) ($quotation->approved_total ?? 0), 2) !== $approvedTotal ||
                 $this->snapshotChanged($quotation->findings_snapshot ?? [], $repairedSnapshot->all());
@@ -98,6 +108,9 @@ class BackfillApprovedQuotationPricing extends Command
             $inspectionNeedsUpdate =
                 round((float) ($inspection->frlc_annual ?? 0), 2) !== $approvedLabour ||
                 round((float) ($inspection->fmc_annual ?? 0), 2) !== $approvedMaterial ||
+                round((float) ($inspection->trade_cost_annual ?? 0), 2) !== $approvedTradeCost ||
+                round((float) ($inspection->trade_client_price_annual ?? 0), 2) !== $approvedTradeClientPrice ||
+                round((float) ($inspection->trade_margin_annual ?? 0), 2) !== $approvedTradeMargin ||
                 round((float) ($inspection->bdc_annual ?? 0), 2) !== $approvedBdc ||
                 round((float) ($inspection->bdc_visits_per_year ?? 0), 2) !== $approvedVisits ||
                 round((float) ($inspection->estimated_task_hours ?? 0), 2) !== $approvedLabourHours ||
@@ -120,6 +133,9 @@ class BackfillApprovedQuotationPricing extends Command
                     $repairedSnapshot,
                     $approvedLabour,
                     $approvedMaterial,
+                    $approvedTradeCost,
+                    $approvedTradeClientPrice,
+                    $approvedTradeMargin,
                     $approvedBdc,
                     $approvedTotal,
                     $approvedVisits,
@@ -129,6 +145,9 @@ class BackfillApprovedQuotationPricing extends Command
                         'findings_snapshot' => $repairedSnapshot->all(),
                         'approved_labour_cost' => $approvedLabour,
                         'approved_material_cost' => $approvedMaterial,
+                        'approved_trade_cost' => $approvedTradeCost,
+                        'approved_trade_client_price' => $approvedTradeClientPrice,
+                        'approved_trade_margin' => $approvedTradeMargin,
                         'approved_bdc_cost' => $approvedBdc,
                         'approved_total' => $approvedTotal,
                     ]);
@@ -136,6 +155,9 @@ class BackfillApprovedQuotationPricing extends Command
                     $inspection->update([
                         'frlc_annual' => $approvedLabour,
                         'fmc_annual' => $approvedMaterial,
+                        'trade_cost_annual' => $approvedTradeCost,
+                        'trade_client_price_annual' => $approvedTradeClientPrice,
+                        'trade_margin_annual' => $approvedTradeMargin,
                         'bdc_annual' => $approvedBdc,
                         'bdc_visits_per_year' => $approvedVisits,
                         'estimated_task_hours' => $approvedLabourHours,
@@ -155,7 +177,7 @@ class BackfillApprovedQuotationPricing extends Command
                 $quotation->id,
                 $inspection->id,
                 $write ? 'UPDATED' : 'WOULD_UPDATE',
-                sprintf('Labour %.2f | Material %.2f | BDC %.2f | Total %.2f', $approvedLabour, $approvedMaterial, $approvedBdc, $approvedTotal),
+                sprintf('Labour %.2f | Material %.2f | Trade %.2f | BDC %.2f | Total %.2f', $approvedLabour, $approvedMaterial, $approvedTradeClientPrice, $approvedBdc, $approvedTotal),
             ];
         }
 
@@ -171,7 +193,7 @@ class BackfillApprovedQuotationPricing extends Command
     }
 
     /**
-     * @return array{0: Collection<int, array<string, mixed>>, 1: float, 2: float}
+     * @return array{0: Collection<int, array<string, mixed>>, 1: float, 2: float, 3: float, 4: float, 5: float}
      */
     private function computeApprovedScopeFromSnapshot(Inspection $inspection, InspectionQuotation $quotation): array
     {
@@ -213,8 +235,18 @@ class BackfillApprovedQuotationPricing extends Command
             ->filter(fn ($f) => $approvedIds->contains((int) ($f['id'] ?? 0)))
             ->values();
 
-        $approvedLabour = round((float) $approvedFindings->sum(fn ($f) => (float) ($f['labour_cost'] ?? 0)), 2);
+        $approvedLabour = round((float) $approvedFindings->sum(function ($f) {
+            $labour = (float) ($f['labour_cost'] ?? 0);
+            $tradeClientPrice = (float) ($f['trade_client_price'] ?? data_get($f, 'trade_pricing.etogo_client_price', 0));
+
+            return $tradeClientPrice > 0 && abs($labour - $tradeClientPrice) < 0.01
+                ? 0.0
+                : $labour;
+        }), 2);
         $approvedMaterial = round((float) $approvedFindings->sum(fn ($f) => (float) ($f['material_cost'] ?? 0)), 2);
+        $approvedTradeCost = round((float) $approvedFindings->sum(fn ($f) => (float) ($f['trade_cost'] ?? data_get($f, 'trade_pricing.trade_total_cost', 0))), 2);
+        $approvedTradeClientPrice = round((float) $approvedFindings->sum(fn ($f) => (float) ($f['trade_client_price'] ?? data_get($f, 'trade_pricing.etogo_client_price', 0))), 2);
+        $approvedTradeMargin = round((float) $approvedFindings->sum(fn ($f) => (float) ($f['trade_margin'] ?? data_get($f, 'trade_pricing.etogo_margin_amount', 0))), 2);
 
         if ($approvedLabour <= 0) {
             $approvedLabour = round((float) ($quotation->approved_labour_cost ?? 0), 2);
@@ -224,7 +256,13 @@ class BackfillApprovedQuotationPricing extends Command
             $approvedMaterial = round((float) $quotation->approved_material_cost, 2);
         }
 
-        return [$repairedSnapshot, $approvedLabour, $approvedMaterial];
+        if ($approvedTradeClientPrice <= 0 && (float) ($quotation->approved_trade_client_price ?? 0) > 0) {
+            $approvedTradeCost = round((float) ($quotation->approved_trade_cost ?? 0), 2);
+            $approvedTradeClientPrice = round((float) $quotation->approved_trade_client_price, 2);
+            $approvedTradeMargin = round((float) ($quotation->approved_trade_margin ?? 0), 2);
+        }
+
+        return [$repairedSnapshot, $approvedLabour, $approvedMaterial, $approvedTradeCost, $approvedTradeClientPrice, $approvedTradeMargin];
     }
 
     /**

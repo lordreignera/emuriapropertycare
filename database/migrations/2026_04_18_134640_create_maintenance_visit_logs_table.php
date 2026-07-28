@@ -20,6 +20,7 @@ return new class extends Migration
             $table->decimal('hours_worked', 5, 2)->nullable();
             $table->enum('status', ['pending', 'in_progress', 'completed'])->default('pending');
             $table->text('notes')->nullable();
+            $table->json('accomplished_tasks')->nullable();
             $table->timestamps();
         });
     }

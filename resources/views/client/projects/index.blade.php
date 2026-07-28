@@ -1,11 +1,11 @@
 @extends('client.layout')
 
-@section('title', 'My Projects')
+@section('title', 'Remediation Projects')
 
-@section('header', 'My Projects')
+@section('header', 'Remediation Projects')
 
 @section('breadcrumbs')
-<li class="breadcrumb-item active" aria-current="page">Projects</li>
+<li class="breadcrumb-item active" aria-current="page">Remediation Projects</li>
 @endsection
 
 @section('content')
@@ -15,8 +15,8 @@
             <div class="card-body text-white p-4">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <h3 class="fw-bold mb-1">My Projects</h3>
-                        <p class="mb-0 opacity-75">Track all active and completed care projects</p>
+                        <h3 class="fw-bold mb-1">Remediation Projects</h3>
+                        <p class="mb-0 opacity-75">Track active and completed remediation work</p>
                     </div>
                     <div class="d-flex align-items-center gap-2">
                         <span class="badge bg-white text-primary fs-6 px-3 py-2">
@@ -38,10 +38,10 @@
             <div class="card border-0 shadow-sm">
                 <div class="card-body text-center py-5">
                     <i class="mdi mdi-folder-open-outline text-muted" style="font-size: 4rem;"></i>
-                    <h5 class="mt-3 text-muted">No Projects Yet</h5>
-                    <p class="text-muted">Projects are created after your property inspection is completed and your care agreement is signed.</p>
+                    <h5 class="mt-3 text-muted">No Remediation Projects Yet</h5>
+                    <p class="text-muted">Projects are created after your PHAR assessment is completed and your care agreement is signed.</p>
                     <a href="{{ route('client.inspections.index') }}" class="btn btn-primary mt-2">
-                        <i class="mdi mdi-clipboard-check me-1"></i> View Inspections
+                        <i class="mdi mdi-clipboard-check me-1"></i> View PHAR Assessments
                     </a>
                 </div>
             </div>
@@ -54,13 +54,13 @@
                 $insp = $project->inspections->sortByDesc('completed_date')->first();
 
                 // Agreement signing state
-                $clientSigned       = $insp && $insp->approved_by_client;
-                $etogoCountersigned = $insp && $insp->etogo_signed_at;
-                $fullySigned        = $clientSigned && $etogoCountersigned;
+                $clientSigned    = $insp && $insp->approved_by_client;
+                $etogoSignedOff  = $insp && $insp->etogo_signed_at;
+                $fullySigned     = $clientSigned && $etogoSignedOff;
 
                 // Dates ONLY from the fully-signed contract (work schedule first/last visit)
                 // planned_start_date and target_completion_date are set from the work schedule
-                // which is locked once the agreement is countersigned — these ARE the contract dates.
+                // which is locked once the agreement is signed off - these ARE the contract dates.
                 $startDate = $fullySigned && $insp->planned_start_date
                     ? $insp->planned_start_date
                     : null;
@@ -308,17 +308,17 @@
                             @if(!$progDoneCheck)
                                 <div class="alert alert-light border py-2 px-3 mb-0 mt-2 small">
                                     <i class="mdi mdi-clock-outline me-1 text-warning"></i>
-                                    Awaiting inspection completion
+                                    Awaiting PHAR completion
                                 </div>
                             @elseif(!$clientSigned)
                                 <div class="alert alert-warning border-0 py-2 px-3 mb-0 mt-2 small">
                                     <i class="mdi mdi-pen me-1"></i>
                                     <strong>Action required:</strong> Agreement not yet signed
                                 </div>
-                            @elseif(!$etogoCountersigned)
+                            @elseif(!$etogoSignedOff)
                                 <div class="alert alert-info border-0 py-2 px-3 mb-0 mt-2 small">
                                     <i class="mdi mdi-clock-check-outline me-1"></i>
-                                    Signed by you — awaiting Emuria countersignature
+                                    Signed by you - awaiting ETOGO signoff
                                 </div>
                             @else
                                 <div class="alert alert-success border-0 py-2 px-3 mb-0 mt-2 small">
@@ -352,12 +352,12 @@
                                    class="btn btn-sm btn-warning w-100">
                                     <i class="mdi mdi-pen me-1"></i> Sign Agreement
                                 </a>
-                            @elseif($insp && $clientSigned && !$etogoCountersigned)
+                            @elseif($insp && $clientSigned && !$etogoSignedOff)
                                 <a href="{{ route('client.inspections.agreement', $insp->id) }}"
                                    class="btn btn-sm btn-outline-info w-100">
                                     <i class="mdi mdi-eye me-1"></i> View Agreement
                                 </a>
-                            @elseif($insp && $etogoCountersigned)
+                            @elseif($insp && $etogoSignedOff)
                                 <a href="{{ route('client.inspections.agreement', $insp->id) }}"
                                    class="btn btn-sm btn-outline-success w-100">
                                     <i class="mdi mdi-file-check me-1"></i> View Signed Agreement

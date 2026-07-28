@@ -116,14 +116,14 @@ class InspectionInvoiceSyncService
                 : (optional($existingInvoice?->due_date)->toDateString() ?? now()->addDays(14)->toDateString()),
             'line_items' => [
                 [
-                    'description' => 'Pre-Inspection Fee - ' . ($inspection->property?->property_name ?? 'Property'),
+                    'description' => 'Property Diagnosis Fee - ' . ($inspection->property?->property_name ?? 'Property'),
                     'inspection_id' => $inspection->id,
                     'quantity' => 1,
                     'unit_price' => $amount,
                     'total' => $amount,
                 ],
             ],
-            'notes' => 'Auto-synced pre-inspection fee invoice for inspection #' . $inspection->id,
+            'notes' => 'Auto-synced diagnosis fee invoice for diagnosis #' . $inspection->id,
         ];
 
         if ($existingInvoice) {

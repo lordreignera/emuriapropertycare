@@ -1,11 +1,11 @@
 @extends('client.layout')
 
-@section('title', 'My Properties')
+@section('title', 'My Property Registry')
 
-@section('header', 'My Properties')
+@section('header', 'My Property Registry')
 
 @section('breadcrumbs')
-<li class="breadcrumb-item active" aria-current="page">Properties</li>
+<li class="breadcrumb-item active" aria-current="page">Property Registry</li>
 @endsection
 
 @section('content')
@@ -16,11 +16,11 @@
             <div class="card-body text-white p-4">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <h3 class="fw-bold mb-1">My Properties</h3>
-                        <p class="mb-0 opacity-75">Manage and track all your properties</p>
+                        <h3 class="fw-bold mb-1">My Property Registry</h3>
+                        <p class="mb-0 opacity-75">Manage registered properties, property facts, diagnosis reports, and evidence</p>
                     </div>
                     <a href="{{ route('client.properties.create') }}" class="btn btn-light btn-lg shadow-sm">
-                        <i class="mdi mdi-plus me-2"></i> Add New Property
+                        <i class="mdi mdi-plus me-2"></i> Register Property
                     </a>
                 </div>
             </div>
@@ -38,7 +38,7 @@
                         <i class="mdi mdi-check-circle text-success"></i>
                     </div>
                     <div>
-                        <strong>Success!</strong> Inspection scheduled successfully! Your inspection fee has been processed. An inspector will be assigned to your property shortly.
+                        <strong>Success!</strong> Your property update was received.
                     </div>
                     <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert" aria-label="Close"></button>
                 </div>
@@ -89,7 +89,7 @@
                                 <td>
                                     @if($completedInspection)
                                         <span class="badge bg-info d-inline-flex align-items-center">
-                                            <i class="mdi mdi-file-check me-1"></i> Inspected • Report Ready
+                                            <i class="mdi mdi-file-check me-1"></i> PHAR Complete - Report Ready
                                         </span>
                                         <div class="text-muted small mt-1">
                                             {{ optional($completedInspection->completed_date)->format('M d, Y') }}
@@ -97,7 +97,7 @@
                                         @if(($completedInspection->work_payment_status ?? 'pending') === 'paid')
                                             <div class="small mt-1 text-success">
                                                 <i class="mdi mdi-check-circle-outline me-1"></i>
-                                                Work Payment: Paid
+                                                Remediation Payment: Paid
                                                 @if(($completedInspection->payment_plan ?? '') === 'installment')
                                                     (50% Deposit Plan)
                                                 @elseif(($completedInspection->work_payment_cadence ?? '') === 'per_visit')
@@ -111,19 +111,19 @@
                                         @else
                                             <div class="small mt-1 text-warning">
                                                 <i class="mdi mdi-credit-card-clock-outline me-1"></i>
-                                                Work Payment: Pending
+                                                Remediation Payment: Pending
                                             </div>
                                         @endif
                                     @elseif($hasScheduledInspection)
                                         <span class="badge bg-success d-inline-flex align-items-center">
-                                            <i class="mdi mdi-check-circle me-1"></i> Scheduled & Paid
+                                            <i class="mdi mdi-check-circle me-1"></i> Diagnosis Scheduled
                                         </span>
                                         <div class="text-muted small mt-1">
                                             {{ optional($latestInspection->inspection_fee_paid_at)->format('M d, Y') }}
                                         </div>
                                     @else
                                         <span class="badge bg-warning d-inline-flex align-items-center">
-                                            <i class="mdi mdi-alert-circle-outline me-1"></i> Not Scheduled
+                                            <i class="mdi mdi-phone-in-talk-outline me-1"></i> Awaiting ETOGO Call
                                         </span>
                                     @endif
                                 </td>
@@ -146,19 +146,27 @@
                                             <i class="mdi mdi-eye"></i>
                                         </a>
 
-                                        @if(!$hasScheduledInspection)
-                                            {{-- Schedule inspection --}}
-                                            <a href="{{ route('client.inspections.schedule', $property->id) }}"
-                                               class="btn btn-sm btn-success action-btn"
-                                               title="Schedule Inspection & Pay"
+                                        @if($latestInspection?->activeSpatialModels?->isNotEmpty() || $latestInspection?->activeMatterportModel)
+                                            <a href="{{ route('properties.digital-twin', $property) }}"
+                                               class="btn btn-sm btn-outline-primary action-btn"
+                                               title="Open Digital Twin"
                                                data-bs-toggle="tooltip">
-                                                <i class="mdi mdi-calendar-check me-1"></i> Schedule
+                                                <i class="mdi mdi-cube-scan"></i>
                                             </a>
+                                        @endif
+
+                                        @if(!$hasScheduledInspection)
+                                            <button class="btn btn-sm btn-outline-primary action-btn"
+                                                    title="ETOGO will contact you to confirm the site visit"
+                                                    data-bs-toggle="tooltip"
+                                                    disabled>
+                                                <i class="mdi mdi-phone-in-talk-outline me-1"></i> Contact Pending
+                                            </button>
                                         @elseif($completedInspection)
                                             {{-- Report --}}
                                             <a href="{{ route('client.inspections.report', $completedInspection->id) }}"
                                                class="btn btn-sm btn-primary action-btn"
-                                               title="View Inspection Report"
+                                               title="View Diagnosis Report"
                                                data-bs-toggle="tooltip">
                                                 <i class="mdi mdi-file-document-outline me-1"></i> Report
                                             </a>
@@ -207,9 +215,9 @@
                                                 </button>
                                             @endif
                                         @else
-                                            {{-- Awaiting inspection completion --}}
+                                            {{-- Awaiting PHAR completion --}}
                                             <button class="btn btn-sm btn-outline-success action-btn"
-                                                    title="Inspection Scheduled"
+                                                    title="Diagnosis Scheduled"
                                                     data-bs-toggle="tooltip"
                                                     disabled>
                                                 <i class="mdi mdi-check-circle me-1"></i> Scheduled

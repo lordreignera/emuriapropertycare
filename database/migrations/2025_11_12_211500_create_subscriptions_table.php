@@ -17,8 +17,6 @@ return new class extends Migration
             $table->foreignId('tier_id')->constrained()->onDelete('restrict');
             // property_id: nullable, no FK (circular dep — property also FKs to subscriptions)
             $table->unsignedBigInteger('property_id')->nullable();
-            // custom_product_id: column added here, FK added in create_new_system_tables after client_custom_products exists
-            $table->unsignedBigInteger('custom_product_id')->nullable();
             $table->enum('payment_cadence', ['monthly', 'annual'])->default('monthly');
             $table->enum('payment_model', ['pay_as_you_go', 'monthly', 'annual', 'hybrid'])->default('monthly');
             $table->date('start_date');

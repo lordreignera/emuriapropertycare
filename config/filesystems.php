@@ -15,6 +15,8 @@ return [
 
     'default' => env('FILESYSTEM_DISK', 'local'),
 
+    'trade_application_documents_disk' => env('TRADE_APPLICATION_DOCUMENT_DISK', 'public'),
+
     /*
     |--------------------------------------------------------------------------
     | Filesystem Disks

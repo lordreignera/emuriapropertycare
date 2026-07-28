@@ -40,6 +40,10 @@ return new class extends Migration
             $table->enum('type', ['residential', 'commercial', 'mixed_use']);
             $table->string('property_subtype')->nullable();
             $table->integer('residential_units')->nullable();
+            $table->boolean('has_high_pitched_roof')->default(false)
+                ->comment('Adds $75 surcharge to inspection fee');
+            $table->boolean('has_crawl_space')->default(false)
+                ->comment('Adds $50 surcharge to inspection fee');
             $table->decimal('mixed_use_commercial_weight', 5, 2)->nullable()->comment('Percentage (0-100) of commercial area for mixed-use properties');
             $table->integer('year_built')->nullable();
             $table->decimal('square_footage_interior', 10, 2)->default(0);
@@ -61,6 +65,8 @@ return new class extends Migration
 
             // Problems & Sensitivities
             $table->text('known_problems')->nullable();
+            $table->json('known_problem_details')->nullable();
+            $table->json('known_problem_images')->nullable();
             $table->json('sensitivities')->nullable();
 
             // Home Care Goals (from Step 3 of form)
@@ -83,9 +89,7 @@ return new class extends Migration
             $table->string('blueprint_file')->nullable();
             $table->json('property_photos')->nullable();
 
-            $table->enum('status', ['pending_approval', 'approved', 'rejected', 'awaiting_inspection'])->default('pending_approval');
-            $table->timestamp('approved_at')->nullable();
-            $table->foreignId('approved_by')->nullable()->constrained('users')->onDelete('set null');
+            $table->enum('status', ['registered', 'awaiting_inspection', 'in_assessment', 'assessed', 'archived'])->default('registered');
 
             // Complexity scoring
             $table->integer('current_complexity_score')->default(0);

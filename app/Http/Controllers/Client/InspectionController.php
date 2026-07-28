@@ -13,6 +13,8 @@ use App\Notifications\WorkPaymentReceivedNotification;
 use App\Notifications\InstallmentPaymentReceivedNotification;
 use App\Services\AgreementScheduleService;
 use App\Services\BDCCalculator;
+use App\Services\DiagnosisPricingService;
+use App\Services\InspectionFeeConfirmationService;
 use App\Services\InspectionInvoiceSyncService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -27,6 +29,7 @@ class InspectionController extends Controller
     private const BASE_FEE_PER_UNIT       = 299;
     private const HIGH_PITCHED_ROOF_FEE   = 75;
     private const CRAWL_SPACE_FEE         = 50;
+    private const COMMITTED_DECISION = 'immediate_remediation';
     private const TEST_CHARGE_CENTS       = 100; // $1.00 — TEST MODE; remove override when going live
 
     /**
@@ -34,6 +37,10 @@ class InspectionController extends Controller
      */
     private function calculateInspectionFee(\App\Models\Property $property): array
     {
+        if (isset($this->diagnosisPricingService)) {
+            return $this->diagnosisPricingService->calculate($property);
+        }
+
         $units        = max(1, (int) ($property->residential_units ?? 1));
         $baseFee      = self::BASE_FEE_PER_UNIT * $units;
         $roofSurcharge  = $property->has_high_pitched_roof ? self::HIGH_PITCHED_ROOF_FEE : 0;
@@ -59,7 +66,9 @@ class InspectionController extends Controller
 
     public function __construct(
         private readonly AgreementScheduleService $agreementScheduleService,
+        private readonly InspectionFeeConfirmationService $inspectionFeeConfirmationService,
         private readonly InspectionInvoiceSyncService $inspectionInvoiceSyncService,
+        private readonly DiagnosisPricingService $diagnosisPricingService,
     )
     {
     }
@@ -80,6 +89,16 @@ class InspectionController extends Controller
         }
     }
 
+    private function normalizeFindingDecision(string $decision): string
+    {
+        return match ($decision) {
+            'commit', self::COMMITTED_DECISION => self::COMMITTED_DECISION,
+            'defer', 'stewardship_monitoring' => 'stewardship_monitoring',
+            'decline', 'declined' => 'declined',
+            default => 'stewardship_monitoring',
+        };
+    }
+
     /**
      * List client's inspections (scheduled, in progress, completed).
      */
@@ -93,7 +112,7 @@ class InspectionController extends Controller
             ->groupBy('property_id')
             ->pluck('id');
 
-        $inspections = Inspection::with(['property', 'project'])
+        $inspections = Inspection::with(['property', 'project', 'activeMatterportModel', 'activeSpatialModels'])
             ->whereIn('id', $latestInspectionIds)
             ->whereIn('property_id', $propertyIds)
             ->where('status', '!=', 'cancelled')
@@ -101,8 +120,19 @@ class InspectionController extends Controller
             ->orderByDesc('id')
             ->paginate(10);
 
+        $findingsReadyInspections = Inspection::with('property')
+            ->withCount('pharFindings')
+            ->whereIn('property_id', $propertyIds)
+            ->whereNotNull('findings_report_shared_at')
+            ->whereNull('client_committed_at')
+            ->where('status', '!=', 'completed')
+            ->orderByDesc('findings_report_shared_at')
+            ->orderByDesc('id')
+            ->take(3)
+            ->get();
+
         $viewMode = 'inspections';
-        return view('client.inspections.index', compact('inspections', 'viewMode'));
+        return view('client.inspections.index', compact('inspections', 'viewMode', 'findingsReadyInspections'));
     }
 
     /**
@@ -165,6 +195,14 @@ class InspectionController extends Controller
         }
 
         $inspection = $this->agreementScheduleService->refresh($inspection);
+        $inspection->loadMissing([
+            'property',
+            'activeMatterportModel',
+            'activeSpatialModels.captureSession',
+            'issueMarkers.spatialModel',
+            'issueMarkers.captureSession',
+            'issueMarkers.pharFinding',
+        ]);
 
         $findings = \App\Models\PHARFinding::where('inspection_id', $inspection->id)
             ->orderBy('id')
@@ -280,6 +318,161 @@ class InspectionController extends Controller
         $inspection->save();
 
         return back()->with('success', 'Finding photos uploaded successfully.');
+    }
+
+    /**
+     * ETOGO Stage C — Show the findings report to the client (no pricing).
+     *
+     * Plain-language summary of what the inspector found, grouped by space /
+     * system / severity. The client uses this view to decide which findings to
+     * commit to (commit / defer / decline). Pricing happens only AFTER they
+     * commit (Stage D handled by admin).
+     */
+    public function findingsReport(Inspection $inspection)
+    {
+        $this->authorizeInspection($inspection);
+        $inspection->loadMissing([
+            'property',
+            'activeMatterportModel',
+            'activeSpatialModels.captureSession',
+            'issueMarkers.spatialModel',
+            'issueMarkers.captureSession',
+            'issueMarkers.pharFinding',
+        ]);
+
+        if (!$inspection->hasSharedFindingsReport() && !in_array($inspection->status, ['findings_shared', 'client_committed', 'estimation_in_progress', 'estimation_completed', 'quotation_shared', 'quotation_approved', 'completed', 'approved'], true)) {
+            return redirect()->route('client.inspections.index')
+                ->with('info', 'The findings report has not been shared with you yet. You will be notified once it is ready for review.');
+        }
+
+        $findings = \App\Models\PHARFinding::where('inspection_id', $inspection->id)
+            ->orderByRaw("
+                CASE severity
+                    WHEN 'critical' THEN 1
+                    WHEN 'high' THEN 2
+                    WHEN 'moderate' THEN 3
+                    WHEN 'medium' THEN 3
+                    WHEN 'low' THEN 4
+                    ELSE 5
+                END
+            ")
+            ->orderBy('id')
+            ->get();
+
+        $existingDecisions = \App\Models\FindingClientDecision::where('inspection_id', $inspection->id)
+            ->whereNull('inspection_quotation_id')
+            ->get()
+            ->keyBy('phar_finding_id');
+
+        return view('client.inspections.findings-report', [
+            'inspection'        => $inspection,
+            'findings'          => $findings,
+            'existingDecisions' => $existingDecisions,
+            'alreadyCommitted'  => $inspection->hasClientCommitted(),
+        ]);
+    }
+
+    /**
+     * ETOGO Stage C (save) — Client commits per-finding decisions.
+     *
+     * Persists one FindingClientDecision per finding using the PHAR finding record.
+     * decision vocabulary. Marks the inspection client_committed so admin can
+     * move to Stage D (estimation).
+     */
+    public function commitFindings(Request $request, Inspection $inspection)
+    {
+        $this->authorizeInspection($inspection);
+
+        if (!$inspection->hasSharedFindingsReport()) {
+            return redirect()->route('client.inspections.index')
+                ->with('error', 'The findings report has not been shared with you yet.');
+        }
+
+        $validated = $request->validate([
+            'decisions'              => 'required|array|min:1',
+            'decisions.*.finding_id' => 'required|integer|exists:phar_findings,id',
+            'decisions.*.decision'   => 'required|in:commit,defer,decline,immediate_remediation,stewardship_monitoring,declined',
+            'decisions.*.notes'      => 'nullable|string|max:1000',
+        ]);
+
+        $findingIds = \App\Models\PHARFinding::where('inspection_id', $inspection->id)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        if (empty($findingIds)) {
+            return redirect()->route('client.inspections.findings-report', $inspection->id)
+                ->with('error', 'No findings are available for decisions yet.');
+        }
+
+        $expectedFindingIds = collect($findingIds)->sort()->values();
+        $submittedFindingIds = collect($validated['decisions'])
+            ->pluck('finding_id')
+            ->map(fn ($id) => (int) $id)
+            ->sort()
+            ->values();
+
+        if (
+            $submittedFindingIds->count() !== $expectedFindingIds->count()
+            || $submittedFindingIds->unique()->count() !== $submittedFindingIds->count()
+            || $submittedFindingIds->diff($expectedFindingIds)->isNotEmpty()
+            || $expectedFindingIds->diff($submittedFindingIds)->isNotEmpty()
+        ) {
+            return redirect()->route('client.inspections.findings-report', $inspection->id)
+                ->withErrors(['decisions' => 'Please choose one decision for every finding in this report.'])
+                ->withInput();
+        }
+
+        $userId = Auth::id();
+
+        $committedCount = 0;
+
+        DB::transaction(function () use ($validated, $inspection, $findingIds, $userId, &$committedCount) {
+            foreach ($validated['decisions'] as $row) {
+                $findingId = (int) $row['finding_id'];
+                if (!in_array($findingId, $findingIds, true)) {
+                    continue; // Skip ids that don't belong to this inspection
+                }
+
+                $decision = $this->normalizeFindingDecision((string) $row['decision']);
+
+                \App\Models\FindingClientDecision::updateOrCreate(
+                    [
+                        'inspection_id'           => $inspection->id,
+                        'phar_finding_id'         => $findingId,
+                        'inspection_quotation_id' => null,
+                    ],
+                    [
+                        'decided_by'   => $userId,
+                        'decision'     => $decision,
+                        'client_notes' => $row['notes'] ?? null,
+                        'decided_at'   => now(),
+                    ]
+                );
+
+                if ($decision === self::COMMITTED_DECISION) {
+                    $committedCount++;
+                }
+            }
+
+            $inspection->update($committedCount > 0
+                ? [
+                    'status'              => 'client_committed',
+                    'client_committed_at' => now(),
+                ]
+                : [
+                    'status'              => 'findings_shared',
+                    'client_committed_at' => null,
+                ]);
+        });
+
+        if ($committedCount === 0) {
+            return redirect()->route('client.inspections.findings-report', $inspection->id)
+                ->with('warning', 'Your decisions were recorded. Since no items were committed, no pricing will be prepared.');
+        }
+
+        return redirect()->route('client.inspections.index')
+            ->with('success', "You have committed to {$committedCount} finding(s). Our team will now prepare pricing and a formal quotation for your review.");
     }
 
     /**
@@ -509,7 +702,14 @@ class InspectionController extends Controller
         $deferredIds = $snapshotIds->diff($approvedIds)->values();
         $approvedFindings = $allFindings->filter(fn ($f) => $approvedIds->contains((int) ($f['id'] ?? 0)))->values();
 
-        $approvedLabour = round((float) $approvedFindings->sum(fn ($f) => (float) ($f['labour_cost'] ?? 0)), 2);
+        $approvedLabour = round((float) $approvedFindings->sum(function ($f) {
+            $labour = (float) ($f['labour_cost'] ?? 0);
+            $tradeClientPrice = (float) ($f['trade_client_price'] ?? data_get($f, 'trade_pricing.etogo_client_price', 0));
+
+            return $tradeClientPrice > 0 && abs($labour - $tradeClientPrice) < 0.01
+                ? 0.0
+                : $labour;
+        }), 2);
         $approvedMaterial = round((float) $approvedFindings->sum(fn ($f) => (float) ($f['material_cost'] ?? 0)), 2);
         $approvedTradeCost = round((float) $approvedFindings->sum(fn ($f) => (float) ($f['trade_cost'] ?? data_get($f, 'trade_pricing.trade_total_cost', 0))), 2);
         $approvedTradeClientPrice = round((float) $approvedFindings->sum(fn ($f) => (float) ($f['trade_client_price'] ?? data_get($f, 'trade_pricing.etogo_client_price', 0))), 2);
@@ -534,7 +734,7 @@ class InspectionController extends Controller
         ]);
         $approvedBdc = round((float) ($bdcResult['bdc_annual'] ?? 0), 2);
         
-        $approvedTotal = round($approvedLabour + $approvedMaterial + $approvedBdc, 2);
+        $approvedTotal = round($approvedLabour + $approvedMaterial + $approvedTradeClientPrice + $approvedBdc, 2);
 
         $quotationStatus = 'approved';
         $inspectionQuotationStatus = 'approved';
@@ -591,11 +791,11 @@ class InspectionController extends Controller
                 'scientific_final_annual' => $approvedTotal,
                 'arp_equivalent_final' => $approvedTotal,
                 'base_package_price_snapshot' => $approvedTotal,
+                'status' => 'quotation_approved',
                 'quotation_status' => $inspectionQuotationStatus,
                 'quotation_approved_at' => now(),
             ]);
         });
-
         $propertyName = (string) ($inspection->property?->property_name ?? 'Property');
         $adminRecipients = User::role(['Super Admin', 'Administrator'])
             ->get()
@@ -742,15 +942,22 @@ class InspectionController extends Controller
             $adminRecipients = User::role(['Super Admin', 'Administrator', 'Project Manager'])
                 ->get()->unique('id')->values();
             if ($adminRecipients->isNotEmpty()) {
-                Notification::send($adminRecipients, new WorkPaymentReceivedNotification(
-                    inspectionId: (int) $inspection->id,
-                    propertyId:   (int) $inspection->property_id,
-                    propertyName: (string) ($inspection->property->property_name ?? 'Property'),
-                    propertyCode: (string) ($inspection->property->property_code ?? 'N/A'),
-                    amount:       round(((float) $paymentIntent->amount_received) / 100, 2),
-                    clientName:   (string) (Auth::user()->name ?? 'Client'),
-                    plan:         $plan,
-                ));
+                try {
+                    Notification::send($adminRecipients, new WorkPaymentReceivedNotification(
+                        inspectionId: (int) $inspection->id,
+                        propertyId:   (int) $inspection->property_id,
+                        propertyName: (string) ($inspection->property->property_name ?? 'Property'),
+                        propertyCode: (string) ($inspection->property->property_code ?? 'N/A'),
+                        amount:       round(((float) $paymentIntent->amount_received) / 100, 2),
+                        clientName:   (string) (Auth::user()->name ?? 'Client'),
+                        plan:         $plan,
+                    ));
+                } catch (\Throwable $e) {
+                    \Log::warning('Work payment notification failed', [
+                        'inspection_id' => $inspection->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
             }
 
             return response()->json([
@@ -878,17 +1085,24 @@ class InspectionController extends Controller
             $adminRecipients = User::role(['Super Admin', 'Administrator', 'Project Manager'])
                 ->get()->unique('id')->values();
             if ($adminRecipients->isNotEmpty()) {
-                Notification::send($adminRecipients, new InstallmentPaymentReceivedNotification(
-                    inspectionId:        (int) $inspection->id,
-                    propertyId:          (int) $inspection->property_id,
-                    propertyName:        (string) ($inspection->property->property_name ?? 'Property'),
-                    propertyCode:        (string) ($inspection->property->property_code ?? 'N/A'),
-                    amount:              round(((float) $paymentIntent->amount_received) / 100, 2),
-                    clientName:          (string) (Auth::user()->name ?? 'Client'),
-                    installmentNumber:   $paid,
-                    totalInstallments:   $total,
-                    plan:                $inspection->payment_plan ?? 'installment',
-                ));
+                try {
+                    Notification::send($adminRecipients, new InstallmentPaymentReceivedNotification(
+                        inspectionId:        (int) $inspection->id,
+                        propertyId:          (int) $inspection->property_id,
+                        propertyName:        (string) ($inspection->property->property_name ?? 'Property'),
+                        propertyCode:        (string) ($inspection->property->property_code ?? 'N/A'),
+                        amount:              round(((float) $paymentIntent->amount_received) / 100, 2),
+                        clientName:          (string) (Auth::user()->name ?? 'Client'),
+                        installmentNumber:   $paid,
+                        totalInstallments:   $total,
+                        plan:                $inspection->payment_plan ?? 'installment',
+                    ));
+                } catch (\Throwable $e) {
+                    \Log::warning('Installment payment notification failed', [
+                        'inspection_id' => $inspection->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
             }
 
             return response()->json([
@@ -931,7 +1145,7 @@ class InspectionController extends Controller
     public function scheduleCreate(Property $property)
     {
         // Verify property belongs to current user
-        if ($property->user_id !== Auth::id()) {
+        if ((int) $property->user_id !== (int) Auth::id()) {
             abort(403, 'Unauthorized: This property does not belong to you.');
         }
 
@@ -946,29 +1160,75 @@ class InspectionController extends Controller
                 ->with('info', 'An inspection has already been scheduled and paid for this property.');
         }
 
-        // Create Stripe Payment Intent
-        $stripe = new \Stripe\StripeClient(config('cashier.secret'));
         $feeData = $this->calculateInspectionFee($property);
-
-        $paymentIntent = $stripe->paymentIntents->create([
-            'amount' => $feeData['charge_cents'],
-            'currency' => strtolower((string) config('cashier.currency', 'usd')),
-            'metadata' => [
-                'payment_type' => 'inspection_fee',
-                'property_id' => $property->id,
-                'user_id' => Auth::id(),
-                'property_name' => $property->property_name,
-                'inspection_full_amount' => number_format((float) $feeData['total_dollars'], 2, '.', ''),
-            ],
-        ]);
 
         return view('client.inspections.schedule', [
             'property' => $property,
             'feeData' => $feeData,
             'inspectionFee' => $feeData['charge_dollars'],
-            'clientSecret' => $paymentIntent->client_secret,
             'stripeKey' => config('cashier.key'),
         ]);
+    }
+
+    public function createInspectionPaymentIntent(Request $request, Property $property)
+    {
+        if ((int) $property->user_id !== (int) Auth::id()) {
+            abort(403, 'Unauthorized: This property does not belong to you.');
+        }
+
+        $validated = $request->validate([
+            'preferred_date' => 'required|date|after_or_equal:today',
+            'preferred_time' => 'nullable|date_format:H:i',
+            'special_notes' => 'nullable|string|max:1000',
+        ]);
+
+        $existingInspection = Inspection::where('property_id', $property->id)
+            ->where('inspection_fee_status', 'paid')
+            ->where('status', '!=', 'cancelled')
+            ->first();
+
+        if ($existingInspection) {
+            return response()->json([
+                'success' => false,
+                'message' => 'An inspection has already been scheduled and paid for this property.',
+            ], 409);
+        }
+
+        try {
+            $feeData = $this->calculateInspectionFee($property);
+            $stripe = new \Stripe\StripeClient(config('cashier.secret'));
+
+            $paymentIntent = $stripe->paymentIntents->create([
+                'amount' => $feeData['charge_cents'],
+                'currency' => strtolower((string) config('cashier.currency', 'usd')),
+                'metadata' => [
+                    'payment_type' => 'inspection_fee',
+                    'property_id' => $property->id,
+                    'user_id' => Auth::id(),
+                    'property_name' => $property->property_name,
+                    'inspection_full_amount' => number_format((float) $feeData['total_dollars'], 2, '.', ''),
+                    'preferred_date' => (string) $validated['preferred_date'],
+                    'preferred_time' => (string) ($validated['preferred_time'] ?? '09:00'),
+                    'special_notes' => (string) Str::limit((string) ($validated['special_notes'] ?? ''), 450, ''),
+                ],
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'client_secret' => $paymentIntent->client_secret,
+            ]);
+        } catch (\Throwable $e) {
+            \Log::error('Inspection payment intent creation failed', [
+                'property_id' => $property->id,
+                'user_id' => Auth::id(),
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Payment setup is taking too long. Please refresh and try again.',
+            ], 502);
+        }
     }
 
     /**
@@ -977,7 +1237,7 @@ class InspectionController extends Controller
     public function scheduleStore(Request $request, Property $property)
     {
         // Verify property belongs to current user
-        if ($property->user_id !== Auth::id()) {
+        if ((int) $property->user_id !== (int) Auth::id()) {
             abort(403, 'Unauthorized: This property does not belong to you.');
         }
 
@@ -988,70 +1248,54 @@ class InspectionController extends Controller
             'payment_intent_id' => 'required|string',
         ]);
 
-        DB::beginTransaction();
+        $paymentIntentId = (string) $validated['payment_intent_id'];
+
+        $existingInspection = Inspection::where('property_id', $property->id)
+            ->where('stripe_payment_intent_id', $paymentIntentId)
+            ->where('inspection_fee_status', 'paid')
+            ->where('status', '!=', 'cancelled')
+            ->first();
+
+        if ($existingInspection) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Inspection already confirmed.',
+                'redirect' => route('client.properties.index'),
+            ]);
+        }
+
         try {
             // Verify payment intent
             $stripe = new \Stripe\StripeClient(config('cashier.secret'));
-            $paymentIntent = $stripe->paymentIntents->retrieve($validated['payment_intent_id']);
+            $paymentIntent = $stripe->paymentIntents->retrieve($paymentIntentId);
 
-            if ($paymentIntent->status !== 'succeeded') {
-                throw new \Exception('Payment not completed successfully.');
+            if (($paymentIntent->status ?? null) !== 'succeeded') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Payment is not completed yet. Please wait a moment and try again.',
+                ], 400);
             }
 
-            $project = \App\Models\Project::firstOrCreate(
-                ['property_id' => $property->id],
+            if ((int) ($paymentIntent->metadata->property_id ?? 0) !== (int) $property->id) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Payment reference does not match this property. Please contact support.',
+                ], 400);
+            }
+
+            $amount = round(((float) (($paymentIntent->amount_received ?? 0) ?: ($paymentIntent->amount ?? 0))) / 100, 2);
+
+            $inspection = $this->inspectionFeeConfirmationService->confirm(
+                $property,
+                $paymentIntent->id,
+                $amount,
                 [
-                    'title' => 'Property Inspection - ' . $property->property_name,
-                    'description' => 'Client scheduled inspection for ' . $property->property_name,
-                    'status' => 'pending',
-                    'user_id' => $property->user_id,
-                    'managed_by' => $property->project_manager_id,
-                    'created_by' => Auth::id(),
-                    'project_number' => 'PRJ-' . strtoupper(\Illuminate\Support\Str::random(8)),
-                ]
+                    'preferred_date' => $validated['preferred_date'],
+                    'preferred_time' => $validated['preferred_time'] ?? '09:00',
+                    'special_notes' => $validated['special_notes'] ?? null,
+                ],
+                Auth::id()
             );
-
-            // Create inspection record with paid status
-            $feeData = $this->calculateInspectionFee($property);
-            $inspection = Inspection::create([
-                'property_id' => $property->id,
-                'project_id' => $project->id,
-                'scheduled_date' => $validated['preferred_date'] . ' ' . ($validated['preferred_time'] ?? '09:00'),
-                'status' => 'scheduled',
-                'summary' => $validated['special_notes'] ?? null,
-                'inspection_fee_amount' => $feeData['charge_dollars'],
-                'inspection_fee_status' => 'paid',
-                'inspection_fee_paid_at' => now(),
-                'stripe_payment_intent_id' => $paymentIntent->id,
-                'specialist_assessment_breakdown' => null,
-                'specialist_trade_cost' => 0,
-                'specialist_client_price' => 0,
-                'specialist_margin_amount' => 0,
-                'specialist_pricing_currency' => null,
-            ]);
-
-            $this->ensureInspectionFeeInvoice($inspection->fresh(['property', 'project']));
-
-            // Update property status to awaiting_inspection
-            $property->update(['status' => 'awaiting_inspection']);
-
-            DB::commit();
-
-            $adminRecipients = User::role(['Super Admin', 'Administrator', 'Project Manager', 'Inspector', 'Technician', 'Store Manager'])
-                ->get()
-                ->unique('id')
-                ->values();
-
-            if ($adminRecipients->isNotEmpty()) {
-                Notification::send($adminRecipients, new InspectionFeePaidNotification(
-                    inspectionId: (int) $inspection->id,
-                    propertyId: (int) $property->id,
-                    propertyName: (string) ($property->property_name ?? 'Property'),
-                    propertyCode: (string) ($property->property_code ?? 'N/A'),
-                    amount: (float) $feeData['charge_dollars'],
-                    clientName: (string) (Auth::user()->name ?? 'Client'),
-                ));
-            }
 
             return response()->json([
                 'success' => true,
@@ -1059,12 +1303,17 @@ class InspectionController extends Controller
                 'redirect' => route('client.properties.index'),
             ]);
 
-        } catch (\Exception $e) {
-            DB::rollBack();
-            \Log::error('Inspection scheduling error: ' . $e->getMessage());
+        } catch (\Throwable $e) {
+            \Log::error('Inspection scheduling error', [
+                'property_id' => $property->id,
+                'user_id' => Auth::id(),
+                'payment_intent_id' => $paymentIntentId,
+                'error' => $e->getMessage(),
+            ]);
+
             return response()->json([
                 'success' => false,
-                'message' => 'An error occurred while processing your inspection request. Please try again.',
+                'message' => 'Payment was received, but we could not finish scheduling automatically. Please contact support with payment reference ' . $paymentIntentId . '.',
             ], 400);
         }
     }
@@ -1124,26 +1373,18 @@ class InspectionController extends Controller
             'status' => 'awaiting_inspection',
         ]);
 
-        $this->ensureInspectionFeeInvoice($inspection->fresh(['property', 'project']));
+        $inspection = $inspection->fresh(['property', 'project']);
+        $this->ensureInspectionFeeInvoice($inspection);
+        $this->sendInspectionFeePaidNotification(
+            $inspection,
+            $inspection->property,
+            (float) ($inspection->inspection_fee_amount ?? 0)
+        );
 
-        $adminRecipients = User::role(['Super Admin', 'Administrator', 'Project Manager', 'Inspector', 'Technician', 'Store Manager'])
-            ->get()
-            ->unique('id')
-            ->values();
-
-        if ($adminRecipients->isNotEmpty()) {
-            Notification::send($adminRecipients, new InspectionFeePaidNotification(
-                inspectionId: (int) $inspection->id,
-                propertyId: (int) ($inspection->property_id ?? 0),
-                propertyName: (string) ($inspection->property?->property_name ?? 'Property'),
-                propertyCode: (string) ($inspection->property?->property_code ?? 'N/A'),
-                amount: (float) self::INSPECTION_FEE_DOLLARS,
-                clientName: (string) (Auth::user()->name ?? 'Client'),
-            ));
-        }
+        $inspectionFeeAmount = (float) ($inspection->inspection_fee_amount ?? 0);
 
         return redirect()->route('client.properties.index')
-            ->with('success', 'Inspection scheduled successfully! Your inspection fee of $' . number_format(self::INSPECTION_FEE_DOLLARS, 2) . ' has been processed. An inspector will be assigned to your property shortly.');
+            ->with('success', 'Inspection scheduled successfully! Your inspection fee of $' . number_format($inspectionFeeAmount, 2) . ' has been processed. An inspector will be assigned to your property shortly.');
     }
 
     /**
@@ -1163,6 +1404,35 @@ class InspectionController extends Controller
 
         return redirect()->route('client.properties.index')
             ->with('info', 'Inspection scheduling was cancelled. You can try again anytime.');
+    }
+
+    protected function sendInspectionFeePaidNotification(Inspection $inspection, Property $property, float $amount): void
+    {
+        try {
+            $adminRecipients = User::role(['Super Admin', 'Administrator', 'Project Manager', 'Inspector', 'Technician', 'Store Manager'])
+                ->get()
+                ->unique('id')
+                ->values();
+
+            if ($adminRecipients->isEmpty()) {
+                return;
+            }
+
+            Notification::send($adminRecipients, new InspectionFeePaidNotification(
+                inspectionId: (int) $inspection->id,
+                propertyId: (int) $property->id,
+                propertyName: (string) ($property->property_name ?? 'Property'),
+                propertyCode: (string) ($property->property_code ?? 'N/A'),
+                amount: $amount,
+                clientName: (string) (Auth::user()->name ?? 'Client'),
+            ));
+        } catch (\Throwable $e) {
+            \Log::warning('Inspection fee paid notification failed', [
+                'inspection_id' => $inspection->id,
+                'property_id' => $property->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     protected function ensureInspectionFeeInvoice(Inspection $inspection): void
@@ -1189,3 +1459,4 @@ class InspectionController extends Controller
         $this->inspectionInvoiceSyncService->syncInspectionFeeInvoice($inspection);
     }
 }
+

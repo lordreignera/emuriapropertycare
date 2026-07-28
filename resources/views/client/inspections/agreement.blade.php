@@ -20,7 +20,7 @@
                         <i class="mdi mdi-download me-1"></i>Download PDF
                     </a>
                     <a href="{{ ($adminPreview ?? false) ? (($forCountersign ?? false) ? route('inspections.index', ['view' => 'pending-etogo']) : route('inspections.show', $inspection->id)) : route('client.inspections.index') }}" class="btn btn-light btn-sm">
-                        <i class="mdi mdi-arrow-left me-1"></i>Back to Inspections
+                        <i class="mdi mdi-arrow-left me-1"></i>Back to Diagnoses
                     </a>
                 </div>
             </div>

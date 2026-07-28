@@ -5,7 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\InspectionSystem;
 use App\Models\TradeApplication;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
+use Throwable;
 
 class TradeApplicationController extends Controller
 {
@@ -214,9 +217,7 @@ class TradeApplicationController extends Controller
             ->values()
             ->all();
 
-        $disk = config('filesystems.default', 's3');
-
-        foreach ([
+        $fileFields = [
             'business_licence_document',
             'liability_insurance_document',
             'worksafebc_document',
@@ -227,18 +228,7 @@ class TradeApplicationController extends Controller
             'disposal_policy_document',
             'warranty_document',
             'pricing_policy_document',
-        ] as $field) {
-            if ($request->hasFile($field)) {
-                $validated[$field] = $request->file($field)->store('trade-applications/documents', $disk);
-            }
-        }
-
-        $validated['additional_documents'] = [];
-        foreach ((array) $request->file('additional_documents', []) as $document) {
-            if ($document && $document->isValid()) {
-                $validated['additional_documents'][] = $document->store('trade-applications/documents', $disk);
-            }
-        }
+        ];
 
         $requiredStatuses = [
             $validated['business_licence_status'],
@@ -252,7 +242,36 @@ class TradeApplicationController extends Controller
             : TradeApplication::STATUS_NEEDS_MORE_INFORMATION;
         $validated['submitted_at'] = now();
 
-        $application = TradeApplication::create($validated);
+        try {
+            $disk = config('filesystems.trade_application_documents_disk', 'public');
+
+            foreach ($fileFields as $field) {
+                if ($request->hasFile($field)) {
+                    $validated[$field] = $request->file($field)->store('trade-applications/documents', $disk);
+                }
+            }
+
+            $validated['additional_documents'] = [];
+            foreach ((array) $request->file('additional_documents', []) as $document) {
+                if ($document && $document->isValid()) {
+                    $validated['additional_documents'][] = $document->store('trade-applications/documents', $disk);
+                }
+            }
+
+            $application = DB::transaction(fn () => TradeApplication::create($validated));
+        } catch (Throwable $e) {
+            Log::error('Trade application submission failed.', [
+                'message' => $e->getMessage(),
+                'disk' => config('filesystems.trade_application_documents_disk', 'public'),
+                'email' => $validated['email'] ?? null,
+            ]);
+
+            return back()
+                ->withInput($request->except(array_merge($fileFields, ['additional_documents'])))
+                ->withErrors([
+                    'trade_application' => 'We could not save the trade partner application. Please try again, or submit without documents and upload them later.',
+                ]);
+        }
 
         return redirect()->route('trade-applications.thank-you', $application)
             ->with('success', 'Your trade application has been submitted.');

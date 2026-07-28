@@ -62,6 +62,20 @@ class RolePermissionSeeder extends Seeder
             'upload-inspection-reports',
             'approve-inspections',
             'view-assigned-inspections',
+
+            // Vendor-neutral Digital Twin Inspection Viewer
+            'view digital twin inspections',
+            'manage digital twin models',
+            'create digital twin issue markers',
+
+            // Legacy Matterport permissions retained for compatibility
+            'view matterport inspections',
+            'attach matterport models',
+            'create inspection findings',
+            'edit inspection findings',
+            'delete inspection findings',
+            'resolve inspection findings',
+            'view inspection reports',
             
             // Scope of Work
             'view-scope',
@@ -166,6 +180,10 @@ class RolePermissionSeeder extends Seeder
             'view-all-properties', 'approve-properties',
             'view-all-projects', 'create-projects', 'edit-projects', 'assign-projects',
             'view-inspections', 'approve-inspections',
+            'view digital twin inspections', 'manage digital twin models', 'create digital twin issue markers',
+            'view matterport inspections', 'attach matterport models',
+            'create inspection findings', 'edit inspection findings', 'delete inspection findings',
+            'resolve inspection findings', 'view inspection reports',
             'view-scope', 'approve-scope',
             'view-quotes', 'approve-quotes',
             'view-budgets', 'manage-budgets',
@@ -180,6 +198,10 @@ class RolePermissionSeeder extends Seeder
             'view-all-properties',
             'view-all-projects', 'create-projects', 'edit-projects', 'assign-projects',
             'view-inspections', 'create-inspections', 'approve-inspections',
+            'view digital twin inspections', 'manage digital twin models', 'create digital twin issue markers',
+            'view matterport inspections', 'attach matterport models',
+            'create inspection findings', 'edit inspection findings', 'delete inspection findings',
+            'resolve inspection findings', 'view inspection reports',
             'view-scope', 'create-scope', 'approve-scope',
             'view-quotes', 'create-quotes',
             'view-work-logs',
@@ -217,6 +239,12 @@ class RolePermissionSeeder extends Seeder
             'create-inspections',
             'edit-inspections',
             'upload-inspection-reports',
+            'view digital twin inspections', 'create digital twin issue markers',
+            'view matterport inspections',
+            'create inspection findings',
+            'edit inspection findings',
+            'resolve inspection findings',
+            'view inspection reports',
             'view-communications', 'create-communications',
         ]);
 
@@ -251,6 +279,8 @@ class RolePermissionSeeder extends Seeder
             'view-own-projects',
             'view-inspections',
             'approve-inspections',
+            'view matterport inspections',
+            'view inspection reports',
             'view-scope',
             'view-quotes',
             'approve-quotes',

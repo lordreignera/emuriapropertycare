@@ -1,6 +1,6 @@
 @extends('admin.layout')
 
-@section('title', 'Start Inspection')
+@section('title', 'Start Diagnosis')
 
 @section('content')
 <div class="content-wrapper">
@@ -9,14 +9,14 @@
             <!-- Header -->
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <div>
-                    <h3 class="mb-1">Start Property Inspection</h3>
+                    <h3 class="mb-1">Start Property Diagnosis</h3>
                     <p class="text-muted mb-0">
                         <code>{{ $property->property_code }}</code> • {{ $property->property_name }}
                     </p>
                 </div>
                 <div>
                     <a href="{{ route('inspections.index') }}" class="btn btn-secondary btn-sm">
-                        <i class="mdi mdi-arrow-left me-2"></i>Back to Inspections
+                        <i class="mdi mdi-arrow-left me-2"></i>Back to Diagnoses
                     </a>
                 </div>
             </div>

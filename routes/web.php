@@ -32,7 +32,7 @@ Route::get('/register', function () {
     return view('auth.register');
 })->name('register');
 
-// Checkout Process (for custom products after inspection)
+// Checkout Process
 Route::post('/checkout/process', [CheckoutController::class, 'processCheckout'])->name('checkout.process');
 Route::get('/checkout/success', [CheckoutController::class, 'success'])->name('checkout.success')->middleware('auth');
 Route::get('/checkout/cancel', [CheckoutController::class, 'cancel'])->name('checkout.cancel');
@@ -101,13 +101,14 @@ Route::middleware([
     // Main workflow routes
     Route::resource('properties', App\Http\Controllers\PropertyController::class);
     Route::prefix('properties/{property}')->name('properties.')->group(function () {
-        Route::middleware('role:Super Admin|Administrator')->group(function () {
-            Route::post('/approve', [App\Http\Controllers\PropertyController::class, 'approve'])->name('approve');
-            Route::post('/reject', [App\Http\Controllers\PropertyController::class, 'reject'])->name('reject');
-        });
         Route::post('/assign', [App\Http\Controllers\PropertyController::class, 'assign'])
             ->name('assign')
             ->middleware('role:Super Admin|Administrator|Project Manager');
+        Route::post('/diagnosis-invoice', [App\Http\Controllers\PropertyController::class, 'createDiagnosisInvoice'])
+            ->name('diagnosis-invoice.store')
+            ->middleware('role:Super Admin|Administrator|Project Manager');
+        Route::get('/digital-twin', [App\Http\Controllers\DigitalTwinController::class, 'showProperty'])
+            ->name('digital-twin');
     });
     Route::resource('inspections', App\Http\Controllers\InspectionController::class)
         ->except(['update', 'destroy']);
@@ -124,8 +125,22 @@ Route::middleware([
             Route::post('/agreement/countersign', [App\Http\Controllers\InspectionController::class, 'countersignAgreement'])->name('agreement.countersign');
             Route::post('/work-schedule', [App\Http\Controllers\InspectionController::class, 'storeWorkSchedule'])->name('work-schedule.store');
             Route::post('/assessment-schedule', [App\Http\Controllers\InspectionController::class, 'updateAssessmentSchedule'])->name('assessment-schedule.update');
+            Route::get('/digital-twin', [App\Http\Controllers\DigitalTwinController::class, 'show'])->name('digital-twin');
+            Route::post('/digital-twin/models', [App\Http\Controllers\DigitalTwinController::class, 'storeSpatialModel'])->name('digital-twin.models.store');
+            Route::post('/digital-twin/models/{spatialModel}/convert', [App\Http\Controllers\DigitalTwinController::class, 'convertSpatialModel'])->name('digital-twin.models.convert');
+            Route::post('/digital-twin/markers', [App\Http\Controllers\DigitalTwinController::class, 'storeIssueMarker'])->name('digital-twin.markers.store');
+            Route::get('/matterport', fn (App\Models\Inspection $inspection) => redirect()->route('inspections.digital-twin', $inspection))->name('matterport');
+            Route::post('/matterport-model', [App\Http\Controllers\MatterportModelController::class, 'store'])->name('matterport-model.store');
             Route::get('/phar-data', [App\Http\Controllers\InspectionController::class, 'pharData'])->name('phar-data');
             Route::post('/store-phar-data', [App\Http\Controllers\InspectionController::class, 'storePharData'])->name('store-phar-data');
+            // Assessment / Estimation phase split (ETOGO workflow Stages B & D)
+            Route::get('/findings-preview', [App\Http\Controllers\InspectionController::class, 'findingsPreview'])->name('findings-preview');
+            Route::post('/finalise-assessment', [App\Http\Controllers\InspectionController::class, 'finaliseAssessment'])->name('finalise-assessment');
+            Route::get('/assessment-report', [App\Http\Controllers\InspectionController::class, 'assessmentReport'])->name('assessment-report');
+            Route::post('/reopen-assessment', [App\Http\Controllers\InspectionController::class, 'reopenAssessment'])->name('reopen-assessment');
+            Route::post('/share-findings-report', [App\Http\Controllers\InspectionController::class, 'shareFindingsReport'])->name('share-findings-report');
+            Route::get('/estimation', [App\Http\Controllers\InspectionController::class, 'estimation'])->name('estimation');
+            Route::post('/store-estimation', [App\Http\Controllers\InspectionController::class, 'storeEstimation'])->name('store-estimation');
             Route::post('/share-quotation', [App\Http\Controllers\InspectionController::class, 'shareQuotation'])->name('share-quotation');
             Route::post('/share-followup-quotation', [App\Http\Controllers\InspectionController::class, 'shareFollowupQuotation'])->name('share-followup-quotation');
             Route::post('/complete-assessment', [App\Http\Controllers\InspectionController::class, 'completeAssessment'])->name('complete-assessment');
@@ -188,11 +203,6 @@ Route::middleware([
         // Properties
         Route::resource('properties', App\Http\Controllers\Client\PropertyController::class);
         
-        // Tenants
-        Route::resource('tenants', App\Http\Controllers\Client\TenantController::class);
-        Route::get('/tenants/export', [App\Http\Controllers\Client\TenantController::class, 'export'])->name('tenants.export');
-        Route::get('/tenants/property-password/{property}', [App\Http\Controllers\Client\TenantController::class, 'getPropertyPassword'])->name('tenants.property-password');
-        
         // Inspections
         Route::get('/inspections', [App\Http\Controllers\Client\InspectionController::class, 'index'])->name('inspections.index');
         Route::get('/inspections/quotations', [App\Http\Controllers\Client\InspectionController::class, 'quotations'])->name('inspections.quotations');
@@ -201,6 +211,9 @@ Route::middleware([
         Route::get('/inspections/{inspection}/agreement/download', [App\Http\Controllers\Client\InspectionController::class, 'downloadAgreementPdf'])->name('inspections.agreement.download');
         Route::post('/inspections/{inspection}/agreement/sign', [App\Http\Controllers\Client\InspectionController::class, 'signAgreement'])->name('inspections.agreement.sign');
         Route::post('/inspections/{inspection}/findings/{findingIndex}/photos', [App\Http\Controllers\Client\InspectionController::class, 'addFindingPhotos'])->name('inspections.findings.add-photos');
+        // ETOGO Stage C — client reviews findings (no pricing) and commits to which items to remediate
+        Route::get('/inspections/{inspection}/findings-report', [App\Http\Controllers\Client\InspectionController::class, 'findingsReport'])->name('inspections.findings-report');
+        Route::post('/inspections/{inspection}/commit-findings', [App\Http\Controllers\Client\InspectionController::class, 'commitFindings'])->name('inspections.commit-findings');
         Route::get('/inspections/{inspection}/quotation', [App\Http\Controllers\Client\InspectionController::class, 'quotation'])->name('inspections.quotation');
         Route::post('/inspections/{inspection}/quotation/respond', [App\Http\Controllers\Client\InspectionController::class, 'respondQuotation'])->name('inspections.quotation.respond');
         Route::get('/inspections/{inspection}/work-payment', [App\Http\Controllers\Client\InspectionController::class, 'workPayment'])->name('inspections.work-payment');
@@ -210,6 +223,7 @@ Route::middleware([
 
         // Schedule & pay for inspection
         Route::get('/inspections/{property}/schedule', [App\Http\Controllers\Client\InspectionController::class, 'scheduleCreate'])->name('inspections.schedule');
+        Route::post('/inspections/{property}/payment-intent', [App\Http\Controllers\Client\InspectionController::class, 'createInspectionPaymentIntent'])->name('inspections.payment-intent');
         Route::post('/inspections/{property}/schedule', [App\Http\Controllers\Client\InspectionController::class, 'scheduleStore'])->name('inspections.store-schedule');
         Route::get('/inspections/checkout-success', [App\Http\Controllers\Client\InspectionController::class, 'checkoutSuccess'])->name('inspections.checkout-success');
         Route::get('/inspections/checkout-cancel', [App\Http\Controllers\Client\InspectionController::class, 'checkoutCancel'])->name('inspections.checkout-cancel');
@@ -233,6 +247,10 @@ Route::middleware([
         // Invoices
         Route::get('/invoices', [App\Http\Controllers\Client\InvoiceController::class, 'index'])
             ->name('invoices.index');
+        Route::get('/invoices/{invoice}/payment', [App\Http\Controllers\Client\InvoiceController::class, 'payment'])
+            ->name('invoices.payment');
+        Route::post('/invoices/{invoice}/payment', [App\Http\Controllers\Client\InvoiceController::class, 'processPayment'])
+            ->name('invoices.process-payment');
         Route::get('/invoices/{invoice}/download', [App\Http\Controllers\Client\InvoiceController::class, 'download'])
             ->name('invoices.download');
         Route::get('/invoices/{invoice}', [App\Http\Controllers\Client\InvoiceController::class, 'show'])
@@ -273,13 +291,6 @@ Route::middleware([
         Route::resource('permissions', App\Http\Controllers\Admin\PermissionManagementController::class);
         Route::post('permissions/{permission}/assign-role', [App\Http\Controllers\Admin\PermissionManagementController::class, 'assignToRole'])->name('permissions.assign-role');
         Route::delete('permissions/{permission}/remove-role/{role}', [App\Http\Controllers\Admin\PermissionManagementController::class, 'removeFromRole'])->name('permissions.remove-role');
-        
-        // Product Management (replaces Tier Management)
-        Route::resource('products', App\Http\Controllers\Admin\ProductManagementController::class);
-        Route::post('products/{product}/components', [App\Http\Controllers\Admin\ProductManagementController::class, 'addComponent'])->name('products.add-component');
-        Route::post('products/{product}/recalculate', [App\Http\Controllers\Admin\ProductManagementController::class, 'recalculateComponents'])->name('products.recalculate');
-        Route::post('products/{product}/toggle-status', [App\Http\Controllers\Admin\ProductManagementController::class, 'toggleStatus'])->name('products.toggle-status');
-        Route::post('products/{product}/duplicate', [App\Http\Controllers\Admin\ProductManagementController::class, 'duplicate'])->name('products.duplicate');
         
         // Pricing System Management
         Route::resource('property-types', App\Http\Controllers\Admin\PropertyTypeController::class)->names('property-types');
@@ -325,6 +336,10 @@ Route::middleware([
         // Service Requests
         Route::get('/service-requests', [App\Http\Controllers\Admin\ServiceRequestController::class, 'index'])
             ->name('service-requests.index');
+        Route::get('/service-requests/create', [App\Http\Controllers\Admin\ServiceRequestController::class, 'create'])
+            ->name('service-requests.create');
+        Route::post('/service-requests', [App\Http\Controllers\Admin\ServiceRequestController::class, 'store'])
+            ->name('service-requests.store');
         Route::get('/service-requests/{serviceRequest}', [App\Http\Controllers\Admin\ServiceRequestController::class, 'show'])
             ->name('service-requests.show');
         Route::post('/service-requests/{serviceRequest}/triage', [App\Http\Controllers\Admin\ServiceRequestController::class, 'triage'])

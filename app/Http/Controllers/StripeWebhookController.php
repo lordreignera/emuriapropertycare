@@ -3,10 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Inspection;
+use App\Models\Invoice;
+use App\Models\Property;
 use App\Models\User;
-use App\Notifications\InspectionFeePaidNotification;
 use App\Notifications\WorkPaymentReceivedNotification;
 use App\Notifications\InstallmentPaymentReceivedNotification;
+use App\Services\InspectionFeeConfirmationService;
+use App\Services\InvoicePaymentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -14,6 +17,12 @@ use Illuminate\Support\Facades\Notification;
 
 class StripeWebhookController extends Controller
 {
+    public function __construct(
+        private readonly InspectionFeeConfirmationService $inspectionFeeConfirmationService,
+        private readonly InvoicePaymentService $invoicePaymentService,
+    ) {
+    }
+
     /**
      * Handle incoming Stripe webhook events.
      * 
@@ -89,6 +98,8 @@ class StripeWebhookController extends Controller
             // Determine the payment type and handle accordingly
             if ($paymentType === 'inspection_fee') {
                 $this->confirmInspectionFeePayment($intent, $metadata, $amount);
+            } elseif ($paymentType === 'invoice_payment') {
+                $this->confirmInvoicePayment($intent, $metadata, $amount);
             } elseif ($paymentType === 'work_start') {
                 $this->confirmWorkPayment($intent, $metadata, $amount);
             } elseif ($paymentType === 'per_visit') {
@@ -180,56 +191,67 @@ class StripeWebhookController extends Controller
      */
     private function confirmInspectionFeePayment(\Stripe\PaymentIntent $intent, array $metadata, float $amount)
     {
-        DB::beginTransaction();
         try {
             $propertyId = $metadata['property_id'] ?? null;
             if (!$propertyId) {
                 throw new \Exception('No property_id in metadata');
             }
 
-            // The inspection should already be created by scheduleStore(),
-            // so we just verify and mark as paid if needed
-            $inspection = Inspection::where('property_id', $propertyId)
-                ->where('inspection_fee_status', 'pending')
-                ->where('status', 'scheduled')
-                ->first();
-
-            if ($inspection) {
-                $inspection->update([
-                    'inspection_fee_status' => 'paid',
-                    'inspection_fee_paid_at' => now(),
-                    'stripe_payment_intent_id' => $intent->id,
-                    'inspection_fee_amount' => $amount,
-                ]);
-
-                // Notify admins
-                $adminRecipients = User::role(['Super Admin', 'Administrator', 'Project Manager', 'Inspector', 'Technician', 'Store Manager'])
-                    ->get()->unique('id')->values();
-                if ($adminRecipients->isNotEmpty()) {
-                    Notification::send($adminRecipients, new InspectionFeePaidNotification(
-                        inspectionId: $inspection->id,
-                        propertyId: $inspection->property_id,
-                        propertyName: $inspection->property->property_name ?? 'Property',
-                        propertyCode: $inspection->property->property_code ?? 'N/A',
-                        amount: $amount,
-                        clientName: $inspection->property->user->name ?? 'Client',
-                    ));
-                }
-
-                Log::info('Inspection fee payment confirmed via webhook', [
-                    'inspection_id' => $inspection->id,
-                    'amount' => $amount,
-                ]);
-            } else {
-                Log::warning('No pending inspection found for property', [
-                    'property_id' => $propertyId,
-                ]);
+            $property = Property::with('user')->find($propertyId);
+            if (!$property) {
+                throw new \Exception("Property {$propertyId} not found");
             }
 
-            DB::commit();
+            $inspection = $this->inspectionFeeConfirmationService->confirm(
+                $property,
+                $intent->id,
+                $amount,
+                [
+                    'preferred_date' => $metadata['preferred_date'] ?? null,
+                    'preferred_time' => $metadata['preferred_time'] ?? '09:00',
+                    'special_notes' => $metadata['special_notes'] ?? null,
+                ],
+                isset($metadata['user_id']) ? (int) $metadata['user_id'] : null
+            );
+
+            Log::info('Inspection fee payment confirmed via webhook', [
+                'inspection_id' => $inspection->id,
+                'property_id' => $property->id,
+                'amount' => $amount,
+            ]);
         } catch (\Throwable $e) {
-            DB::rollBack();
             Log::error('Confirmation of inspection fee payment failed', [
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Confirm an admin-issued invoice payment from webhook.
+     */
+    private function confirmInvoicePayment(\Stripe\PaymentIntent $intent, array $metadata, float $amount)
+    {
+        try {
+            $invoiceId = $metadata['invoice_id'] ?? null;
+            if (!$invoiceId) {
+                throw new \Exception('No invoice_id in metadata');
+            }
+
+            $invoice = Invoice::find($invoiceId);
+            if (!$invoice) {
+                throw new \Exception("Invoice {$invoiceId} not found");
+            }
+
+            $invoice = $this->invoicePaymentService->apply($invoice, $amount, $intent->id);
+
+            Log::info('Invoice payment confirmed via webhook', [
+                'invoice_id' => $invoice->id,
+                'status' => $invoice->status,
+                'paid_amount' => $invoice->paid_amount,
+                'balance' => $invoice->balance,
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Confirmation of invoice payment failed', [
                 'error' => $e->getMessage(),
             ]);
         }

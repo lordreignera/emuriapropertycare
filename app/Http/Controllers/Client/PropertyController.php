@@ -18,7 +18,12 @@ class PropertyController extends Controller
      */
     public function index()
     {
-        $properties = Property::with(['latestInspection', 'latestCompletedInspection'])
+        $properties = Property::with([
+                'latestInspection.activeMatterportModel',
+                'latestInspection.activeSpatialModels',
+                'latestCompletedInspection.activeMatterportModel',
+                'latestCompletedInspection.activeSpatialModels',
+            ])
             ->where('user_id', auth()->id())
             ->latest()
             ->paginate(10);
@@ -134,8 +139,7 @@ class PropertyController extends Controller
         // Set user_id
         $validated['user_id'] = auth()->id();
         
-        // Set status as pending approval
-        $validated['status'] = 'pending_approval';
+        $validated['status'] = 'registered';
         
         // Calculate total square footage
         $validated['total_square_footage'] =
@@ -202,7 +206,7 @@ class PropertyController extends Controller
         
         return redirect()
             ->route('client.properties.show', $property->id)
-            ->with('success', 'Property added successfully! Next step: Schedule and pay for your property inspection/assessment to get started.');
+            ->with('success', 'Property registered successfully. Our team will contact you to confirm the site visit, capture property facts, and prepare the diagnosis invoice.');
     }
 
     /**
@@ -228,11 +232,10 @@ class PropertyController extends Controller
             abort(403, 'Unauthorized access to this property.');
         }
 
-        // Only allow editing if not yet approved
-        if ($property->status === 'approved') {
+        if ($this->hasPaidInspection($property)) {
             return redirect()
                 ->route('client.properties.show', $property->id)
-                ->with('info', 'This property is already approved. Please contact support to request changes.');
+                ->with('info', 'This property already has a paid inspection. Please contact support to request changes.');
         }
 
         return view('client.properties.edit', [
@@ -251,11 +254,10 @@ class PropertyController extends Controller
             abort(403, 'Unauthorized access to this property.');
         }
 
-        // Only allow updating if not yet approved
-        if ($property->status === 'approved') {
+        if ($this->hasPaidInspection($property)) {
             return redirect()
                 ->route('client.properties.show', $property->id)
-                ->with('error', 'Cannot update approved properties. Please contact support.');
+                ->with('error', 'Cannot update properties after inspection payment. Please contact support.');
         }
 
         $validated = $request->validate([
@@ -381,7 +383,7 @@ class PropertyController extends Controller
         
         // Handle new blueprint
         if ($request->hasFile('blueprint_file')) {
-            // Delete old blueprint
+            // Delete the previous blueprint file.
             if ($property->blueprint_file) {
                 Storage::disk($disk)->delete($property->blueprint_file);
             }
@@ -416,11 +418,10 @@ class PropertyController extends Controller
             abort(403, 'Unauthorized access to this property.');
         }
 
-        // Only allow deleting if pending or rejected
-        if ($property->status === 'approved') {
+        if ($this->hasPaidInspection($property)) {
             return redirect()
                 ->route('client.properties.index')
-                ->with('error', 'Cannot delete approved properties. Please contact support.');
+                ->with('error', 'Cannot delete properties after inspection payment. Please contact support.');
         }
 
         $disk = config('filesystems.default', 's3');
@@ -561,6 +562,14 @@ class PropertyController extends Controller
         }
 
         return null;
+    }
+
+    protected function hasPaidInspection(Property $property): bool
+    {
+        return $property->inspections()
+            ->where('inspection_fee_status', 'paid')
+            ->where('status', '!=', 'cancelled')
+            ->exists();
     }
 
     protected function storeKnownProblemImages(Request $request, string $disk): array

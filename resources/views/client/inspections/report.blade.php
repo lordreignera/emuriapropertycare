@@ -1,6 +1,6 @@
 @extends($adminPreview ?? false ? 'admin.layout' : 'client.layout')
 
-@section('title', 'Inspection Report & Work Scope Breakdown')
+@section('title', 'Diagnosis Report & Work Scope Breakdown')
 
 @section('content')
 @if($adminPreview ?? false)
@@ -9,6 +9,15 @@
     <strong>ADMIN PREVIEW MODE</strong> — This is how the client will see their report. No client actions are active.
 </div>
 @endif
+@php
+    $hasDigitalTwin = $inspection->activeSpatialModels->isNotEmpty() || ($inspection->activeMatterportModel ?? null);
+    $reportFindingCount = is_array($inspection->findings)
+        ? count($inspection->findings)
+        : count(json_decode($inspection->getRawOriginal('findings') ?? '[]', true) ?? []);
+    $spatialSourceCount = $inspection->activeSpatialModels->count();
+    $issueMarkerCount = $inspection->issueMarkers->count();
+    $verificationLabel = $inspection->completed_date ? 'Completed' : (($inspection->work_payment_status ?? 'pending') === 'paid' ? 'In progress' : 'Pending');
+@endphp
 <div class="row">
     <div class="col-lg-12 grid-margin stretch-card">
         <div class="card">
@@ -17,15 +26,15 @@
                     <div>
                         <h4 class="card-title mb-0">
                             <i class="mdi mdi-clipboard-check-outline me-2 text-success"></i>
-                            Inspection Report & Work Scope Breakdown
+                            Diagnosis Report & Work Scope Breakdown
                         </h4>
-                        <p class="text-muted small mb-0">Complete breakdown of inspection findings, materials, and labour</p>
+                        <p class="text-muted small mb-0">Property facts, diagnosis findings, remediation scope, and verification status</p>
                     </div>
                     <div>
                         @if(isset($adminPreview) && $adminPreview)
                             @if(($inspection->status ?? null) === 'completed')
                                 <a href="{{ route('inspections.show', $inspection->id) }}" class="btn btn-light btn-sm no-print">
-                                    <i class="mdi mdi-arrow-left me-1"></i>Back to Inspection Record
+                                    <i class="mdi mdi-arrow-left me-1"></i>Back to Diagnosis Record
                                 </a>
                             @else
                                 <a href="{{ route('inspections.phar-data', $inspection->id) }}" class="btn btn-light btn-sm no-print">
@@ -39,7 +48,12 @@
                             @endif
                         @else
                             <a href="{{ route('client.inspections.index') }}" class="btn btn-light btn-sm no-print">
-                                <i class="mdi mdi-arrow-left me-1"></i>Back to Inspections
+                                <i class="mdi mdi-arrow-left me-1"></i>Back to Diagnoses
+                            </a>
+                        @endif
+                        @if($hasDigitalTwin)
+                            <a href="{{ route('inspections.digital-twin', $inspection->id) }}" class="btn btn-outline-primary btn-sm no-print">
+                                <i class="mdi mdi-cube-scan me-1"></i>Open Digital Twin
                             </a>
                         @endif
                         <button onclick="window.print()" class="btn btn-outline-secondary btn-sm no-print">
@@ -59,7 +73,7 @@
                     <div class="alert alert-info d-flex flex-wrap justify-content-between align-items-center gap-2 no-print">
                         <div>
                             <strong>Your quotation is ready for review.</strong>
-                            Select the findings you want approved before assessment completion.
+                            Select the findings you want approved before diagnosis completion.
                         </div>
                         <a href="{{ route('client.inspections.quotation', $inspection->id) }}" class="btn btn-primary btn-sm">
                             <i class="mdi mdi-file-check-outline me-1"></i>Review Quotation
@@ -109,11 +123,51 @@
                     </div>
                 @endif
 
-                <!-- Property & Inspection Summary -->
+                <div class="card mb-4 border-primary">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">
+                            <i class="mdi mdi-map-search-outline me-2"></i>Property Lifecycle Summary
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-3 col-6">
+                                <div class="border rounded p-3 h-100">
+                                    <small class="text-muted d-block">Property Facts</small>
+                                    <strong>{{ $spatialSourceCount }} source{{ $spatialSourceCount === 1 ? '' : 's' }}</strong>
+                                    <div class="small text-muted mt-1">{{ $hasDigitalTwin ? 'Twin evidence attached' : 'Twin evidence pending' }}</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 col-6">
+                                <div class="border rounded p-3 h-100">
+                                    <small class="text-muted d-block">Diagnosis</small>
+                                    <strong>{{ $reportFindingCount }} finding{{ $reportFindingCount === 1 ? '' : 's' }}</strong>
+                                    <div class="small text-muted mt-1">{{ ucfirst(str_replace('_', ' ', (string) ($inspection->status ?? 'scheduled'))) }}</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 col-6">
+                                <div class="border rounded p-3 h-100">
+                                    <small class="text-muted d-block">Spatial Markers</small>
+                                    <strong>{{ $issueMarkerCount }} marker{{ $issueMarkerCount === 1 ? '' : 's' }}</strong>
+                                    <div class="small text-muted mt-1">Linked to PHAR findings where available</div>
+                                </div>
+                            </div>
+                            <div class="col-md-3 col-6">
+                                <div class="border rounded p-3 h-100">
+                                    <small class="text-muted d-block">Verification</small>
+                                    <strong>{{ $verificationLabel }}</strong>
+                                    <div class="small text-muted mt-1">Resolved work remains visible in history</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Property & Diagnosis Summary -->
                 <div class="card mb-4">
                     <div class="card-header bg-primary text-white">
                         <h5 class="mb-0">
-                            <i class="mdi mdi-home-outline me-2"></i>Property & Inspection Information
+                            <i class="mdi mdi-home-outline me-2"></i>Property & Diagnosis Information
                         </h5>
                     </div>
                     <div class="card-body">
@@ -157,7 +211,7 @@
                                         <td>{{ $inspection->inspector?->name ?? 'Not Assigned' }}</td>
                                     </tr>
                                     <tr>
-                                        <th>Inspection Date:</th>
+                                        <th>Diagnosis Date:</th>
                                         <td>{{ $inspection->scheduled_date?->format('M d, Y') ?? 'Not Scheduled' }}</td>
                                     </tr>
                                     <tr>
@@ -217,6 +271,8 @@
                     </div>
                 </div>
 
+                @include('inspections.partials.digital-twin-evidence-summary', ['inspection' => $inspection])
+
                 <!-- Findings Summary — grouped by severity -->
                 @php
                     $inlineFindingsRaw = is_array($inspection->findings)
@@ -229,7 +285,7 @@
                         return $left . '|' . $right;
                     };
 
-                    // The report always shows ALL findings because the client paid for the inspection.
+                    // The report always shows ALL findings because the client paid for the diagnosis.
                     // Per-finding status badges indicate approved / deferred / noted.
 
                     // Build approved & deferred key lookups from the quotation snapshot
@@ -389,13 +445,19 @@
 
                     $pricingScopeApprovedOnly = $isApprovedQuotation && $pricedFindings->isNotEmpty();
 
-                    $totalLabourHrs  = $pricedFindings->sum('phar_labour_hours');
                     $hourlyRateForClient = (float) ($inspection->labour_hourly_rate ?? 165);
-                    $totalLabourCost = round($totalLabourHrs * $hourlyRateForClient, 2);
+                    $findingTradePartnerCost = function ($finding) {
+                        $tradePricing = is_array($finding['trade_pricing'] ?? null) ? $finding['trade_pricing'] : [];
+
+                        return (float) ($finding['trade_client_price'] ?? ($tradePricing['etogo_client_price'] ?? 0));
+                    };
+                    $totalLabourHrs  = $pricedFindings->sum(fn($f) => $findingTradePartnerCost($f) > 0 ? 0 : (float) ($f['phar_labour_hours'] ?? 0));
+                    $totalLabourCost = round((float) $pricedFindings->sum(fn($f) => $findingTradePartnerCost($f) > 0 ? 0 : ((float) ($f['phar_labour_hours'] ?? 0) * $hourlyRateForClient)), 2);
                     $totalMatCost    = $pricedFindings->sum(fn($f) =>
                         collect($f['phar_materials'] ?? [])->sum(fn($m) => (float)($m['line_total'] ?? 0))
                     );
-                    $clientVisibleTotal = round($totalLabourCost + $totalMatCost, 2);
+                    $totalTradePartnerCost = round((float) $pricedFindings->sum(fn($f) => $findingTradePartnerCost($f)), 2);
+                    $clientVisibleTotal = round($totalLabourCost + $totalMatCost + $totalTradePartnerCost, 2);
                 @endphp
                 @if(count($inlineFindingsRaw) > 0)
                 <div class="card mb-4 findings-card">
@@ -435,8 +497,9 @@
                                         $pharMaterials  = $finding['phar_materials'] ?? [];
                                         $findingMatCost = collect($pharMaterials)->sum(fn($m) => (float)($m['line_total'] ?? 0));
                                         $findingLabourHours = (float)($finding['phar_labour_hours'] ?? 0);
-                                        $findingLabourCost = round($findingLabourHours * $hourlyRateForClient, 2);
-                                        $findingSubtotal = round($findingLabourCost + $findingMatCost, 2);
+                                        $findingTradePartnerCostValue = $findingTradePartnerCost($finding);
+                                        $findingLabourCost = $findingTradePartnerCostValue > 0 ? 0 : round($findingLabourHours * $hourlyRateForClient, 2);
+                                        $findingSubtotal = round($findingLabourCost + $findingMatCost + $findingTradePartnerCostValue, 2);
                                         $recommendations = $finding['recommendations'] ?? [];
                                         $findingPhotos = $normalizePhotoPaths($finding['finding_photos'] ?? []);
                                         $rowKey = $findingMatchKey(
@@ -503,7 +566,7 @@
                                                 </div>
                                             @endif
                                             @if(empty($findingPhotos))
-                                                <small class="text-muted d-block mt-2">No inspection photo uploaded for this finding.</small>
+                                                <small class="text-muted d-block mt-2">No diagnosis photo uploaded for this finding.</small>
                                             @endif
                                         </td>
                                         <td class="text-end align-top">
@@ -511,6 +574,8 @@
                                             <div class="mt-1"><small class="text-muted d-block">Cost</small>
                                                 @if($findingLabourCost > 0)
                                                     <strong>${{ number_format($findingLabourCost, 2) }}</strong>
+                                                @elseif($findingTradePartnerCostValue > 0)
+                                                    <span class="text-muted">Handled by trade partner</span>
                                                 @else
                                                     <span class="text-muted">—</span>
                                                 @endif
@@ -541,7 +606,11 @@
                                             @else
                                                 <span class="text-muted">—</span>
                                             @endif
-                                            <div class="small text-muted mt-1">Labour + Materials</div>
+                                            @if($findingTradePartnerCostValue > 0)
+                                                <div class="small text-muted mt-1">Includes Trade Partner Work: ${{ number_format($findingTradePartnerCostValue, 2) }}</div>
+                                            @else
+                                                <div class="small text-muted mt-1">Labour + Materials</div>
+                                            @endif
                                         </td>
                                     </tr>
                                     @endforeach
@@ -572,7 +641,7 @@
                     <div class="card-body">
 
                         <div class="row">
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <div class="card border-primary">
                                     <div class="card-body">
                                         <h6 class="text-muted mb-1">Labour</h6>
@@ -581,7 +650,7 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-3">
                                 <div class="card border-primary">
                                     <div class="card-body">
                                         <h6 class="text-muted mb-1">Materials</h6>
@@ -592,12 +661,21 @@
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-3">
+                                <div class="card border-primary">
+                                    <div class="card-body">
+                                        <h6 class="text-muted mb-1">Trade Partner Work</h6>
+                                        <div class="fs-4 text-primary">${{ number_format($totalTradePartnerCost, 2) }}</div>
+                                        <small class="text-muted">Approved trade partner price</small>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
                                 <div class="card border-success bg-light">
                                     <div class="card-body">
                                         <h6 class="text-muted mb-1">Total</h6>
                                         <div class="fs-3 text-success"><strong>${{ number_format($clientVisibleTotal, 2) }}</strong></div>
-                                        <small class="text-muted">Labour + Materials</small>
+                                        <small class="text-muted">Labour + Materials + Trade Partner Work</small>
                                     </div>
                                 </div>
                             </div>
@@ -605,7 +683,7 @@
 
                         <div class="mt-3">
                             <small class="text-muted">
-                                Pricing shown to client includes only labour and materials by finding.
+                                Pricing shown to client includes labour, materials, and trade partner work by finding.
                                 {{ $pricingScopeApprovedOnly ? 'Totals above are scoped to approved quotation findings only.' : 'Totals above reflect all findings currently listed.' }}
                             </small>
                         </div>
@@ -617,12 +695,12 @@
                     </div>
                 </div>
 
-                <!-- Inspection Photos -->
+                <!-- Diagnosis Photos -->
                 @php $inspectionPhotos = is_array($inspection->photos) ? $inspection->photos : (json_decode($inspection->getRawOriginal('photos') ?? '[]', true) ?? []); @endphp
                 @if(count($inspectionPhotos) > 0)
                 <div class="card mb-4">
                     <div class="card-header" style="background:#495057;color:white;">
-                        <h5 class="mb-0"><i class="mdi mdi-camera me-2"></i>Inspection Photos ({{ count($inspectionPhotos) }})</h5>
+                        <h5 class="mb-0"><i class="mdi mdi-camera me-2"></i>Diagnosis Photos ({{ count($inspectionPhotos) }})</h5>
                     </div>
                     <div class="card-body">
                         <div class="row g-3">
@@ -630,7 +708,7 @@
                             <div class="col-6 col-md-3">
                                 <a href="{{ $inspection->getStorageUrl($photo) }}" target="_blank">
                                     <img src="{{ $inspection->getStorageUrl($photo) }}"
-                                         alt="Inspection photo"
+                                         alt="Diagnosis photo"
                                          class="img-fluid rounded border"
                                          style="width:100%;height:180px;object-fit:cover;">
                                 </a>
@@ -716,7 +794,7 @@
                         <h5 class="mb-0"><i class="mdi mdi-credit-card me-2"></i>Start Remediation Work</h5>
                     </div>
                     <div class="card-body">
-                        <p class="mb-2">Your inspection is complete. Total project cost: <strong>${{ number_format($rptFullAmt, 2) }}</strong> across <strong>{{ $rptVisits }} visit(s)</strong>.</p>
+                        <p class="mb-2">Your diagnosis is complete. Total project cost: <strong>${{ number_format($rptFullAmt, 2) }}</strong> across <strong>{{ $rptVisits }} visit(s)</strong>.</p>
                         <div class="d-flex gap-2 flex-wrap no-print">
                             <a href="{{ route('client.inspections.work-payment', ['inspection' => $inspection->id, 'plan' => 'full']) }}" class="btn btn-success">
                                 <i class="mdi mdi-cash-check me-1"></i>Pay in Full (${{ number_format($rptFullAmt, 2) }})

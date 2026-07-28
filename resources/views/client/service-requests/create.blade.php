@@ -1,14 +1,19 @@
 @extends('client.layout')
 
-@section('title', 'Report Issue')
+@section('title', 'Owner Request')
 
 @section('content')
+@php
+    $addendumMode = $isAddendum ?? false;
+@endphp
 <div class="row mb-4">
     <div class="col-12">
         <div class="card border-0 shadow-sm" style="background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);">
             <div class="card-body text-white p-4">
-                <h3 class="fw-bold mb-1">Report Issue / Request Change</h3>
-                <p class="mb-0 opacity-75">Submit details so admin can triage and move this into assessment</p>
+                <h3 class="fw-bold mb-1">{{ $addendumMode ? 'Owner Update / Add Work' : 'Report Issue / Request Change' }}</h3>
+                <p class="mb-0 opacity-75">
+                    {{ $addendumMode ? 'Tell us what you want added so our team can assess it and prepare a remediation proposal.' : 'Submit details so the team can triage and move this into assessment.' }}
+                </p>
             </div>
         </div>
     </div>
@@ -35,11 +40,16 @@
 
                 <div class="col-md-3">
                     <label class="form-label">Request Type</label>
-                    <select name="request_type" class="form-select @error('request_type') is-invalid @enderror" required>
-                        <option value="emergency" @selected(old('request_type') === 'emergency')>Emergency</option>
-                        <option value="repair" @selected(old('request_type', 'repair') === 'repair')>Repair</option>
-                        <option value="change_request" @selected(old('request_type') === 'change_request')>Change Request</option>
-                    </select>
+                    @if($addendumMode)
+                        <input type="hidden" name="request_type" value="change_request">
+                        <input type="text" class="form-control" value="Additional Work / Proposal Request" readonly>
+                    @else
+                        <select name="request_type" class="form-select @error('request_type') is-invalid @enderror" required>
+                            <option value="emergency" @selected(old('request_type') === 'emergency')>Emergency</option>
+                            <option value="repair" @selected(old('request_type', 'repair') === 'repair')>Repair</option>
+                            <option value="change_request" @selected(old('request_type') === 'change_request')>Change Request</option>
+                        </select>
+                    @endif
                     @error('request_type')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 </div>
 
@@ -56,13 +66,13 @@
 
                 <div class="col-12">
                     <label class="form-label">Title</label>
-                    <input type="text" name="title" value="{{ old('title') }}" class="form-control @error('title') is-invalid @enderror" maxlength="180" required>
+                    <input type="text" name="title" value="{{ old('title') }}" class="form-control @error('title') is-invalid @enderror" maxlength="180" placeholder="{{ $addendumMode ? 'Example: Add exterior drainage repair to the current work' : '' }}" required>
                     @error('title')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 </div>
 
                 <div class="col-12">
                     <label class="form-label">Description</label>
-                    <textarea name="description" rows="4" class="form-control @error('description') is-invalid @enderror" required>{{ old('description') }}</textarea>
+                    <textarea name="description" rows="4" class="form-control @error('description') is-invalid @enderror" placeholder="{{ $addendumMode ? 'Describe the extra work you want us to review, why you need it, and any deadline or access notes.' : '' }}" required>{{ old('description') }}</textarea>
                     @error('description')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 </div>
 
@@ -79,9 +89,9 @@
                 </div>
 
                 <div class="col-12">
-                    <label class="form-label">Items Reported (one per line)</label>
-                    <textarea name="items_reported_text" rows="4" class="form-control @error('items_reported_text') is-invalid @enderror" placeholder="Leaking sink in unit 12B&#10;Cracked lobby tile near entrance">{{ old('items_reported_text') }}</textarea>
-                    <div class="form-text">These entries seed the initial findings list for assessment.</div>
+                    <label class="form-label">{{ $addendumMode ? 'Requested Add-ons (one per line)' : 'Items Reported (one per line)' }}</label>
+                    <textarea name="items_reported_text" rows="4" class="form-control @error('items_reported_text') is-invalid @enderror" placeholder="{{ $addendumMode ? 'Replace damaged exterior trim&#10;Add gutter cleaning to the next visit' : 'Leaking sink in unit 12B&#10;Cracked lobby tile near entrance' }}">{{ old('items_reported_text') }}</textarea>
+                    <div class="form-text">{{ $addendumMode ? 'Each line can become a finding during assessment and then move into quotation.' : 'These entries seed the initial findings list for assessment.' }}</div>
                     @error('items_reported_text')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 </div>
 
@@ -95,7 +105,7 @@
             <div class="d-flex justify-content-end gap-2 mt-4">
                 <a href="{{ route('client.service-requests.index') }}" class="btn btn-outline-secondary">Cancel</a>
                 <button type="submit" class="btn btn-primary">
-                    <i class="mdi mdi-send me-1"></i> Submit Request
+                    <i class="mdi mdi-send me-1"></i> {{ $addendumMode ? 'Submit Additional Work Request' : 'Submit Request' }}
                 </button>
             </div>
         </form>

@@ -37,7 +37,7 @@
     $awaitingQuotationCount = 0;
 
     if ($user->hasRole(['Super Admin', 'Administrator'])) {
-        $propertyIds = \App\Models\Property::where('status', 'approved')->pluck('id');
+        $propertyIds = \App\Models\Property::where('status', '!=', 'archived')->pluck('id');
         $projectIds = \App\Models\Project::whereIn('property_id', $propertyIds)->pluck('id');
 
         $scheduledInspectionsCount = \App\Models\Inspection::whereIn('project_id', $projectIds)
@@ -97,7 +97,7 @@
         })
         ->count();
 
-    // Stage 2: Ready for countersign (tools + schedule done, Etogo not signed yet)
+    // Stage 2: Ready for ETOGO signoff (tools + schedule done, Etogo not signed yet)
     $awaitingScheduleCount = \App\Models\Inspection::whereNotNull('client_signature')
         ->where('work_payment_status', 'paid')
         ->whereNull('etogo_signed_at')
@@ -229,6 +229,10 @@
     $openServiceRequestsCount = \App\Models\ServiceRequest::whereIn('status', ['submitted', 'triaged', 'awaiting_assessment'])
         ->count();
 
+    $openAddendumRequestsCount = \App\Models\ServiceRequest::where('request_type', 'change_request')
+        ->whereIn('status', ['submitted', 'triaged', 'awaiting_assessment'])
+        ->count();
+
     $openTradeApplicationsCount = $user->hasRole(['Super Admin', 'Administrator'])
         ? \App\Models\TradeApplication::whereIn('status', ['submitted', 'ready_for_review', 'needs_more_information', 'conditionally_approved'])->count()
         : 0;
@@ -249,7 +253,7 @@
         </a>
 
         @if(($user->hasRole(['Inspector', 'Project Manager', 'Super Admin', 'Administrator']) || $user->can('view-inspections')) && !$user->hasRole('Store Manager'))
-            <div class="admin-client-section-title">Services</div>
+            <div class="admin-client-section-title">Inspection Workflow</div>
             <details class="admin-client-group" {{ $inspectionsOpen ? 'open' : '' }}>
                 <summary class="admin-client-link {{ $inspectionsOpen ? 'is-active' : '' }}">
                     <span class="admin-client-summary-left">
@@ -267,16 +271,19 @@
                             @endif
                         </a>
                         <a class="admin-client-sublink {{ request()->routeIs('inspections.*') && request()->get('view') == 'awaiting-quotation' ? 'is-active' : '' }}" href="{{ route('inspections.index') }}?view=awaiting-quotation">
-                            <span class="admin-client-sublabel">Pre-assessed properties</span>
+                            <span class="admin-client-sublabel">Findings Awaiting Decisions</span>
                             @if($awaitingQuotationCount > 0)
                                 <span class="admin-client-badge">{{ $awaitingQuotationCount }}</span>
                             @endif
                         </a>
                         <a class="admin-client-sublink {{ request()->get('status') == 'completed' ? 'is-active' : '' }}" href="{{ route('inspections.index') }}?status=completed">
-                            <span class="admin-client-sublabel">Completed</span>
+                            <span class="admin-client-sublabel">Completed PHAR Assessments</span>
                         </a>
                         <a class="admin-client-sublink {{ request()->routeIs('properties.*') && request()->get('status') == 'inspected_completed' ? 'is-active' : '' }}" href="{{ route('properties.index') }}?status=inspected_completed">
-                            <span class="admin-client-sublabel">All Assessed Properties</span>
+                            <span class="admin-client-sublabel">Assessed Property Registry</span>
+                        </a>
+                        <a class="admin-client-sublink {{ request()->routeIs('properties.index') && !request()->get('status') ? 'is-active' : '' }}" href="{{ route('properties.index') }}">
+                            <span class="admin-client-sublabel">Property Registry</span>
                         </a>
                     @else
                         <a class="admin-client-sublink {{ request()->get('status') == 'scheduled' ? 'is-active' : '' }}" href="{{ route('inspections.index') }}?status=scheduled">
@@ -292,7 +299,7 @@
                             @endif
                         </a>
                         <a class="admin-client-sublink {{ !request()->has('status') ? 'is-active' : '' }}" href="{{ route('inspections.index') }}">
-                            <span class="admin-client-sublabel">All Inspections</span>
+                            <span class="admin-client-sublabel">All PHAR Assessments</span>
                         </a>
                     @endif
                 </div>
@@ -327,26 +334,26 @@
                 <summary class="admin-client-link {{ $projectsOpen ? 'is-active' : '' }}">
                     <span class="admin-client-summary-left">
                         <i class="mdi mdi-briefcase admin-client-icon admin-client-icon-projects"></i>
-                        <span>{{ $user->hasRole('Store Manager') ? 'Tool Operations' : 'Project Management' }}</span>
+                        <span>{{ $user->hasRole('Store Manager') ? 'Tool Operations' : 'Remediation & Verification' }}</span>
                     </span>
                     <span class="admin-client-arrow">▾</span>
                 </summary>
                 <div class="admin-client-submenu">
                     @if($user->hasRole(['Project Manager', 'Super Admin', 'Administrator']) || $user->can('view-all-projects'))
 
-                        {{-- Stage 1: tools + scheduling setup before countersign --}}
+                        {{-- Stage 1: tools + scheduling setup before ETOGO signoff --}}
                         <a class="admin-client-sublink {{ request()->routeIs('inspections.index') && request()->get('view') == 'pending-etogo' ? 'is-active' : '' }}"
                            href="{{ route('inspections.index') }}?view=pending-etogo">
-                            <span class="admin-client-sublabel">Pre-Sign Setup</span>
+                        <span class="admin-client-sublabel">Remediation Setup</span>
                             @if($pendingEtogoCount > 0)
                                 <span class="admin-client-badge">{{ $pendingEtogoCount }}</span>
                             @endif
                         </a>
 
-                        {{-- Stage 2: tools + schedule done — ready for Etogo countersign --}}
+                        {{-- Stage 2: tools + schedule done - ready for ETOGO signoff --}}
                         <a class="admin-client-sublink {{ request()->routeIs('inspections.index') && request()->get('view') == 'needs-schedule' ? 'is-active' : '' }}"
                            href="{{ route('inspections.index') }}?view=needs-schedule">
-                            <span class="admin-client-sublabel">Ready to Countersign</span>
+                            <span class="admin-client-sublabel">Ready for ETOGO Signoff</span>
                             @if($awaitingScheduleCount > 0)
                                 <span class="admin-client-badge bg-warning text-dark">{{ $awaitingScheduleCount }}</span>
                             @endif
@@ -369,7 +376,7 @@
                     {{-- Stage 3: Active projects (< 100% progress) --}}
                     <a class="admin-client-sublink {{ request()->routeIs('maintenance-visit-logs.*') && request()->get('progress_filter', 'active') !== 'completed' ? 'is-active' : '' }}"
                        href="{{ route('maintenance-visit-logs.index') }}?progress_filter=active">
-                        <span class="admin-client-sublabel">Active Projects</span>
+                        <span class="admin-client-sublabel">Active Remediation</span>
                         @if($activeWorkCount > 0)
                             <span class="admin-client-badge">{{ $activeWorkCount }}</span>
                         @endif
@@ -378,7 +385,7 @@
                     {{-- Stage 4: Completed projects (100% progress) --}}
                     <a class="admin-client-sublink {{ request()->routeIs('maintenance-visit-logs.*') && request()->get('progress_filter') === 'completed' ? 'is-active' : '' }}"
                        href="{{ route('maintenance-visit-logs.index') }}?progress_filter=completed">
-                        <span class="admin-client-sublabel">Completed Projects</span>
+                        <span class="admin-client-sublabel">Completed Remediation</span>
                         @if($completedWorkCount > 0)
                             <span class="admin-client-badge">{{ $completedWorkCount }}</span>
                         @endif
@@ -401,13 +408,19 @@
                             <span class="admin-client-sublabel">Milestones &amp; Budget</span>
                         </a>
                         <a class="admin-client-sublink {{ request()->routeIs('admin.service-requests.*') ? 'is-active' : '' }}" href="{{ route('admin.service-requests.index') }}">
-                            <span class="admin-client-sublabel">Service Requests Queue</span>
+                            <span class="admin-client-sublabel">Owner Requests Queue</span>
                             @if($openServiceRequestsCount > 0)
                                 <span class="admin-client-badge">{{ $openServiceRequestsCount }}</span>
                             @endif
                         </a>
+                        <a class="admin-client-sublink {{ request()->routeIs('admin.service-requests.*') && request('type') === 'addendum' ? 'is-active' : '' }}" href="{{ route('admin.service-requests.index', ['status' => 'open', 'type' => 'addendum']) }}">
+                            <span class="admin-client-sublabel">Owner Add-on Requests</span>
+                            @if($openAddendumRequestsCount > 0)
+                                <span class="admin-client-badge">{{ $openAddendumRequestsCount }}</span>
+                            @endif
+                        </a>
                         <a class="admin-client-sublink {{ request()->routeIs('change-orders.*') ? 'is-active' : '' }}" href="{{ route('change-orders.index') }}">
-                            <span class="admin-client-sublabel">Change Orders</span>
+                            <span class="admin-client-sublabel">Scope Changes</span>
                         </a>
                     @endif
                 </div>
@@ -527,235 +540,9 @@
         @endrole
     </div>
     <div class="admin-client-version-bar">
-        <span>EMURIA</span> <span class="admin-client-version-badge">v1.0</span>
+        <button type="button" class="admin-client-version-button" aria-label="Application version 1.0">
+            <span class="admin-client-version-label">Version</span>
+            <span class="admin-client-version-badge">1.0</span>
+        </button>
     </div>
 </nav>
-
-<style>
-.admin-client-sidebar,
-body .admin-client-sidebar,
-body.light-theme .admin-client-sidebar {
-    width: 280px !important;
-    background: #eaf4ff !important;
-    border-right: 1px solid #c8dff4 !important;
-    box-shadow: 4px 0 14px rgba(28, 58, 92, .045) !important;
-}
-
-.admin-client-sidebar,
-.admin-client-sidebar * {
-    letter-spacing: 0 !important;
-}
-
-.admin-client-sidebar .admin-client-sidebar-inner {
-    padding: 18px 12px 16px !important;
-}
-
-.admin-client-sidebar .admin-client-brand {
-    display: flex !important;
-    justify-content: center !important;
-    padding: 0 0 18px !important;
-}
-
-.admin-client-sidebar .admin-client-brand a {
-    width: 64px !important;
-    height: 64px !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    background: #fff !important;
-    border-radius: 8px !important;
-    box-shadow: 0 3px 10px rgba(28, 58, 92, .08) !important;
-    text-decoration: none !important;
-}
-
-.admin-client-sidebar .admin-client-brand-logo {
-    width: 40px !important;
-    height: auto !important;
-    object-fit: contain !important;
-}
-
-.admin-client-sidebar .admin-client-user {
-    display: flex !important;
-    align-items: center !important;
-    gap: .7rem !important;
-    margin-bottom: .6rem !important;
-    padding: 12px !important;
-    background: rgba(255,255,255,.68) !important;
-    border: 1px solid #d7e7f7 !important;
-    border-radius: 8px !important;
-    box-shadow: none !important;
-}
-
-.admin-client-sidebar .admin-client-avatar {
-    width: 34px !important;
-    height: 34px !important;
-    border-radius: 999px !important;
-    object-fit: cover !important;
-}
-
-.admin-client-sidebar .admin-client-name {
-    color: #172033 !important;
-    font-size: .9rem !important;
-    font-weight: 800 !important;
-    line-height: 1.15 !important;
-}
-
-.admin-client-sidebar .admin-client-role,
-.admin-client-sidebar .admin-client-section-title {
-    color: #667085 !important;
-}
-
-.admin-client-sidebar .admin-client-role {
-    font-size: .8rem !important;
-    line-height: 1.2 !important;
-}
-
-.admin-client-sidebar .admin-client-section-title {
-    padding: 1rem .55rem .45rem !important;
-    font-size: .68rem !important;
-    font-weight: 850 !important;
-    text-transform: uppercase !important;
-    letter-spacing: .16em !important;
-}
-
-.admin-client-sidebar .admin-client-link,
-.admin-client-sidebar .admin-client-sublink {
-    display: flex !important;
-    align-items: center !important;
-    gap: .7rem !important;
-    color: #172033 !important;
-    text-decoration: none !important;
-    border-radius: 7px !important;
-    box-shadow: none !important;
-    font-weight: 700 !important;
-}
-
-.admin-client-sidebar .admin-client-link {
-    min-height: 44px !important;
-    padding: .55rem !important;
-    justify-content: flex-start !important;
-}
-
-.admin-client-sidebar .admin-client-summary-left {
-    display: flex !important;
-    align-items: center !important;
-    gap: .7rem !important;
-    flex: 1 !important;
-    min-width: 0 !important;
-}
-
-.admin-client-sidebar .admin-client-link span,
-.admin-client-sidebar .admin-client-sublink,
-.admin-client-sidebar .admin-client-sublink:visited,
-.admin-client-sidebar .admin-client-arrow {
-    color: #172033 !important;
-}
-
-.admin-client-sidebar .admin-client-icon,
-.admin-client-sidebar .admin-client-icon-dashboard,
-.admin-client-sidebar .admin-client-icon-property,
-.admin-client-sidebar .admin-client-icon-services,
-.admin-client-sidebar .admin-client-icon-projects,
-.admin-client-sidebar .admin-client-icon-billing,
-.admin-client-sidebar .admin-client-icon-reports,
-.admin-client-sidebar .admin-client-icon-access,
-.admin-client-sidebar .admin-client-icon-settings {
-    width: 30px !important;
-    height: 30px !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    flex-shrink: 0 !important;
-    background: #dbeafa !important;
-    color: #344054 !important;
-    border-radius: 7px !important;
-    box-shadow: none !important;
-}
-
-.admin-client-sidebar .admin-client-group {
-    margin: 0 !important;
-}
-
-.admin-client-sidebar .admin-client-group summary {
-    list-style: none !important;
-    cursor: pointer !important;
-}
-
-.admin-client-sidebar .admin-client-group summary::-webkit-details-marker {
-    display: none !important;
-}
-
-.admin-client-sidebar .admin-client-arrow {
-    margin-left: auto !important;
-    opacity: .72 !important;
-    transition: transform .15s ease !important;
-}
-
-.admin-client-sidebar details[open] .admin-client-arrow {
-    transform: rotate(180deg) !important;
-}
-
-.admin-client-sidebar .admin-client-submenu {
-    padding: .18rem 0 .52rem 0 !important;
-}
-
-.admin-client-sidebar .admin-client-sublink {
-    justify-content: space-between !important;
-    margin-left: 2.65rem !important;
-    padding: .42rem .5rem !important;
-    font-size: .86rem !important;
-    color: #344054 !important;
-}
-
-.admin-client-sidebar .admin-client-link:hover,
-.admin-client-sidebar .admin-client-sublink:hover {
-    background: rgba(255,255,255,.58) !important;
-}
-
-.admin-client-sidebar .admin-client-link.is-active,
-.admin-client-sidebar .admin-client-sublink.is-active {
-    background: #ffffff !important;
-    color: #172033 !important;
-    border-left: 3px solid #2458d6 !important;
-    box-shadow: 0 3px 10px rgba(28, 58, 92, .055) !important;
-}
-
-.admin-client-sidebar .admin-client-link.is-active .admin-client-icon,
-.admin-client-sidebar .admin-client-link:hover .admin-client-icon {
-    background: #ffffff !important;
-    color: #2458d6 !important;
-}
-
-.admin-client-sidebar .admin-client-badge {
-    min-width: 20px !important;
-    height: 20px !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    padding: 0 .45rem !important;
-    border-radius: 999px !important;
-    background: #2458d6 !important;
-    color: #ffffff !important;
-    font-size: .72rem !important;
-    font-weight: 800 !important;
-}
-
-.admin-client-version-bar {
-    padding: 10px 14px !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: space-between !important;
-    border-top: 1px solid #c8dff4 !important;
-    color: #667085 !important;
-    font-size: .72rem !important;
-    font-weight: 700 !important;
-    text-transform: uppercase !important;
-}
-
-.admin-client-version-badge {
-    background: #dbeafa !important;
-    color: #344054 !important;
-    border-radius: 999px !important;
-    padding: 2px 9px !important;
-}
-</style>

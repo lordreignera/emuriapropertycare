@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Inspection;
 use App\Models\InspectionQuotation;
 use App\Models\MaintenanceVisitLog;
+use App\Models\PHARFinding;
+use App\Models\VerificationRecord;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
@@ -340,6 +342,7 @@ class MaintenanceVisitLogController extends Controller
                 'completed_finding_ids' => $existing->push($findingId)->all(),
             ]);
         }
+        $this->markFindingsVerificationPending($inspection, [$findingId]);
 
         return back()->with('success', 'Issue marked as fully resolved.');
     }
@@ -404,6 +407,7 @@ class MaintenanceVisitLogController extends Controller
         $allIds = $findings->pluck('id')->map(fn($id) => (int) $id)->unique()->values()->all();
 
         $inspection->update(['completed_finding_ids' => $allIds]);
+        $this->markFindingsVerificationPending($inspection, $allIds);
 
         // Sync the parent Project status to 'completed'
         if ($inspection->project_id) {
@@ -414,6 +418,37 @@ class MaintenanceVisitLogController extends Controller
         }
 
         return back()->with('success', 'Project marked as fully complete. All issues resolved.');
+    }
+
+    private function markFindingsVerificationPending(Inspection $inspection, iterable $findingIds): void
+    {
+        $ids = collect($findingIds)
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->values();
+
+        if ($ids->isEmpty()) {
+            return;
+        }
+
+        PHARFinding::query()
+            ->where('inspection_id', $inspection->id)
+            ->whereIn('id', $ids)
+            ->update(['workflow_status' => 'verification_pending']);
+
+        foreach ($ids as $findingId) {
+            VerificationRecord::firstOrCreate(
+                [
+                    'phar_finding_id' => $findingId,
+                    'remediation_work_order_id' => null,
+                    'status' => 'pending',
+                ],
+                [
+                    'quality_notes' => 'Created from maintenance completion; awaiting formal verification.',
+                ]
+            );
+        }
     }
 
     private function resolveScopedFindings(Inspection $inspection, Collection $findings): Collection

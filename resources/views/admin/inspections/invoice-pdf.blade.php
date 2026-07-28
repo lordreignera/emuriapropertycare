@@ -2,7 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Inspection Report - {{ $inspection->property?->property_code }}</title>
+    <title>Diagnosis Report - {{ $inspection->property?->property_code }}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -257,7 +257,7 @@
 
 <!-- ════ PROPERTY INFORMATION ════ -->
 <div class="section">
-    <div class="section-title">Property &amp; Inspection Information</div>
+    <div class="section-title">Property &amp; Diagnosis Information</div>
     <div class="section-body">
         <table class="info-grid">
             <tr>
@@ -275,7 +275,7 @@
             <tr>
                 <td class="lbl">Property Type:</td>
                 <td>{{ $inspection->property?->type ? ucfirst(str_replace('_',' ',$inspection->property->type)) : 'N/A' }}</td>
-                <td class="lbl">Inspection Date:</td>
+                <td class="lbl">Diagnosis Date:</td>
                 <td>{{ $inspection->scheduled_date?->format('M d, Y') ?? 'Not scheduled' }}</td>
             </tr>
             <tr>
@@ -593,7 +593,7 @@
 @endphp
 @if(count($pdfResolvedUrls) > 0)
 <div class="section">
-    <div class="section-title">Inspection Photos ({{ count($pdfResolvedUrls) }})</div>
+    <div class="section-title">Diagnosis Photos ({{ count($pdfResolvedUrls) }})</div>
     <div class="section-body">
         <table style="width:100%;border-collapse:collapse;">
             @php $pdfPhotoChunks = array_chunk($pdfResolvedUrls, 4); @endphp

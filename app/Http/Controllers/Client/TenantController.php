@@ -31,11 +31,7 @@ class TenantController extends Controller
 
         $tenants = $query->paginate(15);
         
-        // Get user's approved properties with tenants enabled
-        $properties = Property::where('user_id', Auth::id())
-            ->where('status', 'approved')
-            ->where('has_tenants', true)
-            ->get();
+        $properties = $this->tenantEnabledPropertiesQuery()->get();
 
         return view('client.tenants.index', compact('tenants', 'properties'));
     }
@@ -45,15 +41,11 @@ class TenantController extends Controller
      */
     public function create(Request $request)
     {
-        // Get approved properties with tenants enabled
-        $properties = Property::where('user_id', Auth::id())
-            ->where('status', 'approved')
-            ->where('has_tenants', true)
-            ->get();
+        $properties = $this->tenantEnabledPropertiesQuery()->get();
 
         if ($properties->isEmpty()) {
             return redirect()->route('client.tenants.index')
-                ->with('error', 'You need to have at least one approved property with multi-tenant enabled before adding tenants.');
+                ->with('error', 'You need to have at least one registered property with multi-tenant enabled before adding tenants.');
         }
 
         // Pre-select property if passed in request
@@ -80,10 +72,8 @@ class TenantController extends Controller
         ]);
 
         // Verify property belongs to authenticated user
-        $property = Property::where('id', $validated['property_id'])
-            ->where('user_id', Auth::id())
-            ->where('status', 'approved')
-            ->where('has_tenants', true)
+        $property = $this->tenantEnabledPropertiesQuery()
+            ->whereKey($validated['property_id'])
             ->firstOrFail();
 
         // Get next tenant number for this property
@@ -129,10 +119,7 @@ class TenantController extends Controller
             abort(403, 'Unauthorized access to tenant information.');
         }
 
-        $properties = Property::where('user_id', Auth::id())
-            ->where('status', 'approved')
-            ->where('has_tenants', true)
-            ->get();
+        $properties = $this->tenantEnabledPropertiesQuery()->get();
 
         return view('client.tenants.edit', compact('tenant', 'properties'));
     }
@@ -281,5 +268,12 @@ class TenantController extends Controller
             'tenant_password' => $property->tenant_common_password,
             'property_name' => $property->property_name
         ]);
+    }
+
+    private function tenantEnabledPropertiesQuery()
+    {
+        return Property::where('user_id', Auth::id())
+            ->where('status', '!=', 'archived')
+            ->where('has_tenants', true);
     }
 }

@@ -10,19 +10,32 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <div>
-                            <h4 class="card-title mb-0">Service Requests Queue</h4>
-                            <p class="text-muted small mb-0">Client-reported issues waiting for triage and assessment intake</p>
+                            <h4 class="card-title mb-0">{{ $type === 'addendum' ? 'Add-on Requests Queue' : 'Service Requests Queue' }}</h4>
+                            <p class="text-muted small mb-0">
+                                {{ $type === 'addendum' ? 'Additional work requests waiting for review, assessment, quotation, and client approval' : 'Client-reported issues waiting for triage and assessment intake' }}
+                            </p>
                         </div>
+                        <a href="{{ route('admin.service-requests.create', ['type' => 'addendum']) }}" class="btn btn-primary btn-sm">
+                            <i class="mdi mdi-file-plus-outline me-1"></i>Log Add-on Request
+                        </a>
                     </div>
 
                     @if(session('success'))
                         <div class="alert alert-success">{{ session('success') }}</div>
+                    @endif
+                    @if(session('error'))
+                        <div class="alert alert-danger">{{ session('error') }}</div>
                     @endif
 
                     <ul class="nav nav-pills mb-3">
                         <li class="nav-item">
                             <a class="nav-link {{ $status === 'open' ? 'active' : '' }}" href="{{ route('admin.service-requests.index', ['status' => 'open']) }}">
                                 Open <span class="badge bg-light text-dark ms-1">{{ $openCount }}</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {{ $type === 'addendum' ? 'active' : '' }}" href="{{ route('admin.service-requests.index', ['status' => 'open', 'type' => 'addendum']) }}">
+                                Add-on Requests <span class="badge bg-light text-dark ms-1">{{ $addendumCount }}</span>
                             </a>
                         </li>
                         <li class="nav-item">
@@ -59,7 +72,13 @@
                                             <div>{{ $request->property?->property_name ?? 'N/A' }}</div>
                                             <small class="text-muted">{{ $request->property?->property_code ?? '' }}</small>
                                         </td>
-                                        <td>{{ ucwords(str_replace('_', ' ', $request->request_type)) }}</td>
+                                        <td>
+                                            @if($request->request_type === 'change_request')
+                                                <span class="badge bg-primary">Add-on / Quotation</span>
+                                            @else
+                                                {{ ucwords(str_replace('_', ' ', $request->request_type)) }}
+                                            @endif
+                                        </td>
                                         <td>
                                             <span class="badge bg-{{ $request->urgency === 'critical' ? 'danger' : ($request->urgency === 'high' ? 'warning text-dark' : 'secondary') }}">
                                                 {{ ucfirst($request->urgency) }}

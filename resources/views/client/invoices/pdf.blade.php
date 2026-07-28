@@ -28,7 +28,7 @@
         <p class="meta"><strong>Property:</strong> {{ $invoice->project?->property?->property_name ?? 'N/A' }}</p>
         <p class="meta"><strong>Property Code:</strong> {{ $invoice->project?->property?->property_code ?? 'N/A' }}</p>
         @if($isInspectionFeeInvoice)
-            <p class="meta"><strong>Selected Inspection Date:</strong> {{ optional($inspection?->scheduled_date)->format('M d, Y h:i A') ?? 'N/A' }}</p>
+            <p class="meta"><strong>Selected Diagnosis Date:</strong> {{ optional($inspection?->scheduled_date)->format('M d, Y h:i A') ?? 'N/A' }}</p>
             <p class="meta"><strong>Paid By (Client):</strong> {{ $invoice->user?->name ?? ($invoice->project?->property?->user?->name ?? 'N/A') }}</p>
         @endif
         <p class="meta"><strong>Issue Date:</strong> {{ optional($invoice->issue_date)->format('M d, Y') ?? '-' }}</p>
@@ -37,7 +37,7 @@
     </div>
 
     <div class="card">
-        <div class="card-header">{{ $isInspectionFeeInvoice ? 'Inspection Fee Breakdown' : 'Amount Breakdown (Annual Project Cost)' }}</div>
+        <div class="card-header">{{ $isInspectionFeeInvoice ? 'Diagnosis Fee Breakdown' : 'Amount Breakdown (Annual Project Cost)' }}</div>
         <div class="card-body">
             <table>
                 <thead>
@@ -48,14 +48,19 @@
                 </thead>
                 <tbody>
                     @if($isInspectionFeeInvoice)
-                        <tr>
-                            <td>Pre-Inspection Fee</td>
-                            <td class="text-right">${{ number_format($invoiceTotal, 2) }}</td>
-                        </tr>
-                        <tr>
-                            <td>Inspection Scheduling / Assessment Booking</td>
-                            <td class="text-right">Included</td>
-                        </tr>
+                        @if(is_array($invoice->line_items) && count($invoice->line_items) > 0)
+                            @foreach($invoice->line_items as $item)
+                                <tr>
+                                    <td>{{ $item['description'] ?? 'Property Diagnosis Fee' }}</td>
+                                    <td class="text-right">${{ number_format((float) ($item['total'] ?? 0), 2) }}</td>
+                                </tr>
+                            @endforeach
+                        @else
+                            <tr>
+                                <td>Property Diagnosis Fee</td>
+                                <td class="text-right">${{ number_format($invoiceTotal, 2) }}</td>
+                            </tr>
+                        @endif
                     @else
                         <tr>
                             <td>BDC (Baseline Deterioration Cost)</td>

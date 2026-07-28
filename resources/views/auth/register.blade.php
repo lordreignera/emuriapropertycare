@@ -7,7 +7,7 @@
     <title>Register - EMURIA PropertyCare</title>
     
     <!-- Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -20,7 +20,7 @@
         }
 
         body {
-            font-family: 'Inter', sans-serif;
+            font-family: "Intel Clear", "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
             background: #ffffff;
             min-height: 100vh;
             display: flex;
@@ -393,7 +393,7 @@
                     </li>
                     <li>
                         <i class="fas fa-check-circle"></i>
-                        <span>Professional Property Inspection</span>
+                        <span>Professional Property Diagnosis</span>
                     </li>
                     <li>
                         <i class="fas fa-check-circle"></i>

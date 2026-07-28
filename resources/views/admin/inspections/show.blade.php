@@ -1,6 +1,6 @@
 @extends('admin.layout')
 
-@section('title', 'Inspection Report & Pricing Breakdown')
+@section('title', 'Diagnosis Report & Pricing Breakdown')
 
 @section('content')
 <div class="row">
@@ -11,13 +11,13 @@
                     <div>
                         <h4 class="card-title mb-0">
                             <i class="mdi mdi-clipboard-check-outline me-2 text-success"></i>
-                            Inspection Report & Pricing Breakdown
+                            Diagnosis Report & Pricing Breakdown
                         </h4>
-                        <p class="text-muted small mb-0">Complete breakdown of inspection findings and pricing calculation</p>
+                        <p class="text-muted small mb-0">Complete breakdown of diagnosis findings and pricing calculation</p>
                     </div>
                     <div>
                         <a href="{{ route('inspections.index') }}" class="btn btn-light btn-sm no-print">
-                            <i class="mdi mdi-arrow-left me-1"></i>Back to Inspections
+                            <i class="mdi mdi-arrow-left me-1"></i>Back to Diagnoses
                         </a>
                         <button onclick="window.print()" class="btn btn-outline-secondary btn-sm no-print">
                             <i class="mdi mdi-printer me-1"></i>Print Report
@@ -33,7 +33,7 @@
                 @if($inspection->bdc_annual === null || $inspection->bdc_annual == 0)
                 <div class="alert alert-warning alert-dismissible fade show">
                     <i class="mdi mdi-alert-circle me-2"></i>
-                    <strong>Calculations are missing!</strong> This inspection may have been created before the pricing calculation system was implemented.
+                    <strong>Calculations are missing!</strong> This diagnosis may have been created before the pricing calculation system was implemented.
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 </div>
                 @endif
@@ -426,7 +426,7 @@
             @elseif($inspection->status === 'completed')
             <div class="card mb-4 border-secondary">
                 <div class="card-body text-muted small">
-                    <i class="mdi mdi-toolbox-outline me-1"></i>No tools have been assigned to this inspection yet.
+                    <i class="mdi mdi-toolbox-outline me-1"></i>No tools have been assigned to this diagnosis yet.
                     @if(Auth::user()->hasRole(['Super Admin', 'Store Manager']))
                     <a href="{{ route('tool-assignments.index') }}" class="ms-2">Assign Tools</a>
                     @endif
@@ -434,11 +434,11 @@
             </div>
             @endif
 
-            <!-- Property & Inspection Summary -->
+            <!-- Property & Diagnosis Summary -->
             <div class="card mb-4">
                 <div class="card-header bg-primary text-white">
                     <h5 class="mb-0">
-                        <i class="mdi mdi-home-outline me-2"></i>Property & Inspection Information
+                        <i class="mdi mdi-home-outline me-2"></i>Property & Diagnosis Information
                     </h5>
                 </div>
                 <div class="card-body">
@@ -482,7 +482,7 @@
                                     <td>{{ $inspection->inspector?->name ?? 'Not Assigned' }}</td>
                                 </tr>
                                 <tr>
-                                    <th>Inspection Date:</th>
+                                    <th>Diagnosis Date:</th>
                                     <td>{{ $inspection->scheduled_date?->format('M d, Y') ?? 'Not Scheduled' }}</td>
                                 </tr>
                                 <tr>
@@ -873,7 +873,7 @@
                                     <div class="card-body">
                                         <h6 class="text-muted mb-1">TUS Score <small class="text-muted">(Tenant Underwriting)</small></h6>
                                         <div class="fs-4 text-secondary">{{ number_format($inspection->tus_score ?? 75, 1) }}/100</div>
-                                        <small class="text-muted">Inspector-entered per inspection</small>
+                                        <small class="text-muted">Inspector-entered per diagnosis</small>
                                     </div>
                                 </div>
                             </div>
@@ -887,12 +887,12 @@
                 </div>
             </div>
 
-            <!-- Inspection Photos -->
+            <!-- Diagnosis Photos -->
             @php $inspectionPhotos = is_array($inspection->photos) ? $inspection->photos : (json_decode($inspection->getRawOriginal('photos') ?? '[]', true) ?? []); @endphp
             @if(count($inspectionPhotos) > 0)
             <div class="card mb-4">
                 <div class="card-header" style="background:#495057;color:white;">
-                    <h5 class="mb-0"><i class="mdi mdi-camera me-2"></i>Inspection Photos ({{ count($inspectionPhotos) }})</h5>
+                    <h5 class="mb-0"><i class="mdi mdi-camera me-2"></i>Diagnosis Photos ({{ count($inspectionPhotos) }})</h5>
                 </div>
                 <div class="card-body">
                     <div class="row g-3">
@@ -900,7 +900,7 @@
                         <div class="col-6 col-md-3">
                             <a href="{{ $inspection->getStorageUrl($photo) }}" target="_blank">
                                 <img src="{{ $inspection->getStorageUrl($photo) }}"
-                                     alt="Inspection photo"
+                                 alt="Diagnosis photo"
                                      class="img-fluid rounded border"
                                      style="width:100%;height:180px;object-fit:cover;">
                             </a>

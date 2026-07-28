@@ -219,6 +219,15 @@
                 $sevColors2 = ['critical'=>'#dc3545','high'=>'#fd7e14','noi_protection'=>'#7c3aed','medium'=>'#ffc107','low'=>'#198754'];
                 $sevLabels2 = ['critical'=>'Safety & Health','high'=>'Urgency','noi_protection'=>'NOI Protection','medium'=>'Value Depreciation','low'=>'Non-Urgent'];
                 $prioMap2   = ['critical'=>1,'high'=>1,'noi_protection'=>2,'medium'=>2,'low'=>3];
+                $impactCategories2 = [
+                    'health_safety' => 'Health/Safety',
+                    'moisture' => 'Moisture',
+                    'structural' => 'Structural',
+                    'functionality' => 'Functionality',
+                    'cost_exposure' => 'Cost Exposure',
+                    'property_value' => 'Property Value',
+                    'insurance_risk' => 'Insurance Risk',
+                ];
                 $loadedRate = (float)($bdcSettings['loaded_hourly_rate'] ?? 165);
 
                 $isApprovedScopeLocked = (($inspection->quotation_status ?? null) === 'approved')
@@ -251,11 +260,13 @@
                 $approvedFindings2 = $scopedFindings2->filter(fn($f) => !empty($f['__approved_scope']))->values();
                 $deferredFindings2 = $scopedFindings2->reject(fn($f) => !empty($f['__approved_scope']))->values();
 
-                $findingFrc2 = function ($finding) use ($loadedRate) {
+                $findingTradeClient2 = function ($finding) {
                     $trade = is_array($finding['trade_pricing'] ?? null) ? $finding['trade_pricing'] : [];
-                    $tradeClient = (float) ($trade['etogo_client_price'] ?? 0);
-                    return $tradeClient > 0
-                        ? $tradeClient
+                    return (float) ($trade['etogo_client_price'] ?? 0);
+                };
+                $findingFrc2 = function ($finding) use ($loadedRate, $findingTradeClient2) {
+                    return $findingTradeClient2($finding) > 0
+                        ? 0
                         : ((float) ($finding['phar_labour_hours'] ?? 0) * $loadedRate);
                 };
                 $findingMaterialsIncludedByPartner2 = function ($finding) {
@@ -263,11 +274,12 @@
                     return (bool) ($finding['trade_materials_included'] ?? ($trade['materials_included'] ?? false));
                 };
 
-                $totalLabourHrs2 = 0; $totalFRLC2 = 0; $totalMatCost2 = 0; $totalMatItems2 = 0;
+                $totalLabourHrs2 = 0; $totalFRLC2 = 0; $totalTradeClient2 = 0; $totalMatCost2 = 0; $totalMatItems2 = 0;
                 foreach ($scopedFindings2 as $sf2) {
                     $hrs2 = (float)($sf2['phar_labour_hours'] ?? 0);
                     $totalLabourHrs2 += $hrs2;
                     $totalFRLC2 += $findingFrc2($sf2);
+                    $totalTradeClient2 += $findingTradeClient2($sf2);
                     if ($findingMaterialsIncludedByPartner2($sf2)) {
                         continue;
                     }
@@ -279,6 +291,7 @@
 
                 $approvedLabourHrs2 = round((float) $approvedFindings2->sum(fn($f) => (float) ($f['phar_labour_hours'] ?? 0)), 2);
                 $approvedFRLC2 = round((float) $approvedFindings2->sum(fn($f) => $findingFrc2($f)), 2);
+                $approvedTradeClient2 = round((float) $approvedFindings2->sum(fn($f) => $findingTradeClient2($f)), 2);
                 $approvedMatItems2 = (int) $approvedFindings2->sum(fn($f) => $findingMaterialsIncludedByPartner2($f) ? 0 : count($f['phar_materials'] ?? []));
                 $approvedMatCost2 = round((float) $approvedFindings2->sum(fn($f) => $findingMaterialsIncludedByPartner2($f) ? 0 : collect($f['phar_materials'] ?? [])->sum(fn($m) => (float) ($m['line_total'] ?? 0))), 2);
 
@@ -296,12 +309,70 @@
                 }
 
                 $summaryLabourHrs2 = $isApprovedScopeLocked ? $approvedLabourHrs2 : $totalLabourHrs2;
-                $approvedTradeApplications2 = \App\Models\TradeApplication::query()
-                    ->with('tradePartner')
-                    ->whereHas('tradePartner', fn($query) => $query->where('status', \App\Models\TradePartner::STATUS_ACTIVE))
+                $approvedTradePartners2 = \App\Models\TradePartner::query()
+                    ->with('application')
+                    ->where('status', \App\Models\TradePartner::STATUS_ACTIVE)
                     ->orderBy('company_name')
-                    ->get(['id', 'company_name', 'system_ids', 'subsystem_ids', 'system_pricing', 'subsystem_pricing', 'agreed_subsystem_pricing']);
+                    ->get(['id', 'partner_number', 'trade_application_id', 'company_name', 'system_ids', 'subsystem_ids', 'agreed_subsystem_pricing']);
             @endphp
+
+            {{-- ETOGO inspection workflow: Assessment vs Estimation phase banner --}}
+            @php
+                $findingsCount         = (int) \App\Models\PHARFinding::where('inspection_id', $inspection->id)->count();
+                $hasSharedFindings     = $inspection->hasSharedFindingsReport();
+                $hasClientCommitted    = $inspection->hasClientCommitted();
+                $committedCount        = $hasClientCommitted
+                    ? \App\Models\FindingClientDecision::where('inspection_id', $inspection->id)
+                        ->whereNull('inspection_quotation_id')
+                        ->whereIn('decision', ['immediate_remediation', 'commit'])
+                        ->count()
+                    : 0;
+            @endphp
+            <div class="card mb-3 border-info">
+                <div class="card-body py-3">
+                    <div class="d-flex flex-wrap gap-3 align-items-center">
+                        <div class="flex-grow-1">
+                            <strong class="d-block mb-1 text-info">
+                                <i class="mdi mdi-routes-clock me-1"></i>ETOGO Workflow — Assessment & Estimation
+                            </strong>
+                            @if($findingsCount === 0)
+                                <span class="small text-muted">Capture findings first (no pricing). Pricing happens after the client commits.</span>
+                            @elseif(!$hasSharedFindings)
+                                <span class="small text-muted">
+                                    <strong>{{ $findingsCount }}</strong> finding(s) captured. Next: share the findings report with the client so they can commit to which items to remediate.
+                                </span>
+                            @elseif(!$hasClientCommitted)
+                                <span class="small text-warning">
+                                    <i class="mdi mdi-clock-outline"></i> Findings report shared {{ optional($inspection->findings_report_shared_at)->diffForHumans() }}.
+                                    Waiting for client to commit to findings before pricing.
+                                </span>
+                            @else
+                                <span class="small text-success">
+                                    <i class="mdi mdi-check-decagram"></i> Client committed to <strong>{{ $committedCount }}</strong> of {{ $findingsCount }} finding(s) {{ optional($inspection->client_committed_at)->diffForHumans() }}.
+                                    You can now estimate pricing for the committed items.
+                                </span>
+                            @endif
+                        </div>
+                        <div class="d-flex flex-wrap gap-2">
+                            @if($findingsCount > 0 && !$hasSharedFindings && !in_array($inspection->status, ['completed', 'approved'], true))
+                                <form method="POST" action="{{ route('inspections.share-findings-report', $inspection->id) }}" class="d-inline"
+                                      onsubmit="return confirm('Share findings report with client? They will be asked to commit to specific items before you price them.');">
+                                    @csrf
+                                    <button type="submit" class="btn btn-primary btn-sm">
+                                        <i class="mdi mdi-share-variant me-1"></i>Share Findings Report
+                                    </button>
+                                </form>
+                            @elseif($hasSharedFindings)
+                                <a href="{{ route('client.inspections.findings-report', $inspection->id) }}"
+                                   target="_blank"
+                                   class="btn btn-outline-secondary btn-sm">
+                                    <i class="mdi mdi-eye-outline me-1"></i>View Client Findings Report
+                                </a>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             {{-- Progress / stage banner --}}
             <div class="card mb-3 border-0" style="background:linear-gradient(135deg,#5b67ca 0%,#4854b8 100%);">
@@ -434,7 +505,7 @@
                         </div>
                     @endif
 
-                    <form action="{{ route('inspections.store-phar-data', $inspection->id) }}" method="POST">
+                    <form action="{{ route('inspections.store-estimation', $inspection->id) }}" method="POST">
                         @csrf
 
                         <!-- SECTION 1: PHAR Inputs -->
@@ -599,12 +670,13 @@
                                                     <th style="width:90px;">Severity</th>
                                                     <th>System</th>
                                                     <th>Subsystem</th>
+                                                    <th style="min-width:230px;">Finding Context</th>
                                                     <th>Issue / Finding</th>
                                                     <th>Risk / Impact</th>
                                                     <th>Recommendations &amp; Notes</th>
                                                     <th class="text-end" style="width:130px;">Est. Labour Cost</th>
                                                     <th>Materials &amp; Cost</th>
-                                                    <th class="text-end" style="width:220px;">Specialist Work Pricing</th>
+                                                    <th class="text-end" style="width:240px;">Work Assignment &amp; Costing</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -615,11 +687,11 @@
                                                         $color2    = $sevColors2[$sev2] ?? '#6c757d';
                                                         $label2    = $sevLabels2[$sev2] ?? ucfirst($sev2);
                                                         $hrs2f     = (float)($finding['phar_labour_hours'] ?? 0);
-                                                        $lc2       = $hrs2f * $loadedRate;
                                                         $mats2     = $finding['phar_materials'] ?? [];
                                                         $matTotal2 = array_sum(array_column($mats2, 'line_total'));
                                                         $trade2    = is_array($finding['trade_pricing'] ?? null) ? $finding['trade_pricing'] : [];
                                                         $tradeClient2 = (float) ($trade2['etogo_client_price'] ?? 0);
+                                                        $lc2       = $tradeClient2 > 0 ? 0 : ($hrs2f * $loadedRate);
                                                         $tradeCost2 = (float) ($trade2['trade_total_cost'] ?? 0);
                                                         $tradeMargin2 = (float) ($trade2['etogo_margin_amount'] ?? 0);
                                                         $tradeShouldPrice2 = app(\App\Services\PharTradePricingService::class)->shouldPriceFinding($finding);
@@ -647,8 +719,15 @@
                                                         ];
                                                         $findingSystemId2 = (int) ($finding['system_id'] ?? 0);
                                                         $findingSubsystemId2 = (int) ($finding['subsystem_id'] ?? 0);
-                                                        $matchingTradeApps2 = $approvedTradeApplications2
-                                                            ->filter(fn($app) => $findingSystemId2 > 0 && in_array($findingSystemId2, array_map('intval', $app->system_ids ?? []), true))
+                                                        $selectedFindingType2 = old("findings.$fi.finding_type", $finding['finding_type'] ?? 'stand_alone');
+                                                        $selectedImpactCategories2 = collect(old("findings.$fi.impact_categories", $finding['impact_categories'] ?? []))
+                                                            ->map(fn($value) => (string) $value)
+                                                            ->filter()
+                                                            ->values()
+                                                            ->all();
+                                                        $findingEvidenceCount2 = count(array_filter((array) ($finding['finding_photos'] ?? [])));
+                                                        $matchingTradePartners2 = $approvedTradePartners2
+                                                            ->filter(fn($partner) => $findingSystemId2 > 0 && in_array($findingSystemId2, array_map('intval', $partner->system_ids ?? []), true))
                                                             ->values();
                                                         $recs2     = is_array($finding['recommendations'] ?? null)
                                                                         ? $finding['recommendations']
@@ -661,6 +740,53 @@
                                                         </td>
                                                         <td class="fw-semibold">{{ $finding['system'] ?? '—' }}</td>
                                                         <td class="text-muted">{{ $finding['subsystem'] ?? '—' }}</td>
+                                                        <td>
+                                                            <input type="hidden" name="findings[{{ $fi }}][impact_categories][]" value="">
+
+                                                            <div class="mb-2">
+                                                                <label class="form-label mb-1 text-muted" style="font-size:.7rem;">Room / area</label>
+                                                                <div class="small fw-semibold text-dark">
+                                                                    {{ $finding['room_name'] ?? $finding['location'] ?? 'Not recorded' }}
+                                                                </div>
+                                                                @if(!empty($finding['spot']))
+                                                                    <div class="small text-muted">{{ $finding['spot'] }}</div>
+                                                                @endif
+                                                            </div>
+
+                                                            <div class="mb-2">
+                                                                <label class="form-label mb-1 text-muted" style="font-size:.7rem;">Finding type</label>
+                                                                <select class="form-select form-select-sm @error("findings.$fi.finding_type") is-invalid @enderror" name="findings[{{ $fi }}][finding_type]">
+                                                                    <option value="stand_alone" @selected($selectedFindingType2 === 'stand_alone')>Standalone</option>
+                                                                    <option value="cascading" @selected($selectedFindingType2 === 'cascading')>Cascading</option>
+                                                                </select>
+                                                                @error("findings.$fi.finding_type")
+                                                                    <div class="invalid-feedback d-block">{{ $message }}</div>
+                                                                @enderror
+                                                            </div>
+
+                                                            <div>
+                                                                <label class="form-label mb-1 text-muted" style="font-size:.7rem;">Impact</label>
+                                                                <div class="d-flex flex-wrap gap-1">
+                                                                    @foreach($impactCategories2 as $impactValue2 => $impactLabel2)
+                                                                        <label class="badge bg-light text-dark border fw-normal">
+                                                                            <input type="checkbox" class="form-check-input me-1" name="findings[{{ $fi }}][impact_categories][]" value="{{ $impactValue2 }}" @checked(in_array($impactValue2, $selectedImpactCategories2, true))>
+                                                                            {{ $impactLabel2 }}
+                                                                        </label>
+                                                                    @endforeach
+                                                                </div>
+                                                                @error("findings.$fi.impact_categories")
+                                                                    <div class="text-danger small mt-1">{{ $message }}</div>
+                                                                @enderror
+                                                            </div>
+
+                                                            <div class="mt-2 small {{ $findingEvidenceCount2 > 0 ? 'text-success' : 'text-danger' }}">
+                                                                <i class="mdi {{ $findingEvidenceCount2 > 0 ? 'mdi-check-circle-outline' : 'mdi-alert-circle-outline' }} me-1"></i>
+                                                                Evidence: {{ $findingEvidenceCount2 }} photo{{ $findingEvidenceCount2 === 1 ? '' : 's' }}
+                                                            </div>
+                                                            @error("findings.$fi.finding_photos")
+                                                                <div class="text-danger small mt-1">{{ $message }}</div>
+                                                            @enderror
+                                                        </td>
                                                         <td>
                                                             @if($isApprovedScopeLocked)
                                                                 <div class="mt-1">
@@ -722,7 +848,7 @@
                                                                     <input type="hidden" name="findings[{{ $fi }}][requires_trade_pricing]" value="{{ (int) $tradeChecked2 }}">
                                                                     <div class="row g-2">
                                                                         <div class="col-12">
-                                                                            <label class="form-label mb-1 text-muted" style="font-size:.7rem;">Work handled by</label>
+                                                                            <label class="form-label mb-1 text-muted" style="font-size:.7rem;">Work assignment</label>
                                                                             <select class="form-select form-select-sm" name="findings[{{ $fi }}][fulfillment_type]" data-fulfillment-select>
                                                                                 <option value="etogo_team" @selected($fulfillmentType2 === 'etogo_team')>ETOGO team</option>
                                                                                 <option value="trade_partner" @selected($fulfillmentType2 === 'trade_partner')>Trade partner</option>
@@ -730,21 +856,23 @@
                                                                             </select>
                                                                         </div>
                                                                         <div class="col-12 trade-partner-fields" data-trade-partner-fields>
-                                                                            <label class="form-label mb-1 text-muted" style="font-size:.7rem;">Approved partner</label>
+                                                                            <label class="form-label mb-1 text-muted" style="font-size:.7rem;">Approved trade partner</label>
                                                                             <select class="form-select form-select-sm" name="findings[{{ $fi }}][trade_application_id]" data-partner-select>
-                                                                                <option value="" data-rate="" data-unit="" data-min="" data-max="">Auto / not assigned</option>
-                                                                                @foreach($matchingTradeApps2 as $tradeApp2)
+                                                                                <option value="" data-rate="" data-unit="" data-min="" data-max="">Auto-select matching partner</option>
+                                                                                @forelse($matchingTradePartners2 as $tradePartner2)
                                                                                     @php
+                                                                                        $tradeApplication2 = $tradePartner2->application;
                                                                                         $tradePricing2 = [];
-                                                                                        if ($findingSubsystemId2 > 0 && in_array($findingSubsystemId2, array_map('intval', $tradeApp2->subsystem_ids ?? []), true)) {
-                                                                                            $agreedTradePricingRows2 = $tradeApp2->agreed_subsystem_pricing ?? [];
-                                                                                            $submittedTradePricingRows2 = $tradeApp2->subsystem_pricing ?? [];
+                                                                                        if ($findingSubsystemId2 > 0 && in_array($findingSubsystemId2, array_map('intval', $tradePartner2->subsystem_ids ?? []), true)) {
+                                                                                            $agreedTradePricingRows2 = $tradePartner2->agreed_subsystem_pricing ?? [];
+                                                                                            $submittedTradePricingRows2 = $tradeApplication2?->subsystem_pricing ?? [];
                                                                                             $agreedTradePricing2 = $agreedTradePricingRows2[(string) $findingSubsystemId2] ?? $agreedTradePricingRows2[$findingSubsystemId2] ?? [];
                                                                                             $submittedTradePricing2 = $submittedTradePricingRows2[(string) $findingSubsystemId2] ?? $submittedTradePricingRows2[$findingSubsystemId2] ?? [];
                                                                                             $tradePricing2 = $agreedTradePricing2 ?: $submittedTradePricing2;
                                                                                         }
                                                                                         if (empty($tradePricing2)) {
-                                                                                            $tradePricing2 = $tradeApp2->system_pricing[(string) $findingSystemId2] ?? $tradeApp2->system_pricing[$findingSystemId2] ?? [];
+                                                                                            $systemPricing2 = $tradeApplication2?->system_pricing ?? [];
+                                                                                            $tradePricing2 = $systemPricing2[(string) $findingSystemId2] ?? $systemPricing2[$findingSystemId2] ?? [];
                                                                                         }
                                                                                         $tradeRateLabel2 = !empty($tradePricing2['typical_rate'])
                                                                                             ? ' - CAD ' . number_format((float) $tradePricing2['typical_rate'], 2) . ' / ' . ($tradePricing2['pricing_unit'] ?? $tradePricing2['rate_unit'] ?? 'unit')
@@ -754,17 +882,21 @@
                                                                                         $tradeOptionMax2 = $tradePricing2['maximum_charge'] ?? '';
                                                                                     @endphp
                                                                                     <option
-                                                                                        value="{{ $tradeApp2->id }}"
+                                                                                        value="{{ $tradePartner2->trade_application_id }}"
                                                                                         data-rate="{{ $tradePricing2['typical_rate'] ?? '' }}"
                                                                                         data-unit="{{ $tradeOptionUnit2 }}"
                                                                                         data-min="{{ $tradeOptionMin2 }}"
                                                                                         data-max="{{ $tradeOptionMax2 }}"
-                                                                                        data-company="{{ $tradeApp2->company_name }}"
-                                                                                        @selected((string) $selectedTradeApp2 === (string) $tradeApp2->id)
-                                                                                    >{{ $tradeApp2->tradePartner?->partner_number }} - {{ $tradeApp2->company_name }}{{ $tradeRateLabel2 }}</option>
-                                                                                @endforeach
+                                                                                        data-company="{{ $tradePartner2->company_name }}"
+                                                                                        @selected((string) $selectedTradeApp2 === (string) $tradePartner2->trade_application_id)
+                                                                                    >{{ $tradePartner2->partner_number }} - {{ $tradePartner2->company_name }}{{ $tradeRateLabel2 }}</option>
+                                                                                @empty
+                                                                                    <option value="" disabled>No active approved partner matches this finding</option>
+                                                                                @endforelse
                                                                             </select>
-                                                                            <div class="trade-rate-note mt-2" data-rate-note>No approved partner selected yet.</div>
+                                                                            <div class="trade-rate-note mt-2" data-rate-note>
+                                                                                {{ $matchingTradePartners2->isEmpty() ? 'No active approved partner is mapped to this finding system yet.' : 'Auto-select uses the lowest matching approved partner rate unless you choose a partner.' }}
+                                                                            </div>
                                                                         </div>
                                                                         <div class="col-12 trade-partner-fields" data-trade-partner-fields>
                                                                             <label class="form-label mb-1 text-muted" style="font-size:.7rem;">Work area / scope</label>
@@ -783,7 +915,7 @@
                                                                             </select>
                                                                         </div>
                                                                         <div class="col-12 trade-partner-fields" data-trade-partner-fields>
-                                                                            <div class="trade-live-estimate" data-live-estimate>Choose a partner and enter quantity to preview the partner/client amount.</div>
+                                                                            <div class="trade-live-estimate" data-live-estimate>Choose an approved trade partner and enter quantity to preview partner cost and client price.</div>
                                                                         </div>
                                                                         <div class="col-12 trade-partner-fields" data-trade-partner-fields>
                                                                             <label class="form-label mb-1 text-muted" style="font-size:.7rem;">Estimated work hours</label>
@@ -800,7 +932,7 @@
                                                                             <input class="form-control form-control-sm" name="findings[{{ $fi }}][trade_notes]" value="{{ $tradeNotes2 }}" placeholder="Internal measure note" data-partner-input>
                                                                         </div>
                                                                     </div>
-                                                                    <div class="text-muted mt-1" style="font-size:.68rem;">Quantity / time is the work coverage used by the partner, such as hours, square metres, days, or each item. Final pricing is recalculated when you save and review costs.</div>
+                                                                    <div class="text-muted mt-1" style="font-size:.68rem;">Quantity / time is the work coverage used by the approved trade partner, such as hours, square metres, days, or each item. Final costing is recalculated when you save and review costs.</div>
                                                                 </div>
                                                             @endunless
                                                             @if($tradeClient2 > 0)
@@ -829,10 +961,10 @@
                                             </tbody>
                                             <tfoot style="background:#f8fafc;">
                                                 <tr>
-                                                    <td colspan="7" class="text-end fw-bold" style="font-size:.9rem;">Totals</td>
+                                                    <td colspan="8" class="text-end fw-bold" style="font-size:.9rem;">Totals</td>
                                                     <td class="text-end fw-bold text-success" style="font-size:.95rem;">${{ number_format($totalFRLC2, 2) }}</td>
                                                     <td class="fw-bold text-success" style="font-size:.9rem;">{{ $totalMatItems2 }} item(s) &mdash; ${{ number_format($totalMatCost2, 2) }}</td>
-                                                    <td class="text-end fw-bold text-success" style="font-size:.9rem;">${{ number_format((float) ($inspection->trade_client_price_annual ?? 0), 2) }}</td>
+                                                    <td class="text-end fw-bold text-success" style="font-size:.9rem;">${{ number_format(max($totalTradeClient2, (float) ($inspection->trade_client_price_annual ?? 0)), 2) }}</td>
                                                 </tr>
                                             </tfoot>
                                         </table>
@@ -996,8 +1128,9 @@
                         @php
                             $lockedLabour   = (float) $activeQuotation->approved_labour_cost;
                             $lockedMaterial = (float) $activeQuotation->approved_material_cost;
+                            $lockedTrade    = (float) ($activeQuotation->approved_trade_client_price ?? $approvedTradeClient2 ?? 0);
                             $lockedBdc      = (float) ($activeQuotation->approved_bdc_cost ?? $inspection->bdc_annual ?? 0);
-                            $lockedTotal    = round((float) ($activeQuotation->approved_total ?? ($lockedLabour + $lockedMaterial + $lockedBdc)), 2);
+                            $lockedTotal    = round((float) ($activeQuotation->approved_total ?? ($lockedLabour + $lockedMaterial + $lockedTrade + $lockedBdc)), 2);
                             $lockedVisits   = max(1, (int) ($inspection->bdc_visits_per_year ?? 1));
                         @endphp
                         <div class="card mb-4" style="border:2px solid #198754;">
@@ -1010,7 +1143,7 @@
                                     <i class="mdi mdi-lock me-2"></i>
                                     <strong>Pricing is locked.</strong> The client approved a subset of findings.
                                     The amounts below reflect <em>only the approved scope</em> and will be used when you complete the assessment.
-                                    "Save &amp; Preview Pricing" is disabled while the quotation is approved.
+                                    "Save &amp; Review Work Costing" is disabled while the quotation is approved.
                                 </div>
                                 <div class="row g-3 mb-3">
                                     <div class="col-md">
@@ -1036,16 +1169,16 @@
                                     </div>
                                     <div class="col-md">
                                         <div class="p-3 rounded text-center" style="background:#fff7ed;border:1px solid #f97316;">
-                                            <div class="text-muted small">Trade Client Price</div>
-                                            <div class="fw-bold fs-5" style="color:#f97316;">${{ number_format($inspection->trade_client_price_annual ?? 0, 2) }}</div>
-                                            <div class="text-muted" style="font-size:.72rem;">margin ${{ number_format($inspection->trade_margin_annual ?? 0, 2) }}</div>
+                                            <div class="text-muted small">Trade Partner Work</div>
+                                            <div class="fw-bold fs-5" style="color:#f97316;">${{ number_format($lockedTrade, 2) }}</div>
+                                            <div class="text-muted" style="font-size:.72rem;">approved trade partner work</div>
                                         </div>
                                     </div>
                                     <div class="col-md">
                                         <div class="p-3 rounded text-center" style="background:#f0e8ff;border:2px solid #7c3aed;">
                                             <div class="text-muted small fw-semibold">Total Approved Cost</div>
                                             <div class="fw-bold fs-5" style="color:#7c3aed;">${{ number_format($lockedTotal, 2) }}</div>
-                                            <div class="text-muted" style="font-size:.75rem;">BDC + Labour + Material</div>
+                                            <div class="text-muted" style="font-size:.75rem;">BDC + Labour + Material + Trade Partner Work</div>
                                         </div>
                                     </div>
                                 </div>
@@ -1102,8 +1235,8 @@
                                     </div>
                                     <div class="col-md">
                                         <div class="p-3 rounded text-center" style="background:#fff7ed;border:1px solid #f97316;">
-                                            <div class="text-muted small">Trade Client Price</div>
-                                            <div class="fw-bold fs-5" style="color:#f97316;">${{ number_format($inspection->trade_client_price_annual ?? 0, 2) }}</div>
+                                            <div class="text-muted small">Trade Partner Work</div>
+                                            <div class="fw-bold fs-5" style="color:#f97316;">${{ number_format(max($totalTradeClient2, (float) ($inspection->trade_client_price_annual ?? 0)), 2) }}</div>
                                             <div class="text-muted" style="font-size:.72rem;">margin ${{ number_format($inspection->trade_margin_annual ?? 0, 2) }}</div>
                                         </div>
                                     </div>
@@ -1112,7 +1245,7 @@
                                             <div class="text-muted small fw-semibold">Total Remediation Cost</div>
                                             <div id="trcAnnual" class="fw-bold fs-5" style="color:#7c3aed;">$0.00</div>
                                             <div id="trcMonthly" class="text-muted" style="font-size:.8rem;">$0.00/mo</div>
-                                            <div class="text-muted" style="font-size:.7rem;">BDC + FRLC + FMC</div>
+                                            <div class="text-muted" style="font-size:.7rem;">BDC + FRLC + FMC + Trade Partner Work</div>
                                         </div>
                                     </div>
                                 </div>
@@ -1137,7 +1270,7 @@
 
                                 <div class="alert alert-info mb-0">
                                     <i class="mdi mdi-information me-2"></i>
-                                    <strong>Preview only.</strong> Click <strong>Save &amp; Preview Pricing</strong> to run the PHAR engine and lock in the ARP, then <strong>Complete Assessment</strong> when ready.
+                                    <strong>Preview only.</strong> Click <strong>Save &amp; Review Work Costing</strong> to run the PHAR engine and lock in the ARP, then share the quotation when ready.
                                 </div>
                             </div>
                         </div>
@@ -1151,7 +1284,7 @@
 
                         <div class="card mb-4" style="border:3px solid #198754;">
                             <div class="card-header text-white d-flex justify-content-between align-items-center" style="background:linear-gradient(135deg,#198754,#146c43);">
-                                <h5 class="mb-0"><i class="mdi mdi-check-decagram me-2"></i>Final PHAR Pricing Dashboard</h5>
+                                <h5 class="mb-0"><i class="mdi mdi-check-decagram me-2"></i>Final PHAR Work Costing Dashboard</h5>
                                 <span class="badge bg-light text-success fs-6 px-3">Calculated</span>
                             </div>
                             <div class="card-body">
@@ -1179,8 +1312,8 @@
                                     </div>
                                     <div class="col-md">
                                         <div class="p-3 rounded text-center" style="background:#fff7ed;border:1px solid #f97316;">
-                                            <div class="text-muted small">Trade Client Price</div>
-                                            <div class="fw-bold fs-5" style="color:#f97316;">${{ number_format($inspection->trade_client_price_annual ?? 0, 2) }}</div>
+                                            <div class="text-muted small">Trade Partner Work</div>
+                                            <div class="fw-bold fs-5" style="color:#f97316;">${{ number_format(max($totalTradeClient2, (float) ($inspection->trade_client_price_annual ?? 0)), 2) }}</div>
                                             <div class="text-muted" style="font-size:.72rem;">margin ${{ number_format($inspection->trade_margin_annual ?? 0, 2) }}</div>
                                         </div>
                                     </div>
@@ -1246,7 +1379,7 @@
                                 @if(($inspection->quotation_status ?? null) === 'approved' && $activeQuotation && $activeQuotation->status === 'approved')
                                 <p class="text-muted small mb-3">
                                     <i class="mdi mdi-lock me-1"></i>
-                                    Pricing and scope are <strong>locked to the approved quotation</strong>.
+                                    Work costing and scope are <strong>locked to the approved quotation</strong>.
                                     Editing findings is disabled after client approval.
                                     Click <strong>Complete Assessment</strong> below to generate the invoice using the approved amounts.
                                 </p>
@@ -1258,15 +1391,15 @@
                                 <p class="text-muted small mb-3">
                                     <i class="mdi mdi-information-outline me-1"></i>
                                     <strong>Save Draft &amp; Back</strong> returns you to Step 1 to review findings.
-                                    <strong>Save &amp; Preview</strong> calculates pricing so you can review it — the assessment stays <em>in progress</em>.
-                                    Once you are satisfied, click <strong>Complete Assessment</strong> to lock it in.
+                                    <strong>Save &amp; Review Work Costing</strong> calculates labour, materials, and trade partner work so you can review it. The assessment stays <em>in progress</em>.
+                                    Once you are satisfied, share the quotation with the client.
                                 </p>
                                 <div class="d-flex justify-content-between align-items-center gap-2">
                                     <button type="submit" name="action" value="save_draft_back" class="btn btn-secondary" formnovalidate>
                                         <i class="mdi mdi-content-save me-1"></i>Save Draft &amp; Back to Step 1
                                     </button>
                                     <button type="submit" name="action" value="save_preview" class="btn btn-primary btn-lg">
-                                        <i class="mdi mdi-calculator me-1"></i>Save &amp; Preview Pricing
+                                        <i class="mdi mdi-calculator me-1"></i>Save &amp; Review Work Costing
                                     </button>
                                 </div>
                                 @endif
@@ -1274,11 +1407,11 @@
                         </div>
                     </form>
 
-                    {{-- Complete Assessment — separate POST, only shown once pricing has been calculated --}}
+                    {{-- Complete Assessment: separate POST, only shown once work costing has been calculated --}}
                     @if(($inspection->bdc_annual ?? 0) > 0 && $inspection->status !== 'completed')
                     <div class="card border-success mb-4">
                         <div class="card-header bg-success text-white py-2">
-                            <strong><i class="mdi mdi-check-decagram me-1"></i>Pricing Ready — Preview Before Completing</strong>
+                            <strong><i class="mdi mdi-check-decagram me-1"></i>Work Costing Ready - Review Before Sharing</strong>
                         </div>
                         <div class="card-body">
                             @php
@@ -1522,6 +1655,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // Server-side pre-computed totals from Step 1 findings
     const SERVER_FRLC        = {{ $isApprovedScopeLocked ? $approvedFRLC2 : $totalFRLC2 }};
     const SERVER_FMC         = {{ $isApprovedScopeLocked ? $approvedMatCost2 : $totalMatCost2 }};
+    const SERVER_TRADE       = {{ $isApprovedScopeLocked ? $approvedTradeClient2 : max($totalTradeClient2, (float) ($inspection->trade_client_price_annual ?? 0)) }};
     const SERVER_LABOUR_HRS  = {{ $summaryLabourHrs2 }};
     const HOURS_PER_DAY      = 11;
 
@@ -1582,6 +1716,7 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateCalculationSummary() {
         const frlc = SERVER_FRLC;
         const fmc  = SERVER_FMC;
+        const trade = SERVER_TRADE;
 
         // BDC: use travel-based if inputs are filled, otherwise fall back to labour estimate
         const travelBDC = calculateBDCFromTravel();
@@ -1607,8 +1742,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const fmcAnnual = fmc;
         const fmcMonthly = fmc;
         
-        // TRC = BDC + FRLC + FMC
-        const trcAnnual = bdcAnnual + frlcAnnual + fmcAnnual;
+        // TRC = BDC + FRLC + FMC + Trade Partner Work
+        const trcAnnual = bdcAnnual + frlcAnnual + fmcAnnual + trade;
         const trcMonthly = trcAnnual;
         
         // ARP = TRC
@@ -1676,10 +1811,10 @@ document.addEventListener('DOMContentLoaded', function() {
             if (rateNote) {
                 rateNote.textContent = fulfillment?.value === 'etogo_team'
                     ? 'ETOGO team selected. Partner pricing fields are not needed for this finding.'
-                    : 'Choose Trade partner if this finding should use an approved partner rate.';
+                    : 'Choose Trade partner if this finding should use an approved trade partner rate.';
             }
             if (liveEstimate) {
-                liveEstimate.textContent = 'No partner client price will be added while this is handled by ETOGO team.';
+                liveEstimate.textContent = 'No trade partner client price will be added while this is handled by the ETOGO team.';
             }
             return;
         }
@@ -1697,10 +1832,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
         if (!selected || !selected.value || rate <= 0) {
             if (rateNote) {
-                rateNote.textContent = 'Select an approved partner to see their registered/agreed CAD rate.';
+                rateNote.textContent = 'Select an approved trade partner to see their registered/agreed CAD rate.';
             }
             if (liveEstimate) {
-                liveEstimate.textContent = 'Choose a partner and enter quantity to preview the partner/client amount.';
+                liveEstimate.textContent = 'Choose an approved trade partner and enter quantity to preview partner cost and client price.';
             }
             return;
         }
@@ -1720,7 +1855,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         if (liveEstimate) {
-            liveEstimate.innerHTML = `<strong>Preview:</strong> partner cost CAD ${partnerCost.toFixed(2)}; estimated client price CAD ${clientPrice.toFixed(2)} after ETOGO margin. Save & review costs to lock the official calculation.`;
+            liveEstimate.innerHTML = `<strong>Preview:</strong> trade partner cost CAD ${partnerCost.toFixed(2)}; estimated client price CAD ${clientPrice.toFixed(2)} after ETOGO margin. Save and review work costing to lock the official calculation.`;
         }
     }
 

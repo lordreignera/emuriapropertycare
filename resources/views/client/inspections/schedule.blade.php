@@ -1,9 +1,9 @@
 @extends('client.layout')
 
-@section('title', 'Schedule Inspection')
+@section('title', 'Schedule Diagnosis')
 
 @section('content')
-<div class="row">
+<div class="row schedule-payment-page">
     <div class="col-lg-8 mx-auto">
         <!-- Header Card with Gradient -->
         <div class="card shadow-lg border-0 mb-4" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
@@ -13,7 +13,7 @@
                         <i class="mdi mdi-calendar-check" style="font-size: 2rem;"></i>
                     </div>
                     <div>
-                        <h3 class="mb-1 fw-bold">Schedule Property Inspection</h3>
+                        <h3 class="mb-1 fw-bold">Schedule Property Diagnosis</h3>
                         <p class="mb-0 opacity-75">Book your comprehensive property assessment</p>
                     </div>
                 </div>
@@ -46,7 +46,7 @@
 
                             {{-- Fee breakdown --}}
                             <div class="mt-3 pt-2 border-top border-secondary border-opacity-25">
-                                <p class="small text-muted mb-1 fw-semibold">Inspection Fee Breakdown:</p>
+                                <p class="small text-muted mb-1 fw-semibold">Diagnosis Fee Breakdown:</p>
                                 <ul class="list-unstyled small text-muted mb-1">
                                     <li>{{ $feeData['units'] }} unit{{ $feeData['units'] > 1 ? 's' : '' }} &times; ${{ number_format($feeData['base_fee'] / $feeData['units'], 0) }} = <strong>${{ number_format($feeData['base_fee'], 0) }}</strong></li>
                                     @if($feeData['roof_surcharge'] > 0)
@@ -55,7 +55,7 @@
                                     @if($feeData['crawl_surcharge'] > 0)
                                     <li>Crawl space surcharge: <strong>+${{ number_format($feeData['crawl_surcharge'], 0) }}</strong></li>
                                     @endif
-                                    <li class="fw-bold text-dark">Total inspection fee: ${{ number_format($feeData['total_dollars'], 0) }}</li>
+                                    <li class="fw-bold text-dark">Total diagnosis fee: ${{ number_format($feeData['total_dollars'], 0) }}</li>
                                 </ul>
                                 @if($feeData['is_test_mode'])
                                 <div class="alert alert-warning py-1 px-2 mb-0 small">
@@ -117,7 +117,7 @@
                             <!-- Card Element Container -->
                             <div class="mb-4">
                                 <label class="form-label fw-semibold">Card Details <span class="text-danger">*</span></label>
-                                <div id="card-element" class="form-control p-3" style="height: auto; min-height: 45px;"></div>
+                                <div id="card-element" class="form-control p-3"></div>
                                 <div id="card-errors" class="text-danger small mt-2"></div>
                             </div>
 
@@ -126,7 +126,7 @@
                                 <div class="form-check">
                                     <input class="form-check-input" type="checkbox" id="agree_terms" required>
                                     <label class="form-check-label fw-semibold" for="agree_terms">
-                                        I agree to pay the <span class="text-success">${{ number_format($feeData['charge_dollars'], 2) }}</span> inspection fee via secure payment.
+                                        I agree to pay the <span class="text-success">${{ number_format($feeData['charge_dollars'], 2) }}</span> diagnosis fee via secure payment.
                                     </label>
                                 </div>
                             </div>
@@ -171,7 +171,7 @@
                             </li>
                             <li class="d-flex align-items-start">
                                 <i class="mdi mdi-check-circle-outline text-success me-2 mt-1"></i>
-                                <span><strong>Follow-up Support</strong><br><small class="text-muted">Questions answered after inspection</small></span>
+                                <span><strong>Follow-up Support</strong><br><small class="text-muted">Questions answered after diagnosis</small></span>
                             </li>
                         </ul>
                     </div>
@@ -181,7 +181,7 @@
                 <div class="card shadow-sm border-0 bg-primary bg-opacity-10">
                     <div class="card-body p-4">
                         <h6 class="fw-bold text-dark mb-3">
-                            <i class="mdi mdi-timeline-clock text-primary me-2"></i>Inspection Process
+                            <i class="mdi mdi-timeline-clock text-primary me-2"></i>Diagnosis Process
                         </h6>
                         <div class="d-flex mb-3">
                             <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 32px; height: 32px; flex-shrink: 0;">
@@ -206,7 +206,7 @@
                                 <strong>3</strong>
                             </div>
                             <div>
-                                <strong class="d-block">On-Site Inspection</strong>
+                                <strong class="d-block">On-Site Diagnosis</strong>
                                 <small class="text-muted">Thorough assessment of your property</small>
                             </div>
                         </div>
@@ -216,7 +216,7 @@
                             </div>
                             <div>
                                 <strong class="d-block">Receive Report</strong>
-                                <small class="text-muted">Get your detailed inspection report within 48 hours</small>
+                                <small class="text-muted">Get your detailed diagnosis report within 48 hours</small>
                             </div>
                         </div>
                     </div>
@@ -238,6 +238,57 @@
 </div>
 @endsection
 
+@push('styles')
+<style>
+    .schedule-payment-page .form-control,
+    .schedule-payment-page .input-group-text,
+    .schedule-payment-page #card-element {
+        background: #ffffff !important;
+        color: #111827 !important;
+        border-color: #cfd8e6 !important;
+        box-shadow: none !important;
+    }
+
+    .schedule-payment-page .form-control {
+        min-height: 46px;
+    }
+
+    .schedule-payment-page textarea.form-control {
+        min-height: 94px;
+    }
+
+    .schedule-payment-page .form-control::placeholder {
+        color: #667085 !important;
+        opacity: 1;
+    }
+
+    .schedule-payment-page .form-control:focus,
+    .schedule-payment-page #card-element.StripeElement--focus {
+        background: #ffffff !important;
+        color: #111827 !important;
+        border-color: #2458d6 !important;
+        box-shadow: 0 0 0 3px rgba(36, 88, 214, .14) !important;
+    }
+
+    .schedule-payment-page input[type="date"]::-webkit-datetime-edit,
+    .schedule-payment-page input[type="time"]::-webkit-datetime-edit {
+        color: #111827 !important;
+    }
+
+    .schedule-payment-page input[type="date"]::-webkit-calendar-picker-indicator,
+    .schedule-payment-page input[type="time"]::-webkit-calendar-picker-indicator {
+        opacity: .7;
+        filter: none;
+    }
+
+    .schedule-payment-page #card-element {
+        height: auto;
+        min-height: 52px;
+        padding-top: 16px !important;
+    }
+</style>
+@endpush
+
 @push('scripts')
 <script src="https://js.stripe.com/v3/"></script>
 <script>
@@ -250,10 +301,11 @@
         style: {
             base: {
                 fontSize: '16px',
-                color: '#32325d',
+                color: '#111827',
+                backgroundColor: '#ffffff',
                 fontFamily: '"Helvetica Neue", Helvetica, sans-serif',
                 '::placeholder': {
-                    color: '#aab7c4'
+                    color: '#667085'
                 }
             },
             invalid: {
@@ -280,6 +332,57 @@
     const submitButton = document.getElementById('submit-button');
     const buttonText = document.getElementById('button-text');
     const spinner = document.getElementById('spinner');
+    const pendingScheduleKey = 'etogo_pending_inspection_schedule_{{ $property->id }}';
+
+    function setSubmitting(isSubmitting) {
+        submitButton.disabled = isSubmitting;
+        buttonText.classList.toggle('d-none', isSubmitting);
+        spinner.classList.toggle('d-none', !isSubmitting);
+    }
+
+    async function savePaidInspectionSchedule(payload) {
+        const formData = new FormData();
+        formData.append('_token', '{{ csrf_token() }}');
+        formData.append('preferred_date', payload.preferred_date);
+        formData.append('preferred_time', payload.preferred_time || '09:00');
+        formData.append('special_notes', payload.special_notes || '');
+        formData.append('payment_intent_id', payload.payment_intent_id);
+
+        const response = await fetch('{{ route('client.inspections.store-schedule', $property->id) }}', {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'Accept': 'application/json'
+            }
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            localStorage.removeItem(pendingScheduleKey);
+            window.location.href = data.redirect + '?success=1';
+            return;
+        }
+
+        throw new Error(data.message || 'Schedule confirmation failed.');
+    }
+
+    window.addEventListener('DOMContentLoaded', async () => {
+        const pendingSchedule = JSON.parse(localStorage.getItem(pendingScheduleKey) || 'null');
+        if (!pendingSchedule || !pendingSchedule.payment_intent_id) {
+            return;
+        }
+
+        document.getElementById('card-errors').textContent = 'Finalizing your previous payment. Please do not pay again.';
+        setSubmitting(true);
+
+        try {
+            await savePaidInspectionSchedule(pendingSchedule);
+        } catch (err) {
+            document.getElementById('card-errors').textContent = err.message + ' Payment reference: ' + pendingSchedule.payment_intent_id;
+            setSubmitting(false);
+        }
+    });
     
     form.addEventListener('submit', async (event) => {
         event.preventDefault();
@@ -291,9 +394,7 @@
         }
         
         // Disable submit button and show spinner
-        submitButton.disabled = true;
-        buttonText.classList.add('d-none');
-        spinner.classList.remove('d-none');
+        setSubmitting(true);
         
         try {
             // First, validate the card without charging
@@ -309,64 +410,59 @@
             if (validationError) {
                 // Card validation failed - show error WITHOUT charging
                 document.getElementById('card-errors').textContent = 'Card validation failed: ' + validationError.message;
-                submitButton.disabled = false;
-                buttonText.classList.remove('d-none');
-                spinner.classList.add('d-none');
+                setSubmitting(false);
+                return;
+            }
+
+            const intentResponse = await fetch('{{ route('client.inspections.payment-intent', $property->id) }}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    preferred_date: document.getElementById('preferred_date').value,
+                    preferred_time: document.getElementById('preferred_time').value || '09:00',
+                    special_notes: document.getElementById('special_notes').value || ''
+                })
+            });
+
+            const intentData = await intentResponse.json();
+
+            if (!intentResponse.ok || !intentData.success || !intentData.client_secret) {
+                document.getElementById('card-errors').textContent = intentData.message || 'Payment setup failed. Please try again.';
+                setSubmitting(false);
                 return;
             }
             
             // Card is valid, now confirm the payment
             const {error, paymentIntent} = await stripe.confirmCardPayment(
-                '{{ $clientSecret }}',
+                intentData.client_secret,
                 {
-                    payment_method: {
-                        card: cardElement,
-                        billing_details: {
-                            name: '{{ Auth::user()->name }}',
-                            email: '{{ Auth::user()->email }}'
-                        }
-                    }
+                    payment_method: paymentMethod.id
                 }
             );
             
             if (error) {
                 // Show error to customer
                 document.getElementById('card-errors').textContent = error.message;
-                submitButton.disabled = false;
-                buttonText.classList.remove('d-none');
-                spinner.classList.add('d-none');
+                setSubmitting(false);
             } else if (paymentIntent.status === 'succeeded') {
-                // Payment succeeded, submit the form
-                const formData = new FormData();
-                formData.append('_token', '{{ csrf_token() }}');
-                formData.append('preferred_date', document.getElementById('preferred_date').value);
-                formData.append('preferred_time', document.getElementById('preferred_time').value);
-                formData.append('special_notes', document.getElementById('special_notes').value);
-                formData.append('payment_intent_id', paymentIntent.id);
-                
-                const response = await fetch('{{ route('client.inspections.store-schedule', $property->id) }}', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                const data = await response.json();
-                
-                if (data.success) {
-                    // Redirect to properties page with success message
-                    window.location.href = data.redirect + '?success=1';
-                } else {
-                    alert(data.message || 'An error occurred. Please try again.');
-                    submitButton.disabled = false;
-                    buttonText.classList.remove('d-none');
-                    spinner.classList.add('d-none');
-                }
+                const pendingSchedule = {
+                    preferred_date: document.getElementById('preferred_date').value,
+                    preferred_time: document.getElementById('preferred_time').value || '09:00',
+                    special_notes: document.getElementById('special_notes').value || '',
+                    payment_intent_id: paymentIntent.id
+                };
+
+                localStorage.setItem(pendingScheduleKey, JSON.stringify(pendingSchedule));
+                await savePaidInspectionSchedule(pendingSchedule);
             }
         } catch (err) {
             console.error('Payment error:', err);
-            alert('An unexpected error occurred. Please try again.');
-            submitButton.disabled = false;
-            buttonText.classList.remove('d-none');
-            spinner.classList.add('d-none');
+            document.getElementById('card-errors').textContent = err.message || 'An unexpected error occurred. Please try again.';
+            setSubmitting(false);
         }
     });
 </script>

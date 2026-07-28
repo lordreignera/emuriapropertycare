@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
             RolePermissionSeeder::class,
             SuperAdminSeeder::class,
             StaffUsersSeeder::class,
+            DemoClientSeeder::class,
             CPIPricingSystemSeeder::class,
             BDCSettingsSeeder::class,
             InspectionSystemsSeeder::class,

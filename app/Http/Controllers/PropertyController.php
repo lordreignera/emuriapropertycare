@@ -2,18 +2,24 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Inspection;
+use App\Models\Invoice;
+use App\Models\Project;
 use App\Models\Property;
 use App\Models\User;
+use App\Services\DiagnosisPricingService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class PropertyController extends Controller
 {
     /**
-     * Display a listing of properties (for admin approval).
+     * Display a listing of registered properties and assessment status.
      */
-    public function index(Request $request)
+    public function index(Request $request, DiagnosisPricingService $diagnosisPricingService)
     {
         $user = Auth::user();
         $query = Property::with([
@@ -21,6 +27,8 @@ class PropertyController extends Controller
             'inspections' => function ($q) {
                 $q->latest('created_at');
             },
+            'inspections.activeMatterportModel',
+            'inspections.activeSpatialModels',
         ]);
 
         // Role-based filtering
@@ -39,9 +47,14 @@ class PropertyController extends Controller
                 $this->applyPropertyStatusFilter($query, (string) $request->status);
             }
         } elseif ($user->hasRole('Project Manager')) {
-            // Project Managers only see properties assigned to them
-            $query->where('project_manager_id', $user->id)
-                  ->where('status', 'awaiting_inspection');
+            // Project Managers see their assigned properties through the full assessment lifecycle.
+            $query->where('project_manager_id', $user->id);
+
+            if ($request->filled('status')) {
+                $this->applyPropertyStatusFilter($query, (string) $request->status);
+            } else {
+                $query->where('status', '!=', 'archived');
+            }
         } elseif ($user->hasRole('Technician')) {
             // Technicians only see properties with projects assigned to them
             $query->whereHas('projects', function($q) use ($user) {
@@ -69,16 +82,23 @@ class PropertyController extends Controller
         }
 
         $properties = $query->orderBy('created_at', 'desc')->paginate(15);
+        $diagnosisPricingByPropertyId = $properties->getCollection()
+            ->mapWithKeys(fn (Property $property) => [
+                $property->id => $diagnosisPricingService->calculate($property),
+            ])
+            ->all();
 
-        return view('admin.properties.index', compact('properties'));
+        return view('admin.properties.index', compact('properties', 'diagnosisPricingByPropertyId'));
     }
 
     private function applyPropertyStatusFilter(Builder $query, string $status): void
     {
         if ($status === 'awaiting_inspection') {
-            $query->whereHas('inspections', function ($inspectionQuery) {
-                $inspectionQuery->where('inspection_fee_status', 'paid')
-                    ->where('status', 'scheduled');
+            $query->where(function ($statusQuery) {
+                $statusQuery->where('status', 'awaiting_inspection')
+                ->orWhereHas('inspections', function ($inspectionQuery) {
+                    $inspectionQuery->where('status', 'scheduled');
+                });
             })->whereDoesntHave('inspections', function ($inspectionQuery) {
                 $inspectionQuery->where('status', 'completed');
             });
@@ -133,24 +153,15 @@ class PropertyController extends Controller
     }
 
     /**
-     * Update the specified property (for approval/rejection).
+     * Update lightweight property lifecycle status.
      */
     public function update(Request $request, Property $property)
     {
         $validated = $request->validate([
-            'status' => 'required|in:pending_approval,approved,rejected',
-            'rejection_reason' => 'required_if:status,rejected|nullable|string',
+            'status' => 'required|in:registered,awaiting_inspection,in_assessment,assessed,archived',
         ]);
 
         $property->status = $validated['status'];
-
-        if ($validated['status'] === 'approved') {
-            $property->approved_at = now();
-            $property->approved_by = Auth::id();
-        } elseif ($validated['status'] === 'rejected') {
-            $property->rejection_reason = $validated['rejection_reason'] ?? null;
-        }
-
         $property->save();
 
         $statusMessage = ucfirst(str_replace('_', ' ', $validated['status']));
@@ -160,38 +171,7 @@ class PropertyController extends Controller
     }
 
     /**
-     * Approve a property.
-     */
-    public function approve(Property $property)
-    {
-        $property->status = 'approved';
-        $property->approved_at = now();
-        $property->approved_by = Auth::id();
-        $property->save();
-
-        return redirect()->back()
-            ->with('success', "Property '{$property->property_name}' has been approved!");
-    }
-
-    /**
-     * Reject a property.
-     */
-    public function reject(Request $request, Property $property)
-    {
-        $validated = $request->validate([
-            'rejection_reason' => 'required|string|max:1000',
-        ]);
-
-        $property->status = 'rejected';
-        $property->rejection_reason = $validated['rejection_reason'];
-        $property->save();
-
-        return redirect()->back()
-            ->with('success', "Property '{$property->property_name}' has been rejected.");
-    }
-
-    /**
-     * Assign project manager and inspector to a paid inspection.
+     * Assign project manager and inspector to a property diagnosis workflow.
      */
     public function assign(Request $request, Property $property)
     {
@@ -201,24 +181,39 @@ class PropertyController extends Controller
             'technician_id'      => 'nullable|exists:users,id',
         ]);
 
-        // Find the most recent paid inspection for this property (any status)
+        $project = Project::firstOrCreate(
+            ['property_id' => $property->id],
+            [
+                'title' => 'Property Facts & Diagnosis - ' . $property->property_name,
+                'description' => 'Property facts and diagnosis workflow for ' . $property->property_name,
+                'status' => 'pending',
+                'user_id' => $property->user_id,
+                'managed_by' => $property->project_manager_id,
+                'created_by' => Auth::id(),
+                'project_number' => 'PRJ-' . strtoupper(Str::random(8)),
+            ]
+        );
+
+        // Find the most recent open diagnosis/inspection record for this property.
         $inspection = $property->inspections()
-            ->where('inspection_fee_status', 'paid')
-            ->whereIn('status', ['scheduled', 'in_progress', 'completed'])
+            ->whereIn('status', ['scheduled', 'in_progress', 'findings_captured', 'findings_shared', 'client_committed', 'estimation_in_progress', 'estimation_completed', 'quotation_shared', 'quotation_approved'])
             ->latest('id')
             ->first();
 
         if (!$inspection) {
-            // Fall back to any paid inspection
-            $inspection = $property->inspections()
-                ->where('inspection_fee_status', 'paid')
-                ->latest('id')
-                ->first();
-        }
-
-        if (!$inspection) {
-            return redirect()->back()
-                ->with('error', 'No paid inspection found for this property.');
+            $inspection = Inspection::create([
+                'property_id' => $property->id,
+                'project_id' => $project->id,
+                'status' => 'scheduled',
+                'inspection_fee_status' => 'pending',
+                'property_code' => $property->property_code,
+                'property_name' => $property->property_name,
+                'property_address_snapshot' => trim(($property->property_address ?? '') . ', ' . ($property->city ?? '')),
+                'property_type_snapshot' => $property->type,
+                'residential_units_snapshot' => (int) ($property->number_of_units ?: $property->residential_units ?: 0),
+                'commercial_sqft_snapshot' => $property->square_footage_interior,
+                'mixed_use_weight_snapshot' => $property->mixed_use_commercial_weight,
+            ]);
         }
 
         // Resolve values: use submitted value if provided, otherwise keep existing
@@ -260,6 +255,7 @@ class PropertyController extends Controller
         }
 
         // Assign inspection team
+        $inspection->project_id = $inspection->project_id ?: $project->id;
         if ($inspectorId)  $inspection->inspector_id  = $inspectorId;
         if ($technicianId !== null || array_key_exists('technician_id', $validated)) {
             $inspection->technician_id = $technicianId;
@@ -272,11 +268,14 @@ class PropertyController extends Controller
         if ($projectManagerId) $property->project_manager_id = $projectManagerId;
         $property->assigned_at = $property->assigned_at ?: now();
         $property->inspection_scheduled_at = $property->inspection_scheduled_at ?: $inspection->scheduled_date;
+        if (($property->status ?? null) === 'registered') {
+            $property->status = 'awaiting_inspection';
+        }
         $property->save();
 
         // Also update the project's manager if a project exists and PM changed
-        if ($inspection->project && $projectManagerId) {
-            $inspection->project->update(['managed_by' => $projectManagerId]);
+        if ($projectManagerId) {
+            $project->update(['managed_by' => $projectManagerId]);
         }
 
         $parts = [];
@@ -288,6 +287,165 @@ class PropertyController extends Controller
             : 'Team updated (no changes made).';
 
         return redirect()->back()->with('success', $successMsg);
+    }
+
+    public function createDiagnosisInvoice(Request $request, Property $property, DiagnosisPricingService $diagnosisPricingService)
+    {
+        $pricing = $diagnosisPricingService->calculate($property);
+
+        $validated = $request->validate([
+            'property_facts_amount' => ['nullable', 'numeric', 'min:0'],
+            'diagnosis_amount' => ['nullable', 'numeric', 'min:0'],
+            'due_date' => ['nullable', 'date', 'after_or_equal:today'],
+        ]);
+
+        $propertyFactsAmount = round((float) ($validated['property_facts_amount'] ?? 0), 2);
+        $diagnosisAmount = round((float) ($validated['diagnosis_amount'] ?? $pricing['invoice_dollars']), 2);
+        $total = round($propertyFactsAmount + $diagnosisAmount, 2);
+
+        if ($total <= 0) {
+            return back()->with('error', 'Invoice total must be greater than zero.');
+        }
+
+        $invoice = DB::transaction(function () use ($property, $propertyFactsAmount, $diagnosisAmount, $total, $validated, $pricing) {
+            $property->loadMissing('user');
+
+            $project = Project::firstOrCreate(
+                ['property_id' => $property->id],
+                [
+                    'title' => 'Property Facts & Diagnosis - ' . $property->property_name,
+                    'description' => 'Property facts capture and diagnosis preparation for ' . $property->property_name,
+                    'status' => 'pending',
+                    'user_id' => $property->user_id,
+                    'managed_by' => $property->project_manager_id,
+                    'created_by' => Auth::id(),
+                    'project_number' => 'PRJ-' . strtoupper(Str::random(8)),
+                ]
+            );
+
+            $inspection = Inspection::where('property_id', $property->id)
+                ->where('status', '!=', 'completed')
+                ->latest('id')
+                ->first();
+
+            if (!$inspection) {
+                $inspection = Inspection::create([
+                    'property_id' => $property->id,
+                    'project_id' => $project->id,
+                    'inspector_id' => $property->inspector_id,
+                    'assigned_by' => Auth::id(),
+                    'status' => 'scheduled',
+                    'inspection_fee_status' => 'pending',
+                    'inspection_fee_amount' => $diagnosisAmount,
+                    'property_code' => $property->property_code,
+                    'property_name' => $property->property_name,
+                    'property_address_snapshot' => trim(($property->property_address ?? '') . ', ' . ($property->city ?? '')),
+                    'property_type_snapshot' => $property->type,
+                    'residential_units_snapshot' => (int) ($property->number_of_units ?: $property->residential_units ?: 0),
+                    'commercial_sqft_snapshot' => $property->square_footage_interior,
+                    'mixed_use_weight_snapshot' => $property->mixed_use_commercial_weight,
+                ]);
+            } else {
+                $inspection->update([
+                    'project_id' => $inspection->project_id ?: $project->id,
+                    'inspection_fee_status' => $inspection->inspection_fee_status === 'paid' ? 'paid' : 'pending',
+                    'inspection_fee_amount' => $diagnosisAmount,
+                ]);
+            }
+
+            $lineItems = [];
+
+            if ($propertyFactsAmount > 0) {
+                $lineItems[] = [
+                    'description' => 'Property Facts - floor plan and digital twin capture',
+                    'purpose' => 'property_facts',
+                    'property_id' => $property->id,
+                    'inspection_id' => $inspection->id,
+                    'quantity' => 1,
+                    'unit_price' => $propertyFactsAmount,
+                    'total' => $propertyFactsAmount,
+                ];
+            }
+
+            $lineItems[] = [
+                'description' => 'Property Diagnosis Fee',
+                'purpose' => 'property_diagnosis',
+                'property_id' => $property->id,
+                'inspection_id' => $inspection->id,
+                'quantity' => 1,
+                'unit_price' => $diagnosisAmount,
+                'total' => $diagnosisAmount,
+                'pricing_snapshot' => [
+                    'units' => $pricing['units'],
+                    'base_fee' => $pricing['base_fee'],
+                    'roof_surcharge' => $pricing['roof_surcharge'],
+                    'crawl_surcharge' => $pricing['crawl_surcharge'],
+                ],
+            ];
+
+            $existingInvoice = Invoice::where('project_id', $project->id)
+                ->where('user_id', $property->user_id)
+                ->where('type', 'additional')
+                ->whereIn('status', ['draft', 'sent', 'partial', 'overdue'])
+                ->get()
+                ->first(function (Invoice $invoice) use ($property) {
+                    return collect($invoice->line_items ?? [])
+                        ->contains(fn ($item) => (int) ($item['property_id'] ?? 0) === (int) $property->id
+                            && in_array(($item['purpose'] ?? null), ['property_facts', 'property_diagnosis'], true));
+                });
+
+            $attributes = [
+                'project_id' => $project->id,
+                'user_id' => $property->user_id,
+                'type' => 'additional',
+                'subtotal' => $total,
+                'tax' => 0,
+                'total' => $total,
+                'paid_amount' => (float) ($existingInvoice->paid_amount ?? 0),
+                'balance' => max(0, round($total - (float) ($existingInvoice->paid_amount ?? 0), 2)),
+                'status' => (float) ($existingInvoice->paid_amount ?? 0) > 0 ? 'partial' : 'sent',
+                'issue_date' => optional($existingInvoice?->issue_date)->toDateString() ?? now()->toDateString(),
+                'due_date' => $validated['due_date'] ?? optional($existingInvoice?->due_date)->toDateString() ?? now()->addDays(14)->toDateString(),
+                'line_items' => $lineItems,
+                'notes' => 'Property facts and diagnosis invoice for ' . ($property->property_name ?? 'property') . '.',
+            ];
+
+            if ($attributes['balance'] <= 0) {
+                $attributes['status'] = 'paid';
+                $attributes['paid_at'] = now()->toDateString();
+            }
+
+            if ($existingInvoice) {
+                $existingInvoice->update($attributes);
+                $invoice = $existingInvoice->fresh();
+            } else {
+                $attributes['invoice_number'] = $this->nextInvoiceNumber('INV-DIAG-' . now()->format('Ymd') . '-' . $property->id);
+                $invoice = Invoice::create($attributes);
+            }
+
+            if (($property->status ?? null) === 'registered') {
+                $property->update(['status' => 'awaiting_inspection']);
+            }
+
+            return $invoice;
+        });
+
+        return redirect()
+            ->route('invoices.show', $invoice)
+            ->with('success', 'Property facts and diagnosis invoice has been prepared for the client.');
+    }
+
+    private function nextInvoiceNumber(string $baseInvoiceNumber): string
+    {
+        $invoiceNumber = $baseInvoiceNumber;
+        $counter = 1;
+
+        while (Invoice::where('invoice_number', $invoiceNumber)->exists()) {
+            $invoiceNumber = $baseInvoiceNumber . '-' . $counter;
+            $counter++;
+        }
+
+        return $invoiceNumber;
     }
 
     /**

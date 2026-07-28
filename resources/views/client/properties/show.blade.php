@@ -10,40 +10,56 @@
 @endsection
 
 @section('content')
+@php
+    $latestPaidInspection = $property->inspections()
+        ->where('inspection_fee_status', 'paid')
+        ->where('status', '!=', 'cancelled')
+        ->latest('id')
+        ->first();
+    $hasPaidInspection = (bool) $latestPaidInspection;
+@endphp
 <div class="row">
     {{-- Property Status Banner --}}
     <div class="col-12 mb-3">
-        @if($property->status === 'pending_approval')
+        @if(!$hasPaidInspection)
         <div class="alert alert-info d-flex align-items-center" role="alert">
-            <i class="mdi mdi-calendar-check me-3" style="font-size: 2rem;"></i>
+            <i class="mdi mdi-phone-in-talk-outline me-3" style="font-size: 2rem;"></i>
             <div class="flex-grow-1">
-                <h5 class="alert-heading mb-1">Action Required: Schedule Your Inspection</h5>
-                <p class="mb-2">Your property has been added successfully! To get started, you need to:</p>
+                <h5 class="alert-heading mb-1">Property Registered: ETOGO Will Contact You</h5>
+                <p class="mb-2">Your property is in the onboarding queue. Next steps:</p>
                 <ol class="mb-2 ps-3">
-                    <li>Schedule your property for inspection/assessment</li>
-                    <li>Complete the payment to confirm your assessment</li>
+                    <li>Our team confirms access and visit details by call</li>
+                    <li>We visit the site and prepare your property facts, floor plan, and digital twin</li>
+                    <li>We share an invoice for property facts and diagnosis after the scope is clear</li>
                 </ol>
-                <a href="{{ route('client.inspections.schedule', $property->id) }}" class="btn btn-primary btn-sm mt-2">
-                    <i class="mdi mdi-calendar-plus me-1"></i> Schedule Inspection Now
-                </a>
             </div>
         </div>
-        @elseif($property->status === 'approved')
+        @elseif(($latestPaidInspection->status ?? null) === 'completed')
         <div class="alert alert-success d-flex align-items-center" role="alert">
             <i class="mdi mdi-check-circle me-3" style="font-size: 2rem;"></i>
             <div class="flex-grow-1">
-                <h5 class="alert-heading mb-1">Approved</h5>
-                <p class="mb-0">This property has been approved on {{ $property->approved_at->format('M d, Y') }}</p>
+                <h5 class="alert-heading mb-1">Diagnosis Completed</h5>
+                <p class="mb-2">Your PHAR diagnosis has been completed and the report journey is active.</p>
+                <a href="{{ route('client.inspections.report', $latestPaidInspection->id) }}" class="btn btn-success btn-sm">
+                    <i class="mdi mdi-file-document-outline me-1"></i> View Report
+                </a>
             </div>
         </div>
-        @elseif($property->status === 'rejected')
-        <div class="alert alert-danger d-flex align-items-center" role="alert">
-            <i class="mdi mdi-close-circle me-3" style="font-size: 2rem;"></i>
-            <div class="flex-grow-1">
-                <h5 class="alert-heading mb-1">Rejected</h5>
-                <p class="mb-0">This property submission was rejected. Please contact support for details.</p>
+        @else
+            <div class="alert alert-success d-flex align-items-center" role="alert">
+                <i class="mdi mdi-calendar-clock me-3" style="font-size: 2rem;"></i>
+                <div class="flex-grow-1">
+                    <h5 class="alert-heading mb-1">Diagnosis Scheduled</h5>
+                    <p class="mb-0">
+                        Your diagnosis invoice/payment is confirmed.
+                        @if($latestPaidInspection?->scheduled_date)
+                            Scheduled for {{ $latestPaidInspection->scheduled_date->format('M d, Y \a\t g:i A') }}.
+                        @else
+                            The team will confirm the assessment details shortly.
+                        @endif
+                    </p>
+                </div>
             </div>
-        </div>
         @endif
     </div>
 
@@ -274,7 +290,7 @@
                     <a href="{{ route('client.properties.index') }}" class="btn btn-light">
                         <i class="mdi mdi-arrow-left"></i> Back to List
                     </a>
-                    @if($property->status !== 'approved')
+                    @unless($hasPaidInspection)
                     <a href="{{ route('client.properties.edit', $property->id) }}" class="btn btn-warning">
                         <i class="mdi mdi-pencil"></i> Edit Property
                     </a>
@@ -285,7 +301,7 @@
                             <i class="mdi mdi-delete"></i> Delete Property
                         </button>
                     </form>
-                    @endif
+                    @endunless
                 </div>
             </div>
         </div>

@@ -12,6 +12,7 @@ use App\Models\Subscription;
 use App\Models\ToolSetting;
 use App\Models\TradeApplication;
 use App\Models\TradePartner;
+use App\Models\User;
 
 class DashboardController extends Controller
 {
@@ -114,7 +115,7 @@ class DashboardController extends Controller
                 ->with('tier')
                 ->first();
 
-            // Build recent activities from latest properties, inspections, and invoices.
+            // Build recent activities from latest properties, diagnosis records, and invoices.
             $propertyActivities = Property::query()
                 ->latest('created_at')
                 ->take(5)
@@ -124,11 +125,13 @@ class DashboardController extends Controller
                         'created_at' => $property->created_at,
                         'description' => 'Property registered',
                         'property' => $property,
-                        'status' => ucfirst((string) ($property->status ?? 'submitted')),
+                        'status' => ucfirst(str_replace('_', ' ', (string) ($property->status ?? 'registered'))),
                         'status_color' => match ((string) ($property->status ?? '')) {
-                            'approved' => 'success',
-                            'pending_approval' => 'warning',
-                            'rejected' => 'danger',
+                            'registered' => 'info',
+                            'awaiting_inspection' => 'warning',
+                            'in_assessment' => 'primary',
+                            'assessed' => 'success',
+                            'archived' => 'secondary',
                             default => 'secondary',
                         },
                     ];
@@ -142,7 +145,7 @@ class DashboardController extends Controller
                 ->map(function (Inspection $inspection) {
                     return (object) [
                         'created_at' => $inspection->created_at,
-                        'description' => 'Inspection ' . ucfirst(str_replace('_', ' ', (string) ($inspection->status ?? 'scheduled'))),
+                        'description' => 'Diagnosis ' . ucfirst(str_replace('_', ' ', (string) ($inspection->status ?? 'scheduled'))),
                         'property' => $inspection->property,
                         'status' => ucfirst(str_replace('_', ' ', (string) ($inspection->status ?? 'scheduled'))),
                         'status_color' => match ((string) ($inspection->status ?? '')) {
@@ -184,6 +187,53 @@ class DashboardController extends Controller
                 ->take(10)
                 ->values();
 
+            $recentProperties = Property::query()
+                ->latest('created_at')
+                ->take(5)
+                ->get();
+
+            $upcomingInspections = Inspection::query()
+                ->with('property')
+                ->where('status', 'scheduled')
+                ->whereNotNull('scheduled_date')
+                ->orderBy('scheduled_date')
+                ->take(5)
+                ->get();
+
+            $newRegistrationsCount = Property::where('status', 'registered')->count();
+            $pendingInvoicesCount = Invoice::pending()->count();
+            $totalUsersCount = User::count();
+            $awaitingContactCount = Property::where('status', 'registered')->count();
+            $propertyFactsPendingCount = Property::query()
+                ->whereIn('status', ['awaiting_inspection', 'in_assessment'])
+                ->whereDoesntHave('spatialModels', function ($query) {
+                    $query->where('status', 'active');
+                })
+                ->count();
+            $invoiceNeededCount = Property::query()
+                ->whereHas('spatialModels', function ($query) {
+                    $query->where('status', 'active');
+                })
+                ->whereDoesntHave('projects.invoices', function ($query) {
+                    $query->where(function ($invoiceQuery) {
+                        $invoiceQuery
+                            ->where('notes', 'like', '%Property facts and diagnosis%')
+                            ->orWhere('invoice_number', 'like', 'INV-DIAG-%');
+                    });
+                })
+                ->count();
+            $diagnosisInProgressCount = Inspection::whereIn('status', [
+                'scheduled',
+                'in_progress',
+                'findings_captured',
+                'findings_shared',
+                'client_committed',
+                'estimation_in_progress',
+                'estimation_completed',
+                'quotation_shared',
+                'quotation_approved',
+            ])->count();
+
             return view('admin.index', compact(
                 'propertiesCount',
                 'inspectionsCount',
@@ -194,7 +244,16 @@ class DashboardController extends Controller
                 'openTradeApplicationsCount',
                 'approvedTradeApplicationsCount',
                 'subscription',
-                'recentActivities'
+                'recentActivities',
+                'recentProperties',
+                'upcomingInspections',
+                'newRegistrationsCount',
+                'pendingInvoicesCount',
+                'totalUsersCount',
+                'awaitingContactCount',
+                'propertyFactsPendingCount',
+                'invoiceNeededCount',
+                'diagnosisInProgressCount'
             ));
         }
         
@@ -213,20 +272,20 @@ class DashboardController extends Controller
                 ->where('status', 'active')
                 ->count();
             
-            // Count inspections as unique completed properties (latest completed report per property)
+            // Count diagnoses as unique completed properties (latest completed report per property)
             $projectIds = Project::whereIn('property_id', $propertyIds)->pluck('id');
             $inspectionsCount = Inspection::whereIn('property_id', $propertyIds)
                 ->where('status', 'completed')
                 ->distinct('property_id')
                 ->count('property_id');
 
-            // Count properties with inspection fee paid
+            // Count properties with diagnosis fee paid
             $paidInspectionsCount = Inspection::whereIn('property_id', $propertyIds)
                 ->where('inspection_fee_status', 'paid')
                 ->distinct('property_id')
                 ->count('property_id');
 
-            // Count paid inspections that are not yet completed
+            // Count paid diagnoses that are not yet completed
             $paidPendingInspectionsCount = max($paidInspectionsCount - $inspectionsCount, 0);
             
             // Count unpaid invoices for KPI
@@ -266,7 +325,7 @@ class DashboardController extends Controller
                 ->pending()
                 ->count();
                 
-            // Get pending inspections
+            // Get pending diagnoses
             $pendingInspections = Inspection::whereIn('project_id', $projectIds)
                 ->where('status', 'scheduled')
                 ->count();
@@ -308,6 +367,17 @@ class DashboardController extends Controller
                 ->take(5)
                 ->get();
 
+            $findingsReadyInspections = Inspection::with(['property', 'project'])
+                ->withCount('pharFindings')
+                ->whereIn('property_id', $propertyIds)
+                ->whereNotNull('findings_report_shared_at')
+                ->whereNull('client_committed_at')
+                ->where('status', '!=', 'completed')
+                ->orderByDesc('findings_report_shared_at')
+                ->orderByDesc('id')
+                ->take(5)
+                ->get();
+
             // Completed projects with outstanding balance (work done, payment pending)
             $completedWithBalance = Inspection::with('property')
                 ->whereIn('property_id', $propertyIds)
@@ -317,6 +387,70 @@ class DashboardController extends Controller
                 ->whereNull('arp_fully_paid_at')
                 ->get()
                 ->filter(fn($i) => !empty($i->completed_finding_ids))
+                ->values();
+
+            $upcomingInspections = Inspection::with('property')
+                ->whereIn('property_id', $propertyIds)
+                ->where('status', 'scheduled')
+                ->whereNotNull('scheduled_date')
+                ->orderBy('scheduled_date')
+                ->take(5)
+                ->get();
+
+            $invoiceActivities = Invoice::where('user_id', $user->id)
+                ->latest('created_at')
+                ->take(5)
+                ->get()
+                ->map(function (Invoice $invoice) {
+                    return (object) [
+                        'created_at' => $invoice->created_at,
+                        'title' => 'Invoice ' . strtoupper((string) ($invoice->invoice_number ?? ('#' . $invoice->id))),
+                        'description' => ucfirst((string) ($invoice->status ?? 'sent')) . ' invoice',
+                        'icon' => 'mdi-file-document-outline',
+                        'tone' => match ((string) ($invoice->status ?? '')) {
+                            'paid' => 'success',
+                            'partial' => 'warning',
+                            'overdue' => 'danger',
+                            default => 'info',
+                        },
+                    ];
+                });
+
+            $inspectionActivities = Inspection::whereIn('property_id', $propertyIds)
+                ->latest('created_at')
+                ->take(5)
+                ->get()
+                ->map(function (Inspection $inspection) {
+                    return (object) [
+                        'created_at' => $inspection->created_at,
+                        'title' => 'Diagnosis ' . ucfirst(str_replace('_', ' ', (string) ($inspection->status ?? 'scheduled'))),
+                        'description' => $inspection->property_name ?? $inspection->property?->property_name ?? 'Property diagnosis',
+                        'icon' => 'mdi-clipboard-check-outline',
+                        'tone' => match ((string) ($inspection->status ?? '')) {
+                            'completed' => 'success',
+                            'scheduled' => 'primary',
+                            'in_progress' => 'info',
+                            default => 'warning',
+                        },
+                    ];
+                });
+
+            $propertyActivities = $recentProperties
+                ->map(function (Property $property) {
+                    return (object) [
+                        'created_at' => $property->created_at,
+                        'title' => 'Property registered',
+                        'description' => $property->property_name ?? $property->property_code ?? 'Property',
+                        'icon' => 'mdi-home-city-outline',
+                        'tone' => 'primary',
+                    ];
+                });
+
+            $recentClientActivities = $propertyActivities
+                ->concat($inspectionActivities)
+                ->concat($invoiceActivities)
+                ->sortByDesc('created_at')
+                ->take(6)
                 ->values();
 
             return view('client.dashboard', compact(
@@ -336,9 +470,12 @@ class DashboardController extends Controller
                 'pendingInspections',
                 'subscription',
                 'recentProperties',
+                'findingsReadyInspections',
                 'completedInspections',
                 'quotationReadyInspections',
-                'completedWithBalance'
+                'completedWithBalance',
+                'upcomingInspections',
+                'recentClientActivities'
             ));
         }
         
@@ -430,14 +567,14 @@ class DashboardController extends Controller
                 'due_date' => now()->addDays(14)->toDateString(),
                 'line_items' => [
                     [
-                        'description' => 'Inspection Service - ' . ($inspection->property?->property_name ?? 'Property'),
+                        'description' => 'Property Diagnosis Service - ' . ($inspection->property?->property_name ?? 'Property'),
                         'inspection_id' => $inspection->id,
                         'quantity' => 1,
                         'unit_price' => $monthlyAmount,
                         'total' => $monthlyAmount,
                     ],
                 ],
-                'notes' => 'Auto-generated from completed inspection #' . $inspection->id,
+                'notes' => 'Auto-generated from completed diagnosis #' . $inspection->id,
             ]);
         }
     }

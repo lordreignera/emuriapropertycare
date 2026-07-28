@@ -111,7 +111,7 @@
                             <i class="mdi mdi-plus me-2"></i>Add Tenant
                         </a>
                         @else
-                        <button class="btn btn-primary btn-sm" disabled title="You need an approved property with tenants enabled">
+                        <button class="btn btn-primary btn-sm" disabled title="You need a registered property with tenants enabled">
                             <i class="mdi mdi-plus me-2"></i>Add Tenant
                         </button>
                         @endif
@@ -252,7 +252,7 @@
                                     <p class="text-muted small">
                                         <strong>How it works:</strong><br>
                                         1. Add a property with "Has Tenants" enabled<br>
-                                        2. Once approved, you can add tenants to that property<br>
+                                        2. Once registered, you can add tenants to that property<br>
                                         3. Each tenant gets a unique login (e.g., SUN-1, SUN-2)<br>
                                         4. All tenants share one password per property<br>
                                         5. Tenants can report emergencies and view property info

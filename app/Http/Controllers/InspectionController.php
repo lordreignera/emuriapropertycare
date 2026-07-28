@@ -15,6 +15,7 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use App\Services\BDCCalculator;
 use App\Services\AgreementScheduleService;
 use App\Services\InspectionInvoiceSyncService;
+use App\Models\FindingClientDecision;
 use App\Models\InspectionSystem;
 use App\Models\InspectionQuotation;
 use App\Models\PHARFinding;
@@ -51,7 +52,6 @@ class InspectionController extends Controller
         }
 
         $scheduledCount = (clone $countsBaseQuery)
-            ->where('inspection_fee_status', 'paid')
             ->where('status', 'scheduled')
             ->whereHas('property')
             ->whereDoesntHave('property.inspections', function ($q) {
@@ -61,6 +61,17 @@ class InspectionController extends Controller
 
         $inProgressCount = (clone $countsBaseQuery)
             ->where('status', 'in_progress')
+            ->count();
+
+        // ETOGO workflow queues
+        // Findings shared with client, waiting on the client to commit (informational)
+        $awaitingClientCount = (clone $countsBaseQuery)
+            ->where('status', 'findings_shared')
+            ->count();
+
+        // Client has committed findings — ready for admin to attach pricing (action needed)
+        $awaitingEstimationCount = (clone $countsBaseQuery)
+            ->whereIn('status', ['client_committed', 'estimation_in_progress'])
             ->count();
 
         $latestCompletedByProperty = Inspection::query()
@@ -78,7 +89,7 @@ class InspectionController extends Controller
             ->whereIn('id', $latestCompletedByProperty)
             ->count();
 
-        $inspectionListQuery = static fn () => Inspection::with(['property.user', 'property.projectManager', 'inspector', 'assignedBy', 'project.manager', 'toolAssignments', 'activeQuotation'])
+        $inspectionListQuery = static fn () => Inspection::with(['property.user', 'property.projectManager', 'inspector', 'assignedBy', 'project.manager', 'toolAssignments', 'activeQuotation', 'activeMatterportModel', 'activeSpatialModels'])
             ->whereNotNull('property_id');
         
         // Base query for inspections
@@ -87,9 +98,8 @@ class InspectionController extends Controller
         // Filter by status if provided
         if ($request->filled('status')) {
             if ($request->status === 'scheduled') {
-                // Show inspections that are scheduled and paid but not yet completed
-                $query->where('inspection_fee_status', 'paid')
-                      ->where('status', 'scheduled')
+                // Show scheduled diagnosis/site-visit records whether invoice is pending or paid.
+                $query->where('status', 'scheduled')
                       ->whereHas('property')
                       ->whereDoesntHave('property.inspections', function ($q) {
                           $q->where('status', 'completed');
@@ -106,8 +116,13 @@ class InspectionController extends Controller
                     ->whereIn('id', $latestCompletedByProperty);
             }
         } else {
-            // By default, show scheduled and in_progress inspections
-            $query->whereIn('status', ['scheduled', 'in_progress']);
+            // By default, show all in-flight inspections (scheduled, in_progress, and the
+            // ETOGO assessment/estimation phases) so none silently disappear from the list.
+            $query->whereIn('status', [
+                'scheduled', 'in_progress',
+                'findings_shared', 'client_committed',
+                'estimation_in_progress', 'estimation_completed',
+            ]);
         }
 
         // Ready-to-countersign view: client signed + paid + tools assigned + schedule set, but Etogo not yet countersigned
@@ -137,6 +152,17 @@ class InspectionController extends Controller
                 $q->where('status', 'in_progress')
                     ->orWhereIn('quotation_status', ['shared', 'client_reviewing', 'client_responded']);
             });
+
+            if ($user->hasRole('Inspector')) {
+                $query->where('inspector_id', $user->id);
+            }
+        }
+
+        // ETOGO Stage D queue: client committed to findings — ready for admin to attach pricing
+        if ($request->get('view') === 'awaiting-estimation') {
+            $query = $inspectionListQuery()
+                ->whereIn('status', ['client_committed', 'estimation_in_progress', 'estimation_completed'])
+                ->whereNotNull('client_committed_at');
 
             if ($user->hasRole('Inspector')) {
                 $query->where('inspector_id', $user->id);
@@ -192,7 +218,7 @@ class InspectionController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
-        return view('admin.inspections.index', compact('inspections', 'scheduledCount', 'inProgressCount', 'completedCount', 'inspectors', 'projectManagers', 'technicians'));
+        return view('admin.inspections.index', compact('inspections', 'scheduledCount', 'inProgressCount', 'completedCount', 'awaitingClientCount', 'awaitingEstimationCount', 'inspectors', 'projectManagers', 'technicians'));
     }
 
     /**
@@ -237,6 +263,14 @@ class InspectionController extends Controller
                 ->where('status', 'in_progress')
                 ->latest('id')
                 ->first();
+        }
+
+        // If the assessment has been finalised (locked), send staff to the PHAR
+        // assessment report instead of the editable capture form. Reopen from the
+        // report first if the findings genuinely need to change.
+        if ($inspection && $inspection->assessment_finalised_at && !$serviceRequestId) {
+            return redirect()->route('inspections.assessment-report', $inspection->id)
+                ->with('info', 'This assessment is finalised. Reopen it from the report if you need to edit the findings.');
         }
 
         $systems = collect();
@@ -325,6 +359,13 @@ class InspectionController extends Controller
             $seededFindingsSource = !empty($seededSystemFindings) ? 'property_known_issues' : null;
         }
 
+        $savedSystemFindings = $hasExistingFindings
+            ? array_values($inspection->findings ?? [])
+            : [];
+        $initialSystemFindings = !empty($savedSystemFindings)
+            ? $savedSystemFindings
+            : $seededSystemFindings;
+
         $dbMaterialSettings = \App\Models\FmcMaterialSetting::active()->get([
             'material_name', 'default_unit', 'default_unit_cost', 'hst_rate', 'pst_rate', 'system_id', 'subsystem_id',
         ])->map(static function ($row) {
@@ -395,6 +436,7 @@ class InspectionController extends Controller
             'serviceRequest',
             'seededSystemFindings',
             'seededFindingsSource',
+            'initialSystemFindings',
             'activeTradePartners'
         ));
     }
@@ -650,6 +692,9 @@ class InspectionController extends Controller
         $inspection->findings = $normalizedFindings;
 
         $inspection->save();
+        if (($property->status ?? null) !== 'archived') {
+            $property->update(['status' => 'in_assessment']);
+        }
 
         return response()->json([
             'ok' => true,
@@ -972,6 +1017,11 @@ class InspectionController extends Controller
         }
 
         $inspection->save();
+        if (($property->status ?? null) !== 'archived') {
+            $property->update([
+                'status' => $inspection->status === 'completed' ? 'assessed' : 'in_assessment',
+            ]);
+        }
 
         if (!empty($validated['service_request_id'])) {
             $serviceRequest = ServiceRequest::query()
@@ -990,6 +1040,13 @@ class InspectionController extends Controller
             }
         }
 
+        // ==== ETOGO: persist findings as phar_findings at capture time ====
+        // The findings report (and per-finding client commitments) read from
+        // phar_findings, so we create/sync them here (descriptive + the 6
+        // interpretation answers, no pricing). Pricing is added later in the
+        // Estimation step without destroying these rows or client decisions.
+        $this->persistPharFindings($inspection, $normalizedFindings, false);
+
         // ==== FINDINGS & MATERIALS ARE NOW COLLECTED ON PAGE 2 (PHAR DATA FORM) ====
         // Findings processing moved to storePharData() method
         // This keeps the two-page workflow clean: Page 1 = CPI scoring, Page 2 = PHAR data
@@ -998,10 +1055,20 @@ class InspectionController extends Controller
         // Full calculations happen after PHAR data collection in storePharData()
 
         $proceedToPhar = $request->input('next_stage') === 'phar';
+        $proceedToPreview = $request->input('next_stage') === 'preview';
 
         $message = $proceedToPhar
             ? 'CPI scoring saved. Proceed to PHAR assessment/pricing.'
-            : 'CPI scoring saved as draft successfully!';
+            : ($proceedToPreview
+                ? 'Findings saved. Review the client-facing report below, then share it with the client.'
+                : 'CPI scoring saved as draft successfully!');
+
+        // ETOGO assessment flow: land on the findings preview so the inspector
+        // can review the plain-language report before sharing it with the client.
+        if ($proceedToPreview) {
+            return redirect()->route('inspections.findings-preview', $inspection->id)
+                ->with('success', $message);
+        }
 
         // Redirect to PHAR data form (Page 2) when user chooses next stage
         if ($proceedToPhar) {
@@ -1795,6 +1862,9 @@ class InspectionController extends Controller
             'findings.*.category'               => 'nullable|string',
             'findings.*.notes'                  => 'nullable|string',
             'findings.*.property_id'            => 'nullable|exists:properties,id',
+            'findings.*.finding_type'           => 'nullable|in:stand_alone,cascading',
+            'findings.*.impact_categories'      => 'nullable|array',
+            'findings.*.impact_categories.*'    => 'nullable|string|max:80',
             'findings.*.requires_trade_pricing' => 'nullable|boolean',
             'findings.*.fulfillment_type'       => 'nullable|in:etogo_team,trade_partner,decide_later',
             'findings.*.trade_application_id'   => 'nullable|exists:trade_applications,id',
@@ -1874,6 +1944,10 @@ class InspectionController extends Controller
                 'phar_included_yn'  => isset($phar['included_yn']) ? (bool) $phar['included_yn'] : ($finding['phar_included_yn'] ?? true),
                 'phar_notes'        => $phar['notes'] ?? ($finding['phar_notes'] ?? ''),
                 'phar_materials'    => !empty($pharMaterials) ? $pharMaterials : ($finding['phar_materials'] ?? []),
+                'finding_type' => $phar['finding_type'] ?? ($finding['finding_type'] ?? 'stand_alone'),
+                'impact_categories' => array_values(array_filter((array) (
+                    $phar['impact_categories'] ?? ($finding['impact_categories'] ?? [])
+                ))),
                 'requires_trade_pricing' => array_key_exists('requires_trade_pricing', $phar)
                     ? (bool) $phar['requires_trade_pricing']
                     : ($finding['requires_trade_pricing'] ?? null),
@@ -1926,38 +2000,29 @@ class InspectionController extends Controller
             (float) ($computedInspection->bdc_annual ?? 0) <= 0 ||
             (float) ($computedInspection->trc_annual ?? 0) <= 0) {
             return redirect()->back()->withInput()->withErrors([
-                'save_preview' => 'Pricing preview cannot be saved yet. Please complete all required PHAR inputs and ensure BDC, labour hours, and totals are fully computed.',
+                'save_preview' => 'Work costing cannot be saved yet. Please complete all required PHAR inputs and ensure BDC, labour hours, and totals are fully computed.',
             ]);
         }
 
         // ==== FINAL SAVE: process into relational tables ====
-        $inspection->pharFindings()->delete();
+        // Update phar_findings in place so their ids (and any client commitments
+        // that cascade from them) survive, then rebuild the pricing children.
         $inspection->materials()->delete();
         $inspection->tradePricingItems()->delete();
+
+        $pharFindingMap = $this->persistPharFindings($inspection, $mergedFindings, true);
 
         $tradePricingService = app(\App\Services\PharTradePricingService::class);
 
         foreach ($mergedFindings as $findingIndex => $findingData) {
-            if (empty($findingData['issue']) && empty($findingData['phar_labour_hours'])) {
+            $pharFinding = $pharFindingMap[$findingIndex] ?? null;
+            if (!$pharFinding) {
                 continue;
             }
 
             $isTradePartnerFinding = $tradePricingService->shouldPriceFinding($findingData);
             $tradeMaterialsIncluded = $isTradePartnerFinding && (bool) ($findingData['trade_materials_included'] ?? false);
             $billableMaterials = $tradeMaterialsIncluded ? [] : ($findingData['phar_materials'] ?? []);
-
-            $pharFinding = \App\Models\PHARFinding::create([
-                'inspection_id' => $inspection->id,
-                'property_id'   => $property->id,
-                'task_question' => $findingData['task_question'] ?? ($findingData['issue'] ?? ''),
-                'category'      => $findingData['phar_category'] ?? 'General',
-                'priority'      => $findingData['priority'] ?? 3,
-                'included_yn'   => $findingData['phar_included_yn'] ?? true,
-                'labour_hours'  => $findingData['phar_labour_hours'] ?? 0,
-                'material_cost' => collect($billableMaterials)->sum(fn($m) => (float) ($m['line_total'] ?? 0)),
-                'notes'         => $findingData['phar_notes'] ?? null,
-                'photo_ids'     => !empty($findingData['finding_photos']) ? $findingData['finding_photos'] : null,
-            ]);
 
             if ($isTradePartnerFinding) {
                 $tradePricing = $tradePricingService->priceFinding($inspection, $findingData, (int) $findingIndex);
@@ -2022,7 +2087,380 @@ class InspectionController extends Controller
         // Do NOT mark as completed yet — send admin back to phar-data so they can
         // preview the report and contract draft before finalising.
         return redirect()->route('inspections.phar-data', $inspection->id)
-            ->with('success', 'Pricing calculated successfully! Review the preview below, then click Complete Assessment when ready.');
+            ->with('success', 'Work assignment and costing saved successfully. Review the preview below, then share the quotation when ready.');
+    }
+
+    /**
+     * Create or update phar_findings rows from the inspection's findings list,
+     * matching existing rows by position so ids (and any client decisions that
+     * cascade from them) are preserved. Used at capture time (no pricing) and
+     * during estimation (with pricing).
+     *
+     * @param  array  $findings  Ordered, normalised/merged findings array.
+     * @return array<int, \App\Models\PHARFinding|null>  Map of finding index → row (null = empty/skipped).
+     */
+    private function persistPharFindings(Inspection $inspection, array $findings, bool $withPricing): array
+    {
+        // phar_findings.severity is ENUM(low, moderate, high, critical); the findings
+        // JSON uses a wider scale, so map it down to a valid enum value.
+        $severityMap = [
+            'critical'       => 'critical',
+            'high'           => 'high',
+            'noi_protection' => 'high',
+            'medium'         => 'moderate',
+            'moderate'       => 'moderate',
+            'low'            => 'low',
+        ];
+
+        $existing = $inspection->pharFindings()->orderBy('id')->get()->values();
+        $tradePricingService = $withPricing ? app(\App\Services\PharTradePricingService::class) : null;
+
+        $map = [];
+        $position = 0;
+
+        foreach ($findings as $index => $finding) {
+            $hasContent = trim((string) ($finding['issue'] ?? '')) !== ''
+                || trim((string) ($finding['issue_description'] ?? '')) !== ''
+                || trim((string) ($finding['risk_impact'] ?? '')) !== ''
+                || trim((string) ($finding['recommendation_details'] ?? '')) !== ''
+                || trim((string) ($finding['notes'] ?? '')) !== '';
+
+            if (!$hasContent && empty($finding['phar_labour_hours'])) {
+                $map[$index] = null;
+                continue;
+            }
+
+            $rawSeverity = (string) ($finding['severity'] ?? 'moderate');
+
+            $attrs = [
+                'property_id'   => $inspection->property_id,
+                'system_id'     => $finding['system_id'] ?? null,
+                'subsystem_id'  => $finding['subsystem_id'] ?? null,
+                'finding_type'  => $finding['finding_type'] ?? 'stand_alone',
+                'impact_categories' => !empty($finding['impact_categories']) ? array_values((array) $finding['impact_categories']) : null,
+                'task_question' => $finding['issue'] ?? ($finding['task_question'] ?? ''),
+                'category'      => $finding['phar_category'] ?? 'General',
+                'severity'      => $severityMap[$rawSeverity] ?? 'moderate',
+                'priority'      => $finding['priority'] ?? 3,
+                'included_yn'   => $finding['phar_included_yn'] ?? true,
+                'notes'         => $finding['phar_notes'] ?? ($finding['notes'] ?? null),
+                'photo_ids'     => !empty($finding['finding_photos']) ? $finding['finding_photos'] : null,
+                // ETOGO Client Understanding — derived from the inspector's natural fields so the
+                // client report can answer the key questions without a rigid questionnaire on the form.
+                'observed_condition'     => $finding['issue_description'] ?? null,        // What we found
+                'consequence_if_ignored' => $finding['risk_impact'] ?? null,             // Why it matters / what is at risk
+                'remediation_strategy'   => $finding['recommendation_details'] ?? null,  // Our recommendation
+            ];
+
+            if ($withPricing) {
+                $isTradePartnerFinding = $tradePricingService->shouldPriceFinding($finding);
+                $tradeMaterialsIncluded = $isTradePartnerFinding && (bool) ($finding['trade_materials_included'] ?? false);
+                $billableMaterials = $tradeMaterialsIncluded ? [] : ($finding['phar_materials'] ?? []);
+                $attrs['labour_hours']  = $finding['phar_labour_hours'] ?? 0;
+                $attrs['material_cost'] = collect($billableMaterials)->sum(fn($m) => (float) ($m['line_total'] ?? 0));
+            }
+
+            $row = $existing->get($position);
+            if ($row) {
+                $row->update($attrs);
+            } else {
+                $row = \App\Models\PHARFinding::create(array_merge(['inspection_id' => $inspection->id], $attrs));
+            }
+
+            $map[$index] = $row;
+            $position++;
+        }
+
+        // Remove any leftover phar_findings beyond the current set.
+        foreach ($existing->slice($position) as $row) {
+            $row->delete();
+        }
+
+        return $map;
+    }
+
+    /**
+     * ETOGO Stage A (preview) — read-only preview of the captured findings,
+     * rendered as the client will see them, with a button to share the report.
+     * Reached right after the inspector saves the findings-capture form.
+     */
+    public function findingsPreview(string $id)
+    {
+        $inspection = Inspection::with([
+            'property',
+            'activeMatterportModel',
+            'activeSpatialModels.captureSession',
+            'issueMarkers.spatialModel',
+            'issueMarkers.captureSession',
+            'issueMarkers.pharFinding',
+        ])->findOrFail($id);
+
+        $user = Auth::user();
+        if (!$user->hasAnyRole(['Super Admin', 'Administrator', 'Project Manager', 'Inspector'])) {
+            abort(403, 'Only staff may preview the findings report.');
+        }
+
+        $findings = PHARFinding::where('inspection_id', $inspection->id)
+            ->orderByRaw("
+                CASE severity
+                    WHEN 'critical' THEN 1
+                    WHEN 'high' THEN 2
+                    WHEN 'moderate' THEN 3
+                    WHEN 'medium' THEN 3
+                    WHEN 'low' THEN 4
+                    ELSE 5
+                END
+            ")
+            ->orderBy('id')
+            ->get();
+
+        return view('admin.inspections.findings-preview', [
+            'inspection' => $inspection,
+            'property'   => $inspection->property,
+            'findings'   => $findings,
+        ]);
+    }
+
+    /**
+     * ETOGO Stage B — Share findings-only report with client.
+     *
+     * Marks the assessment as "findings_shared" so the client can review what
+     * was discovered (in plain language, with no pricing) and decide which
+     * items to commit to. Pricing/estimation only happens AFTER the client
+     * commits in Stage C.
+     */
+    public function shareFindingsReport(Inspection $inspection)
+    {
+        $user = Auth::user();
+        if (!$user->hasAnyRole(['Super Admin', 'Administrator', 'Project Manager', 'Inspector'])) {
+            abort(403, 'Only staff may share the findings report.');
+        }
+
+        $findings = PHARFinding::where('inspection_id', $inspection->id)
+            ->orderBy('id')
+            ->get();
+
+        if ($findings->isEmpty()) {
+            return redirect()->route('inspections.show', $inspection->id)
+                ->with('error', 'No findings captured yet. Save the assessment findings before sharing the report.');
+        }
+
+        if (in_array($inspection->status, ['completed', 'approved'], true)) {
+            return redirect()->route('inspections.show', $inspection->id)
+                ->with('info', 'This assessment is already completed.');
+        }
+
+        try {
+            DB::transaction(function () use ($inspection) {
+                $updates = [
+                    'status' => 'findings_shared',
+                    'findings_report_shared_at' => now(),
+                ];
+                $inspection->update($updates);
+            });
+        } catch (\Throwable $e) {
+            Log::error('shareFindingsReport failed', [
+                'inspection_id' => $inspection->id,
+                'error' => $e->getMessage(),
+            ]);
+            return redirect()->route('inspections.show', $inspection->id)
+                ->with('error', 'Could not share the findings report: ' . $e->getMessage());
+        }
+
+        return redirect()->route('inspections.show', $inspection->id)
+            ->with('success', 'Findings report shared with the client. They can now review and commit to items for remediation.');
+    }
+
+    /**
+     * Finalise the assessment — locks the captured findings from further edits and
+     * produces the official PHAR assessment report. Reversible via reopenAssessment()
+     * until the report has been shared with the client.
+     */
+    public function finaliseAssessment(Inspection $inspection)
+    {
+        $user = Auth::user();
+        if (!$user->hasAnyRole(['Super Admin', 'Administrator', 'Project Manager', 'Inspector'])) {
+            abort(403, 'Only staff may finalise an assessment.');
+        }
+
+        $findingsCount = PHARFinding::where('inspection_id', $inspection->id)->count();
+        if ($findingsCount === 0) {
+            return redirect()->route('inspections.findings-preview', $inspection->id)
+                ->with('error', 'Capture at least one finding before finalising the assessment.');
+        }
+
+        if (in_array($inspection->status, ['completed', 'approved'], true)) {
+            return redirect()->route('inspections.assessment-report', $inspection->id)
+                ->with('info', 'This assessment is already completed.');
+        }
+
+        try {
+            DB::transaction(function () use ($inspection, $user) {
+                $updates = [
+                    'assessment_finalised_at' => now(),
+                    'assessment_finalised_by' => $user->id,
+                ];
+                // Only advance the lifecycle if we are still in the capture phase.
+                if (in_array($inspection->status, ['scheduled', 'in_progress'], true)) {
+                    $updates['status'] = 'findings_captured';
+                }
+                $inspection->update($updates);
+                $inspection->property()
+                    ->where('status', '!=', 'archived')
+                    ->update(['status' => 'assessed']);
+            });
+        } catch (\Throwable $e) {
+            Log::error('finaliseAssessment failed', [
+                'inspection_id' => $inspection->id,
+                'error' => $e->getMessage(),
+            ]);
+            return redirect()->route('inspections.findings-preview', $inspection->id)
+                ->with('error', 'Could not finalise the assessment: ' . $e->getMessage());
+        }
+
+        return redirect()->route('inspections.assessment-report', $inspection->id)
+            ->with('success', 'Assessment finalised. The PHAR assessment report is ready to share with the client.');
+    }
+
+    /**
+     * Official PHAR assessment report (staff view) — read-only, generated once the
+     * assessment is finalised. Shows the full finding detail plus internal notes,
+     * with actions to share the client-facing report or reopen for edits.
+     */
+    public function assessmentReport(string $id)
+    {
+        $inspection = Inspection::with([
+            'property',
+            'inspector',
+            'finalisedBy',
+            'activeMatterportModel',
+            'activeSpatialModels.captureSession',
+            'issueMarkers.spatialModel',
+            'issueMarkers.captureSession',
+            'issueMarkers.pharFinding',
+        ])->findOrFail($id);
+
+        $user = Auth::user();
+        if (!$user->hasAnyRole(['Super Admin', 'Administrator', 'Project Manager', 'Inspector'])) {
+            abort(403, 'Only staff may view the assessment report.');
+        }
+
+        $findings = PHARFinding::with(['system', 'subsystem'])
+            ->where('inspection_id', $inspection->id)
+            ->orderByRaw("
+                CASE severity
+                    WHEN 'critical' THEN 1
+                    WHEN 'high' THEN 2
+                    WHEN 'moderate' THEN 3
+                    WHEN 'medium' THEN 3
+                    WHEN 'low' THEN 4
+                    ELSE 5
+                END
+            ")
+            ->orderBy('id')
+            ->get();
+
+        return view('admin.inspections.assessment-report', [
+            'inspection' => $inspection,
+            'property'   => $inspection->property,
+            'findings'   => $findings,
+        ]);
+    }
+
+    /**
+     * Reopen a finalised assessment for further edits (admins / managers only).
+     * Clears the finalised lock and returns the inspection to the capture phase,
+     * provided the findings have not already been shared with the client.
+     */
+    public function reopenAssessment(Inspection $inspection)
+    {
+        $user = Auth::user();
+        if (!$user->hasAnyRole(['Super Admin', 'Administrator', 'Project Manager'])) {
+            abort(403, 'Only administrators or project managers may reopen an assessment.');
+        }
+
+        if ($inspection->findings_report_shared_at !== null) {
+            return redirect()->route('inspections.assessment-report', $inspection->id)
+                ->with('error', 'This report has already been shared with the client and can no longer be reopened.');
+        }
+
+        $inspection->update([
+            'assessment_finalised_at' => null,
+            'assessment_finalised_by' => null,
+            'status' => 'in_progress',
+        ]);
+        $inspection->property()
+            ->where('status', '!=', 'archived')
+            ->update(['status' => 'in_assessment']);
+
+        return redirect()->route('inspections.create', ['property_id' => $inspection->property_id])
+            ->with('success', 'Assessment reopened. You can edit the findings and finalise again when ready.');
+    }
+
+    /**
+     * ETOGO Stage D — Estimation form (admin pricing for committed findings only).
+     *
+     * Thin alias over pharData() that ensures the view only shows findings the
+     * client has committed to (Stage C). Falls back to all findings if the
+     * client has not yet committed (for staff who land here early).
+     */
+    public function estimation(string $id)
+    {
+        $inspection = Inspection::findOrFail($id);
+
+        // Bump estimation_started_at on first visit after client commits.
+        if ($inspection->client_committed_at && !$inspection->estimation_started_at) {
+            $inspection->update([
+                'status' => 'estimation_in_progress',
+                'estimation_started_at' => now(),
+            ]);
+        }
+
+        return $this->pharData($id);
+    }
+
+    /**
+     * ETOGO Stage D (save) — Persist pricing/estimation entered by admin.
+     *
+     * Delegates to storePharData() so the existing scientific BDC/FRLC/FMC
+     * pipeline keeps working, then stamps the estimation_completed_at timestamp.
+     */
+    public function storeEstimation(Request $request, string $id)
+    {
+        $response = $this->storePharData($request, $id);
+
+        if ($request->input('action') === 'save_draft_back') {
+            return $response;
+        }
+
+        if ($response instanceof \Illuminate\Http\RedirectResponse && $response->getSession()->has('errors')) {
+            return $response;
+        }
+
+        try {
+            $inspection = Inspection::find($id);
+            if (
+                $inspection
+                && !in_array($inspection->status, ['completed', 'approved'], true)
+                && ($inspection->quotation_status ?? null) !== 'approved'
+                && (float) ($inspection->bdc_annual ?? 0) > 0
+                && (float) ($inspection->trc_annual ?? 0) > 0
+            ) {
+                $updates = ['estimation_completed_at' => now()];
+                // Only flip status if we are still in the assessment/estimation phase.
+                if (in_array($inspection->status, ['findings_captured', 'findings_shared', 'client_committed', 'estimation_in_progress'], true)) {
+                    $updates['status'] = 'estimation_completed';
+                }
+                $inspection->update($updates);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('storeEstimation timestamp update failed', [
+                'inspection_id' => $id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return $response;
     }
 
     /**
@@ -2033,7 +2471,7 @@ class InspectionController extends Controller
     {
         if (($inspection->bdc_annual ?? 0) <= 0) {
             return redirect()->route('inspections.phar-data', $inspection->id)
-                ->with('error', 'Please save and preview pricing first before sharing the quotation.');
+                ->with('error', 'Please save and review work assignment and costing before sharing the quotation.');
         }
 
         if ($inspection->status === 'completed') {
@@ -2041,19 +2479,52 @@ class InspectionController extends Controller
                 ->with('info', 'This assessment is already completed and cannot be re-shared.');
         }
 
-        $findings = PHARFinding::where('inspection_id', $inspection->id)
+        $allFindings = PHARFinding::where('inspection_id', $inspection->id)
             ->orderBy('id')
             ->get();
 
-        if ($findings->isEmpty()) {
+        if ($allFindings->isEmpty()) {
             return redirect()->route('inspections.phar-data', $inspection->id)
                 ->with('error', 'No findings found. Please add findings before sharing the quotation.');
         }
 
+        $findings = $allFindings;
+        $committedFindingIds = collect();
+
+        if (!empty($inspection->client_committed_at)) {
+            $committedFindingIds = FindingClientDecision::query()
+                ->where('inspection_id', $inspection->id)
+                ->whereNull('inspection_quotation_id')
+                ->whereIn('decision', ['immediate_remediation', 'commit'])
+                ->pluck('phar_finding_id')
+                ->map(fn ($id) => (int) $id)
+                ->filter(fn ($id) => $id > 0)
+                ->unique()
+                ->values();
+
+            if ($committedFindingIds->isEmpty()) {
+                return redirect()->route('inspections.phar-data', $inspection->id)
+                    ->with('error', 'The client has not committed to any findings, so there is no remediation scope to quote.');
+            }
+
+            $findings = $allFindings
+                ->filter(fn (PHARFinding $finding) => $committedFindingIds->contains((int) $finding->id))
+                ->values();
+
+            if ($findings->isEmpty()) {
+                return redirect()->route('inspections.phar-data', $inspection->id)
+                    ->with('error', 'The committed findings could not be matched to the current PHAR findings.');
+            }
+        }
+
         $hourlyRate = (float) ($inspection->labour_hourly_rate ?? 165);
         $inspectionFindings = collect($inspection->findings ?? [])->values();
+        $findingIndexById = $allFindings
+            ->values()
+            ->mapWithKeys(fn (PHARFinding $finding, int $index) => [(int) $finding->id => $index]);
 
-        $findingsSnapshot = $findings->values()->map(function (PHARFinding $finding, int $index) use ($hourlyRate, $inspectionFindings) {
+        $findingsSnapshot = $findings->values()->map(function (PHARFinding $finding) use ($hourlyRate, $inspectionFindings, $findingIndexById) {
+            $index = (int) ($findingIndexById->get((int) $finding->id, 0));
             $labourHours = (float) ($finding->labour_hours ?? 0);
             $materialCost = (float) ($finding->material_cost ?? 0);
             $jsonFinding = $inspectionFindings->get($index, []);
@@ -2094,7 +2565,7 @@ class InspectionController extends Controller
             $tradeClientPrice = round((float) ($tradePricing['etogo_client_price'] ?? 0), 2);
             $tradeMaterialsIncluded = (bool) ($tradePricing['materials_included'] ?? $jsonFinding['trade_materials_included'] ?? false);
             $clientLabourCost = $tradeClientPrice > 0
-                ? $tradeClientPrice
+                ? 0.0
                 : round($labourHours * $hourlyRate, 2);
             if ($tradeMaterialsIncluded) {
                 $materialCost = 0.0;
@@ -2353,6 +2824,7 @@ class InspectionController extends Controller
 
         $updates = [
             'active_quotation_id' => $quotation->id,
+            'status' => 'quotation_shared',
             'quotation_status' => 'shared',
             'quotation_shared_at' => now(),
         ];
@@ -2430,7 +2902,7 @@ class InspectionController extends Controller
     {
         if (($inspection->bdc_annual ?? 0) <= 0) {
             return redirect()->route('inspections.phar-data', $inspection->id)
-                ->with('error', 'Please save and preview pricing first before completing the assessment.');
+                ->with('error', 'Please save and review work assignment and costing before completing the assessment.');
         }
 
         if (($inspection->quotation_status ?? null) !== 'approved') {
@@ -2447,6 +2919,9 @@ class InspectionController extends Controller
             'status'         => 'completed',
             'completed_date' => now(),
         ]);
+        $inspection->property()
+            ->where('status', '!=', 'archived')
+            ->update(['status' => 'assessed']);
 
         // Re-lock pricing from approved quotation + authoritative material total.
         $inspection = $this->reconcileApprovedQuotationPricing($inspection->fresh());
@@ -2503,6 +2978,14 @@ class InspectionController extends Controller
     public function previewReport(Inspection $inspection)
     {
         $inspection = $this->agreementScheduleService->refresh($inspection);
+        $inspection->loadMissing([
+            'property',
+            'activeMatterportModel',
+            'activeSpatialModels.captureSession',
+            'issueMarkers.spatialModel',
+            'issueMarkers.captureSession',
+            'issueMarkers.pharFinding',
+        ]);
 
         $activeQuotation = null;
         if (!empty($inspection->active_quotation_id)) {
@@ -2651,7 +3134,14 @@ class InspectionController extends Controller
         }
 
         $approvedFindings = $snapshot->filter(fn($f) => $approvedIds->contains((int) ($f['id'] ?? 0)))->values();
-        $approvedLabour = round((float) $approvedFindings->sum(fn($f) => (float) ($f['labour_cost'] ?? 0)), 2);
+        $approvedLabour = round((float) $approvedFindings->sum(function ($f) {
+            $labour = (float) ($f['labour_cost'] ?? 0);
+            $tradeClientPrice = (float) ($f['trade_client_price'] ?? data_get($f, 'trade_pricing.etogo_client_price', 0));
+
+            return $tradeClientPrice > 0 && abs($labour - $tradeClientPrice) < 0.01
+                ? 0.0
+                : $labour;
+        }), 2);
         $approvedMaterial = round((float) $approvedFindings->sum(fn($f) => (float) ($f['material_cost'] ?? 0)), 2);
         $approvedTradeCost = round((float) $approvedFindings->sum(fn($f) => (float) ($f['trade_cost'] ?? data_get($f, 'trade_pricing.trade_total_cost', 0))), 2);
         $approvedTradeClientPrice = round((float) $approvedFindings->sum(fn($f) => (float) ($f['trade_client_price'] ?? data_get($f, 'trade_pricing.etogo_client_price', 0))), 2);
@@ -2688,7 +3178,7 @@ class InspectionController extends Controller
         ]);
         $approvedBdc = round((float) ($bdcResult['bdc_annual'] ?? 0), 2);
 
-        $approvedTotal = round($approvedLabour + $approvedMaterial + $approvedBdc, 2);
+        $approvedTotal = round($approvedLabour + $approvedMaterial + $approvedTradeClientPrice + $approvedBdc, 2);
 
         $quotation->update([
             'approved_labour_cost' => $approvedLabour,
@@ -2764,9 +3254,9 @@ class InspectionController extends Controller
             ->get()
             ->sum(fn ($finding) => (float) ($finding->labour_hours ?? 0) * $hourlyRate);
         $frlc = $tradeItems->isNotEmpty()
-            ? round($nonTradeLabour + $tradeClientPrice, 2)
+            ? round($nonTradeLabour, 2)
             : (float) ($inspection->frlc_annual ?? 0);
-        $trc = $bdc + $frlc + (float) ($inspection->fmc_annual ?? 0);
+        $trc = $bdc + $frlc + (float) ($inspection->fmc_annual ?? 0) + $tradeClientPrice;
 
         if ($onlyIfChanged && round((float) $inspection->bdc_annual, 2) === round($bdc, 2)) {
             return;

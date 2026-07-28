@@ -3,607 +3,280 @@
 @section('title', 'Client Dashboard')
 
 @section('content')
-<!-- Welcome Header -->
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="card border-0 shadow-sm client-welcome-card">
-            <div class="card-body p-4">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h2 class="fw-bold mb-2">Welcome back, {{ Auth::user()->name }}! 👋</h2>
-                        <p class="mb-0 text-muted fs-5">Here's what's happening with your properties today</p>
-                    </div>
-                    <div>
-                        <a href="{{ route('client.properties.create') }}" class="btn btn-primary btn-lg shadow-sm">
-                            <i class="mdi mdi-home-plus me-2"></i> Add Property
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+@php
+    $userName = Auth::user()->name ?? 'Client';
+    $underDiagnosis = max((int) ($paidPendingInspectionsCount ?? 0), (int) ($pendingInspections ?? 0));
+    $activeProperties = max((int) $propertiesCount - $underDiagnosis, 0);
+    $inactiveProperties = 0;
+    $statusTotal = max((int) $propertiesCount, 1);
+    $activePct = round(($activeProperties / $statusTotal) * 100);
+    $underDiagnosisPct = round(($underDiagnosis / $statusTotal) * 100);
+    $inactivePct = max(0, 100 - $activePct - $underDiagnosisPct);
+@endphp
 
-{{-- Balance reminder banner --}}
-@if(!empty($completedWithBalance) && $completedWithBalance->isNotEmpty())
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="alert alert-warning border-0 shadow-sm d-flex align-items-start gap-3 mb-0" role="alert">
-            <i class="mdi mdi-alert-circle-outline fs-4 mt-1 flex-shrink-0"></i>
-            <div class="flex-grow-1">
-                <strong>Outstanding Balance Reminder</strong> —
-                {{ $completedWithBalance->count() }} completed project{{ $completedWithBalance->count() > 1 ? 's have' : ' has' }}
-                an outstanding payment balance.
-                @foreach($completedWithBalance as $cwb)
-                    <span class="badge bg-warning text-dark ms-1">
-                        {{ $cwb->property->property_address ?? ('Project #'.$cwb->id) }}
-                    </span>
-                @endforeach
-            </div>
-            <a href="{{ route('client.projects.index') }}"
-               class="btn btn-warning btn-sm ms-2 flex-shrink-0 fw-semibold">
-                <i class="mdi mdi-credit-card me-1"></i>View Projects
-            </a>
+<div class="dash-shell">
+    <div class="dash-hero">
+        <div>
+            <h1>Welcome back, {{ $userName }}</h1>
+            <p>Here is what is happening with your properties today.</p>
         </div>
-    </div>
-</div>
-@endif
-
-{{-- Stats Cards --}}
-<div class="row g-4 mb-4">
-    <!-- Properties Card -->
-    <div class="col-xl-3 col-md-6">
-        <div class="card border-0 shadow-sm h-100 client-kpi-card">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                        <p class="text-muted mb-2 fw-semibold text-uppercase small">My Properties</p>
-                        <h2 class="fw-bold mb-0">{{ $propertiesCount }}</h2>
-                    </div>
-                    <div class="client-kpi-icon">
-                        <i class="mdi mdi-home-modern"></i>
-                    </div>
-                </div>
-                <div class="mt-3">
-                    <a href="{{ route('client.properties.index') }}" class="client-kpi-link">
-                        View all properties <i class="mdi mdi-arrow-right"></i>
-                    </a>
-                </div>
-            </div>
-        </div>
+        <a href="{{ route('client.properties.create') }}" class="dash-primary-action">
+            <i class="mdi mdi-plus"></i>
+            <span>Add Property</span>
+        </a>
     </div>
 
-    <!-- Inspections Card -->
-    <div class="col-xl-3 col-md-6">
-        <div class="card border-0 shadow-sm h-100 client-kpi-card">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                        <p class="text-muted mb-2 fw-semibold text-uppercase small">Inspections</p>
-                        <h2 class="fw-bold mb-0">{{ $paidInspectionsCount ?? 0 }}</h2>
-                        <div class="small text-muted mt-2">
-                            Total paid inspections: <span class="fw-semibold text-dark">{{ $paidInspectionsCount ?? 0 }}</span>
-                        </div>
-                        <div class="small text-muted">
-                            Actually inspected: <span class="fw-semibold text-dark">{{ $inspectionsCount }}</span>
-                        </div>
-                        <div class="small text-muted">
-                            Paid but not yet inspected: <span class="fw-semibold text-dark">{{ $paidPendingInspectionsCount ?? 0 }}</span>
-                        </div>
-                        @if(($paidPendingInspectionsCount ?? 0) > 0)
-                        <span class="badge bg-warning text-dark mt-2">{{ $paidPendingInspectionsCount }} Paid Pending</span>
-                        @endif
-                    </div>
-                    <div class="client-kpi-icon">
-                        <i class="mdi mdi-clipboard-check"></i>
-                    </div>
-                </div>
-                <div class="mt-3">
-                    <a href="{{ route('client.inspections.index') }}" class="client-kpi-link">
-                        View inspections <i class="mdi mdi-arrow-right"></i>
-                    </a>
-                </div>
+    @if(!empty($findingsReadyInspections) && $findingsReadyInspections->isNotEmpty())
+        <section class="dash-alert dash-alert-primary">
+            <i class="mdi mdi-clipboard-text-search-outline"></i>
+            <div>
+                <strong>PHAR Findings Ready for Review</strong>
+                <span>{{ $findingsReadyInspections->count() }} assessment{{ $findingsReadyInspections->count() === 1 ? '' : 's' }} need your decision.</span>
             </div>
-        </div>
-    </div>
+            <a href="{{ route('client.inspections.findings-report', $findingsReadyInspections->first()) }}">Review PHAR Findings</a>
+        </section>
+    @endif
 
-    <!-- Projects Card -->
-    <div class="col-xl-3 col-md-6">
-        <div class="card border-0 shadow-sm h-100 client-kpi-card">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                        <p class="text-muted mb-2 fw-semibold text-uppercase small">Projects</p>
-                        <h2 class="fw-bold mb-0">{{ $projectsCount }}</h2>
-                        @if($projectsCount > 0)
-                        <span class="badge bg-info text-dark mt-2">Active</span>
-                        @endif
-                    </div>
-                    <div class="client-kpi-icon">
-                        <i class="mdi mdi-briefcase"></i>
-                    </div>
-                </div>
-                <div class="mt-3">
-                    <span class="text-muted small">Ongoing projects</span>
-                </div>
+    @if(!empty($completedWithBalance) && $completedWithBalance->isNotEmpty())
+        <section class="dash-alert dash-alert-warning">
+            <i class="mdi mdi-alert-circle-outline"></i>
+            <div>
+                <strong>Outstanding balance</strong>
+                <span>{{ $completedWithBalance->count() }} completed project{{ $completedWithBalance->count() === 1 ? ' has' : 's have' }} a remaining balance.</span>
             </div>
-        </div>
-    </div>
+            <a href="{{ route('client.projects.index') }}">View Projects</a>
+        </section>
+    @endif
 
-    <!-- Invoices Card -->
-    <div class="col-xl-3 col-md-6">
-        <div class="card border-0 shadow-sm h-100 client-kpi-card">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                        <p class="text-muted mb-2 fw-semibold text-uppercase small">Invoices</p>
-                        <h2 class="fw-bold mb-0">{{ $invoicesCount }}</h2>
-                        <div class="small text-muted mt-2">
-                            Inspection invoices: <span class="fw-semibold text-dark">{{ $inspectionInvoicesCount ?? 0 }}</span>
-                            <span class="ms-1">(Paid: {{ $inspectionInvoicesPaidCount ?? 0 }}, Pending: {{ $inspectionInvoicesPendingCount ?? 0 }})</span>
-                        </div>
-                        <div class="small text-muted">
-                            Work payment invoices: <span class="fw-semibold text-dark">{{ $workPaymentInvoicesCount ?? 0 }}</span>
-                            <span class="ms-1">(Paid: {{ $workPaymentInvoicesPaidCount ?? 0 }}, Pending: {{ $workPaymentInvoicesPendingCount ?? 0 }})</span>
-                        </div>
-                        @if($unpaidInvoices > 0)
-                        <span class="badge bg-danger mt-2">{{ $unpaidInvoices }} Pending</span>
-                        @elseif(($invoicesCount ?? 0) > 0)
-                        <span class="badge bg-success mt-2">All Paid</span>
-                        @endif
-                    </div>
-                    <div class="client-kpi-icon">
-                        <i class="mdi mdi-file-document"></i>
-                    </div>
-                </div>
-                <div class="mt-3">
-                    <a href="{{ route('client.invoices.index') }}" class="client-kpi-link">
-                        View invoices <i class="mdi mdi-arrow-right"></i>
-                    </a>
-                </div>
+    <section class="dash-kpis">
+        <article class="dash-kpi">
+            <span class="dash-icon dash-icon-blue"><i class="mdi mdi-home-city-outline"></i></span>
+            <div>
+                <small>My Properties</small>
+                <strong>{{ $propertiesCount }}</strong>
+                <span>Total properties</span>
             </div>
-        </div>
-    </div>
-</div>
+            <a href="{{ route('client.properties.index') }}">View all <i class="mdi mdi-arrow-right"></i></a>
+        </article>
 
-<div class="row g-4">
-    {{-- Recent Properties --}}
-    <div class="col-lg-7">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-4">
+        <article class="dash-kpi">
+            <span class="dash-icon dash-icon-green"><i class="mdi mdi-clipboard-check-outline"></i></span>
+            <div>
+                <small>Diagnoses</small>
+                <strong>{{ $paidInspectionsCount ?? 0 }}</strong>
+                <span>{{ $paidPendingInspectionsCount ?? 0 }} scheduled, {{ $inspectionsCount }} completed</span>
+            </div>
+            <a href="{{ route('client.inspections.index') }}">View diagnoses <i class="mdi mdi-arrow-right"></i></a>
+        </article>
+
+        <article class="dash-kpi">
+            <span class="dash-icon dash-icon-purple"><i class="mdi mdi-briefcase-outline"></i></span>
+            <div>
+                <small>Projects</small>
+                <strong>{{ $projectsCount }}</strong>
+                <span>Ongoing projects</span>
+            </div>
+            <a href="{{ route('client.projects.index') }}">View projects <i class="mdi mdi-arrow-right"></i></a>
+        </article>
+
+        <article class="dash-kpi">
+            <span class="dash-icon dash-icon-orange"><i class="mdi mdi-file-document-outline"></i></span>
+            <div>
+                <small>Invoices</small>
+                <strong>{{ $invoicesCount }}</strong>
+                <span>{{ $unpaidInvoices }} unpaid invoices</span>
+            </div>
+            <a href="{{ route('client.invoices.index') }}">View invoices <i class="mdi mdi-arrow-right"></i></a>
+        </article>
+
+        <article class="dash-kpi">
+            <span class="dash-icon dash-icon-cyan"><i class="mdi mdi-credit-card-outline"></i></span>
+            <div>
+                <small>Payments</small>
+                <strong>{{ $unpaidInvoices }}</strong>
+                <span>Due payments</span>
+            </div>
+            <a href="{{ route('client.invoices.index') }}">View payments <i class="mdi mdi-arrow-right"></i></a>
+        </article>
+    </section>
+
+    <div class="dash-grid dash-grid-stacked">
+        <div class="dash-column">
+            <section class="dash-panel">
+                <div class="dash-panel-head">
                     <div>
-                        <h4 class="fw-bold mb-1">My Properties</h4>
-                        <p class="text-muted mb-0 small">Recently added properties</p>
+                        <h2>My Properties</h2>
+                        <p>Overview of your registered properties.</p>
                     </div>
-                    <a href="{{ route('client.properties.index') }}" class="btn btn-outline-primary btn-sm">
-                        View All <i class="mdi mdi-arrow-right"></i>
-                    </a>
+                    <a href="{{ route('client.properties.index') }}" class="dash-small-button">View All <i class="mdi mdi-arrow-right"></i></a>
                 </div>
-                
+
                 @if($recentProperties->count() > 0)
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle">
-                        <thead class="bg-light">
-                            <tr>
-                                <th class="border-0 text-uppercase small fw-semibold">Property</th>
-                                <th class="border-0 text-uppercase small fw-semibold">Type</th>
-                                <th class="border-0 text-uppercase small fw-semibold">Location</th>
-                                <th class="border-0 text-uppercase small fw-semibold text-end">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach($recentProperties as $property)
-                            <tr>
-                                <td>
-                                    <div class="d-flex align-items-center">
-                                        <div class="rounded-circle bg-primary bg-opacity-10 p-2 me-3">
-                                            <i class="mdi mdi-home text-primary"></i>
-                                        </div>
-                                        <div>
-                                            <div class="fw-semibold">{{ $property->property_name }}</div>
-                                            <small class="text-muted">{{ $property->property_code }}</small>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td>
+                    <div class="dash-table-wrap">
+                        <table class="dash-table">
+                            <thead>
+                                <tr>
+                                    <th>Property</th>
+                                    <th>Type</th>
+                                    <th>Location</th>
+                                    <th>Status</th>
+                                    <th class="text-end">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($recentProperties as $property)
                                     @php
                                         $propertyTypeLabel = match($property->type) {
-                                            'mixed_use' => 'Mixed-Use',
+                                            'mixed_use' => 'Mixed Use',
                                             'residential' => 'Residential',
                                             'commercial' => 'Commercial',
                                             default => 'Not Set',
                                         };
+                                        $propertyStatus = ucfirst(str_replace('_', ' ', (string) ($property->status ?? 'registered')));
                                     @endphp
-                                    <span class="badge bg-info bg-opacity-10 text-info border border-info border-opacity-25">
-                                        {{ $propertyTypeLabel }}
-                                    </span>
-                                </td>
-                                <td>
-                                    <div class="text-muted small">
-                                        <i class="mdi mdi-map-marker me-1"></i>{{ $property->city }}, {{ $property->country }}
-                                    </div>
-                                </td>
-                                <td class="text-end">
-                                    <a href="{{ route('client.properties.show', $property->id) }}" class="btn btn-sm btn-outline-primary">
-                                        <i class="mdi mdi-eye"></i> View
-                                    </a>
-                                </td>
-                            </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
-                @else
-                <div class="text-center py-5">
-                    <div class="rounded-circle bg-light d-inline-flex p-4 mb-3">
-                        <i class="mdi mdi-home-outline text-muted" style="font-size: 4rem;"></i>
-                    </div>
-                    <h5 class="fw-semibold">No properties yet</h5>
-                    <p class="text-muted">Start by adding your first property</p>
-                    <a href="{{ route('client.properties.create') }}" class="btn btn-success mt-2">
-                        <i class="mdi mdi-home-plus me-2"></i> Add Property
-                    </a>
-                </div>
-                @endif
-            </div>
-        </div>
-    </div>
-
-    {{-- Quick Actions & Subscription --}}
-    <div class="col-lg-5">
-        <div class="card border-0 shadow-sm h-100">
-            <div class="card-body">
-                <h4 class="fw-bold mb-4">Quick Actions</h4>
-                <div class="d-flex flex-column gap-3">
-                    <a href="{{ route('client.properties.create') }}" class="text-decoration-none">
-                        <div class="d-flex align-items-center p-3 rounded-3 border-2 hover-shadow transition">
-                            <div class="client-action-icon">
-                                <i class="mdi mdi-home-plus"></i>
-                            </div>
-                            <div class="flex-grow-1">
-                                <h6 class="mb-0 fw-semibold text-dark">Add New Property</h6>
-                                <small class="text-muted">Register a new property</small>
-                            </div>
-                            <i class="mdi mdi-chevron-right text-muted"></i>
-                        </div>
-                    </a>
-                    
-                    <a href="{{ route('client.inspections.index') }}" class="text-decoration-none">
-                        <div class="d-flex align-items-center p-3 rounded-3 border-2 hover-shadow transition">
-                            <div class="client-action-icon">
-                                <i class="mdi mdi-clipboard-check"></i>
-                            </div>
-                            <div class="flex-grow-1">
-                                <h6 class="mb-0 fw-semibold text-dark">Schedule Inspection</h6>
-                                <small class="text-muted">Book a property inspection</small>
-                            </div>
-                            <i class="mdi mdi-chevron-right text-muted"></i>
-                        </div>
-                    </a>
-                    
-                    <a href="{{ route('client.invoices.index') }}" class="text-decoration-none">
-                        <div class="d-flex align-items-center p-3 rounded-3 border-2 hover-shadow transition">
-                            <div class="client-action-icon">
-                                <i class="mdi mdi-file-document"></i>
-                            </div>
-                            <div class="flex-grow-1">
-                                <h6 class="mb-0 fw-semibold text-dark">View Invoices</h6>
-                                <small class="text-muted">Check billing & payments</small>
-                            </div>
-                            <i class="mdi mdi-chevron-right text-muted"></i>
-                        </div>
-                    </a>
-                    
-                    <a href="{{ route('client.support') }}" class="text-decoration-none">
-                        <div class="d-flex align-items-center p-3 rounded-3 border-2 hover-shadow transition">
-                            <div class="client-action-icon">
-                                <i class="mdi mdi-help-circle"></i>
-                            </div>
-                            <div class="flex-grow-1">
-                                <h6 class="mb-0 fw-semibold text-dark">Get Support</h6>
-                                <small class="text-muted">Contact our support team</small>
-                            </div>
-                            <i class="mdi mdi-chevron-right text-muted"></i>
-                        </div>
-                    </a>
-
-                    <a href="{{ route('client.service-requests.create') }}" class="text-decoration-none">
-                        <div class="d-flex align-items-center p-3 rounded-3 border-2 hover-shadow transition">
-                            <div class="client-action-icon">
-                                <i class="mdi mdi-alert-circle"></i>
-                            </div>
-                            <div class="flex-grow-1">
-                                <h6 class="mb-0 fw-semibold text-dark">Report Issue</h6>
-                                <small class="text-muted">Submit a repair, emergency, or change request</small>
-                            </div>
-                            <i class="mdi mdi-chevron-right text-muted"></i>
-                        </div>
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-@if(isset($quotationReadyInspections) && $quotationReadyInspections->count() > 0)
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card shadow-sm border-start border-primary border-4">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <div>
-                        <h4 class="fw-bold mb-1">Quotation Approval Status</h4>
-                        <p class="text-muted mb-0 small">Approve the findings you want to proceed with. Approved findings are the exact work scope that will be charged.</p>
-                    </div>
-                    <a href="{{ route('client.inspections.quotations') }}" class="btn btn-outline-primary btn-sm">View All</a>
-                </div>
-
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle">
-                        <thead class="bg-light">
-                            <tr>
-                                <th>Property</th>
-                                <th>Quotation Status</th>
-                                <th>Shared</th>
-                                <th class="text-end">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach($quotationReadyInspections as $inspection)
-                                <tr>
-                                    <td>
-                                        <div class="fw-semibold">{{ $inspection->property?->property_name ?? 'N/A' }}</div>
-                                        <small class="text-muted">{{ $inspection->property?->property_code ?? '' }}</small>
-                                    </td>
-                                    <td>
-                                        @php $quotationStatus = (string) ($inspection->quotation_status ?? 'shared'); @endphp
-                                        @if($quotationStatus === 'approved')
-                                            <span class="badge bg-success">Approved</span>
-                                        @elseif($quotationStatus === 'client_reviewing')
-                                            <span class="badge bg-info text-dark">In Review</span>
-                                        @else
-                                            <span class="badge bg-primary">Awaiting Approval</span>
-                                        @endif
-                                    </td>
-                                    <td>{{ optional($inspection->quotation_shared_at)->format('M d, Y') ?? '-' }}</td>
-                                    <td class="text-end">
-                                        @if($quotationStatus === 'approved')
-                                            <div class="d-flex flex-column align-items-end gap-1">
-                                                <span class="badge bg-warning text-dark fs-6 px-3 py-2">
-                                                    <i class="mdi mdi-clock-outline me-1"></i>Awaiting Admin Finalization
-                                                </span>
-                                                <a href="{{ route('client.inspections.quotation', $inspection->id) }}" class="btn btn-sm btn-link text-muted p-0">
-                                                    <small>View approved scope</small>
-                                                </a>
+                                    <tr>
+                                        <td>
+                                            <div class="dash-property-cell">
+                                                <span><i class="mdi mdi-domain"></i></span>
+                                                <div>
+                                                    <strong>{{ $property->property_name }}</strong>
+                                                    <small>ID: {{ $property->property_code }}</small>
+                                                </div>
                                             </div>
-                                        @else
-                                            <a href="{{ route('client.inspections.quotation', $inspection->id) }}" class="btn btn-sm btn-primary">
-                                                <i class="mdi mdi-check-decagram-outline"></i>
-                                                Approve Quotation
+                                        </td>
+                                        <td><span class="dash-pill dash-pill-blue">{{ $propertyTypeLabel }}</span></td>
+                                        <td><i class="mdi mdi-map-marker-outline text-muted"></i> {{ $property->city ?? 'N/A' }}, {{ $property->country ?? 'N/A' }}</td>
+                                        <td><span class="dash-pill dash-pill-green">{{ $propertyStatus }}</span></td>
+                                        <td class="text-end">
+                                            <a href="{{ route('client.properties.show', $property->id) }}" class="dash-icon-button" title="View property">
+                                                <i class="mdi mdi-eye-outline"></i>
                                             </a>
-                                        @endif
-                                    </td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-@endif
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @else
+                    <div class="dash-empty">
+                        <i class="mdi mdi-home-plus-outline"></i>
+                        <strong>No properties yet</strong>
+                        <span>Register your first property to begin.</span>
+                    </div>
+                @endif
+            </section>
 
-@if(isset($completedInspections) && $completedInspections->count() > 0)
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card border-0 shadow-sm">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-3">
+            <section class="dash-panel">
+                <div class="dash-panel-head">
                     <div>
-                        <h4 class="fw-bold mb-1">Completed Inspection Reports</h4>
-                        <p class="text-muted mb-0 small">View your pricing breakdown and choose monthly or annual payment to start work.</p>
+                        <h2>Property Status Overview</h2>
+                        <p>Distribution of your properties by status.</p>
                     </div>
-                    <a href="{{ route('client.inspections.index') }}" class="btn btn-outline-primary btn-sm">View All</a>
                 </div>
+                <div class="dash-donut-row">
+                    <div class="dash-donut" style="--active: {{ $activePct }}; --inspect: {{ $underDiagnosisPct }};">
+                        <strong>{{ $propertiesCount }}</strong>
+                        <span>Total</span>
+                    </div>
+                    <div class="dash-legend">
+                        <span><i class="legend-dot legend-blue"></i>Active <strong>{{ $activeProperties }} ({{ $activePct }}%)</strong></span>
+                        <span><i class="legend-dot legend-orange"></i>Under Diagnosis <strong>{{ $underDiagnosis }} ({{ $underDiagnosisPct }}%)</strong></span>
+                        <span><i class="legend-dot legend-gray"></i>Inactive <strong>{{ $inactiveProperties }} ({{ $inactivePct }}%)</strong></span>
+                    </div>
+                </div>
+            </section>
 
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle">
-                        <thead class="bg-light">
-                            <tr>
-                                <th>Property</th>
-                                <th>Completed</th>
-                                <th>Total Cost</th>
-                                <th>Payment</th>
-                                <th class="text-end">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach($completedInspections as $inspection)
-                                <tr>
-                                    <td>
-                                        <div class="fw-semibold">{{ $inspection->property?->property_name ?? 'N/A' }}</div>
-                                        <small class="text-muted">{{ $inspection->property?->property_code ?? '' }}</small>
-                                    </td>
-                                    <td>{{ optional($inspection->completed_date)->format('M d, Y') ?? '-' }}</td>
-                                    <td>${{ number_format((float)($inspection->trc_annual ?? 0), 2) }}</td>
-                                    <td>
-                                        @if(($inspection->work_payment_status ?? 'pending') === 'paid')
-                                            <span class="badge bg-success">Paid ({{ ucfirst($inspection->work_payment_cadence ?? 'monthly') }})</span>
-                                        @else
-                                            <span class="badge bg-warning text-dark">Pending</span>
-                                        @endif
-                                    </td>
-                                    <td class="text-end">
-                                        <a href="{{ route('client.inspections.report', $inspection->id) }}" class="btn btn-sm btn-info">
-                                            <i class="mdi mdi-eye"></i> Report
-                                        </a>
-                                        @if(($inspection->work_payment_status ?? 'pending') !== 'paid')
-                                            <a href="{{ route('client.inspections.work-payment', ['inspection' => $inspection->id, 'cadence' => 'monthly']) }}" class="btn btn-sm btn-success">
-                                                Pay Monthly
-                                            </a>
-                                            <a href="{{ route('client.inspections.work-payment', ['inspection' => $inspection->id, 'cadence' => 'annual']) }}" class="btn btn-sm btn-outline-success">
-                                                Pay Annual
-                                            </a>
-                                        @endif
-                                    </td>
-                                </tr>
-                            @endforeach
-                        </tbody>
-                    </table>
+            <section class="dash-panel">
+                <div class="dash-panel-head">
+                    <div>
+                        <h2>Recent Activity</h2>
+                        <p>Latest updates and activities.</p>
+                    </div>
+                    <a href="{{ route('client.notifications.index') }}" class="dash-small-button">View All <i class="mdi mdi-arrow-right"></i></a>
                 </div>
-            </div>
+                <div class="dash-activity-list">
+                    @forelse(($recentClientActivities ?? collect()) as $activity)
+                        <div class="dash-activity">
+                            <span class="dash-icon dash-icon-{{ $activity->tone ?? 'blue' }}"><i class="mdi {{ $activity->icon ?? 'mdi-bell-outline' }}"></i></span>
+                            <div>
+                                <strong>{{ $activity->title }}</strong>
+                                <small>{{ $activity->description }}</small>
+                            </div>
+                            <time>{{ optional($activity->created_at)->diffForHumans() }}</time>
+                        </div>
+                    @empty
+                        <div class="dash-empty dash-empty-small">
+                            <i class="mdi mdi-bell-outline"></i>
+                            <strong>No recent activity</strong>
+                            <span>New updates will appear here.</span>
+                        </div>
+                    @endforelse
+                </div>
+            </section>
+        </div>
+
+        <div class="dash-column">
+            <section class="dash-panel">
+                <div class="dash-panel-head">
+                    <div>
+                        <h2>Quick Actions</h2>
+                        <p>Common tasks and shortcuts.</p>
+                    </div>
+                </div>
+                <div class="dash-action-list">
+                    <a href="{{ route('client.properties.create') }}">
+                        <span class="dash-icon dash-icon-blue"><i class="mdi mdi-home-plus-outline"></i></span>
+                        <div><strong>Add New Property</strong><small>Register a new property</small></div>
+                        <i class="mdi mdi-chevron-right"></i>
+                    </a>
+                    <a href="{{ route('client.properties.index') }}">
+                        <span class="dash-icon dash-icon-green"><i class="mdi mdi-cube-scan"></i></span>
+                        <div><strong>Property Facts</strong><small>Track onboarding and diagnosis</small></div>
+                        <i class="mdi mdi-chevron-right"></i>
+                    </a>
+                    <a href="{{ route('client.invoices.index') }}">
+                        <span class="dash-icon dash-icon-orange"><i class="mdi mdi-file-document-outline"></i></span>
+                        <div><strong>View Invoices</strong><small>Check billing and payments</small></div>
+                        <i class="mdi mdi-chevron-right"></i>
+                    </a>
+                    <a href="{{ route('client.service-requests.create') }}">
+                        <span class="dash-icon dash-icon-purple"><i class="mdi mdi-alert-circle-outline"></i></span>
+                        <div><strong>Report Issue</strong><small>Submit a repair request</small></div>
+                        <i class="mdi mdi-chevron-right"></i>
+                    </a>
+                </div>
+            </section>
+
+            <section class="dash-panel">
+                <div class="dash-panel-head">
+                    <div>
+                        <h2>Upcoming Diagnoses</h2>
+                        <p>Your next scheduled property diagnoses.</p>
+                    </div>
+                </div>
+                @if(($upcomingInspections ?? collect())->isNotEmpty())
+                    <div class="dash-mini-list">
+                        @foreach($upcomingInspections as $inspection)
+                            <a href="{{ route('client.inspections.index') }}">
+                                <span class="dash-icon dash-icon-green"><i class="mdi mdi-calendar-clock-outline"></i></span>
+                                <div>
+                                    <strong>{{ $inspection->property?->property_name ?? $inspection->property_name ?? 'Diagnosis' }}</strong>
+                                    <small>{{ optional($inspection->scheduled_date)->format('M d, Y g:i A') }}</small>
+                                </div>
+                            </a>
+                        @endforeach
+                    </div>
+                @else
+                    <div class="dash-empty dash-empty-small">
+                        <i class="mdi mdi-calendar-check-outline"></i>
+                        <strong>No upcoming diagnoses</strong>
+                        <span>You are all caught up.</span>
+                    </div>
+                @endif
+            </section>
         </div>
     </div>
 </div>
-@endif
 
-{{-- Alerts & Notifications --}}
-@if($unpaidInvoices > 0 || $pendingInspections > 0)
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card shadow-sm border-start border-warning border-4">
-            <div class="card-body">
-                <h5 class="fw-bold mb-3">
-                    <i class="mdi mdi-bell-ring text-warning me-2"></i> Action Required
-                </h5>
-                <div class="row g-3">
-                    @if($unpaidInvoices > 0)
-                    <div class="col-md-6">
-                        <div class="alert alert-warning border-0 shadow-sm mb-0">
-                            <div class="d-flex align-items-center">
-                                <div class="rounded-circle bg-warning bg-opacity-25 p-3 me-3">
-                                    <i class="mdi mdi-alert-circle text-warning" style="font-size: 1.5rem;"></i>
-                                </div>
-                                <div class="flex-grow-1">
-                                    <h6 class="mb-1 fw-semibold">Unpaid Invoices</h6>
-                                    <p class="mb-0 small">You have {{ $unpaidInvoices }} unpaid invoice(s)</p>
-                                </div>
-                                <a href="{{ route('client.invoices.index') }}" class="btn btn-warning btn-sm">
-                                    Pay Now
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                    @endif
-                    
-                    @if($pendingInspections > 0)
-                    <div class="col-md-6">
-                        <div class="alert alert-info border-0 shadow-sm mb-0">
-                            <div class="d-flex align-items-center">
-                                <div class="rounded-circle bg-info bg-opacity-25 p-3 me-3">
-                                    <i class="mdi mdi-calendar-clock text-info" style="font-size: 1.5rem;"></i>
-                                </div>
-                                <div class="flex-grow-1">
-                                    <h6 class="mb-1 fw-semibold">Scheduled Inspections</h6>
-                                    <p class="mb-0 small">{{ $pendingInspections }} inspection(s) scheduled</p>
-                                </div>
-                                <a href="{{ route('client.inspections.index') }}" class="btn btn-info btn-sm">
-                                    View
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                    @endif
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-@endif
-
-<style>
-.client-welcome-card,
-.client-kpi-card,
-.card {
-    background: #ffffff !important;
-    border: 1px solid #dfe6ef !important;
-    border-left: 1px solid #dfe6ef !important;
-    border-radius: 8px !important;
-    box-shadow: 0 4px 12px rgba(16, 24, 40, .045) !important;
-    color: #172033 !important;
-}
-
-.client-welcome-card h2,
-.client-kpi-card h2,
-.card-title,
-.card h4,
-.card h5 {
-    color: #071426 !important;
-    letter-spacing: 0 !important;
-}
-
-.client-kpi-card h2 {
-    font-size: 2rem !important;
-    font-weight: 900 !important;
-}
-
-.client-kpi-card p,
-.client-welcome-card p,
-.text-muted {
-    color: #667085 !important;
-}
-
-.client-kpi-icon,
-.client-action-icon {
-    width: 48px !important;
-    height: 48px !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    flex-shrink: 0 !important;
-    border-radius: 8px !important;
-    background: #f3f6fa !important;
-    color: #344054 !important;
-    box-shadow: none !important;
-}
-
-.client-kpi-icon i,
-.client-action-icon i {
-    color: #344054 !important;
-    font-size: 1.55rem !important;
-}
-
-.client-action-icon {
-    margin-right: 1rem !important;
-}
-
-.client-kpi-link {
-    color: #2458d6 !important;
-    text-decoration: none !important;
-    font-weight: 700 !important;
-    font-size: .875rem !important;
-}
-
-.table thead th {
-    background: #f3f6fa !important;
-    color: #344054 !important;
-    border-bottom: 1px solid #dfe6ef !important;
-}
-
-.table tbody td {
-    background: #ffffff !important;
-    color: #172033 !important;
-    border-top: 1px solid #eef2f6 !important;
-}
-
-.table-hover tbody tr:hover td {
-    background: #f8fafc !important;
-    box-shadow: none !important;
-    transform: none !important;
-}
-
-.hover-shadow,
-.transition {
-    transition: background-color .15s ease, border-color .15s ease, color .15s ease !important;
-}
-
-.hover-shadow:hover,
-.card:hover,
-.btn:hover {
-    box-shadow: 0 4px 12px rgba(16, 24, 40, .045) !important;
-    transform: none !important;
-}
-</style>
+@include('shared.dashboard-design-system')
 @endsection

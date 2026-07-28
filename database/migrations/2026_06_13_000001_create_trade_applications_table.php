@@ -21,7 +21,28 @@ return new class extends Migration
             $table->text('company_description')->nullable();
             $table->json('system_ids')->nullable();
             $table->json('subsystem_ids')->nullable();
+            $table->json('system_pricing')->nullable();
+            $table->json('subsystem_pricing')->nullable();
+            $table->json('agreed_subsystem_pricing')->nullable();
+            $table->json('custom_coverage')->nullable();
+            $table->json('agreed_custom_coverage')->nullable();
             $table->json('availability')->nullable();
+            $table->json('pricing_units')->nullable();
+            $table->decimal('minimum_service_charge', 10, 2)->nullable();
+            $table->string('emergency_premium')->nullable();
+            $table->string('travel_charge_policy')->nullable();
+            $table->string('travel_policy_document')->nullable();
+            $table->string('material_policy')->nullable();
+            $table->string('material_policy_document')->nullable();
+            $table->string('equipment_policy')->nullable();
+            $table->string('equipment_policy_document')->nullable();
+            $table->string('disposal_policy')->nullable();
+            $table->string('disposal_policy_document')->nullable();
+            $table->string('standard_warranty')->nullable();
+            $table->string('warranty_document')->nullable();
+            $table->text('pricing_notes')->nullable();
+            $table->string('pricing_policy_document')->nullable();
+            $table->json('sample_activity_prices')->nullable();
             $table->string('business_licence_status')->default('pending');
             $table->string('business_licence_number')->nullable();
             $table->date('business_licence_expiry')->nullable();
@@ -45,6 +66,7 @@ return new class extends Migration
             $table->foreignId('reviewed_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamp('submitted_at')->nullable();
             $table->timestamp('reviewed_at')->nullable();
+            $table->timestamp('pricing_agreed_at')->nullable();
             $table->timestamps();
         });
     }

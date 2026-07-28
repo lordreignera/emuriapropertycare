@@ -182,20 +182,32 @@ class User extends Authenticatable
         return $this->hasMany(Inspection::class, 'inspector_id');
     }
 
+    public function createdMatterportModels()
+    {
+        return $this->hasMany(MatterportModel::class, 'created_by');
+    }
+
+    public function captureSessions()
+    {
+        return $this->hasMany(CaptureSession::class, 'captured_by');
+    }
+
+    public function createdSpatialModels()
+    {
+        return $this->hasMany(SpatialModel::class, 'created_by');
+    }
+
+    public function createdIssueMarkers()
+    {
+        return $this->hasMany(IssueMarker::class, 'created_by');
+    }
+
     /**
      * Get emergency reports assigned to this user (Technician)
      */
     public function assignedEmergencyReports()
     {
         return $this->hasMany(TenantEmergencyReport::class, 'assigned_to');
-    }
-
-    /**
-     * Get properties approved by this user (PM/Admin)
-     */
-    public function approvedProperties()
-    {
-        return $this->hasMany(Property::class, 'approved_by');
     }
 
     // ========================================

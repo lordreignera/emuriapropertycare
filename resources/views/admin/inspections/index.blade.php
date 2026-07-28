@@ -1,6 +1,6 @@
 @extends('admin.layout')
 
-@section('title', 'Inspections')
+@section('title', 'PHAR Assessments')
 
 @section('content')
 <div class="content-wrapper">
@@ -33,17 +33,20 @@
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <div>
                             @if(request('view') === 'pending-etogo')
-                                <h4 class="card-title mb-0"><i class="mdi mdi-wrench me-2 text-danger"></i>Pre-Sign Setup</h4>
-                                <p class="text-muted small mb-0">Client has signed and paid - assign tools and schedule visits before countersigning</p>
+                                <h4 class="card-title mb-0"><i class="mdi mdi-wrench me-2 text-danger"></i>Remediation Setup</h4>
+                                <p class="text-muted small mb-0">Client has signed and paid - assign tools and schedule visits before ETOGO signoff</p>
                             @elseif(request('view') === 'needs-schedule')
-                                <h4 class="card-title mb-0"><i class="mdi mdi-pen me-2 text-warning"></i>Ready to Countersign</h4>
-                                <p class="text-muted small mb-0">Tools assigned and visits scheduled - awaiting your countersignature</p>
+                                <h4 class="card-title mb-0"><i class="mdi mdi-pen me-2 text-warning"></i>Ready for ETOGO Signoff</h4>
+                                <p class="text-muted small mb-0">Tools assigned and visits scheduled - awaiting final ETOGO signoff</p>
                             @elseif(request('view') === 'awaiting-quotation')
-                                <h4 class="card-title mb-0"><i class="mdi mdi-timer-sand me-2 text-info"></i>Pre-assessed Properties</h4>
-                                <p class="text-muted small mb-0">Includes draft assessments in progress and quotations waiting for client response</p>
+                                <h4 class="card-title mb-0"><i class="mdi mdi-timer-sand me-2 text-info"></i>Findings Awaiting Decisions</h4>
+                                <p class="text-muted small mb-0">Includes draft PHAR assessments and proposals waiting for owner response</p>
+                            @elseif(request('view') === 'awaiting-estimation')
+                                <h4 class="card-title mb-0"><i class="mdi mdi-cash-clock me-2 text-success"></i>Approved Findings - Ready for Work Costing</h4>
+                                <p class="text-muted small mb-0">Owners have approved findings. Set labour, materials, work assignment, and approved trade partner.</p>
                             @else
-                                <h4 class="card-title mb-0">Inspections Management</h4>
-                                <p class="text-muted small mb-0">Scheduled and paid inspections</p>
+                                <h4 class="card-title mb-0">PHAR Assessment Registry</h4>
+                                <p class="text-muted small mb-0">Scheduled, in-progress, and completed PHAR assessments</p>
                             @endif
                         </div>
                     </div>
@@ -60,25 +63,51 @@
                         <li class="nav-item">
                             <a class="nav-link {{ request('status') == 'scheduled' ? 'active' : '' }}"
                                href="{{ route('inspections.index', ['status' => 'scheduled']) }}">
-                                Scheduled and Paid
+                                Awaiting Assessment
                                 <span class="badge bg-success ms-1">{{ $scheduledCount }}</span>
                             </a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link {{ request('status') == 'in_progress' ? 'active' : '' }}"
                                href="{{ route('inspections.index', ['status' => 'in_progress']) }}">
-                                In Progress
+                                PHAR In Progress
                                 <span class="badge bg-primary ms-1">{{ $inProgressCount }}</span>
                             </a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link {{ request('status') == 'completed' ? 'active' : '' }}"
                                href="{{ route('inspections.index', ['status' => 'completed']) }}">
-                                Completed
+                                Completed PHAR
                                 <span class="badge bg-info ms-1">{{ $completedCount }}</span>
                             </a>
                         </li>
                     </ul>
+                    @endif
+
+                    @if(($awaitingEstimationCount ?? 0) > 0 && !request('view'))
+                    <a href="{{ route('inspections.index', ['view' => 'awaiting-estimation']) }}"
+                       class="alert alert-success d-flex align-items-center justify-content-between text-decoration-none py-2 mb-3">
+                        <span>
+                            <i class="mdi mdi-cash-clock me-2"></i>
+                            <strong>{{ $awaitingEstimationCount }}</strong> approved finding set(s) ready for work costing &mdash; set labour, materials, work assignment &amp; trade partner.
+                        </span>
+                        <span class="btn btn-sm btn-success">Open Work Costing Queue <i class="mdi mdi-arrow-right ms-1"></i></span>
+                    </a>
+                    @endif
+
+                    @if(($awaitingClientCount ?? 0) > 0 && !request('view'))
+                    <div class="alert alert-light border d-flex align-items-center py-2 mb-3">
+                        <i class="mdi mdi-account-clock-outline me-2 text-warning"></i>
+                        <span class="small text-muted">
+                            <strong>{{ $awaitingClientCount }}</strong> findings report(s) shared &mdash; waiting for owners to decide before pricing.
+                        </span>
+                    </div>
+                    @endif
+
+                    @if(request('view') === 'awaiting-estimation')
+                    <a href="{{ route('inspections.index') }}" class="btn btn-sm btn-outline-secondary mb-3">
+                        <i class="mdi mdi-arrow-left me-1"></i>Back to PHAR assessments
+                    </a>
                     @endif
 
                     <form method="GET" action="{{ route('inspections.index') }}" class="mb-3">
@@ -103,19 +132,21 @@
                             <i class="mdi mdi-clipboard-check-outline" style="font-size: 3rem; color: #ddd;"></i>
                             <p class="text-muted mt-2">
                                 @if(request('view') === 'pending-etogo')
-                                    No properties awaiting Etogo countersignature
+                                    No properties awaiting ETOGO signoff
                                 @elseif(request('view') === 'needs-schedule')
-                                    No properties awaiting project scheduling
+                                    No properties awaiting remediation scheduling
                                 @elseif(request('view') === 'awaiting-quotation')
-                                    No pre-assessed properties found
+                                    No findings awaiting owner decisions found
+                                @elseif(request('view') === 'awaiting-estimation')
+                                    No approved findings awaiting pricing
                                 @elseif(request('status') == 'scheduled')
-                                    No scheduled inspections found
+                                    No assessments awaiting work found
                                 @elseif(request('status') == 'in_progress')
-                                    No in-progress inspections found
+                                    No in-progress PHAR assessments found
                                 @elseif(request('status') == 'completed')
-                                    No completed inspections found
+                                    No completed PHAR assessments found
                                 @else
-                                    No inspections found
+                                    No PHAR assessments found
                                 @endif
                             </p>
                         </div>
@@ -135,24 +166,35 @@
                                 $teamFullyAssigned = $inspection->inspector_id && $resolvedPm;
                                 $isInProgress = $inspection->status === 'in_progress';
 
-                                if ($isInProgress && ($inspection->bdc_annual ?? 0) > 0) {
-                                    $continueUrl = route('inspections.phar-data', $inspection->id);
+                                if ($inspection->status === 'client_committed' || $inspection->status === 'estimation_in_progress') {
+                                    // Client committed findings — admin assigns and costs the work here
+                                    $continueUrl = route('inspections.estimation', $inspection->id);
                                 } else {
+                                    // Assessment phase — keep capturing/refining findings (no money here).
+                                    // Work costing happens AFTER the client commits, via the estimation queue.
                                     $continueUrl = route('inspections.create', ['property_id' => $inspection->property_id]);
                                 }
 
                                 $statusColor = match($inspection->status) {
                                     'scheduled' => 'bg-success',
                                     'in_progress' => 'bg-warning text-dark',
+                                    'findings_shared' => 'bg-warning text-dark',
+                                    'client_committed' => 'bg-primary',
+                                    'estimation_in_progress' => 'bg-primary',
+                                    'estimation_completed' => 'bg-info',
                                     'completed' => 'bg-info',
                                     default => 'bg-secondary',
                                 };
 
                                 $statusLabel = match($inspection->status) {
-                                    'scheduled' => 'Scheduled',
-                                    'in_progress' => 'In Progress',
-                                    'completed' => 'Completed',
-                                    default => ucfirst($inspection->status),
+                                    'scheduled' => 'Awaiting Assessment',
+                                    'in_progress' => 'PHAR In Progress',
+                                    'findings_shared' => 'Findings Shared',
+                                    'client_committed' => 'Owner Approved',
+                                    'estimation_in_progress' => 'Costing',
+                                    'estimation_completed' => 'Costed',
+                                    'completed' => 'PHAR Complete',
+                                    default => ucfirst(str_replace('_', ' ', $inspection->status)),
                                 };
 
                                 $photos = $prop?->property_photos ?? [];
@@ -295,9 +337,9 @@
                                                         default => ucfirst($inspection->work_payment_cadence ?? '')
                                                     };
                                                 @endphp
-                                                <span class="badge bg-info"><i class="mdi mdi-credit-card-check-outline me-1"></i>Work Paid {{ $cadenceLabel }}</span>
+                                                <span class="badge bg-info"><i class="mdi mdi-credit-card-check-outline me-1"></i>Remediation Paid {{ $cadenceLabel }}</span>
                                             @else
-                                                <span class="badge bg-warning text-dark"><i class="mdi mdi-credit-card-clock-outline me-1"></i>Work Payment Pending</span>
+                                                <span class="badge bg-warning text-dark"><i class="mdi mdi-credit-card-clock-outline me-1"></i>Remediation Payment Pending</span>
                                             @endif
                                         </div>
                                         @endif
@@ -309,6 +351,18 @@
                                                class="btn btn-sm btn-primary fw-bold" title="View Property">
                                                 <i class="mdi mdi-eye me-1"></i>View Property
                                             </a>
+
+                                            @if($inspection->activeSpatialModels->isNotEmpty() || $inspection->activeMatterportModel)
+                                                <a href="{{ route('inspections.digital-twin', $inspection->id) }}"
+                                                   class="btn btn-sm btn-outline-primary" title="Open Digital Twin">
+                                                    <i class="mdi mdi-cube-scan me-1"></i>Open Digital Twin
+                                                </a>
+                                            @elseif(auth()->user()->hasAnyRole(['Super Admin', 'Administrator', 'Project Manager']))
+                                                <a href="{{ route('inspections.digital-twin', $inspection->id) }}"
+                                                   class="btn btn-sm btn-outline-primary" title="Add capture source">
+                                                    <i class="mdi mdi-cube-scan me-1"></i>Add Capture Source
+                                                </a>
+                                            @endif
 
                                             @if($inspection->status === 'completed')
                                             <a href="{{ route('inspections.show', $inspection->id) }}"
@@ -333,12 +387,46 @@
                                             </button>
 
                                             @if($inspection->status !== 'completed')
-                                            <a href="{{ $continueUrl }}"
-                                               class="btn btn-sm {{ $isInProgress ? 'btn-warning' : 'btn-success' }} fw-bold"
-                                               title="{{ $isInProgress ? 'Continue Inspection' : 'Start Inspection' }}">
-                                                <i class="mdi {{ $isInProgress ? 'mdi-play-circle-outline' : 'mdi-clipboard-check' }} me-1"></i>
-                                                {{ $isInProgress ? 'Continue' : 'Start Inspection' }}
-                                            </a>
+                                                @if(in_array($inspection->status, ['client_committed', 'estimation_in_progress']))
+                                                    {{-- Client committed findings — assign and cost the work --}}
+                                                    <a href="{{ route('inspections.estimation', $inspection->id) }}"
+                                                       class="btn btn-sm btn-success fw-bold"
+                                                       title="Set labour, materials, work assignment and trade partner for committed findings">
+                                                        <i class="mdi mdi-cash-plus me-1"></i>Assign &amp; Cost Work
+                                                    </a>
+                                                @elseif($inspection->status === 'estimation_completed')
+                                                    {{-- Work costing done — proceed to quotation --}}
+                                                    <a href="{{ route('inspections.phar-data', $inspection->id) }}"
+                                                       class="btn btn-sm btn-primary fw-bold"
+                                                       title="Review work costing and share quotation">
+                                                        <i class="mdi mdi-file-send-outline me-1"></i>Review &amp; Share Quote
+                                                    </a>
+                                                @elseif($inspection->status === 'findings_shared')
+                                                    {{-- Waiting on client to commit --}}
+                                                    <span class="btn btn-sm btn-outline-warning fw-bold disabled" title="Waiting for client to commit to findings">
+                                                        <i class="mdi mdi-account-clock-outline me-1"></i>Awaiting Client
+                                                    </span>
+                                                    <a href="{{ route('client.inspections.findings-report', $inspection->id) }}"
+                                                       target="_blank"
+                                                       class="btn btn-sm btn-outline-secondary"
+                                                       title="View the findings report shared with the client">
+                                                        <i class="mdi mdi-eye-outline me-1"></i>View Report
+                                                    </a>
+                                                @elseif($inspection->status === 'findings_captured' || $inspection->assessment_finalised_at)
+                                                    {{-- Assessment finalised & locked — open the official PHAR report --}}
+                                                    <a href="{{ route('inspections.assessment-report', $inspection->id) }}"
+                                                       class="btn btn-sm btn-primary fw-bold"
+                                                       title="Open the finalised PHAR assessment report">
+                                                        <i class="mdi mdi-file-document-check-outline me-1"></i>PHAR Report
+                                                    </a>
+                                                @else
+                                                    <a href="{{ $continueUrl }}"
+                                                       class="btn btn-sm {{ $isInProgress ? 'btn-warning' : 'btn-success' }} fw-bold"
+                                                       title="{{ $isInProgress ? 'Continue Diagnosis' : 'Start Diagnosis' }}">
+                                                        <i class="mdi {{ $isInProgress ? 'mdi-play-circle-outline' : 'mdi-clipboard-check' }} me-1"></i>
+                                                        {{ $isInProgress ? 'Continue Diagnosis' : 'Start Diagnosis' }}
+                                                    </a>
+                                                @endif
                                             @endif
 
                                             @if(request('view') === 'awaiting-quotation' && ($inspection->quotation_status ?? null) === 'approved')
@@ -382,14 +470,14 @@
                                             <button type="button"
                                                     class="btn btn-sm btn-info fw-bold text-white"
                                                     onclick="openWorkScheduleModal({{ $inspection->id }}, '{{ addslashes($prop?->property_name ?? '') }}', {{ (int)($inspection->bdc_visits_per_year ?? 1) }}, {{ json_encode($inspection->work_schedule ?? []) }}, {{ json_encode($findingsForModal) }})"
-                                                    title="Edit visit schedule before countersigning">
+                                                    title="Edit visit schedule before ETOGO signoff">
                                                 <i class="mdi mdi-calendar-edit me-1"></i>Reschedule
                                             </button>
                                             @endif
                                             <a href="{{ route('inspections.preview-agreement', $inspection->id) }}?for_countersign=1"
                                                class="btn btn-sm btn-warning fw-bold"
-                                               title="Review contract and countersign">
-                                                <i class="mdi mdi-file-document-edit-outline me-1"></i>Review &amp; Countersign
+                                               title="Review contract and sign off">
+                                                <i class="mdi mdi-file-document-edit-outline me-1"></i>Review &amp; Sign Off
                                             </a>
                                             @endif
                                         </div>

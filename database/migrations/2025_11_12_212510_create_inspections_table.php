@@ -67,7 +67,20 @@ return new class extends Migration
             $table->json('photos')->nullable();
 
             // ── Status & Assessment ────────────────────────────────────────
-            $table->enum('status', ['scheduled', 'in_progress', 'completed', 'approved', 'revision_needed'])->default('scheduled');
+            $table->enum('status', [
+                'scheduled',
+                'in_progress',
+                'findings_captured',
+                'findings_shared',
+                'client_committed',
+                'estimation_in_progress',
+                'estimation_completed',
+                'quotation_shared',
+                'quotation_approved',
+                'completed',
+                'approved',
+                'revision_needed',
+            ])->default('scheduled');
             $table->enum('overall_condition', ['excellent', 'good', 'fair', 'poor', 'critical'])->nullable();
             $table->text('inspector_notes')->nullable();
             $table->text('recommendations')->nullable();
@@ -110,6 +123,9 @@ return new class extends Migration
             // ── FMC (Findings Material Cost) ───────────────────────────────
             $table->decimal('fmc_annual', 10, 2)->default(0);
             $table->decimal('fmc_monthly', 10, 2)->default(0);
+            $table->decimal('trade_cost_annual', 10, 2)->default(0);
+            $table->decimal('trade_client_price_annual', 10, 2)->default(0);
+            $table->decimal('trade_margin_annual', 10, 2)->default(0);
 
             // ── TRC (Total Remediation Cost) ───────────────────────────────
             $table->decimal('trc_annual', 10, 2)->default(0);
@@ -146,6 +162,11 @@ return new class extends Migration
             $table->timestamp('inspection_fee_paid_at')->nullable();
             $table->string('stripe_payment_intent_id')->nullable();
             $table->decimal('inspection_fee_amount', 10, 2)->nullable();
+            $table->json('specialist_assessment_breakdown')->nullable();
+            $table->decimal('specialist_trade_cost', 10, 2)->default(0);
+            $table->decimal('specialist_client_price', 10, 2)->default(0);
+            $table->decimal('specialist_margin_amount', 10, 2)->default(0);
+            $table->string('specialist_pricing_currency', 3)->nullable();
 
             // ── Work Payment ───────────────────────────────────────────────
             $table->decimal('work_payment_amount', 10, 2)->nullable();
@@ -166,18 +187,34 @@ return new class extends Migration
             // ── Agreement Workflow ─────────────────────────────────────────
             $table->foreignId('etogo_signed_by')->nullable()->constrained('users')->nullOnDelete();
             $table->timestamp('etogo_signed_at')->nullable();
+            $table->string('etogo_signature_image_path')->nullable();
             $table->date('planned_start_date')->nullable();
             $table->unsignedInteger('estimated_duration_days')->nullable();
             $table->date('target_completion_date')->nullable();
             $table->string('schedule_blocked_reason', 1000)->nullable();
             $table->json('work_schedule')->nullable();
+            $table->json('completed_finding_ids')->nullable();
 
             // ── Client Approval ────────────────────────────────────────────
             $table->boolean('approved_by_client')->default(false);
             $table->timestamp('client_approved_at')->nullable();
             $table->string('client_signature')->nullable();
+            $table->string('client_signature_image_path')->nullable();
             $table->string('client_full_name')->nullable();
             $table->text('client_acknowledgment')->nullable();
+
+            // Quotation / assessment lifecycle. The FK for active_quotation_id
+            // is attached after inspection_quotations exists.
+            $table->unsignedBigInteger('active_quotation_id')->nullable();
+            $table->string('quotation_status', 30)->nullable();
+            $table->timestamp('quotation_shared_at')->nullable();
+            $table->timestamp('quotation_approved_at')->nullable();
+            $table->timestamp('findings_report_shared_at')->nullable();
+            $table->timestamp('client_committed_at')->nullable();
+            $table->timestamp('estimation_started_at')->nullable();
+            $table->timestamp('estimation_completed_at')->nullable();
+            $table->timestamp('assessment_finalised_at')->nullable();
+            $table->foreignId('assessment_finalised_by')->nullable()->constrained('users')->nullOnDelete();
 
             $table->timestamps();
 
@@ -186,8 +223,10 @@ return new class extends Migration
             $table->index(['project_id', 'status']);
             $table->index('inspector_id');
             $table->index('work_payment_status');
+            $table->unique('stripe_payment_intent_id');
             $table->index('work_stripe_payment_intent_id');
             $table->index('cpi_total_score');
+            $table->index('active_quotation_id');
         });
     }
 

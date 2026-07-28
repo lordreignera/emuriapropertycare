@@ -3,7 +3,7 @@
 @section('title', 'PHAR FORM')
 
 @section('content')
-<div class="content-wrapper">
+<div class="inspection-cpi-page">
     <div class="row">
         <div class="col-12">
             <div class="card mb-3 border-0 shadow-sm" style="background: linear-gradient(135deg, #5b67ca 0%, #4854b8 100%);">
@@ -58,7 +58,7 @@
                             <div class="col-md-4">
                                 <div class="form-group">
                                     <label>Inspection Date & Time <span class="text-danger">*</span></label>
-                                    <input type="datetime-local" name="inspection_date" class="form-control" value="{{ old('inspection_date', optional($inspection->scheduled_date)->format('Y-m-d\\TH:i') ?? now()->format('Y-m-d\\TH:i')) }}" required>
+                                    <input type="datetime-local" name="inspection_date" class="form-control" value="{{ old('inspection_date', optional($inspection?->scheduled_date)->format('Y-m-d\\TH:i') ?? now()->format('Y-m-d\\TH:i')) }}" required>
                                 </div>
                             </div>
                             <div class="col-md-4">
@@ -276,8 +276,8 @@
                                 <button type="submit" class="btn btn-warning me-2">
                                     <i class="mdi mdi-content-save me-1"></i>Save as Draft
                                 </button>
-                                <button type="submit" name="next_stage" value="phar" class="btn btn-success">
-                                    <i class="mdi mdi-arrow-right-bold-circle me-1"></i>Save Form & review costs
+                                <button type="submit" name="next_stage" value="preview" class="btn btn-success">
+                                    <i class="mdi mdi-eye-check-outline me-1"></i>Save &amp; Preview Findings
                                 </button>
                             </div>
                         </div>
@@ -295,6 +295,11 @@
         gap: 12px;
         align-items: end;
         margin-bottom: 16px;
+    }
+
+    .inspection-cpi-page {
+        width: 100%;
+        max-width: 100%;
     }
 
     .cpi-system-empty {
@@ -515,7 +520,7 @@ function removeInspectionSystem(systemId) {
     updateInspectionSystemEmptyState();
 }
 
-const initialFindings = @json(old('system_findings', $seededSystemFindings ?? $inspection->findings ?? []));
+const initialFindings = @json(old('system_findings', $initialSystemFindings ?? []));
 let findingIndex = 0;
 let findingMediaViewerState = {
     items: [],
@@ -964,7 +969,7 @@ function buildTradePartnerOptions(systemId, subsystemId = '', selectedApplicatio
             return;
         }
 
-        const label = `${partner.partner_number || 'Partner'} - ${partner.company_name || 'Approved partner'}${formatTradePartnerRate(partner, subsystemId)}`;
+        const label = `${partner.partner_number || 'Partner'} - ${partner.company_name || 'Approved trade partner'}${formatTradePartnerRate(partner, subsystemId)}`;
         const pricing = getTradePartnerPricing(partner, subsystemId);
         options += `<option value="${escapeHtml(value)}"
             data-rate="${escapeHtml(pricing?.typical_rate ?? '')}"
@@ -1373,14 +1378,14 @@ function addSystemFindingRow(systemId, prefill = {}) {
         <div class="row g-2 px-3 pt-2">
             <div class="col-12">
                 <label class="form-label small fw-semibold text-muted mb-1">Issue Description</label>
-                <textarea name="system_findings[${currentIndex}][issue_description]" class="form-control form-control-sm" rows="3" placeholder="Describe the issue in detail (what was observed, how extensive it is, and any context)...">${escapeHtml(prefill.issue_description || '')}</textarea>
+                <textarea name="system_findings[${currentIndex}][issue_description]" class="form-control form-control-sm" rows="3" placeholder="Describe what you found in plain language the client will understand - what it is, what you saw, and how extensive it is...">${escapeHtml(prefill.issue_description || '')}</textarea>
             </div>
         </div>
         <!-- Row 1c: Risk / Impact -->
         <div class="row g-2 px-3 pt-2">
             <div class="col-12">
                 <label class="form-label small fw-semibold text-muted mb-1">Risk / Impact</label>
-                <textarea name="system_findings[${currentIndex}][risk_impact]" class="form-control form-control-sm" rows="2" placeholder="Describe the risk or impact of this finding...">${escapeHtml(prefill.risk_impact || '')}</textarea>
+                <textarea name="system_findings[${currentIndex}][risk_impact]" class="form-control form-control-sm" rows="2" placeholder="Why this matters and what could happen if it is left unaddressed (safety, comfort, cost, property value)...">${escapeHtml(prefill.risk_impact || '')}</textarea>
             </div>
         </div>
         <!-- Row 2: Location | Spot -->
@@ -1394,10 +1399,10 @@ function addSystemFindingRow(systemId, prefill = {}) {
                 <input type="text" name="system_findings[${currentIndex}][spot]" class="form-control form-control-sm" value="${escapeHtml(prefill.spot || '')}" placeholder="e.g. Top-left corner">
             </div>
         </div>
-        <!-- Row 2b: Internal fulfilment planning -->
-        <div class="row g-2 px-3 pt-2 pb-3 finding-trade-box" style="background:#f8fbff;border-top:1px solid #e7edf8;border-bottom:1px solid #e7edf8;">
+        <!-- Row 2b: Internal fulfilment planning - MOVED to the Estimation step. Hidden here but kept in the DOM so existing trade JS bindings keep working without errors. -->
+        <div class="row g-2 px-3 pt-2 pb-3 finding-trade-box" style="display:none;background:#f8fbff;border-top:1px solid #e7edf8;border-bottom:1px solid #e7edf8;">
             <div class="col-md-3">
-                <label class="form-label small fw-semibold text-muted mb-1">Work handled by</label>
+                <label class="form-label small fw-semibold text-muted mb-1">Work assignment</label>
                 <select name="system_findings[${currentIndex}][fulfillment_type]" class="form-select form-select-sm finding-fulfillment-type">
                     <option value="decide_later" ${fulfillmentType === 'decide_later' ? 'selected' : ''}>Decide later</option>
                     <option value="etogo_team" ${fulfillmentType === 'etogo_team' ? 'selected' : ''}>ETOGO team</option>
@@ -1405,7 +1410,7 @@ function addSystemFindingRow(systemId, prefill = {}) {
                 </select>
             </div>
             <div class="col-md-4">
-                <label class="form-label small fw-semibold text-muted mb-1">Approved partner</label>
+                <label class="form-label small fw-semibold text-muted mb-1">Approved trade partner</label>
                 <select name="system_findings[${currentIndex}][trade_application_id]" class="form-select form-select-sm finding-trade-partner">
                     ${buildTradePartnerOptions(systemId, prefill.subsystem_id || '', selectedTradeApplicationId)}
                 </select>
@@ -1441,7 +1446,7 @@ function addSystemFindingRow(systemId, prefill = {}) {
                 </select>
             </div>
             <div class="col-md-6 finding-trade-dependent-wrap">
-                <div class="small border rounded px-2 py-2 finding-trade-preview" style="background:#fff;">Choose a trade partner to preview the partner/client amount.</div>
+                <div class="small border rounded px-2 py-2 finding-trade-preview" style="background:#fff;">Choose an approved trade partner to preview partner cost and client price.</div>
             </div>
         </div>
         <!-- Row 3: Recommendations | Notes -->
@@ -1469,7 +1474,7 @@ function addSystemFindingRow(systemId, prefill = {}) {
             </div>
             <div class="col-md-6">
                 <label class="form-label small fw-semibold text-muted mb-1">Notes</label>
-                <textarea name="system_findings[${currentIndex}][notes]" class="form-control form-control-sm" rows="3" placeholder="Detailed observations...">${escapeHtml(prefill.notes || '')}</textarea>
+                <textarea name="system_findings[${currentIndex}][notes]" class="form-control form-control-sm" rows="3" placeholder="Internal observations for the ETOGO team (not shown to the client)...">${escapeHtml(prefill.notes || '')}</textarea>
             </div>
         </div>
         <!-- Row 4: Finding Photos -->
@@ -1493,7 +1498,19 @@ function addSystemFindingRow(systemId, prefill = {}) {
             </div>
         </div>
         <!-- Row 5: Labour Hours + Materials -->
-        <div class="px-3 pt-2 pb-3" style="background:#eef3ff;border-top:1px solid #c9d8ff;">
+        <!--
+            ETOGO WORKFLOW NOTE: Work costing fields (labour hours, materials, category)
+            were moved to the Estimation step (after client commits to findings).
+            This section is hidden but kept in the DOM so existing JS bindings
+            (autofill, catalog lookup) continue to function without errors.
+        -->
+        <div class="px-3 pt-2 pb-2" style="background:#f0f9ff;border-top:1px solid #c9d8ff;">
+            <div class="d-flex align-items-center gap-2 small text-muted">
+                <i class="mdi mdi-information-outline"></i>
+                <span>Work assignment and costing (labour, materials, trade partner) is captured in the <strong>Estimation</strong> step after the client commits to which findings to remediate.</span>
+            </div>
+        </div>
+        <div class="px-3 pt-2 pb-3 estimation-fields-legacy" style="display:none;background:#eef3ff;border-top:1px solid #c9d8ff;">
             <div class="row g-2 mb-2 align-items-end">
                 <div class="col-md-3">
                     <label class="form-label small fw-semibold mb-1" style="color:#3d5a99;">
@@ -1604,10 +1621,10 @@ function addSystemFindingRow(systemId, prefill = {}) {
             if (tradeRateNote) {
                 tradeRateNote.textContent = fulfillmentSelect?.value === 'etogo_team'
                     ? 'ETOGO team selected. Partner fields are not needed for this finding.'
-                    : 'Choose Trade partner if this finding should use an approved partner rate.';
+                    : 'Choose Trade partner if this finding should use an approved trade partner rate.';
             }
             if (tradePreview) {
-                tradePreview.textContent = 'No partner client price will be added unless Trade partner is selected.';
+                tradePreview.textContent = 'No trade partner client price will be added unless Trade partner is selected.';
             }
             return;
         }
@@ -1621,7 +1638,7 @@ function addSystemFindingRow(systemId, prefill = {}) {
                 tradeRateNote.textContent = 'Only active partners approved for this system/subsystem appear here.';
             }
             if (tradePreview) {
-                tradePreview.textContent = 'Choose a trade partner to preview the partner/client amount.';
+                tradePreview.textContent = 'Choose an approved trade partner to preview partner cost and client price.';
             }
             return;
         }
@@ -2102,6 +2119,47 @@ function collectAutosavePayload(form) {
     return payload;
 }
 
+function extractSystemFindingsFromPayload(payload) {
+    const findingsByIndex = {};
+
+    Object.entries(payload || {}).forEach(([name, value]) => {
+        const materialMatch = name.match(/^system_findings\[(\d+)\]\[materials\]\[(\d+)\]\[([^\]]+)\]$/);
+        if (materialMatch) {
+            const [, findingIdx, materialIdx, materialField] = materialMatch;
+            findingsByIndex[findingIdx] = findingsByIndex[findingIdx] || {};
+            findingsByIndex[findingIdx].materials = findingsByIndex[findingIdx].materials || [];
+            findingsByIndex[findingIdx].materials[materialIdx] = findingsByIndex[findingIdx].materials[materialIdx] || {};
+            findingsByIndex[findingIdx].materials[materialIdx][materialField] = value;
+            return;
+        }
+
+        const fieldMatch = name.match(/^system_findings\[(\d+)\]\[([^\]]+)\](?:\[\])?$/);
+        if (!fieldMatch) {
+            return;
+        }
+
+        const [, findingIdx, field] = fieldMatch;
+        findingsByIndex[findingIdx] = findingsByIndex[findingIdx] || {};
+        findingsByIndex[findingIdx][field] = value;
+    });
+
+    return Object.keys(findingsByIndex)
+        .sort((a, b) => Number(a) - Number(b))
+        .map((idx) => {
+            const finding = findingsByIndex[idx] || {};
+            if (Array.isArray(finding.recommendations)) {
+                finding.recommendations = finding.recommendations.filter(Boolean);
+            } else if (finding.recommendations) {
+                finding.recommendations = [finding.recommendations].filter(Boolean);
+            } else {
+                finding.recommendations = [];
+            }
+            finding.materials = (finding.materials || []).filter(Boolean);
+            return finding;
+        })
+        .filter((finding) => finding.system_id);
+}
+
 function applyAutosavePayload(form, payload) {
     if (!payload || typeof payload !== 'object') {
         return;
@@ -2152,6 +2210,14 @@ function initializeFormAutosave() {
         const savedRaw = localStorage.getItem(AUTOSAVE_KEY);
         if (savedRaw) {
             const savedData = JSON.parse(savedRaw);
+            const restoredFindings = extractSystemFindingsFromPayload(savedData);
+            const hasRenderedFindings = !!form.querySelector('.finding-card');
+
+            if (!hasRenderedFindings && restoredFindings.length > 0) {
+                restoredFindings.forEach((finding) => addSystemFindingRow(finding.system_id, finding));
+                updateInspectionSystemEmptyState();
+            }
+
             applyAutosavePayload(form, savedData);
             setAutosaveStatus('Autosave: restored local draft');
         }

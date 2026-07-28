@@ -1,6 +1,6 @@
 @extends('client.layout')
 
-@section('title', 'Service Requests')
+@section('title', 'Owner Requests')
 
 @section('content')
 <div class="row mb-4">
@@ -8,12 +8,17 @@
         <div class="card border-0 shadow-sm" style="background: linear-gradient(135deg, #198754 0%, #20c997 100%);">
             <div class="card-body text-white p-4 d-flex justify-content-between align-items-center">
                 <div>
-                    <h3 class="fw-bold mb-1">Service Requests</h3>
-                    <p class="mb-0 opacity-75">Track your reported issues, repairs, and change requests</p>
+                    <h3 class="fw-bold mb-1">Owner Requests</h3>
+                    <p class="mb-0 opacity-75">Track reported issues, owner updates, and requested scope changes</p>
                 </div>
-                <a href="{{ route('client.service-requests.create') }}" class="btn btn-light">
-                    <i class="mdi mdi-plus-circle me-1"></i> Report Issue
-                </a>
+                <div class="d-flex gap-2 flex-wrap justify-content-end">
+                    <a href="{{ route('client.service-requests.create', ['type' => 'addendum']) }}" class="btn btn-light">
+                        <i class="mdi mdi-file-plus-outline me-1"></i> Owner Update / Add Work
+                    </a>
+                    <a href="{{ route('client.service-requests.create') }}" class="btn btn-outline-light">
+                        <i class="mdi mdi-plus-circle me-1"></i> Report Issue
+                    </a>
+                </div>
             </div>
         </div>
     </div>
@@ -28,10 +33,10 @@
         @if($serviceRequests->isEmpty())
             <div class="text-center py-5">
                 <i class="mdi mdi-clipboard-text-outline text-muted" style="font-size: 3rem;"></i>
-                <h5 class="mt-3">No service requests yet</h5>
+                <h5 class="mt-3">No owner requests yet</h5>
                 <p class="text-muted">Submit your first issue so our team can triage and assess it.</p>
                 <a href="{{ route('client.service-requests.create') }}" class="btn btn-success">
-                    <i class="mdi mdi-plus me-1"></i> Create Service Request
+                    <i class="mdi mdi-plus me-1"></i> Create Owner Request
                 </a>
             </div>
         @else
@@ -56,7 +61,13 @@
                                     <div>{{ $request->property?->property_name ?? 'N/A' }}</div>
                                     <small class="text-muted">{{ $request->property?->property_code ?? '' }}</small>
                                 </td>
-                                <td>{{ ucwords(str_replace('_', ' ', $request->request_type)) }}</td>
+                                <td>
+                                    @if($request->request_type === 'change_request')
+                                        <span class="badge bg-primary">Add-on / Proposal</span>
+                                    @else
+                                        {{ ucwords(str_replace('_', ' ', $request->request_type)) }}
+                                    @endif
+                                </td>
                                 <td>
                                     <span class="badge bg-{{ $request->urgency === 'critical' ? 'danger' : ($request->urgency === 'high' ? 'warning text-dark' : 'secondary') }}">
                                         {{ ucfirst($request->urgency) }}

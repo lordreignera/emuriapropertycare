@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class InspectionQuotation extends Model
 {
@@ -11,10 +12,13 @@ class InspectionQuotation extends Model
         'inspection_id',
         'property_id',
         'project_id',
+        'remediation_roadmap_id',
         'created_by',
         'quote_number',
+        'quote_basis',
         'status',
         'findings_snapshot',
+        'decision_snapshot',
         'approved_finding_ids',
         'deferred_finding_ids',
         'client_notes',
@@ -34,6 +38,7 @@ class InspectionQuotation extends Model
 
     protected $casts = [
         'findings_snapshot'    => 'array',
+        'decision_snapshot'    => 'array',
         'approved_finding_ids' => 'array',
         'deferred_finding_ids' => 'array',
         'approved_labour_cost' => 'decimal:2',
@@ -66,9 +71,24 @@ class InspectionQuotation extends Model
         return $this->belongsTo(Project::class);
     }
 
+    public function remediationRoadmap(): BelongsTo
+    {
+        return $this->belongsTo(RemediationRoadmap::class);
+    }
+
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function clientDecisions(): HasMany
+    {
+        return $this->hasMany(FindingClientDecision::class);
+    }
+
+    public function workOrders(): HasMany
+    {
+        return $this->hasMany(RemediationWorkOrder::class);
     }
 
     // ── Status Helpers ─────────────────────────────────────────────────────

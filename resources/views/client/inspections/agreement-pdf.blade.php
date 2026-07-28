@@ -27,7 +27,7 @@
     <div class="header">
         <h2 style="margin:0 0 4px 0;">Client Job Approval & Service Agreement</h2>
         <div class="muted">
-            Inspection #{{ $inspection->id }} | Generated {{ now()->format('Y-m-d H:i') }}
+            Diagnosis #{{ $inspection->id }} | Generated {{ now()->format('Y-m-d H:i') }}
         </div>
     </div>
 

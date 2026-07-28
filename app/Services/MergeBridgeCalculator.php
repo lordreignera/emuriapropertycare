@@ -95,9 +95,8 @@ class MergeBridgeCalculator
         }
 
         // Step 3: TRC (Total Remediation Cost)
-        // Trade partner client pricing is treated as the finding labour/service cost
-        // inside FRLC, so it must not be added again as a fourth TRC component.
-        $trcAnnual   = $bdcAnnual + $frlcCalculation['annual'] + $fmcCalculation['annual'];
+        // Trade partner work is shown and stored as its own service line.
+        $trcAnnual   = $bdcAnnual + $frlcCalculation['annual'] + $fmcCalculation['annual'] + $tradeCalculation['client_price'];
         $trcMonthly  = $trcAnnual;
         $visitsPerYear = max(1, (float) ($bdcResult['visits_per_year'] ?? $inspection->bdc_visits_per_year ?? 1));
         $trcPerVisit = round($trcAnnual / $visitsPerYear, 2);
@@ -176,7 +175,6 @@ class MergeBridgeCalculator
         foreach ($findings as $finding) {
             $findingId = (int) $finding->id;
             if (array_key_exists($findingId, $tradeClientPriceByFinding)) {
-                $annualCost += (float) $tradeClientPriceByFinding[$findingId];
                 continue;
             }
 

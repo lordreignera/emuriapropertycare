@@ -1,171 +1,102 @@
 @extends('admin.layout')
 
-@section('title', 'Welcome')
-
-@section('header')
-Welcome back, {{ auth()->user()->name }}
-@endsection
-
-@section('breadcrumbs')
-<li class="breadcrumb-item active" aria-current="page">{{ now()->format('l, M d, Y') }}</li>
-@endsection
+@section('title', 'Dashboard')
 
 @section('content')
+@php
+    $user = auth()->user();
+    $isStoreManager = $user->hasRole('Store Manager');
+@endphp
 
-@if(auth()->user()->hasRole('Store Manager'))
-{{-- ═══════════════════════════════════════════════════════════
-     STORE MANAGER DASHBOARD
-════════════════════════════════════════════════════════════════ --}}
-<div class="row mb-3">
-    <div class="col-12">
-        <div class="alert alert-primary mb-0" role="alert" style="border-left:4px solid #0d6efd;">
-            <strong>Tools overview.</strong> Manage tool stock, assignments and returns from here.
+<div class="ops-shell">
+    <div class="ops-hero">
+        <div>
+            <h1>Welcome back, {{ $user->name }}</h1>
+            <p>{{ $isStoreManager ? 'Tool stock, assignments and returns at a glance.' : 'Here is what is happening across ETOGO operations today.' }}</p>
         </div>
-    </div>
-</div>
-
-{{-- KPI Cards --}}
-<div class="row">
-    <div class="col-md-3 stretch-card grid-margin">
-        <div class="card bg-gradient-danger text-white emuria-dashboard-card">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="font-weight-normal mb-2">Total Tools</h6>
-                        <h2 class="mb-0">{{ $totalTools ?? 0 }}</h2>
-                        <p class="text-white-50 mb-0 mt-2 small">Active tool records</p>
-                    </div>
-                    <i class="mdi mdi-toolbox mdi-48px opacity-50"></i>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-md-3 stretch-card grid-margin">
-        <div class="card bg-gradient-info text-white emuria-dashboard-card">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="font-weight-normal mb-2">Tools In Use</h6>
-                        <h2 class="mb-0">{{ $toolsInUse ?? 0 }}</h2>
-                        <p class="text-white-50 mb-0 mt-2 small">Units currently deployed</p>
-                    </div>
-                    <i class="mdi mdi-wrench mdi-48px opacity-50"></i>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-md-3 stretch-card grid-margin">
-        <div class="card bg-gradient-success text-white emuria-dashboard-card">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="font-weight-normal mb-2">Tools Owned</h6>
-                        <h2 class="mb-0">{{ $toolsOwned ?? 0 }}</h2>
-                        <p class="text-white-50 mb-0 mt-2 small">Company-owned tools</p>
-                    </div>
-                    <i class="mdi mdi-check-decagram mdi-48px opacity-50"></i>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-md-3 stretch-card grid-margin">
-        <div class="card bg-gradient-warning text-white emuria-dashboard-card">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="font-weight-normal mb-2">Tools Hired</h6>
-                        <h2 class="mb-0">{{ $toolsHired ?? 0 }}</h2>
-                        <p class="text-white-50 mb-0 mt-2 small">Hired / rented tools</p>
-                    </div>
-                    <i class="mdi mdi-handshake mdi-48px opacity-50"></i>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row">
-    {{-- System Overview --}}
-    <div class="col-md-6 grid-margin stretch-card">
-        <div class="card">
-            <div class="card-body">
-                <h4 class="card-title mb-3">System Overview</h4>
-                <div class="system-stats">
-                    <a href="{{ route('tool-assignments.index') }}" class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom text-decoration-none text-dark">
-                        <div class="d-flex align-items-center">
-                            <i class="mdi mdi-clock-alert text-warning mdi-24px me-2"></i>
-                            <span>Pending Tool Assignment</span>
-                        </div>
-                        <span class="badge badge-warning">{{ $pendingToolAssignment ?? 0 }}</span>
+        <div class="ops-hero-actions">
+            @if($isStoreManager)
+                <a href="{{ route('admin.tool-settings.create') }}" class="ops-primary-action">
+                    <i class="mdi mdi-plus"></i>
+                    <span>Add Tool</span>
+                </a>
+            @else
+                @can('create properties')
+                    <a href="{{ route('properties.create') }}" class="ops-primary-action">
+                        <i class="mdi mdi-plus"></i>
+                        <span>Add Property</span>
                     </a>
-                    <a href="{{ route('admin.tool-settings.index') }}" class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom text-decoration-none text-dark">
-                        <div class="d-flex align-items-center">
-                            <i class="mdi mdi-toolbox text-primary mdi-24px me-2"></i>
-                            <span>Total Active Tools</span>
-                        </div>
-                        <span class="badge badge-primary">{{ $totalTools ?? 0 }}</span>
+                @endcan
+            @endif
+        </div>
+    </div>
+
+    @if($isStoreManager)
+        <section class="ops-kpis">
+            <article class="ops-kpi">
+                <span class="ops-icon ops-icon-blue"><i class="mdi mdi-toolbox-outline"></i></span>
+                <div><small>Total Tools</small><strong>{{ $totalTools ?? 0 }}</strong><span>Active tool records</span></div>
+                <a href="{{ route('admin.tool-settings.index') }}">View tools <i class="mdi mdi-arrow-right"></i></a>
+            </article>
+            <article class="ops-kpi">
+                <span class="ops-icon ops-icon-green"><i class="mdi mdi-wrench-outline"></i></span>
+                <div><small>Tools In Use</small><strong>{{ $toolsInUse ?? 0 }}</strong><span>Units currently deployed</span></div>
+                <a href="{{ route('tool-assignments.index') }}">Assignments <i class="mdi mdi-arrow-right"></i></a>
+            </article>
+            <article class="ops-kpi">
+                <span class="ops-icon ops-icon-purple"><i class="mdi mdi-check-decagram-outline"></i></span>
+                <div><small>Tools Owned</small><strong>{{ $toolsOwned ?? 0 }}</strong><span>Company-owned tools</span></div>
+                <a href="{{ route('admin.tool-settings.index') }}?ownership_status=owned">View owned <i class="mdi mdi-arrow-right"></i></a>
+            </article>
+            <article class="ops-kpi">
+                <span class="ops-icon ops-icon-orange"><i class="mdi mdi-handshake-outline"></i></span>
+                <div><small>Tools Hired</small><strong>{{ $toolsHired ?? 0 }}</strong><span>Hired or rented tools</span></div>
+                <a href="{{ route('admin.tool-settings.index') }}?ownership_status=hired">View hired <i class="mdi mdi-arrow-right"></i></a>
+            </article>
+        </section>
+
+        <div class="ops-grid">
+            <section class="ops-panel">
+                <div class="ops-panel-head">
+                    <div><h2>Tool Operations</h2><p>Queues that need store attention.</p></div>
+                </div>
+                <div class="ops-action-list">
+                    <a href="{{ route('tool-assignments.index') }}">
+                        <span class="ops-icon ops-icon-orange"><i class="mdi mdi-clock-alert-outline"></i></span>
+                        <div><strong>Pending Tool Assignment</strong><small>{{ $pendingToolAssignment ?? 0 }} diagnosis job{{ ($pendingToolAssignment ?? 0) === 1 ? '' : 's' }} waiting</small></div>
+                        <b>{{ $pendingToolAssignment ?? 0 }}</b>
                     </a>
-                    <a href="{{ route('admin.tool-settings.index') }}?availability_status=available" class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom text-decoration-none text-dark">
-                        <div class="d-flex align-items-center">
-                            <i class="mdi mdi-check-circle text-success mdi-24px me-2"></i>
-                            <span>Available Tools</span>
-                        </div>
-                        <span class="badge badge-success">{{ $availableTools ?? 0 }}</span>
+                    <a href="{{ route('admin.tool-settings.index') }}?availability_status=available">
+                        <span class="ops-icon ops-icon-green"><i class="mdi mdi-check-circle-outline"></i></span>
+                        <div><strong>Available Tools</strong><small>Ready for assignment</small></div>
+                        <b>{{ $availableTools ?? 0 }}</b>
                     </a>
-                    <a href="{{ route('tool-assignments.index') }}" class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom text-decoration-none text-dark">
-                        <div class="d-flex align-items-center">
-                            <i class="mdi mdi-swap-horizontal text-info mdi-24px me-2"></i>
-                            <span>Unreturned Assignments</span>
-                        </div>
-                        <span class="badge badge-info">{{ $unreturnedRecords ?? 0 }}</span>
-                    </a>
-                    <a href="{{ route('admin.tool-settings.index') }}?ownership_status=hired" class="d-flex justify-content-between align-items-center text-decoration-none text-dark">
-                        <div class="d-flex align-items-center">
-                            <i class="mdi mdi-handshake text-danger mdi-24px me-2"></i>
-                            <span>Hired Tools</span>
-                        </div>
-                        <span class="badge badge-danger">{{ $toolsHired ?? 0 }}</span>
+                    <a href="{{ route('tool-assignments.index') }}">
+                        <span class="ops-icon ops-icon-blue"><i class="mdi mdi-swap-horizontal"></i></span>
+                        <div><strong>Unreturned Assignments</strong><small>Open return records</small></div>
+                        <b>{{ $unreturnedRecords ?? 0 }}</b>
                     </a>
                 </div>
-            </div>
-        </div>
-    </div>
+            </section>
 
-    {{-- Quick Actions --}}
-    <div class="col-md-6 grid-margin stretch-card">
-        <div class="card">
-            <div class="card-body">
-                <h4 class="card-title mb-3">Quick Actions</h4>
-                <div class="d-grid gap-2">
-                    <a href="{{ route('tool-assignments.index') }}" class="btn btn-outline-warning btn-icon-text">
-                        <i class="mdi mdi-toolbox btn-icon-prepend"></i> Assign / Return Tools
-                    </a>
-                    <a href="{{ route('admin.tool-settings.index') }}" class="btn btn-outline-primary btn-icon-text">
-                        <i class="mdi mdi-cog btn-icon-prepend"></i> Manage Tool Settings
-                    </a>
-                    <a href="{{ route('admin.tool-settings.create') }}" class="btn btn-outline-success btn-icon-text">
-                        <i class="mdi mdi-plus btn-icon-prepend"></i> Add New Tool
-                    </a>
-                    <a href="{{ route('inspections.index') }}?view=pending-etogo" class="btn btn-outline-info btn-icon-text">
-                        <i class="mdi mdi-format-list-checks btn-icon-prepend"></i> View Awaiting Assignment
-                    </a>
+            <section class="ops-panel">
+                <div class="ops-panel-head">
+                    <div><h2>Quick Actions</h2><p>Common store workflows.</p></div>
                 </div>
-            </div>
-        </div>
-    </div>
-</div>
+                <div class="ops-action-list">
+                    <a href="{{ route('tool-assignments.index') }}"><span class="ops-icon ops-icon-blue"><i class="mdi mdi-toolbox-outline"></i></span><div><strong>Assign / Return Tools</strong><small>Manage active assignments</small></div><i class="mdi mdi-chevron-right"></i></a>
+                    <a href="{{ route('admin.tool-settings.index') }}"><span class="ops-icon ops-icon-green"><i class="mdi mdi-cog-outline"></i></span><div><strong>Manage Tool Settings</strong><small>Stock, ownership and rates</small></div><i class="mdi mdi-chevron-right"></i></a>
+                    <a href="{{ route('inspections.index') }}?view=pending-etogo"><span class="ops-icon ops-icon-purple"><i class="mdi mdi-format-list-checks"></i></span><div><strong>Awaiting Assignment</strong><small>Ready for tool planning</small></div><i class="mdi mdi-chevron-right"></i></a>
+                </div>
+            </section>
 
-{{-- Recent Tool Assignments --}}
-<div class="row">
-    <div class="col-md-12 grid-margin stretch-card">
-        <div class="card">
-            <div class="card-body">
-                <h4 class="card-title mb-3">Recent Tool Assignments</h4>
-                <div class="table-responsive">
-                    <table class="table table-hover">
+            <section class="ops-panel ops-panel-wide">
+                <div class="ops-panel-head">
+                    <div><h2>Recent Tool Assignments</h2><p>Latest movement from the tool room.</p></div>
+                    <a href="{{ route('tool-assignments.index') }}" class="ops-small-button">View All <i class="mdi mdi-arrow-right"></i></a>
+                </div>
+                <div class="ops-table-wrap">
+                    <table class="ops-table">
                         <thead>
                             <tr>
                                 <th>Date</th>
@@ -178,406 +109,194 @@ Welcome back, {{ auth()->user()->name }}
                         </thead>
                         <tbody>
                             @forelse($recentAssignments ?? [] as $assignment)
-                            <tr>
-                                <td>{{ $assignment->created_at->format('M d, Y') }}</td>
-                                <td>{{ $assignment->tool_name ?? $assignment->toolSetting?->tool_name ?? 'N/A' }}</td>
-                                <td>{{ $assignment->inspection?->property?->property_name ?? $assignment->inspection?->property?->property_code ?? 'N/A' }}</td>
-                                <td>{{ $assignment->quantity }}</td>
-                                <td>
-                                    <span class="badge badge-{{ $assignment->ownership_status === 'hired' ? 'warning' : 'primary' }}">
-                                        {{ ucfirst($assignment->ownership_status ?? 'owned') }}
-                                    </span>
-                                </td>
-                                <td>
-                                    @if($assignment->returned_at)
-                                        <span class="badge badge-success">Returned</span>
-                                    @else
-                                        <span class="badge badge-info">In Use</span>
-                                    @endif
-                                </td>
-                            </tr>
+                                <tr>
+                                    <td>{{ optional($assignment->created_at)->format('M d, Y') }}</td>
+                                    <td><strong>{{ $assignment->tool_name ?? $assignment->toolSetting?->tool_name ?? 'N/A' }}</strong></td>
+                                    <td>{{ $assignment->inspection?->property?->property_name ?? $assignment->inspection?->property?->property_code ?? 'N/A' }}</td>
+                                    <td>{{ $assignment->quantity }}</td>
+                                    <td><span class="ops-pill ops-pill-blue">{{ ucfirst($assignment->ownership_status ?? 'owned') }}</span></td>
+                                    <td>
+                                        @if($assignment->returned_at)
+                                            <span class="ops-pill ops-pill-green">Returned</span>
+                                        @else
+                                            <span class="ops-pill ops-pill-orange">In Use</span>
+                                        @endif
+                                    </td>
+                                </tr>
                             @empty
-                            <tr>
-                                <td colspan="6" class="text-center text-muted py-4">
-                                    No tool assignments yet.
-                                </td>
-                            </tr>
+                                <tr><td colspan="6"><div class="ops-empty ops-empty-row">No tool assignments yet.</div></td></tr>
                             @endforelse
                         </tbody>
                     </table>
                 </div>
-            </div>
+            </section>
         </div>
-    </div>
-</div>
+    @else
+        <section class="ops-kpis">
+            <article class="ops-kpi">
+                <span class="ops-icon ops-icon-blue"><i class="mdi mdi-home-city-outline"></i></span>
+                <div><small>Properties</small><strong>{{ $propertiesCount ?? 0 }}</strong><span>Registered properties</span></div>
+                <a href="{{ route('properties.index') }}">View all <i class="mdi mdi-arrow-right"></i></a>
+            </article>
+            <article class="ops-kpi">
+                <span class="ops-icon ops-icon-green"><i class="mdi mdi-clipboard-check-outline"></i></span>
+                <div><small>Diagnoses</small><strong>{{ $inspectionsCount ?? 0 }}</strong><span>{{ $paidInspectionsCount ?? 0 }} paid, {{ $completedInspectionsCount ?? 0 }} completed</span></div>
+                <a href="{{ route('inspections.index') }}">View diagnoses <i class="mdi mdi-arrow-right"></i></a>
+            </article>
+            <article class="ops-kpi">
+                <span class="ops-icon ops-icon-purple"><i class="mdi mdi-briefcase-outline"></i></span>
+                <div><small>Projects</small><strong>{{ $projectsCount ?? 0 }}</strong><span>Active remediation work</span></div>
+                <a href="{{ route('maintenance-visit-logs.index') }}">View projects <i class="mdi mdi-arrow-right"></i></a>
+            </article>
+            <article class="ops-kpi">
+                <span class="ops-icon ops-icon-orange"><i class="mdi mdi-file-document-outline"></i></span>
+                <div><small>Invoices</small><strong>{{ $invoicesCount ?? 0 }}</strong><span>{{ $pendingInvoicesCount ?? 0 }} unpaid invoices</span></div>
+                <a href="{{ route('invoices.index') }}">View invoices <i class="mdi mdi-arrow-right"></i></a>
+            </article>
+            <article class="ops-kpi">
+                <span class="ops-icon ops-icon-cyan"><i class="mdi mdi-account-hard-hat-outline"></i></span>
+                <div><small>Trade Partners</small><strong>{{ $approvedTradeApplicationsCount ?? 0 }}</strong><span>{{ $openTradeApplicationsCount ?? 0 }} open applications</span></div>
+                @role('Super Admin|Administrator')
+                    <a href="{{ route('admin.trade-applications.index') }}">Review trades <i class="mdi mdi-arrow-right"></i></a>
+                @else
+                    <span></span>
+                @endrole
+            </article>
+        </section>
 
-@else
-{{-- ═══════════════════════════════════════════════════════════
-     GENERIC STAFF DASHBOARD (non-Store Manager)
-════════════════════════════════════════════════════════════════ --}}
-
-<div class="row mb-3">
-    <div class="col-12">
-        <div class="alert alert-primary mb-0" role="alert" style="border-left:4px solid #0d6efd;">
-            <strong>You are doing great.</strong> Keep the momentum today and drive every project one step closer to completion.
-        </div>
-    </div>
-</div>
-
-<div class="row">
-    {{-- Stats Cards --}}
-    <div class="col-md-3 stretch-card grid-margin">
-        <div class="card bg-gradient-danger emuria-dashboard-card">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="font-weight-normal mb-2">Properties</h6>
-                        <h2 class="mb-0">{{ $propertiesCount ?? 0 }}</h2>
-                        <p class="text-white-50 mb-0 mt-2 small">Registered Properties</p>
+        <div class="ops-grid ops-grid-stacked">
+            <div class="ops-column">
+                <section class="ops-panel">
+                    <div class="ops-panel-head">
+                        <div><h2>Property Registry</h2><p>Recently added properties.</p></div>
+                        <a href="{{ route('properties.index') }}" class="ops-small-button">View All <i class="mdi mdi-arrow-right"></i></a>
                     </div>
-                    <div>
-                        <i class="mdi mdi-home-modern mdi-48px opacity-50"></i>
+                    <div class="ops-table-wrap">
+                        <table class="ops-table">
+                            <thead>
+                                <tr>
+                                    <th>Property</th>
+                                    <th>Type</th>
+                                    <th>Location</th>
+                                    <th>Status</th>
+                                    <th class="text-end">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @forelse($recentProperties ?? [] as $property)
+                                    @php
+                                        $propertyTypeLabel = match($property->type) {
+                                            'mixed_use' => 'Mixed Use',
+                                            'residential' => 'Residential',
+                                            'commercial' => 'Commercial',
+                                            default => 'Not Set',
+                                        };
+                                    @endphp
+                                    <tr>
+                                        <td>
+                                            <div class="ops-property-cell">
+                                                <span><i class="mdi mdi-domain"></i></span>
+                                                <div><strong>{{ $property->property_name }}</strong><small>ID: {{ $property->property_code }}</small></div>
+                                            </div>
+                                        </td>
+                                        <td><span class="ops-pill ops-pill-blue">{{ $propertyTypeLabel }}</span></td>
+                                        <td><i class="mdi mdi-map-marker-outline text-muted"></i> {{ $property->city ?? 'N/A' }}, {{ $property->country ?? 'N/A' }}</td>
+                                        <td><span class="ops-pill ops-pill-green">{{ ucfirst(str_replace('_', ' ', (string) ($property->status ?? 'registered'))) }}</span></td>
+                                        <td class="text-end">
+                                            <a href="{{ route('properties.show', $property->id) }}" class="ops-icon-button" title="View property">
+                                                <i class="mdi mdi-eye-outline"></i>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                @empty
+                                    <tr><td colspan="5"><div class="ops-empty ops-empty-row">No properties yet.</div></td></tr>
+                                @endforelse
+                            </tbody>
+                        </table>
                     </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-3 stretch-card grid-margin">
-        <div class="card bg-gradient-info emuria-dashboard-card">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="font-weight-normal mb-2">Inspections</h6>
-                        <h2 class="mb-0">{{ $inspectionsCount ?? 0 }}</h2>
-                        <p class="text-white-50 mb-0 mt-2 small">Total Inspections</p>
-                        <p class="text-white-50 mb-0 small">Actually inspected: {{ $completedInspectionsCount ?? 0 }}</p>
-                        <p class="text-white-50 mb-0 small">Paid for inspection: {{ $paidInspectionsCount ?? 0 }}</p>
+                </section>
+
+                <section class="ops-panel">
+                    <div class="ops-panel-head">
+                        <div><h2>Operations Queue</h2><p>Items that need attention.</p></div>
                     </div>
-                    <div>
-                        <i class="mdi mdi-clipboard-check mdi-48px opacity-50"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-3 stretch-card grid-margin">
-        <div class="card bg-gradient-success emuria-dashboard-card">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="font-weight-normal mb-2">Projects</h6>
-                        <h2 class="mb-0">{{ $projectsCount ?? 0 }}</h2>
-                        <p class="text-white-50 mb-0 mt-2 small">Active Projects</p>
-                    </div>
-                    <div>
-                        <i class="mdi mdi-briefcase mdi-48px opacity-50"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="col-md-3 stretch-card grid-margin">
-        <div class="card bg-gradient-warning emuria-dashboard-card">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="font-weight-normal mb-2">Invoices</h6>
-                        <h2 class="mb-0">{{ $invoicesCount ?? 0 }}</h2>
-                        <p class="text-white-50 mb-0 mt-2 small">Total Invoices</p>
-                    </div>
-                    <div>
-                        <i class="mdi mdi-file-document mdi-48px opacity-50"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row">
-    {{-- System Overview --}}
-    <div class="col-md-6 grid-margin stretch-card">
-        <div class="card">
-            <div class="card-body">
-                <h4 class="card-title mb-3">System Overview</h4>
-                <div class="system-stats">
-                    @role('Super Admin|Administrator')
-                    <a href="{{ route('properties.index', ['status' => 'pending_approval']) }}" class="emuria-queue-link">
-                        <div class="d-flex align-items-center">
-                            <i class="mdi mdi-clock-alert text-warning mdi-24px me-2"></i>
-                            <span>Pending Approvals</span>
-                        </div>
-                        <span class="badge badge-warning">{{ \App\Models\Property::where('status', 'pending_approval')->count() }}</span>
-                    </a>
-                    <a href="{{ route('admin.users.index') }}" class="emuria-queue-link">
-                        <div class="d-flex align-items-center">
-                            <i class="mdi mdi-account-multiple text-info mdi-24px me-2"></i>
-                            <span>Total Users</span>
-                        </div>
-                        <span class="badge badge-info">{{ \App\Models\User::count() }}</span>
-                    </a>
-                    @endrole
-
-                    @if(auth()->user()->hasRole(['Super Admin', 'Administrator', 'Project Manager', 'Inspector']) || auth()->user()->can('view-inspections'))
-                    <a href="{{ route('properties.index', ['status' => 'not_inspected']) }}" class="emuria-queue-link">
-                        <div class="d-flex align-items-center">
-                            <i class="mdi mdi-clipboard-check text-primary mdi-24px me-2"></i>
-                            <span>Not Inspected</span>
-                        </div>
-                        <span class="badge badge-primary">{{ \App\Models\Property::whereDoesntHave('inspections', function ($query) { $query->where('status', 'completed'); })->count() }}</span>
-                    </a>
-                    @endif
-
-                    @can('view-invoices')
-                    <a href="{{ route('invoices.index', ['status' => 'pending']) }}" class="emuria-queue-link">
-                        <div class="d-flex align-items-center">
-                            <i class="mdi mdi-file-document-alert text-danger mdi-24px me-2"></i>
-                            <span>Unpaid Invoices</span>
-                        </div>
-                        <span class="badge badge-danger">{{ \App\Models\Invoice::pending()->count() }}</span>
-                    </a>
-                    @endcan
-
-                    @role('Super Admin|Administrator')
-                    <a href="{{ route('admin.trade-applications.index') }}" class="emuria-queue-link">
-                        <div class="d-flex align-items-center">
-                            <i class="mdi mdi-account-hard-hat text-success mdi-24px me-2"></i>
-                            <span>Trade Applications</span>
-                        </div>
-                        <span class="badge badge-success">{{ $openTradeApplicationsCount ?? 0 }}</span>
-                    </a>
-                    @endrole
-
-                    @unless(
-                        auth()->user()->hasRole(['Super Admin', 'Administrator', 'Project Manager', 'Inspector'])
-                        || auth()->user()->can('view-inspections')
-                        || auth()->user()->can('view-invoices')
-                    )
-                        <div class="text-muted small">No system queues are available for your current permissions.</div>
-                    @endunless
-                </div>
-            </div>
-        </div>
-    </div>
-
-    {{-- Quick Actions --}}
-    <div class="col-md-6 grid-margin stretch-card">
-        <div class="card">
-            <div class="card-body">
-                <h4 class="card-title mb-3">Quick Actions</h4>
-                <div class="d-grid gap-2">
-                    @can('create properties')
-                    <a href="{{ route('properties.create') }}" class="btn btn-outline-primary btn-icon-text">
-                        <i class="mdi mdi-home-plus btn-icon-prepend"></i> Add New Property
-                    </a>
-                    @endcan
-                    
-                    @can('create inspections')
-                    <a href="{{ route('inspections.create') }}" class="btn btn-outline-info btn-icon-text">
-                        <i class="mdi mdi-clipboard-check btn-icon-prepend"></i> Schedule Inspection
-                    </a>
-                    @endcan
-                    
-                    @can('create projects')
-                    <a href="{{ route('projects.create') }}" class="btn btn-outline-warning btn-icon-text">
-                        <i class="mdi mdi-briefcase btn-icon-prepend"></i> Create Project
-                    </a>
-                    @endcan
-                    
-                    @can('view-invoices')
-                    <a href="{{ route('invoices.index') }}" class="btn btn-outline-success btn-icon-text">
-                        <i class="mdi mdi-file-document btn-icon-prepend"></i> View Invoices
-                    </a>
-                    @endcan
-
-                    @role('Super Admin|Administrator')
-                    <a href="{{ route('admin.trade-applications.index') }}" class="btn btn-outline-primary btn-icon-text">
-                        <i class="mdi mdi-account-hard-hat btn-icon-prepend"></i>
-                        Review Trade Applications
-                        @if(($openTradeApplicationsCount ?? 0) > 0)
-                            <span class="badge badge-primary ms-2">{{ $openTradeApplicationsCount }}</span>
+                    <div class="ops-action-list">
+                        @role('Super Admin|Administrator')
+                            <a href="{{ route('properties.index', ['status' => 'registered']) }}"><span class="ops-icon ops-icon-blue"><i class="mdi mdi-phone-in-talk-outline"></i></span><div><strong>Awaiting Contact</strong><small>Registered properties to call</small></div><b>{{ $awaitingContactCount ?? $newRegistrationsCount ?? 0 }}</b></a>
+                            <a href="{{ route('properties.index', ['status' => 'awaiting_inspection']) }}"><span class="ops-icon ops-icon-purple"><i class="mdi mdi-cube-scan"></i></span><div><strong>Property Facts Pending</strong><small>Floor plan and twin capture needed</small></div><b>{{ $propertyFactsPendingCount ?? 0 }}</b></a>
+                            <a href="{{ route('invoices.create') }}"><span class="ops-icon ops-icon-orange"><i class="mdi mdi-file-plus-outline"></i></span><div><strong>Invoice Needed</strong><small>Property facts or diagnosis bill to prepare</small></div><b>{{ $invoiceNeededCount ?? 0 }}</b></a>
+                            <a href="{{ route('admin.users.index') }}"><span class="ops-icon ops-icon-cyan"><i class="mdi mdi-account-multiple-outline"></i></span><div><strong>Total Users</strong><small>Registered platform users</small></div><b>{{ $totalUsersCount ?? 0 }}</b></a>
+                        @endrole
+                        @if($user->hasRole(['Super Admin', 'Administrator', 'Project Manager', 'Inspector']) || $user->can('view-inspections'))
+                            <a href="{{ route('inspections.index') }}"><span class="ops-icon ops-icon-green"><i class="mdi mdi-clipboard-pulse-outline"></i></span><div><strong>Diagnosis In Progress</strong><small>Active diagnosis and PHAR work</small></div><b>{{ $diagnosisInProgressCount ?? ($upcomingInspections ?? collect())->count() }}</b></a>
                         @endif
-                    </a>
-                    <a href="{{ route('trade-applications.create') }}" target="_blank" class="btn btn-outline-warning btn-icon-text">
-                        <i class="mdi mdi-open-in-new btn-icon-prepend"></i> Open Public Trade Form
-                    </a>
-                    @endrole
-                </div>
+                        @can('view-invoices')
+                            <a href="{{ route('invoices.index', ['status' => 'pending']) }}"><span class="ops-icon ops-icon-orange"><i class="mdi mdi-file-alert-outline"></i></span><div><strong>Unpaid Invoices</strong><small>Open billing queue</small></div><b>{{ $pendingInvoicesCount ?? 0 }}</b></a>
+                        @endcan
+                    </div>
+                </section>
+
+                <section class="ops-panel">
+                    <div class="ops-panel-head">
+                        <div><h2>Upcoming Diagnoses</h2><p>Next scheduled property diagnoses.</p></div>
+                    </div>
+                    @if(($upcomingInspections ?? collect())->isNotEmpty())
+                        <div class="ops-mini-list">
+                            @foreach($upcomingInspections as $inspection)
+                                <a href="{{ route('inspections.show', $inspection->id) }}">
+                                    <span class="ops-icon ops-icon-green"><i class="mdi mdi-calendar-clock-outline"></i></span>
+                                    <div><strong>{{ $inspection->property?->property_name ?? $inspection->property_name ?? 'Diagnosis' }}</strong><small>{{ optional($inspection->scheduled_date)->format('M d, Y g:i A') }}</small></div>
+                                </a>
+                            @endforeach
+                        </div>
+                    @else
+                        <div class="ops-empty"><i class="mdi mdi-calendar-check-outline"></i><strong>No upcoming diagnoses</strong><span>The diagnosis queue is clear.</span></div>
+                    @endif
+                </section>
+            </div>
+
+            <div class="ops-column">
+                <section class="ops-panel">
+                    <div class="ops-panel-head">
+                        <div><h2>Quick Actions</h2><p>Common admin shortcuts.</p></div>
+                    </div>
+                    <div class="ops-action-list">
+                        @can('create properties')
+                            <a href="{{ route('properties.create') }}"><span class="ops-icon ops-icon-blue"><i class="mdi mdi-home-plus-outline"></i></span><div><strong>Add New Property</strong><small>Register a new property</small></div><i class="mdi mdi-chevron-right"></i></a>
+                        @endcan
+                        @can('create inspections')
+                            <a href="{{ route('properties.index') }}"><span class="ops-icon ops-icon-green"><i class="mdi mdi-calendar-check-outline"></i></span><div><strong>Start Diagnosis</strong><small>Open the property queue</small></div><i class="mdi mdi-chevron-right"></i></a>
+                        @endcan
+                        @can('view-invoices')
+                            <a href="{{ route('invoices.index') }}"><span class="ops-icon ops-icon-orange"><i class="mdi mdi-file-document-outline"></i></span><div><strong>View Invoices</strong><small>Billing and payments</small></div><i class="mdi mdi-chevron-right"></i></a>
+                        @endcan
+                        @role('Super Admin|Administrator')
+                            <a href="{{ route('admin.trade-applications.index') }}"><span class="ops-icon ops-icon-purple"><i class="mdi mdi-account-hard-hat-outline"></i></span><div><strong>Trade Applications</strong><small>Review partner onboarding</small></div><i class="mdi mdi-chevron-right"></i></a>
+                        @endrole
+                    </div>
+                </section>
+
+                <section class="ops-panel">
+                    <div class="ops-panel-head">
+                        <div><h2>Recent Activity</h2><p>Latest operational updates.</p></div>
+                        <a href="{{ route('notifications.index') }}" class="ops-small-button">View All <i class="mdi mdi-arrow-right"></i></a>
+                    </div>
+                    <div class="ops-activity-list">
+                        @forelse($recentActivities ?? [] as $activity)
+                            <div class="ops-activity">
+                                <span class="ops-icon ops-icon-{{ $activity->status_color ?? 'blue' }}"><i class="mdi mdi-bell-outline"></i></span>
+                                <div><strong>{{ $activity->description }}</strong><small>{{ $activity->property->property_name ?? $activity->property->name ?? 'N/A' }}</small></div>
+                                <time>{{ optional($activity->created_at)->diffForHumans() }}</time>
+                            </div>
+                        @empty
+                            <div class="ops-empty"><i class="mdi mdi-bell-outline"></i><strong>No recent activity</strong><span>New updates will appear here.</span></div>
+                        @endforelse
+                    </div>
+                </section>
             </div>
         </div>
-    </div>
+    @endif
 </div>
 
-@role('Super Admin|Administrator')
-<div class="row">
-    <div class="col-md-12 grid-margin stretch-card">
-        <div class="card" style="border-left:4px solid #28a745;">
-            <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-3">
-                <div>
-                    <h4 class="card-title mb-1">Trade Partner Onboarding</h4>
-                    <p class="text-muted mb-0">
-                        {{ $openTradeApplicationsCount ?? 0 }} open application(s), {{ $approvedTradeApplicationsCount ?? 0 }} approved trade partner(s).
-                    </p>
-                </div>
-                <div class="d-flex flex-wrap gap-2">
-                    <a href="{{ route('admin.trade-applications.index') }}" class="btn btn-success btn-icon-text">
-                        <i class="mdi mdi-clipboard-account btn-icon-prepend"></i> Review Registered Trades
-                    </a>
-                    <a href="{{ route('trade-applications.create') }}" target="_blank" class="btn btn-outline-secondary btn-icon-text">
-                        <i class="mdi mdi-link-variant btn-icon-prepend"></i> Public Registration Link
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-@endrole
-
-{{-- Recent Activity --}}
-<div class="row">
-    <div class="col-md-12 grid-margin stretch-card">
-        <div class="card">
-            <div class="card-body">
-                <h4 class="card-title mb-3">Recent Activity</h4>
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Activity</th>
-                                <th>Property</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @forelse($recentActivities ?? [] as $activity)
-                            <tr>
-                                <td>{{ $activity->created_at->format('M d, Y') }}</td>
-                                <td>{{ $activity->description }}</td>
-                                <td>{{ $activity->property->property_name ?? $activity->property->name ?? 'N/A' }}</td>
-                                <td>
-                                    <span class="badge badge-{{ $activity->status_color }}">
-                                        {{ $activity->status }}
-                                    </span>
-                                </td>
-                            </tr>
-                            @empty
-                            <tr>
-                                <td colspan="4" class="text-center text-muted py-4">
-                                    No recent activity. Start by adding a property!
-                                </td>
-                            </tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<style>
-body.light-theme .content-wrapper {
-    background-color: #f4f7fb !important;
-}
-
-body.light-theme .card,
-.card,
-.emuria-dashboard-card,
-.emuria-dashboard-card.bg-gradient-danger,
-.emuria-dashboard-card.bg-gradient-info,
-.emuria-dashboard-card.bg-gradient-success,
-.emuria-dashboard-card.bg-gradient-warning {
-    background: #ffffff !important;
-    border: 1px solid #dfe6ef !important;
-    border-left: 1px solid #dfe6ef !important;
-    border-radius: 8px !important;
-    box-shadow: 0 4px 12px rgba(16, 24, 40, .045) !important;
-    color: #172033 !important;
-}
-
-.card-body {
-    color: #172033 !important;
-}
-
-.card-title {
-    color: #172033 !important;
-    font-weight: 800 !important;
-}
-
-.emuria-dashboard-card {
-    min-height: 142px !important;
-}
-
-.emuria-dashboard-card .card-body {
-    padding: 20px 22px !important;
-}
-
-.emuria-dashboard-card h6,
-.emuria-dashboard-card p,
-.emuria-dashboard-card .text-white-50 {
-    color: #667085 !important;
-}
-
-.emuria-dashboard-card h6 {
-    font-size: .76rem !important;
-    font-weight: 800 !important;
-    letter-spacing: .04em !important;
-    text-transform: uppercase !important;
-}
-
-.emuria-dashboard-card h2 {
-    color: #071426 !important;
-    font-size: 2rem !important;
-    font-weight: 900 !important;
-}
-
-.emuria-dashboard-card i.mdi-48px {
-    width: 48px !important;
-    height: 48px !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    background: #f3f6fa !important;
-    color: #344054 !important;
-    border-radius: 8px !important;
-    font-size: 1.6rem !important;
-    opacity: 1 !important;
-}
-
-.table {
-    color: #172033 !important;
-}
-
-.table thead th {
-    background: #f3f6fa !important;
-    color: #344054 !important;
-    border-bottom: 1px solid #dfe6ef !important;
-}
-
-.table tbody td {
-    background: #ffffff !important;
-    color: #172033 !important;
-    border-top: 1px solid #eef2f6 !important;
-}
-
-.table-hover tbody tr:hover td {
-    background: #f8fafc !important;
-    box-shadow: none !important;
-    transform: none !important;
-}
-
-body.light-theme .btn-outline-primary,
-body.light-theme .btn-outline-info,
-body.light-theme .btn-outline-success,
-body.light-theme .btn-outline-warning {
-    color: #2458d6 !important;
-}
-</style>
-
-@endif {{-- end @if(Store Manager) / @else --}}
-
+@include('shared.dashboard-design-system')
 @endsection
