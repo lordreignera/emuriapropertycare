@@ -4,6 +4,93 @@
 
 @section('content')
 <div class="content-wrapper">
+    <style>
+        .property-registry-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 18px;
+        }
+
+        .property-registry-card {
+            border: 1px solid #dfe6ef;
+            border-radius: 8px;
+            background: #ffffff;
+            overflow: hidden;
+            box-shadow: 0 8px 22px rgba(16, 24, 40, .055);
+            min-height: 100%;
+        }
+
+        .property-registry-cover {
+            height: 150px;
+            background: linear-gradient(135deg, #e8eef8, #f8fafc);
+            overflow: hidden;
+        }
+
+        .property-registry-cover img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .property-registry-cover-placeholder {
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #8a98ad;
+            font-size: 2.4rem;
+        }
+
+        .property-team-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            border: 1px solid #d8e0ec;
+            border-radius: 7px;
+            overflow: hidden;
+        }
+
+        .property-team-cell {
+            min-height: 78px;
+            padding: 10px 8px;
+            text-align: center;
+            border-right: 1px solid #d8e0ec;
+            background: #fbfcfe;
+        }
+
+        .property-team-cell:last-child {
+            border-right: 0;
+        }
+
+        .property-action-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .property-action-row form {
+            margin: 0;
+        }
+
+        .property-action-row .btn {
+            min-height: 36px;
+        }
+
+        @media (max-width: 576px) {
+            .property-registry-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .property-action-row > .btn,
+            .property-action-row > form {
+                flex: 1 1 calc(50% - 8px);
+            }
+
+            .property-action-row > form > .btn {
+                width: 100%;
+            }
+        }
+    </style>
     <div class="row">
         <div class="col-lg-12 grid-margin stretch-card">
             <div class="card">
@@ -34,7 +121,7 @@
                         <li class="nav-item">
                             <a class="nav-link {{ request('status') == 'not_inspected' ? 'active' : '' }}" 
                                href="{{ route('properties.index', ['status' => 'not_inspected']) }}">
-                                <i class="mdi mdi-home-alert"></i> Not Yet Assessed
+                                <i class="mdi mdi-home-alert"></i> Not Yet Diagnosed
                                 <span class="badge bg-warning ms-1">
                                     {{ \App\Models\Property::whereDoesntHave('inspections', function($query) {
                                             $query->where('status', 'completed');
@@ -46,7 +133,7 @@
                         <li class="nav-item">
                             <a class="nav-link {{ request('status') == 'inspected_completed' ? 'active' : '' }}" 
                                href="{{ route('properties.index', ['status' => 'inspected_completed']) }}">
-                                <i class="mdi mdi-check-decagram"></i> Assessed & Completed
+                                <i class="mdi mdi-check-decagram"></i> Diagnosed & Completed
                                 <span class="badge bg-success ms-1">
                                     {{ \App\Models\Property::whereHas('inspections', function($query) {
                                             $query->where('status', 'completed');
@@ -81,97 +168,132 @@
                         </div>
                     </form>
 
-                    <div class="table-responsive">
-                        <table id="propertiesTable" class="table table-hover table-striped">
-                            <thead>
-                                <tr>
-                                    <th>Property</th>
-                                    <th>Owner</th>
-                                    <th>Location</th>
-                                    <th>Type</th>
-                                    <th>Status</th>
-                                    <th>Submitted</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @forelse($properties as $property)
-                                <tr>
-                                    <td>
-                                        <code>{{ $property->property_code }}</code><br>
-                                        <strong>{{ $property->property_name }}</strong>
-                                        @if($property->property_brand)
-                                        <br><small class="text-muted">Brand: {{ $property->property_brand }}</small>
-                                        @endif
-                                    </td>
-                                    <td>
-                                        <div>{{ $property->owner_first_name }}</div>
-                                        <small class="text-muted">{{ $property->owner_email }}</small>
-                                    </td>
-                                    <td>
-                                        {{ $property->city }}, {{ $property->province }}<br>
-                                        <small class="text-muted">{{ $property->country }}</small>
-                                    </td>
-                                    <td>
-                                        <span class="badge badge-info">
-                                            {{ ucfirst(str_replace('_', ' ', $property->type)) }}
-                                        </span>
-                                        @if($property->has_tenants)
-                                        <br><span class="badge badge-primary mt-1">
-                                            <i class="mdi mdi-account-group"></i> Multi-Tenant
-                                        </span>
-                                        @endif
-                                    </td>
-                                    <td>
-                                        @php
-                                            $latestInspection = $property->inspections->first();
-                                        @endphp
+                    @if($properties->isEmpty())
+                        <div class="text-center py-5">
+                            <i class="mdi mdi-home-outline" style="font-size: 3rem; color: #d0d7e2;"></i>
+                            <p class="text-muted mt-2 mb-0">No properties found</p>
+                        </div>
+                    @else
+                        <div class="property-registry-grid">
+                            @foreach($properties as $property)
+                                @php
+                                    $latestInspection = $property->inspections->first();
+                                    $completedInspection = $property->inspections->firstWhere('status', 'completed');
+                                    $projectInvoice = null;
+                                    if ($completedInspection?->project_id) {
+                                        $projectInvoice = \App\Models\Invoice::where('project_id', $completedInspection->project_id)
+                                            ->latest('id')
+                                            ->first();
+                                    }
+                                    $agreementFullySigned = $completedInspection
+                                        && !empty($completedInspection->client_signature)
+                                        && !empty($completedInspection->etogo_signed_at);
+                                    $diagnosisPricing = $diagnosisPricingByPropertyId[$property->id] ?? ['invoice_dollars' => 0];
+                                    $openDiagnosis = $property->inspections()
+                                        ->whereIn('status', ['scheduled', 'in_progress'])
+                                        ->first();
+                                    $hasInspectorAssigned = $openDiagnosis && $openDiagnosis->inspector_id;
+                                    $startableInspection = $property->inspections->first(function ($inspection) {
+                                        return in_array($inspection->status, ['scheduled', 'in_progress'], true);
+                                    });
+                                    $canInspectorStart = $startableInspection
+                                        && auth()->user()->hasRole('Inspector')
+                                        && (
+                                            (int) ($startableInspection->inspector_id ?? 0) === (int) auth()->id()
+                                            || (int) ($property->inspector_id ?? 0) === (int) auth()->id()
+                                            || auth()->user()->can('create inspections')
+                                        );
+                                    $canAdminStart = !$completedInspection
+                                        && !auth()->user()->hasRole('Inspector')
+                                        && (
+                                            auth()->user()->can('create inspections')
+                                            || auth()->user()->hasRole(['Super Admin', 'Super Administrator', 'Administrator', 'Project Manager'])
+                                        );
+                                    $photos = is_array($property->property_photos ?? null) ? $property->property_photos : [];
+                                    $coverPhoto = !empty($photos) ? $property->getStorageUrl($photos[0]) : null;
+                                    $statusClass = $completedInspection ? 'bg-success' : ($latestInspection ? 'bg-warning text-dark' : 'bg-secondary');
+                                    $statusLabel = $completedInspection ? 'Diagnosed & Completed' : ($latestInspection ? ucfirst(str_replace('_', ' ', (string) $latestInspection->status)) : 'Not Yet Diagnosed');
+                                @endphp
 
-                                        @if($latestInspection)
-                                            @if($latestInspection->status === 'completed')
-                                                <span class="badge badge-success">
-                                                    <i class="mdi mdi-check-circle"></i> Assessed & Completed
-                                                </span>
-                                                <br><small class="text-muted">{{ optional($latestInspection->completed_date)->format('M d, Y') ?? 'Completion date unavailable' }}</small>
-                                            @else
-                                                <span class="badge badge-warning">
-                                                    <i class="mdi mdi-clock-outline"></i> Not Yet Assessed
-                                                </span>
-                                                <br><small class="text-muted">Inspection status: {{ ucfirst(str_replace('_', ' ', $latestInspection->status)) }}</small>
-                                            @endif
-
-                                            <br>
-                                            @if($latestInspection->inspection_fee_status === 'paid')
-                                                <small class="text-success"><i class="mdi mdi-cash-check"></i> Diagnosis invoice paid</small>
-                                            @else
-                                                <small class="text-muted"><i class="mdi mdi-receipt-clock-outline"></i> Invoice pending / unpaid</small>
-                                            @endif
+                                <article class="property-registry-card">
+                                    <div class="property-registry-cover">
+                                        @if($coverPhoto)
+                                            <img src="{{ $coverPhoto }}" alt="{{ $property->property_name ?? 'Property' }}" loading="lazy">
                                         @else
-                                            <span class="badge badge-warning">
-                                                <i class="mdi mdi-alert-circle-outline"></i> Not Yet Assessed
-                                            </span>
-                                            <br><small class="text-muted"><i class="mdi mdi-phone-in-talk-outline"></i> Awaiting client call</small>
+                                            <div class="property-registry-cover-placeholder">
+                                                <i class="mdi mdi-home-city-outline"></i>
+                                            </div>
                                         @endif
-                                    </td>
-                                    <td>{{ $property->created_at->format('M d, Y') }}</td>
-                                    <td>
-                                        <div class="btn-group" role="group">
-                                            @php
-                                                $completedInspection = $property->inspections->firstWhere('status', 'completed');
-                                                $projectInvoice = null;
-                                                if ($completedInspection?->project_id) {
-                                                    $projectInvoice = \App\Models\Invoice::where('project_id', $completedInspection->project_id)
-                                                        ->latest('id')
-                                                        ->first();
-                                                }
-                                                $agreementFullySigned = $completedInspection
-                                                    && !empty($completedInspection->client_signature)
-                                                    && !empty($completedInspection->etogo_signed_at);
-                                            @endphp
+                                    </div>
 
-                                            @php
-                                                $diagnosisPricing = $diagnosisPricingByPropertyId[$property->id] ?? ['invoice_dollars' => 0];
-                                            @endphp
+                                    <div class="p-3">
+                                        <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                                            <div class="min-w-0">
+                                                <h5 class="mb-1 fw-bold">{{ $property->property_name }}</h5>
+                                                <div class="small">
+                                                    <code class="me-2">{{ $property->property_code }}</code>
+                                                    <span class="text-muted">{{ $property->city }}, {{ $property->province }}</span>
+                                                </div>
+                                                @if($property->property_brand)
+                                                    <div class="small text-muted mt-1">Brand: {{ $property->property_brand }}</div>
+                                                @endif
+                                            </div>
+                                            <span class="badge {{ $statusClass }} text-nowrap">{{ $statusLabel }}</span>
+                                        </div>
+
+                                        <div class="small mb-3">
+                                            <i class="mdi mdi-account-outline text-muted me-1"></i>
+                                            <strong>{{ $property->owner_first_name ?: ($property->user?->name ?? '-') }}</strong>
+                                            <span class="text-muted ms-1">{{ $property->owner_email }}</span>
+                                        </div>
+
+                                        <div class="d-flex flex-wrap gap-2 mb-3">
+                                            <span class="badge bg-info text-dark">{{ ucfirst(str_replace('_', ' ', (string) $property->type)) }}</span>
+                                            @if($property->has_tenants)
+                                                <span class="badge bg-primary"><i class="mdi mdi-account-group me-1"></i>Multi-Tenant</span>
+                                            @endif
+                                            @if($latestInspection?->inspection_fee_status === 'paid')
+                                                <span class="badge bg-success"><i class="mdi mdi-cash-check me-1"></i>Diagnosis Paid</span>
+                                            @elseif($latestInspection)
+                                                <span class="badge bg-light text-dark border"><i class="mdi mdi-receipt-clock-outline me-1"></i>Invoice Pending</span>
+                                            @endif
+                                        </div>
+
+                                        <div class="property-team-grid mb-3">
+                                            <div class="property-team-cell">
+                                                <i class="mdi mdi-account-check text-info d-block" style="font-size:1.1rem;"></i>
+                                                <div class="text-muted" style="font-size:.65rem;">INSPECTOR</div>
+                                                <div class="fw-semibold" style="font-size:.74rem;">{{ $latestInspection?->inspector?->name ?? '-' }}</div>
+                                            </div>
+                                            <div class="property-team-cell">
+                                                <i class="mdi mdi-tools text-secondary d-block" style="font-size:1.1rem;"></i>
+                                                <div class="text-muted" style="font-size:.65rem;">TECHNICIAN</div>
+                                                <div class="fw-semibold" style="font-size:.74rem;">{{ $latestInspection?->technician?->name ?? '-' }}</div>
+                                            </div>
+                                            <div class="property-team-cell">
+                                                <i class="mdi mdi-account-hard-hat text-primary d-block" style="font-size:1.1rem;"></i>
+                                                <div class="text-muted" style="font-size:.65rem;">MANAGER</div>
+                                                <div class="fw-semibold" style="font-size:.74rem;">{{ $property->projectManager?->name ?? $completedInspection?->project?->manager?->name ?? '-' }}</div>
+                                            </div>
+                                        </div>
+
+                                        <div class="d-flex justify-content-between align-items-center small mb-3">
+                                            <div>
+                                                <i class="mdi mdi-calendar me-1 text-muted"></i>
+                                                @if($latestInspection?->scheduled_date)
+                                                    {{ optional($latestInspection->scheduled_date)->format('M d, Y - h:i A') }}
+                                                @else
+                                                    {{ $property->created_at->format('M d, Y') }}
+                                                @endif
+                                            </div>
+                                            <div class="text-muted">{{ $property->country }}</div>
+                                        </div>
+
+                                        <div class="property-action-row">
+                                            <a href="{{ route('properties.show', $property->id) }}"
+                                               class="btn btn-sm btn-primary fw-bold" title="View Property">
+                                                <i class="mdi mdi-eye me-1"></i>View Property
+                                            </a>
 
                                             @if(!$completedInspection)
                                                 <a href="{{ route('properties.digital-twin', $property) }}"
@@ -216,78 +338,39 @@
                                                 @endif
                                             @endif
 
-                                            @if(!$completedInspection)
-                                                <a href="{{ route('properties.show', $property->id) }}" 
-                                                   class="btn btn-sm btn-info" title="View Details">
-                                                    <i class="mdi mdi-eye"></i>
-                                                </a>
-                                            @endif
-                                            
-                                            @php
-                                                $openDiagnosis = $property->inspections()
-                                                    ->whereIn('status', ['scheduled', 'in_progress'])
-                                                    ->first();
-                                                $hasInspectorAssigned = $openDiagnosis && $openDiagnosis->inspector_id;
-                                                $startableInspection = $property->inspections->first(function ($inspection) {
-                                                    return in_array($inspection->status, ['scheduled', 'in_progress'], true);
-                                                });
-                                                $canInspectorStart = $startableInspection
-                                                    && auth()->user()->hasRole('Inspector')
-                                                    && (
-                                                        (int) ($startableInspection->inspector_id ?? 0) === (int) auth()->id()
-                                                        || (int) ($property->inspector_id ?? 0) === (int) auth()->id()
-                                                        || auth()->user()->can('create inspections')
-                                                    );
-                                                $canAdminStart = !$completedInspection
-                                                    && !auth()->user()->hasRole('Inspector')
-                                                    && (
-                                                        auth()->user()->can('create inspections')
-                                                        || auth()->user()->hasRole(['Super Admin', 'Super Administrator', 'Administrator', 'Project Manager'])
-                                                    );
-                                            @endphp
-
                                             @if($canInspectorStart || $canAdminStart)
                                                 <a href="{{ route('inspections.create', ['property_id' => $property->id]) }}"
                                                    class="btn btn-sm btn-success fw-bold"
                                                    title="Start Diagnosis">
-                                                    <i class="mdi mdi-clipboard-check me-1"></i> Start Diagnosis
+                                                    <i class="mdi mdi-clipboard-check me-1"></i>Start Diagnosis
                                                 </a>
                                             @endif
-                                            
+
                                             @if(!$completedInspection && !$hasInspectorAssigned)
-                                                <button type="button" class="btn btn-sm btn-primary" 
-                                                        onclick="assignStaff({{ $property->id }})" 
+                                                <button type="button" class="btn btn-sm btn-primary"
+                                                        onclick="assignStaff({{ $property->id }})"
                                                         title="Assign Diagnosis Team">
-                                                    <i class="mdi mdi-account-plus"></i>
+                                                    <i class="mdi mdi-account-plus me-1"></i>Assign Team
                                                 </button>
                                             @endif
-                                            
+
                                             @if(!auth()->user()->hasRole('Inspector') && !$completedInspection)
-                                                <form action="{{ route('properties.destroy', $property->id) }}" 
-                                                      method="POST" 
-                                                      onsubmit="return confirm('Are you sure you want to delete this property?');"
-                                                      class="d-inline">
+                                                <form action="{{ route('properties.destroy', $property->id) }}"
+                                                      method="POST"
+                                                      onsubmit="return confirm('Are you sure you want to delete this property?');">
                                                     @csrf
                                                     @method('DELETE')
                                                     <button type="submit" class="btn btn-sm btn-dark" title="Delete">
-                                                        <i class="mdi mdi-delete"></i>
+                                                        <i class="mdi mdi-delete me-1"></i>Delete
                                                     </button>
                                                 </form>
                                             @endif
                                         </div>
-                                    </td>
-                                </tr>
-                                @empty
-                                <tr>
-                                    <td colspan="7" class="text-center py-4">
-                                        <i class="mdi mdi-home-outline" style="font-size: 3rem; color: #ddd;"></i>
-                                        <p class="text-muted mt-2">No properties found</p>
-                                    </td>
-                                </tr>
-                                @endforelse
-                            </tbody>
-                        </table>
-                    </div>
+                                    </div>
+                                </article>
+                            @endforeach
+                        </div>
+                    @endif
                     
                     @if($properties->hasPages())
                     <div class="mt-3">
@@ -348,7 +431,7 @@
                                     <option value="{{ $inspector->id }}">{{ $inspector->name }} ({{ $inspector->email }})</option>
                                     @endforeach
                                 </select>
-                                <small class="text-muted" style="color: #666666 !important;">Assign an inspector to conduct the assessment</small>
+                                <small class="text-muted" style="color: #666666 !important;">Assign an inspector to conduct the diagnosis</small>
                             </div>
                         </div>
                     </div>
@@ -461,22 +544,5 @@ function assignStaff(propertyId) {
     modal.show();
 }
 
-$(document).ready(function() {
-    @if($properties->count() > 0)
-    $('#propertiesTable').DataTable({
-        "pageLength": 15,
-        "lengthMenu": [[15, 25, 50, -1], [15, 25, 50, "All"]],
-        "order": [[5, "desc"]],
-        "language": {
-            "search": "Search:",
-            "lengthMenu": "Show _MENU_ properties",
-            "info": "Showing _START_ to _END_ of _TOTAL_ properties"
-        },
-        "columnDefs": [
-            { "orderable": false, "targets": [6] }
-        ]
-    });
-    @endif
-});
 </script>
 @endpush

@@ -12,8 +12,9 @@ class ToolSetting extends Model
     protected $fillable = [
         'tool_name',
         'quantity',
-        'system_id',
-        'subsystem_id',
+        'building_system_id',
+        'building_subsystem_id',
+        'building_component_id',
         'finding_template_setting_id',
         'ownership_status',
         'availability_status',
@@ -24,8 +25,9 @@ class ToolSetting extends Model
 
     protected $casts = [
         'quantity' => 'integer',
-        'system_id' => 'integer',
-        'subsystem_id' => 'integer',
+        'building_system_id' => 'integer',
+        'building_subsystem_id' => 'integer',
+        'building_component_id' => 'integer',
         'finding_template_setting_id' => 'integer',
         'sort_order' => 'integer',
         'is_active' => 'boolean',
@@ -33,12 +35,17 @@ class ToolSetting extends Model
 
     public function system(): BelongsTo
     {
-        return $this->belongsTo(InspectionSystem::class, 'system_id');
+        return $this->belongsTo(BuildingSystem::class, 'building_system_id');
     }
 
     public function subsystem(): BelongsTo
     {
-        return $this->belongsTo(InspectionSubsystem::class, 'subsystem_id');
+        return $this->belongsTo(BuildingSubsystem::class, 'building_subsystem_id');
+    }
+
+    public function component(): BelongsTo
+    {
+        return $this->belongsTo(BuildingComponent::class, 'building_component_id');
     }
 
     public function findingTemplateSetting(): BelongsTo

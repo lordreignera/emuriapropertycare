@@ -107,6 +107,15 @@ Route::middleware([
         Route::post('/diagnosis-invoice', [App\Http\Controllers\PropertyController::class, 'createDiagnosisInvoice'])
             ->name('diagnosis-invoice.store')
             ->middleware('role:Super Admin|Administrator|Project Manager');
+        Route::get('/process-invoice', [App\Http\Controllers\PropertyController::class, 'previewProcessInvoice'])
+            ->name('process-invoice.preview')
+            ->middleware('role:Super Admin|Administrator|Project Manager');
+        Route::post('/process-invoice/share', [App\Http\Controllers\PropertyController::class, 'shareProcessInvoice'])
+            ->name('process-invoice.share')
+            ->middleware('role:Super Admin|Administrator|Project Manager');
+        Route::get('/process-invoice/download', [App\Http\Controllers\PropertyController::class, 'downloadProcessInvoice'])
+            ->name('process-invoice.download')
+            ->middleware('role:Super Admin|Administrator|Project Manager');
         Route::get('/digital-twin', [App\Http\Controllers\DigitalTwinController::class, 'showProperty'])
             ->name('digital-twin');
     });
@@ -127,7 +136,6 @@ Route::middleware([
             Route::post('/assessment-schedule', [App\Http\Controllers\InspectionController::class, 'updateAssessmentSchedule'])->name('assessment-schedule.update');
             Route::get('/digital-twin', [App\Http\Controllers\DigitalTwinController::class, 'show'])->name('digital-twin');
             Route::post('/digital-twin/models', [App\Http\Controllers\DigitalTwinController::class, 'storeSpatialModel'])->name('digital-twin.models.store');
-            Route::post('/digital-twin/models/{spatialModel}/convert', [App\Http\Controllers\DigitalTwinController::class, 'convertSpatialModel'])->name('digital-twin.models.convert');
             Route::post('/digital-twin/markers', [App\Http\Controllers\DigitalTwinController::class, 'storeIssueMarker'])->name('digital-twin.markers.store');
             Route::get('/matterport', fn (App\Models\Inspection $inspection) => redirect()->route('inspections.digital-twin', $inspection))->name('matterport');
             Route::post('/matterport-model', [App\Http\Controllers\MatterportModelController::class, 'store'])->name('matterport-model.store');
@@ -321,6 +329,7 @@ Route::middleware([
     Route::prefix('admin')->name('admin.')->middleware('role:Super Admin|Administrator')->group(function () {
         Route::resource('systems', App\Http\Controllers\Admin\SystemController::class)->except(['show'])->names('systems');
         Route::resource('subsystems', App\Http\Controllers\Admin\SubsystemController::class)->except(['show'])->names('subsystems');
+        Route::resource('components', App\Http\Controllers\Admin\BuildingComponentController::class)->except(['show'])->names('components');
         
         // BDC Calibration Engine Settings
         Route::get('settings/bdc', [App\Http\Controllers\Admin\BDCSettingsController::class, 'index'])->name('settings.bdc');

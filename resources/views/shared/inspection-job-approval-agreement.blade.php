@@ -240,7 +240,7 @@
 <div class="job-approval-agreement" style="border:1px solid #d8dbe2; padding:14px; border-radius:6px; margin-top:14px; {{ !empty($pdfMode) ? 'font-size:11px;' : '' }}">
     <h3 style="margin:0 0 6px 0; font-size:{{ !empty($pdfMode) ? '15px' : '19px' }};">CLIENT JOB APPROVAL &amp; SERVICE AGREEMENT</h3>
     <div style="margin-bottom:10px;"><strong>ETOGO | Proactive Property &amp; People Stewardship&trade;</strong></div>
-    <p style="margin-top:0;">This Client Job Approval &amp; Service Agreement (the "Agreement") is entered into as of the Date of Approval set forth below, by and between Etogo ("Etogo") and the undersigned client (the "Client").</p>
+    <p style="margin-top:0;">This Client Job Approval &amp; Service Agreement (the "Agreement") is entered into as of the Date of Approval set forth below, by and between ETOGO ("ETOGO") and the undersigned client (the "Client").</p>
 
     <h4 style="margin-bottom:4px;">1. PROJECT IDENTIFICATION</h4>
     <div>• Client Name: {{ $agreementClientName }}</div>
@@ -250,7 +250,7 @@
     <div>• Date of Approval: {{ $agreementApprovalDate }}</div>
 
     <h4 style="margin:10px 0 4px 0;">2. SCOPE OF WORK (LOCKED SCOPE)</h4>
-    <p style="margin:0 0 6px 0;">The Scope of Work is strictly defined by the line items generated through the Etogo system and is based upon:</p>
+    <p style="margin:0 0 6px 0;">The Scope of Work is strictly defined by the line items generated through the ETOGO system and is based upon:</p>
     <div>• Property Health Assessment Report (PHAR)</div>
     <div>• Client-requested specific scope</div>
     <div>• Site inspection findings</div>
@@ -305,7 +305,7 @@
         </ol>
     @endif
     
-    <p style="margin-top:6px;">Locked Scope Clause: The scope of work is fixed upon execution of this Agreement. Etogo is only responsible for the tasks explicitly listed above. Any additional work, discovery of hidden defects, or requested modifications must follow the formal Change Order Process (Section 5).</p>
+    <p style="margin-top:6px;">Locked Scope Clause: The scope of work is fixed upon execution of this Agreement. ETOGO is only responsible for the tasks explicitly listed above. Any additional work, discovery of hidden defects, or requested modifications must follow the formal Change Order Process (Section 5).</p>
 
     <h4 style="margin:10px 0 4px 0;">3. PROJECT TIMELINE &amp; WORK SCHEDULE</h4>
     <div>• Start Date: {{ $agreementStartDate }}</div>
@@ -405,7 +405,7 @@
     @if(!empty($agreementInspection->schedule_blocked_reason))
         <div style="margin-top:6px;color:#9a3412;"><strong>Scheduling Note:</strong> {{ $agreementInspection->schedule_blocked_reason }}</div>
     @endif
-    <p style="margin-top:6px;">Timeline Clause: The timeline is an estimate based on the current scope, material availability, and site conditions. Etogo shall not be held liable for delays caused by Client-initiated changes, restricted site access, permit delays, or force majeure events (e.g., extreme weather).</p>
+    <p style="margin-top:6px;">Timeline Clause: The timeline is an estimate based on the current scope, material availability, and site conditions. ETOGO shall not be held liable for delays caused by Client-initiated changes, restricted site access, permit delays, or force majeure events (e.g., extreme weather).</p>
 
     <h4 style="margin:10px 0 4px 0;">4. PRICING &amp; PAYMENT TERMS</h4>
     <div><strong>A. Project Cost Breakdown:</strong></div>
@@ -436,25 +436,25 @@
             .</div>
     @endif
     <p style="margin:6px 0 0 0;"><em>Single-visit jobs may also use a two-part structure: 50% deposit before mobilization and 50% balance payment after service completion.</em></p>
-    <p style="margin-top:6px;">Payment Clause: Work will not commence, and the project will not be placed on the Etogo master schedule, until the required deposit is received in cleared funds. Etogo reserves the right to withhold final deliverables, reports, or warranties until full payment is settled.</p>
+    <p style="margin-top:6px;">Payment Clause: Work will not commence, and the project will not be placed on the ETOGO master schedule, until the required deposit is received in cleared funds. ETOGO reserves the right to withhold final deliverables, reports, or warranties until full payment is settled.</p>
 
     <h4 style="margin:10px 0 4px 0;">5. CHANGE ORDER PROCESS</h4>
-    <p style="margin:0 0 6px 0;">Etogo maintains a zero-tolerance policy for undocumented scope creep to ensure project profitability and timeline integrity.</p>
+    <p style="margin:0 0 6px 0;">ETOGO maintains a zero-tolerance policy for undocumented scope creep to ensure project profitability and timeline integrity.</p>
     <div>Change Order Requirements: No additional work will be performed without a digital or written Change Order including:</div>
     <div>1. Detailed description of the additional work.</div>
     <div>2. Fixed costing for the change.</div>
     <div>3. Revised timeline impact.</div>
     <div>4. Client signature/authorization.</div>
-    <p style="margin-top:6px;">Clause: Verbal approvals are not legally binding. All changes must be processed through the Etogo operational system.</p>
+    <p style="margin-top:6px;">Clause: Verbal approvals are not legally binding. All changes must be processed through the ETOGO operational system.</p>
 
     <h4 style="margin:10px 0 4px 0;">6. MATERIALS &amp; PROCUREMENT</h4>
     <div>Materials Provision:</div>
-    <div>• Supplied by Etogo (standard procurement)</div>
-    <div>• Supplied by Client (subject to Etogo approval)</div>
-    <p style="margin-top:6px;">Clause: Etogo reserves the right to select appropriate materials and substitute equivalent materials where supply chain constraints exist. Etogo is not responsible for delays, quality defects, or installation failures arising from client-supplied materials.</p>
+    <div>• Supplied by ETOGO (standard procurement)</div>
+    <div>• Supplied by Client (subject to ETOGO approval)</div>
+    <p style="margin-top:6px;">Clause: ETOGO reserves the right to select appropriate materials and substitute equivalent materials where supply chain constraints exist. ETOGO is not responsible for delays, quality defects, or installation failures arising from client-supplied materials.</p>
 
     <h4 style="margin:10px 0 4px 0;">7. TOOL &amp; EXECUTION STANDARDS</h4>
-    <p style="margin:0 0 6px 0;">Etogo operates under a proprietary controlled execution system. The Client acknowledges that services are delivered using:</p>
+    <p style="margin:0 0 6px 0;">ETOGO operates under a proprietary controlled execution system. The Client acknowledges that services are delivered using:</p>
     <div>• Digital tool tracking and operator accountability.</div>
     <div>• Measured output delivery (e.g., turnover standards).</div>
     <div>• Defined material allocation protocols.</div>
@@ -476,7 +476,7 @@
     @else
         <div style="margin-top:6px;">• Assigned tool set will populate automatically once assessment scope is synchronized.</div>
     @endif
-    <p style="margin-top:6px;">This system ensures that the project is executed to Etogo’s professional quality standards and "Proactive Property Stewardship" benchmarks.</p>
+    <p style="margin-top:6px;">This system ensures that the project is executed to ETOGO’s professional quality standards and "Proactive Property Stewardship" benchmarks.</p>
 
     <h4 style="margin:10px 0 4px 0;">8. SITE ACCESS &amp; RESPONSIBILITIES</h4>
     <div>The Client agrees to provide:</div>
@@ -490,14 +490,14 @@
     <p style="margin:0 0 6px 0;">Client Review Period: The Client has 48 hours following notice of completion to raise concerns. After this period, the work is deemed accepted and final payment is due.</p>
 
     <h4 style="margin:10px 0 4px 0;">10. LIMITED WORKMANSHIP WARRANTY</h4>
-    <p style="margin:0 0 6px 0;">Etogo provides a 90-day warranty on workmanship related specifically to the items in the Approved Scope.</p>
+    <p style="margin:0 0 6px 0;">ETOGO provides a 90-day warranty on workmanship related specifically to the items in the Approved Scope.</p>
     <p style="margin:0 0 6px 0;">Exclusions: This warranty does not cover normal wear and tear, pre-existing structural issues, new damage caused by third parties/tenants, or external environmental factors.</p>
 
     <h4 style="margin:10px 0 4px 0;">11. LIABILITY &amp; RISK</h4>
-    <p style="margin:0 0 6px 0;">Clause: Etogo is not liable for pre-existing conditions, latent defects not visible during the PHAR/Assessment, or consequential damages arising from the property’s overall condition. Our liability is limited to the total value of this specific Job Agreement.</p>
+    <p style="margin:0 0 6px 0;">Clause: ETOGO is not liable for pre-existing conditions, latent defects not visible during the PHAR/Assessment, or consequential damages arising from the property’s overall condition. Our liability is limited to the total value of this specific Job Agreement.</p>
 
     <h4 style="margin:10px 0 4px 0;">12. INTEGRATION WITH ETOGO STEWARDSHIP SYSTEM</h4>
-    <p style="margin:0 0 6px 0;">This Agreement is a component of the Etogo operational ecosystem. All project records, material logs, and progress tracking within the Etogo system are incorporated herein by reference. In the event of a conflict between this Job Approval and the Master Property Stewardship &amp; Management Agreement, the Master Agreement shall prevail.</p>
+    <p style="margin:0 0 6px 0;">This Agreement is a component of the ETOGO operational ecosystem. All project records, material logs, and progress tracking within the ETOGO system are incorporated herein by reference. In the event of a conflict between this Job Approval and the Master Property Stewardship &amp; Management Agreement, the Master Agreement shall prevail.</p>
 
     <h4 style="margin:10px 0 4px 0;">13. GOVERNING LAW &amp; JURISDICTION</h4>
     <p style="margin:0 0 6px 0;">This Agreement shall be governed by and construed in accordance with the laws of the Province of British Columbia and the federal laws of Canada applicable therein. The parties irrevocably attorn to the exclusive jurisdiction of the courts of the Province of British Columbia, sitting in Vancouver, British Columbia, in respect of any dispute arising under or in connection with this Agreement.</p>
@@ -507,7 +507,7 @@
     <div style="margin-bottom:6px;">
         <strong>Step 1 — Client Signature:</strong> The Client reviews and signs this Agreement below, confirming approval of the Scope of Work and acceptance of all terms.<br>
         <strong>Step 2 — Work Payment / Deposit:</strong> The Client confirms the first work payment (full amount or first visit payment), which mobilizes the project.<br>
-        <strong>Step 3 — Etogo Countersignature:</strong> An authorized Etogo representative countersigns to fully execute this Agreement. Work scheduling commences upon completion of all three steps.
+        <strong>Step 3 — ETOGO Countersignature:</strong> An authorized ETOGO representative countersigns to fully execute this Agreement. Work scheduling commences upon completion of all three steps.
     </div>
     <p style="margin:0 0 10px 0;">This Agreement is not binding until all three steps above are completed.</p>
 
@@ -538,25 +538,25 @@
             </td>
             <td style="width:50%; vertical-align:top; padding-left:14px; border-top:2px solid #333; padding-top:8px;">
                 <strong>STEP 3 — ETOGO COUNTERSIGNATURE</strong><br><br>
-                @if(!empty($agreementInspection->etogo_signed_at))
+                @if(!empty($agreementInspection->ETOGO_signed_at))
                     Signature: <em style="font-style:italic;">Digitally Signed</em><br>
-                    @if(!empty($agreementInspection->etogo_signature_image_path))
+                    @if(!empty($agreementInspection->ETOGO_signature_image_path))
                         @php
                             $disk = config('filesystems.default', 'public');
-                            $etogoSigUrl = $pdfMode ?? false
-                                ? storage_path('app/public/' . $agreementInspection->etogo_signature_image_path)
-                                : \Illuminate\Support\Facades\Storage::disk($disk)->url($agreementInspection->etogo_signature_image_path);
+                            $ETOGOSigUrl = $pdfMode ?? false
+                                ? storage_path('app/public/' . $agreementInspection->ETOGO_signature_image_path)
+                                : \Illuminate\Support\Facades\Storage::disk($disk)->url($agreementInspection->ETOGO_signature_image_path);
                         @endphp
-                        <img src="{{ $etogoSigUrl }}" alt="Etogo Signature"
+                        <img src="{{ $ETOGOSigUrl }}" alt="ETOGO Signature"
                              style="max-height:55px;max-width:180px;object-fit:contain;display:block;margin:4px 0;"><br>
                     @endif
-                    Date: {{ optional($agreementInspection->etogo_signed_at)->format('Y-m-d h:i A') ?: 'N/A' }}<br>
-                    Name (Print): {{ $agreementInspection->etogoRepresentative?->name ?? 'Etogo Representative' }}
+                    Date: {{ optional($agreementInspection->ETOGO_signed_at)->format('Y-m-d h:i A') ?: 'N/A' }}<br>
+                    Name (Print): {{ $agreementInspection->ETOGORepresentative?->name ?? 'ETOGO Representative' }}
                 @else
                     Signature: _________________________________<br>
                     Date: ____________________<br>
                     Name (Print): ______________________________<br>
-                    <small style="color:#888;">(Etogo signs after client + payment confirmed)</small>
+                    <small style="color:#888;">(ETOGO signs after client + payment confirmed)</small>
                 @endif
             </td>
         </tr>

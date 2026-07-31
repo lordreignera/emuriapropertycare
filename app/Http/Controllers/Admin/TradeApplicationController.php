@@ -34,7 +34,7 @@ class TradeApplicationController extends Controller
             TradeApplication::STATUS_NEEDS_MORE_INFORMATION,
             TradeApplication::STATUS_CONDITIONALLY_APPROVED,
         ])->count();
-        $approvedCount = TradePartner::where('status', TradePartner::STATUS_ACTIVE)->count();
+        $approvedCount = TradeApplication::where('status', TradeApplication::STATUS_APPROVED)->count();
         $rejectedCount = TradeApplication::where('status', TradeApplication::STATUS_REJECTED)->count();
 
         return view('admin.trade-applications.index', compact(
@@ -48,7 +48,7 @@ class TradeApplicationController extends Controller
 
     public function show(TradeApplication $tradeApplication)
     {
-        $tradeApplication->load('tradePartner');
+        $tradeApplication->load('tradePartner', 'reviewer');
 
         return view('admin.trade-applications.show', [
             'application' => $tradeApplication,
@@ -60,22 +60,18 @@ class TradeApplicationController extends Controller
     public function updateStatus(Request $request, TradeApplication $tradeApplication)
     {
         $validated = $request->validate([
-            'status' => 'required|in:ready_for_review,needs_more_information,conditionally_approved,approved,rejected,suspended',
-            'admin_notes' => 'nullable|string|max:5000',
+            'status' => 'required|in:approved,rejected',
+            'admin_notes' => 'required|string|max:5000',
             'agreed_subsystem_pricing' => 'nullable|array',
-            'agreed_subsystem_pricing.*.pricing_unit' => 'nullable|in:sf,lf,ea,hr,day,ls,ton',
+            'agreed_subsystem_pricing.*.pricing_unit' => 'nullable|in:sf,lf,ea,pc,hr,day,ls,ton',
             'agreed_subsystem_pricing.*.typical_rate' => 'nullable|numeric|min:0|max:999999.99',
-            'agreed_subsystem_pricing.*.maximum_charge' => 'nullable|numeric|min:0|max:999999.99',
-            'agreed_subsystem_pricing.*.estimated_duration' => 'nullable|string|max:255',
-            'agreed_subsystem_pricing.*.notes' => 'nullable|string|max:1000',
+            'agreed_subsystem_pricing.*.estimated_hours' => 'nullable|numeric|min:0|max:99999.99',
             'agreed_custom_coverage' => 'nullable|array',
             'agreed_custom_coverage.*.system_name' => 'nullable|string|max:255',
             'agreed_custom_coverage.*.subsystem_name' => 'nullable|string|max:255',
-            'agreed_custom_coverage.*.pricing_unit' => 'nullable|in:sf,lf,ea,hr,day,ls,ton',
+            'agreed_custom_coverage.*.pricing_unit' => 'nullable|in:sf,lf,ea,pc,hr,day,ls,ton',
             'agreed_custom_coverage.*.typical_rate' => 'nullable|numeric|min:0|max:999999.99',
-            'agreed_custom_coverage.*.maximum_charge' => 'nullable|numeric|min:0|max:999999.99',
-            'agreed_custom_coverage.*.estimated_duration' => 'nullable|string|max:255',
-            'agreed_custom_coverage.*.notes' => 'nullable|string|max:1000',
+            'agreed_custom_coverage.*.estimated_hours' => 'nullable|numeric|min:0|max:99999.99',
         ]);
 
         $agreedSubsystemPricing = $this->normalizeAgreedSubsystemPricing(
@@ -145,12 +141,10 @@ class TradeApplicationController extends Controller
                 return [
                     'pricing_unit' => $pricing['pricing_unit'] ?? null,
                     'typical_rate' => isset($pricing['typical_rate']) && $pricing['typical_rate'] !== '' ? (float) $pricing['typical_rate'] : null,
-                    'maximum_charge' => isset($pricing['maximum_charge']) && $pricing['maximum_charge'] !== '' ? (float) $pricing['maximum_charge'] : null,
-                    'estimated_duration' => trim((string) ($pricing['estimated_duration'] ?? '')),
-                    'notes' => trim((string) ($pricing['notes'] ?? '')),
+                    'estimated_hours' => isset($pricing['estimated_hours']) && $pricing['estimated_hours'] !== '' ? (float) $pricing['estimated_hours'] : null,
                 ];
             })
-            ->filter(fn ($pricing) => $pricing['pricing_unit'] !== null || $pricing['typical_rate'] !== null || $pricing['maximum_charge'] !== null || $pricing['estimated_duration'] !== '' || $pricing['notes'] !== '')
+            ->filter(fn ($pricing) => $pricing['pricing_unit'] !== null || $pricing['typical_rate'] !== null || $pricing['estimated_hours'] !== null)
             ->all();
     }
 
@@ -165,12 +159,10 @@ class TradeApplicationController extends Controller
                     'subsystem_name' => trim((string) ($coverage['subsystem_name'] ?? $submitted['subsystem_name'] ?? '')),
                     'pricing_unit' => $coverage['pricing_unit'] ?? null,
                     'typical_rate' => isset($coverage['typical_rate']) && $coverage['typical_rate'] !== '' ? (float) $coverage['typical_rate'] : null,
-                    'maximum_charge' => isset($coverage['maximum_charge']) && $coverage['maximum_charge'] !== '' ? (float) $coverage['maximum_charge'] : null,
-                    'estimated_duration' => trim((string) ($coverage['estimated_duration'] ?? '')),
-                    'notes' => trim((string) ($coverage['notes'] ?? '')),
+                    'estimated_hours' => isset($coverage['estimated_hours']) && $coverage['estimated_hours'] !== '' ? (float) $coverage['estimated_hours'] : null,
                 ];
             })
-            ->filter(fn ($coverage) => $coverage['system_name'] !== '' || $coverage['subsystem_name'] !== '' || $coverage['pricing_unit'] !== null || $coverage['typical_rate'] !== null || $coverage['maximum_charge'] !== null || $coverage['estimated_duration'] !== '' || $coverage['notes'] !== '')
+            ->filter(fn ($coverage) => $coverage['system_name'] !== '' || $coverage['subsystem_name'] !== '' || $coverage['pricing_unit'] !== null || $coverage['typical_rate'] !== null || $coverage['estimated_hours'] !== null)
             ->values()
             ->all();
     }

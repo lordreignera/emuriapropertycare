@@ -115,7 +115,7 @@ function renderPotree(stage, source) {
     const url = source.fileUrl || source.externalUrl || source.downloadUrl;
 
     if (!url) {
-        renderCard(stage, source, source.title, 'This converted point cloud does not have a viewer file yet.');
+        renderCard(stage, source, source.title, 'This hosted point-cloud layer does not have a viewer URL yet.');
         return;
     }
 
@@ -124,7 +124,7 @@ function renderPotree(stage, source) {
             <iframe
                 class="twin-frame"
                 src="${escapeAttribute(url)}"
-                title="${escapeAttribute(source.title || 'Converted point cloud viewer')}">
+                title="${escapeAttribute(source.title || 'Hosted point cloud viewer')}">
             </iframe>
         </div>
     `;
@@ -521,17 +521,6 @@ function renderSource(root, stage, source) {
             break;
         case 'potree':
             renderPotree(stage, source);
-            break;
-        case 'conversion_needed':
-            renderCard(
-                stage,
-                source,
-                'Conversion needed before browser viewing',
-                source.processingStatus === 'queued'
-                    ? 'This file is safely stored as source evidence and is queued for point-cloud conversion. Run the digital-twin queue worker to create browser-viewable Potree output.'
-                    : (source.conversionError || 'This file is safely stored as source evidence. Convert OBJ/FBX meshes to GLB, and point clouds such as E57/LAS/LAZ to Potree, COPC, or 3D Tiles before interactive viewing.'),
-                'Download Source File'
-            );
             break;
         case 'external_link':
             renderCard(stage, source, source.title, 'This source is available as an external link.', 'Open External Source');

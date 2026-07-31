@@ -5,17 +5,43 @@
         : (json_decode($inspection->getRawOriginal('findings') ?? '[]', true) ?? []);
 
     $legacyPaths = [];
-    if ($findingIndex !== null && isset($inspectionFindings[$findingIndex]['finding_photos'])) {
-        $legacyPaths = (array) $inspectionFindings[$findingIndex]['finding_photos'];
+    $legacyMatch = collect($inspectionFindings)->first(function ($row) use ($f) {
+        $legacyTitle = trim((string) ($row['issue'] ?? $row['finding'] ?? $row['task_question'] ?? ''));
+        $findingTitle = trim((string) ($f->task_question ?? ''));
+
+        if ($legacyTitle === '' || $findingTitle === '' || $legacyTitle !== $findingTitle) {
+            return false;
+        }
+
+        $legacyCategory = trim((string) ($row['phar_category'] ?? $row['category'] ?? ''));
+        $findingCategory = trim((string) ($f->category ?? ''));
+
+        if ($legacyCategory !== '' && $findingCategory !== '' && $legacyCategory !== $findingCategory) {
+            return false;
+        }
+
+        foreach (['building_system_id', 'building_subsystem_id', 'building_component_id'] as $key) {
+            $legacyId = (int) ($row[$key] ?? 0);
+            $findingId = (int) ($f->{$key} ?? 0);
+            if ($legacyId > 0 && $findingId > 0 && $legacyId !== $findingId) {
+                return false;
+            }
+        }
+
+        return true;
+    });
+
+    if (is_array($legacyMatch) && isset($legacyMatch['finding_photos'])) {
+        $legacyPaths = (array) $legacyMatch['finding_photos'];
     }
 
-    if (empty($legacyPaths)) {
-        $legacyMatch = collect($inspectionFindings)->first(function ($row) use ($f) {
-            return trim((string) ($row['finding'] ?? $row['task_question'] ?? '')) === trim((string) ($f->task_question ?? ''));
-        });
+    if (empty($legacyPaths) && $findingIndex !== null && isset($inspectionFindings[$findingIndex])) {
+        $indexedRow = $inspectionFindings[$findingIndex];
+        $indexedTitle = trim((string) ($indexedRow['issue'] ?? $indexedRow['finding'] ?? $indexedRow['task_question'] ?? ''));
+        $findingTitle = trim((string) ($f->task_question ?? ''));
 
-        if (is_array($legacyMatch) && isset($legacyMatch['finding_photos'])) {
-            $legacyPaths = (array) $legacyMatch['finding_photos'];
+        if ($indexedTitle !== '' && $indexedTitle === $findingTitle && isset($indexedRow['finding_photos'])) {
+            $legacyPaths = (array) $indexedRow['finding_photos'];
         }
     }
 
@@ -41,7 +67,7 @@
 @if($evidencePaths->isNotEmpty())
     <div class="mt-3 p-2 px-3 rounded" style="background:#f8fbff;border-left:4px solid #0d6efd;">
         <div class="fw-bold small text-uppercase mb-2" style="color:#0d6efd;letter-spacing:.04em;">
-            <i class="mdi mdi-image-multiple-outline me-1"></i>Evidence photos
+            <i class="mdi mdi-image-multiple-outline me-1"></i>Finding evidence
         </div>
         <div class="d-flex flex-wrap gap-2">
             @foreach($evidencePaths as $index => $path)
@@ -63,6 +89,7 @@
                         src="{{ $url }}"
                         controls
                         preload="metadata"
+                        title="{{ $label }} video"
                         style="height:84px;width:128px;object-fit:cover;border-radius:6px;border:1px solid #d7e0ec;background:#000;">
                     </video>
                 @else

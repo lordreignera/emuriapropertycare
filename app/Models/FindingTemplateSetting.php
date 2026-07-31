@@ -12,8 +12,9 @@ class FindingTemplateSetting extends Model
 
     protected $fillable = [
         'task_question',
-        'system_id',
-        'subsystem_id',
+        'building_system_id',
+        'building_subsystem_id',
+        'building_component_id',
         'category',
         'default_included',
         'default_notes',
@@ -23,8 +24,9 @@ class FindingTemplateSetting extends Model
     ];
 
     protected $casts = [
-        'system_id' => 'integer',
-        'subsystem_id' => 'integer',
+        'building_system_id' => 'integer',
+        'building_subsystem_id' => 'integer',
+        'building_component_id' => 'integer',
         'default_included' => 'boolean',
         'default_recommendations' => 'array',
         'is_active' => 'boolean',
@@ -43,11 +45,16 @@ class FindingTemplateSetting extends Model
 
     public function system(): BelongsTo
     {
-        return $this->belongsTo(InspectionSystem::class, 'system_id');
+        return $this->belongsTo(BuildingSystem::class, 'building_system_id');
     }
 
     public function subsystem(): BelongsTo
     {
-        return $this->belongsTo(InspectionSubsystem::class, 'subsystem_id');
+        return $this->belongsTo(BuildingSubsystem::class, 'building_subsystem_id');
+    }
+
+    public function component(): BelongsTo
+    {
+        return $this->belongsTo(BuildingComponent::class, 'building_component_id');
     }
 }

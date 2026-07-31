@@ -1,6 +1,6 @@
 @extends('admin.layout')
 
-@section('title', 'PHAR Assessments')
+@section('title', 'PHAR Diagnosis')
 
 @section('content')
 <div class="content-wrapper">
@@ -39,14 +39,14 @@
                                 <h4 class="card-title mb-0"><i class="mdi mdi-pen me-2 text-warning"></i>Ready for ETOGO Signoff</h4>
                                 <p class="text-muted small mb-0">Tools assigned and visits scheduled - awaiting final ETOGO signoff</p>
                             @elseif(request('view') === 'awaiting-quotation')
-                                <h4 class="card-title mb-0"><i class="mdi mdi-timer-sand me-2 text-info"></i>Findings Awaiting Decisions</h4>
-                                <p class="text-muted small mb-0">Includes draft PHAR assessments and proposals waiting for owner response</p>
+                                <h4 class="card-title mb-0"><i class="mdi mdi-file-document-check-outline me-2 text-info"></i>Diagnosed Reports</h4>
+                                <p class="text-muted small mb-0">Diagnosis findings have been recorded and are ready to share or awaiting owner decision.</p>
                             @elseif(request('view') === 'awaiting-estimation')
-                                <h4 class="card-title mb-0"><i class="mdi mdi-cash-clock me-2 text-success"></i>Approved Findings - Ready for Work Costing</h4>
-                                <p class="text-muted small mb-0">Owners have approved findings. Set labour, materials, work assignment, and approved trade partner.</p>
+                                <h4 class="card-title mb-0"><i class="mdi mdi-cash-clock me-2 text-success"></i>Decided Findings / Pricing</h4>
+                                <p class="text-muted small mb-0">Owners have decided which findings to proceed with. Attach prices by finding and deliverable.</p>
                             @else
-                                <h4 class="card-title mb-0">PHAR Assessment Registry</h4>
-                                <p class="text-muted small mb-0">Scheduled, in-progress, and completed PHAR assessments</p>
+                                <h4 class="card-title mb-0">PHAR Diagnosis Registry</h4>
+                                <p class="text-muted small mb-0">Scheduled, in-progress, and completed PHAR diagnoses</p>
                             @endif
                         </div>
                     </div>
@@ -63,21 +63,21 @@
                         <li class="nav-item">
                             <a class="nav-link {{ request('status') == 'scheduled' ? 'active' : '' }}"
                                href="{{ route('inspections.index', ['status' => 'scheduled']) }}">
-                                Awaiting Assessment
+                                Awaiting Diagnosis
                                 <span class="badge bg-success ms-1">{{ $scheduledCount }}</span>
                             </a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link {{ request('status') == 'in_progress' ? 'active' : '' }}"
                                href="{{ route('inspections.index', ['status' => 'in_progress']) }}">
-                                PHAR In Progress
+                                Diagnosis In Progress
                                 <span class="badge bg-primary ms-1">{{ $inProgressCount }}</span>
                             </a>
                         </li>
                         <li class="nav-item">
                             <a class="nav-link {{ request('status') == 'completed' ? 'active' : '' }}"
                                href="{{ route('inspections.index', ['status' => 'completed']) }}">
-                                Completed PHAR
+                                Diagnosed Reports
                                 <span class="badge bg-info ms-1">{{ $completedCount }}</span>
                             </a>
                         </li>
@@ -89,9 +89,9 @@
                        class="alert alert-success d-flex align-items-center justify-content-between text-decoration-none py-2 mb-3">
                         <span>
                             <i class="mdi mdi-cash-clock me-2"></i>
-                            <strong>{{ $awaitingEstimationCount }}</strong> approved finding set(s) ready for work costing &mdash; set labour, materials, work assignment &amp; trade partner.
+                            <strong>{{ $awaitingEstimationCount }}</strong> decided finding set(s) ready for pricing &mdash; attach labour, materials, work assignment &amp; trade partner.
                         </span>
-                        <span class="btn btn-sm btn-success">Open Work Costing Queue <i class="mdi mdi-arrow-right ms-1"></i></span>
+                        <span class="btn btn-sm btn-success">Open Pricing Queue <i class="mdi mdi-arrow-right ms-1"></i></span>
                     </a>
                     @endif
 
@@ -106,7 +106,7 @@
 
                     @if(request('view') === 'awaiting-estimation')
                     <a href="{{ route('inspections.index') }}" class="btn btn-sm btn-outline-secondary mb-3">
-                        <i class="mdi mdi-arrow-left me-1"></i>Back to PHAR assessments
+                        <i class="mdi mdi-arrow-left me-1"></i>Back to PHAR diagnoses
                     </a>
                     @endif
 
@@ -140,13 +140,13 @@
                                 @elseif(request('view') === 'awaiting-estimation')
                                     No approved findings awaiting pricing
                                 @elseif(request('status') == 'scheduled')
-                                    No assessments awaiting work found
+                                    No diagnoses awaiting work found
                                 @elseif(request('status') == 'in_progress')
-                                    No in-progress PHAR assessments found
+                                    No in-progress PHAR diagnoses found
                                 @elseif(request('status') == 'completed')
-                                    No completed PHAR assessments found
+                                    No completed PHAR diagnoses found
                                 @else
-                                    No PHAR assessments found
+                                    No PHAR diagnoses found
                                 @endif
                             </p>
                         </div>
@@ -187,13 +187,13 @@
                                 };
 
                                 $statusLabel = match($inspection->status) {
-                                    'scheduled' => 'Awaiting Assessment',
-                                    'in_progress' => 'PHAR In Progress',
+                                    'scheduled' => 'Awaiting Diagnosis',
+                                    'in_progress' => 'Diagnosis In Progress',
                                     'findings_shared' => 'Findings Shared',
                                     'client_committed' => 'Owner Approved',
                                     'estimation_in_progress' => 'Costing',
                                     'estimation_completed' => 'Costed',
-                                    'completed' => 'PHAR Complete',
+                                    'completed' => 'Diagnosis Complete',
                                     default => ucfirst(str_replace('_', ' ', $inspection->status)),
                                 };
 
@@ -416,7 +416,7 @@
                                                     {{-- Assessment finalised & locked — open the official PHAR report --}}
                                                     <a href="{{ route('inspections.assessment-report', $inspection->id) }}"
                                                        class="btn btn-sm btn-primary fw-bold"
-                                                       title="Open the finalised PHAR assessment report">
+                                                       title="Open the finalised PHAR diagnosis report">
                                                         <i class="mdi mdi-file-document-check-outline me-1"></i>PHAR Report
                                                     </a>
                                                 @else
@@ -432,7 +432,7 @@
                                             @if(request('view') === 'awaiting-quotation' && ($inspection->quotation_status ?? null) === 'approved')
                                             <a href="{{ route('inspections.phar-data', $inspection->id) }}"
                                                class="btn btn-sm btn-primary fw-bold"
-                                               title="Open PHAR and complete assessment">
+                                               title="Open PHAR and complete diagnosis">
                                                 <i class="mdi mdi-check-decagram me-1"></i>Open PHAR
                                             </a>
                                             @endif
@@ -441,7 +441,7 @@
                                             <button type="button"
                                                     class="btn btn-sm btn-outline-secondary"
                                                     onclick="openAssessmentScheduleModal({{ $inspection->id }}, '{{ addslashes($prop?->property_name ?? '') }}', '{{ optional($inspection->scheduled_date)->format('Y-m-d\\TH:i') }}')"
-                                                    title="Set assessment date">
+                                                    title="Set diagnosis date">
                                                 <i class="mdi mdi-calendar-edit me-1"></i>Set Date
                                             </button>
                                             @endif
@@ -924,23 +924,25 @@ function openWorkScheduleModal(inspectionId, propertyName, totalVisits, existing
             var color = clsMap[meta.cls] || '#6c757d';
             var desc = f.desc ? '<div class="small text-muted mt-1"><strong>Issue:</strong> ' + escapeHtml(f.desc) + '</div>' : '';
             var rec  = f.rec  ? '<div class="small mt-1" style="color:#0d6efd;"><strong>Recommendation:</strong> ' + escapeHtml(f.rec) + '</div>' : '';
-            return '<tr>' +
-                '<td class="py-1 text-center align-middle" style="width:2%">' +
-                    '<span class="badge" style="background:' + color + ';font-size:.65rem;">' + (i+1) + '</span>' +
-                '</td>' +
-                '<td class="py-1 align-top" style="width:55%">' +
-                    '<div class="fw-semibold" style="font-size:.82rem;">' + escapeHtml(f.title) + '</div>' +
+            return '<div class="border rounded p-2 bg-white">' +
+                '<div class="d-flex justify-content-between align-items-start gap-2">' +
+                    '<div class="pe-2">' +
+                    '<span class="badge me-1" style="background:' + color + ';font-size:.65rem;">' + (i+1) + '</span>' +
+                    '<span class="fw-semibold" style="font-size:.82rem;">' + escapeHtml(f.title) + '</span>' +
+                    '<div class="mt-1">' +
                     '<span class="badge" style="background:' + color + ';font-size:.65rem;">' + escapeHtml(meta.label) + '</span>' +
                     (f.cat ? ' <span class="badge bg-light text-dark border" style="font-size:.65rem;">' + escapeHtml(f.cat) + '</span>' : '') +
+                    '</div>' +
                     desc + rec +
-                '</td>' +
-                '<td class="py-1 align-middle text-center" style="width:43%">' +
+                    '</div>' +
+                    '<div class="flex-shrink-0">' +
                     '<button type="button" class="btn btn-xs btn-outline-secondary btn-sm py-0 px-2" style="font-size:.7rem;" ' +
                         'onclick="copyFindingToTask(this)" data-title="' + escapeAttr(f.title) + '" data-rec="' + escapeAttr(f.rec || f.title) + '">' +
                         '<i class="mdi mdi-content-copy me-1"></i>Use as Task' +
                     '</button>' +
-                '</td>' +
-            '</tr>';
+                    '</div>' +
+                '</div>' +
+            '</div>';
         }).join('');
 
         refEl.innerHTML =
@@ -957,10 +959,8 @@ function openWorkScheduleModal(inspectionId, propertyName, totalVisits, existing
                         '<i class="mdi mdi-lightbulb-outline me-1"></i>' +
                         'These are the approved findings for this property. Use them as a guide when planning tasks for each visit day.' +
                     '</div>' +
-                    '<div class="table-responsive" style="max-height:260px;overflow-y:auto;">' +
-                        '<table class="table table-sm table-borderless mb-0" style="font-size:.82rem;">' +
-                            '<tbody>' + rows + '</tbody>' +
-                        '</table>' +
+                    '<div class="d-grid gap-2 p-2" style="max-height:260px;overflow-y:auto;font-size:.82rem;">' +
+                        rows +
                     '</div>' +
                 '</div>' +
             '</div>';

@@ -14,7 +14,7 @@ class ClientInspectionScheduleTest extends TestCase
     public function test_schedule_page_loads_without_precreating_a_stripe_payment_intent(): void
     {
         $this->withoutMiddleware([
-            \App\Http\Middleware\CheckSubscription::class,
+            \App\Http\Middleware\CheckActiveSubscription::class,
             \Spatie\Permission\Middleware\RoleMiddleware::class,
         ]);
 

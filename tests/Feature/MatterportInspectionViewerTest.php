@@ -20,7 +20,7 @@ class MatterportInspectionViewerTest extends TestCase
         parent::setUp();
 
         $this->withoutMiddleware([
-            \App\Http\Middleware\CheckSubscription::class,
+            \App\Http\Middleware\CheckActiveSubscription::class,
         ]);
         $this->withoutVite();
 

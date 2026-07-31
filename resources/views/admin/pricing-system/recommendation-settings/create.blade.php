@@ -16,6 +16,12 @@
                                 return [
                                     'id' => $subsystem->id,
                                     'name' => $subsystem->name,
+                                    'components' => $subsystem->components->map(function ($component) {
+                                        return [
+                                            'id' => $component->id,
+                                            'name' => $component->name,
+                                        ];
+                                    })->values()->all(),
                                 ];
                             })->values()->all(),
                         ];
@@ -32,22 +38,29 @@
                     </div>
 
                     <div class="row">
-                        <div class="col-md-6 form-group">
-                            <label for="system_id">System Scope</label>
-                            <select class="form-control @error('system_id') is-invalid @enderror" id="system_id" name="system_id">
+                        <div class="col-md-4 form-group">
+                            <label for="building_system_id">System Scope</label>
+                            <select class="form-control @error('building_system_id') is-invalid @enderror" id="building_system_id" name="building_system_id">
                                 <option value="">All Systems</option>
                                 @foreach(($systems ?? collect()) as $system)
-                                    <option value="{{ $system->id }}" {{ (string) old('system_id') === (string) $system->id ? 'selected' : '' }}>{{ $system->name }}</option>
+                                    <option value="{{ $system->id }}" {{ (string) old('building_system_id') === (string) $system->id ? 'selected' : '' }}>{{ $system->name }}</option>
                                 @endforeach
                             </select>
-                            @error('system_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            @error('building_system_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
-                        <div class="col-md-6 form-group">
-                            <label for="subsystem_id">Subsystem Scope</label>
-                            <select class="form-control @error('subsystem_id') is-invalid @enderror" id="subsystem_id" name="subsystem_id">
+                        <div class="col-md-4 form-group">
+                            <label for="building_subsystem_id">Subsystem Scope</label>
+                            <select class="form-control @error('building_subsystem_id') is-invalid @enderror" id="building_subsystem_id" name="building_subsystem_id">
                                 <option value="">All Subsystems</option>
                             </select>
-                            @error('subsystem_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            @error('building_subsystem_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        </div>
+                        <div class="col-md-4 form-group">
+                            <label for="building_component_id">Component Scope</label>
+                            <select class="form-control @error('building_component_id') is-invalid @enderror" id="building_component_id" name="building_component_id">
+                                <option value="">All Components</option>
+                            </select>
+                            @error('building_component_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
                     </div>
 
@@ -73,12 +86,15 @@
                 <script>
                     (function () {
                         const systems = @json($systemsJson);
-                        const systemSelect = document.getElementById('system_id');
-                        const subsystemSelect = document.getElementById('subsystem_id');
-                        const selectedSubsystemId = "{{ old('subsystem_id') }}";
+                        const systemSelect = document.getElementById('building_system_id');
+                        const subsystemSelect = document.getElementById('building_subsystem_id');
+                        const componentSelect = document.getElementById('building_component_id');
+                        const selectedSubsystemId = "{{ old('building_subsystem_id') }}";
+                        const selectedComponentId = "{{ old('building_component_id') }}";
 
                         function renderSubsystems(systemId) {
                             subsystemSelect.innerHTML = '<option value="">All Subsystems</option>';
+                            componentSelect.innerHTML = '<option value="">All Components</option>';
                             const selectedSystem = systems.find((system) => String(system.id) === String(systemId));
 
                             if (!selectedSystem) {
@@ -96,11 +112,31 @@
                             });
                         }
 
+                        function renderComponents(subsystemId) {
+                            componentSelect.innerHTML = '<option value="">All Components</option>';
+                            const selectedSystem = systems.find((system) => String(system.id) === String(systemSelect.value));
+                            const selectedSubsystem = selectedSystem?.subsystems.find((subsystem) => String(subsystem.id) === String(subsystemId));
+
+                            selectedSubsystem?.components.forEach((component) => {
+                                const option = document.createElement('option');
+                                option.value = component.id;
+                                option.textContent = component.name;
+                                if (String(component.id) === String(selectedComponentId)) {
+                                    option.selected = true;
+                                }
+                                componentSelect.appendChild(option);
+                            });
+                        }
+
                         systemSelect.addEventListener('change', function () {
                             renderSubsystems(this.value);
                         });
+                        subsystemSelect.addEventListener('change', function () {
+                            renderComponents(this.value);
+                        });
 
                         renderSubsystems(systemSelect.value);
+                        renderComponents(subsystemSelect.value);
                     })();
                 </script>
             </div>

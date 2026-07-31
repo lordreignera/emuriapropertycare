@@ -27,19 +27,44 @@
     $photoPathsForFinding = function ($finding, ?int $index = null) use ($inspectionFindings) {
         $paths = collect((array) ($finding->photo_ids ?? []));
 
-        if ($index !== null && isset($inspectionFindings[$index]['finding_photos'])) {
-            $paths = $paths->merge((array) $inspectionFindings[$index]['finding_photos']);
-        }
-
         $matched = collect($inspectionFindings)->first(function ($row) use ($finding) {
-            $legacyTitle = trim((string) ($row['finding'] ?? $row['task_question'] ?? ''));
+            $legacyTitle = trim((string) ($row['issue'] ?? $row['finding'] ?? $row['task_question'] ?? ''));
             $findingTitle = trim((string) ($finding->task_question ?? ''));
 
-            return $legacyTitle !== '' && $legacyTitle === $findingTitle;
+            if ($legacyTitle === '' || $legacyTitle !== $findingTitle) {
+                return false;
+            }
+
+            $legacyCategory = trim((string) ($row['phar_category'] ?? $row['category'] ?? ''));
+            $findingCategory = trim((string) ($finding->category ?? ''));
+
+            if ($legacyCategory !== '' && $findingCategory !== '' && $legacyCategory !== $findingCategory) {
+                return false;
+            }
+
+            foreach (['building_system_id', 'building_subsystem_id', 'building_component_id'] as $key) {
+                $legacyId = (int) ($row[$key] ?? 0);
+                $findingId = (int) ($finding->{$key} ?? 0);
+                if ($legacyId > 0 && $findingId > 0 && $legacyId !== $findingId) {
+                    return false;
+                }
+            }
+
+            return true;
         });
 
         if (is_array($matched) && isset($matched['finding_photos'])) {
             $paths = $paths->merge((array) $matched['finding_photos']);
+        }
+
+        if ($paths->isEmpty() && $index !== null && isset($inspectionFindings[$index])) {
+            $indexedRow = $inspectionFindings[$index];
+            $indexedTitle = trim((string) ($indexedRow['issue'] ?? $indexedRow['finding'] ?? $indexedRow['task_question'] ?? ''));
+            $findingTitle = trim((string) ($finding->task_question ?? ''));
+
+            if ($indexedTitle !== '' && $indexedTitle === $findingTitle && isset($indexedRow['finding_photos'])) {
+                $paths = $paths->merge((array) $indexedRow['finding_photos']);
+            }
         }
 
         return $paths
@@ -310,6 +335,10 @@
 
     .phar-grid.two {
         grid-template-columns: 1.15fr .85fr;
+    }
+
+    .phar-grid.one {
+        grid-template-columns: minmax(0, 1fr);
     }
 
     .phar-panel {
@@ -753,7 +782,7 @@
         </section>
     </div>
 
-    <div class="phar-grid two">
+    <div class="phar-grid one">
         <section class="phar-panel">
             <h3>Findings With Evidence</h3>
             <div class="phar-finding-list">
@@ -778,32 +807,6 @@
                 @empty
                     <div class="text-muted small">No findings have been captured yet.</div>
                 @endforelse
-            </div>
-        </section>
-
-        <section class="phar-panel">
-            <h3>Property Score Forecast</h3>
-            <div class="phar-score-bars">
-                <div class="phar-bar">
-                    <div>{{ $score }}%</div>
-                    <div class="phar-bar-box" style="height:{{ max(34, $score) }}px;"></div>
-                    <span>Current</span>
-                </div>
-                <div class="phar-bar">
-                    <div>{{ min(98, $score + 6) }}%</div>
-                    <div class="phar-bar-box" style="height:{{ max(40, $score + 6) }}px;background:#1e9aa7;"></div>
-                    <span>After Immediate</span>
-                </div>
-                <div class="phar-bar">
-                    <div>{{ min(99, $score + 11) }}%</div>
-                    <div class="phar-bar-box" style="height:{{ max(44, $score + 11) }}px;background:#73b843;"></div>
-                    <span>12-Month Plan</span>
-                </div>
-                <div class="phar-bar">
-                    <div>{{ min(99, $score + 16) }}%</div>
-                    <div class="phar-bar-box" style="height:{{ max(48, $score + 16) }}px;background:#087b35;"></div>
-                    <span>Full Stewardship</span>
-                </div>
             </div>
         </section>
     </div>

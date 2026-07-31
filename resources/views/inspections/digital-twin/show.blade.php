@@ -36,10 +36,8 @@
             'runtimeFormat' => $model->runtime_format,
             'originalFormat' => $model->original_format,
             'accuracyClass' => $model->accuracy_class,
-            'processingStatus' => $model->processing_status,
             'isPrimary' => (bool) $model->is_primary,
             'extension' => $model->detected_extension,
-            'conversionError' => data_get($model->metadata, 'conversion_error'),
         ];
     })->values();
 
@@ -58,7 +56,6 @@
             'runtimeFormat' => 'hosted',
             'originalFormat' => 'matterport_sid',
             'accuracyClass' => null,
-            'processingStatus' => 'ready',
             'isPrimary' => true,
             'extension' => null,
         ]]);
@@ -533,7 +530,7 @@
                         </div>
                         <div>
                             <label class="twin-label" for="display_name">Display name</label>
-                            <input id="display_name" name="display_name" type="text" class="form-control" value="{{ old('display_name') }}" placeholder="Matterport E57 point cloud">
+                            <input id="display_name" name="display_name" type="text" class="form-control" value="{{ old('display_name') }}" placeholder="Matterport tour, LiDAR cloud, drone photos">
                         </div>
                         <div>
                             <label class="twin-label" for="capture_type">Capture type</label>
@@ -554,21 +551,13 @@
                                 data-max-upload-bytes="{{ $serverUploadBytes }}"
                                 data-max-upload-mb="{{ $serverUploadMb }}"
                             >
-                            <small class="twin-help">Current browser upload limit: {{ $serverUploadMb }} MB. Very large E57 uploads also need matching WAMP/PHP limits and may take time.</small>
+                            <small class="twin-help">Files are saved to the configured cloud disk. For large LiDAR/E57 packages, paste a cloud URL instead of uploading through the browser.</small>
                             <div class="twin-upload-warning" id="sourceFileWarning"></div>
                         </div>
                         <div>
-                            <label class="twin-label" for="external_url">External URL</label>
+                            <label class="twin-label" for="external_url">Cloud URL</label>
                             <input id="external_url" name="external_url" type="url" class="form-control" value="{{ old('external_url') }}" placeholder="https://my.matterport.com/show/?m=...">
-                            <small class="twin-help">Use this for hosted Matterport tours or cloud-hosted source files.</small>
-                        </div>
-                        <div>
-                            <label class="twin-label" for="processing_status">Processing</label>
-                            <select id="processing_status" name="processing_status" class="form-select">
-                                @foreach(['ready' => 'Ready', 'queued' => 'Queued', 'processing' => 'Processing', 'failed' => 'Failed'] as $value => $label)
-                                    <option value="{{ $value }}" @selected(old('processing_status', 'ready') === $value)>{{ $label }}</option>
-                                @endforeach
-                            </select>
+                            <small class="twin-help">Use this for Matterport, Azure Blob, AWS S3/CloudFront, or another hosted twin asset.</small>
                         </div>
                         <div class="d-flex align-items-end">
                             <div class="form-check">
@@ -711,9 +700,6 @@
                                         <div class="twin-item-title">{{ $model->display_name ?: $model->source_type_label }}</div>
                                         <div class="d-flex flex-wrap gap-1 justify-content-end">
                                             <span class="badge {{ $model->is_primary ? 'bg-primary' : 'bg-light text-dark' }}">{{ $model->is_primary ? 'Primary' : ucfirst($model->status) }}</span>
-                                            <span class="badge {{ $model->processing_status === 'ready' ? 'bg-success' : ($model->processing_status === 'failed' ? 'bg-danger' : 'bg-warning text-dark') }}">
-                                                {{ ucfirst(str_replace('_', ' ', $model->processing_status)) }}
-                                            </span>
                                         </div>
                                     </div>
                                     <div class="twin-meta">
@@ -724,26 +710,8 @@
                                     </div>
                                     @if($model->isRawPointCloud())
                                         <div class="mt-3 d-flex flex-wrap align-items-center gap-2">
-                                            @if($canManageDigitalTwin && in_array($model->processing_status, ['queued', 'failed'], true))
-                                                <form method="POST" action="{{ route('inspections.digital-twin.models.convert', [$inspection, $model]) }}" class="m-0">
-                                                    @csrf
-                                                    <button type="submit" class="btn btn-sm btn-outline-primary">
-                                                        <i class="mdi mdi-cog-transfer-outline me-1"></i>
-                                                        {{ $model->processing_status === 'failed' ? 'Retry conversion' : 'Run conversion' }}
-                                                    </button>
-                                                </form>
-                                            @endif
-                                            @if($model->processing_status === 'processing')
-                                                <span class="small text-muted">Conversion is running in the digital-twin queue.</span>
-                                            @elseif($model->processing_status === 'queued')
-                                                <span class="small text-muted">Waiting for worker: <code>php artisan queue:work --queue=digital-twin,default</code></span>
-                                            @endif
+                                            <span class="small text-muted">Raw point-cloud processing and tiling are handled outside ETOGO. Store converted/browser-ready output in Azure/AWS and attach its cloud URL here.</span>
                                         </div>
-                                        @if(data_get($model->metadata, 'conversion_error'))
-                                            <div class="alert alert-warning mt-3 mb-0 py-2">
-                                                {{ data_get($model->metadata, 'conversion_error') }}
-                                            </div>
-                                        @endif
                                     @endif
                                 </div>
                             @endforeach
@@ -944,14 +912,12 @@
             var runtimeFormat = document.getElementById('runtime_format');
             var captureType = document.getElementById('capture_type');
             var sourceType = document.getElementById('source_type');
-            var processingStatus = document.getElementById('processing_status');
             var submitButton = sourceFile ? sourceFile.closest('form').querySelector('button[type="submit"]') : null;
 
             if (!sourceFile || !warning) {
                 return;
             }
 
-            var conversionExtensions = ['obj', 'fbx', 'dae', 'ply', 'e57', 'las', 'laz', 'pts', 'ptx', 'xyz', 'zip'];
             var pointCloudExtensions = ['e57', 'las', 'laz', 'pts', 'ptx', 'xyz'];
             var imageExtensions = ['jpg', 'jpeg', 'png', 'webp'];
 
@@ -1003,9 +969,8 @@
                     setSelectValue(captureType, 'point_cloud');
                     setSelectValue(sourceType, 'master_point_cloud');
                     if (runtimeFormat && !runtimeFormat.value) {
-                        runtimeFormat.value = 'conversion_needed';
+                        runtimeFormat.value = 'cloud_reference';
                     }
-                    setSelectValue(processingStatus, 'queued');
                 } else if (extension === 'glb' || extension === 'gltf') {
                     setSelectValue(captureType, 'glb_model');
                     setSelectValue(sourceType, 'runtime_3d_model');
@@ -1018,11 +983,6 @@
                 } else if (extension === 'pdf') {
                     setSelectValue(captureType, 'document');
                     setSelectValue(sourceType, 'document_reference');
-                } else if (conversionExtensions.includes(extension)) {
-                    if (runtimeFormat && !runtimeFormat.value) {
-                        runtimeFormat.value = 'conversion_needed';
-                    }
-                    setSelectValue(processingStatus, 'queued');
                 }
 
                 if (maxBytes > 0 && file.size > maxBytes) {

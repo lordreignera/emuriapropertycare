@@ -23,7 +23,7 @@ if (!defined('LARAVEL_START')) {
 }
 
 use App\Models\Inspection;
-use App\Models\InspectionSystem;
+use App\Models\BuildingSystem;
 use App\Models\Property;
 use App\Models\User;
 use App\Http\Controllers\InspectionController;
@@ -84,7 +84,7 @@ $systemIssues = [
 ];
 
 // ── Build system_findings payload ─────────────────────────────────────────
-$systems = InspectionSystem::where('is_active', true)->orderBy('id')->get();
+$systems = BuildingSystem::where('is_active', true)->orderBy('id')->get();
 $systemFindings = [];
 $idx = 0;
 
@@ -98,8 +98,8 @@ foreach ($systems as $system) {
     $severity = $severityCycle[$idx % count($severityCycle)];
 
     $systemFindings[] = [
-        'system_id'       => $system->id,
-        'subsystem_id'    => null,
+        'building_system_id'       => $system->id,
+        'building_subsystem_id'    => null,
         'issue'           => $content['issue'],
         'location'        => $content['location'],
         'spot'            => $content['spot'],

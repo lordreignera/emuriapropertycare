@@ -9,8 +9,6 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('phar_findings', function (Blueprint $table) {
-            $table->foreign('system_id')->references('id')->on('systems')->nullOnDelete();
-            $table->foreign('subsystem_id')->references('id')->on('subsystems')->nullOnDelete();
             $table->foreign('parent_finding_id')->references('id')->on('phar_findings')->nullOnDelete();
         });
 
@@ -292,8 +290,6 @@ return new class extends Migration
         Schema::dropIfExists('finding_evidence');
 
         Schema::table('phar_findings', function (Blueprint $table) {
-            $table->dropForeign(['system_id']);
-            $table->dropForeign(['subsystem_id']);
             $table->dropForeign(['parent_finding_id']);
         });
     }

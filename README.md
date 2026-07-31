@@ -1,59 +1,78 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# ETOGO Property Care
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+ETOGO is a Laravel application for regenerative property care workflows. It supports client property registration, property facts and diagnosis invoices, inspections, PHAR findings, client quotations, work payments, trade partner onboarding, tool assignments, and vendor-neutral digital twin/Matterport evidence.
 
-## About Laravel
+## Stack
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- Laravel 12, PHP 8.2
+- Jetstream, Fortify, Sanctum, Livewire
+- Spatie roles and permissions
+- Laravel Cashier and Stripe
+- Vite, Tailwind CSS, Three.js
+- DomPDF and PhpSpreadsheet
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Local Setup
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+1. Install PHP and Composer dependencies:
 
-## Learning Laravel
+   ```bash
+   composer install
+   ```
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+2. Install frontend dependencies:
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+   ```bash
+   npm install
+   ```
 
-## Laravel Sponsors
+3. Copy and configure the environment:
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+   ```bash
+   cp .env.example .env
+   php artisan key:generate
+   ```
 
-### Premium Partners
+4. Run migrations and seeders:
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+   ```bash
+   php artisan migrate --seed
+   ```
 
-## Contributing
+5. Build or run assets:
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+   ```bash
+   npm run build
+   npm run dev
+   ```
 
-## Code of Conduct
+6. Start the app:
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+   ```bash
+   php artisan serve
+   ```
 
-## Security Vulnerabilities
+## Stripe Notes
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+Stripe keys are read from `STRIPE_KEY`, `STRIPE_SECRET`, and `STRIPE_WEBHOOK_SECRET`. Subscription checkout requires each tier to have `stripe_price_id_monthly` and `stripe_price_id_annual` populated. Use `Database\Seeders\StripeProductSeeder` or update tiers manually before enabling subscription checkout.
 
-## License
+Inspection diagnosis payments currently use the intentional test charge configured in the diagnosis pricing flow while the project is still in testing.
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+## Digital Twin Storage
+
+ETOGO does not convert point clouds or 3D capture files inside the Laravel app. Store heavy source files, converted tiles, and browser-ready twin assets in a cloud provider such as AWS S3, CloudFront, Azure Blob Storage, Matterport, or another capture platform. The app stores the property twin metadata, issue markers, provider IDs, uploaded cloud-disk paths, and external cloud URLs.
+
+AWS S3 is supported by the current dependencies through `league/flysystem-aws-s3-v3`. To use Azure Blob Storage as the Laravel filesystem disk, add the appropriate Flysystem Azure adapter and configure `FILESYSTEM_DISK` for that disk.
+
+## Testing
+
+Run the test suite with Xdebug disabled for much faster local runs:
+
+```bash
+XDEBUG_MODE=off php artisan test
+```
+
+On Windows PowerShell:
+
+```powershell
+$env:XDEBUG_MODE='off'; php artisan test
+```

@@ -316,7 +316,7 @@
                     ->get(['id', 'partner_number', 'trade_application_id', 'company_name', 'system_ids', 'subsystem_ids', 'agreed_subsystem_pricing']);
             @endphp
 
-            {{-- ETOGO inspection workflow: Assessment vs Estimation phase banner --}}
+            {{-- ETOGO inspection workflow: Diagnosis vs Estimation phase banner --}}
             @php
                 $findingsCount         = (int) \App\Models\PHARFinding::where('inspection_id', $inspection->id)->count();
                 $hasSharedFindings     = $inspection->hasSharedFindingsReport();
@@ -333,7 +333,7 @@
                     <div class="d-flex flex-wrap gap-3 align-items-center">
                         <div class="flex-grow-1">
                             <strong class="d-block mb-1 text-info">
-                                <i class="mdi mdi-routes-clock me-1"></i>ETOGO Workflow — Assessment & Estimation
+                                <i class="mdi mdi-routes-clock me-1"></i>ETOGO Workflow — Diagnosis & Estimation
                             </strong>
                             @if($findingsCount === 0)
                                 <span class="small text-muted">Capture findings first (no pricing). Pricing happens after the client commits.</span>
@@ -603,7 +603,7 @@
 
                                 {{-- BDC Travel Calibration --}}
                                 <h6 class="fw-bold text-primary mb-3"><i class="mdi mdi-map-marker-distance me-2"></i>BDC Travel Calibration</h6>
-                                <p class="text-muted small">Instant travel-based BDC estimate (per visit &amp; annual). <strong>Visits / year</strong> is taken from the field above. Values are saved with the assessment.</p>
+                                <p class="text-muted small">Instant travel-based BDC estimate (per visit &amp; annual). <strong>Visits / year</strong> is taken from the field above. Values are saved with the diagnosis.</p>
                                 <div class="row g-2">
                                     <div class="col-md-6">
                                         <label>Distance (km) <span class="text-danger">*</span></label>
@@ -717,8 +717,8 @@
                                                             'day' => 'Per day',
                                                             'ton' => 'Per ton',
                                                         ];
-                                                        $findingSystemId2 = (int) ($finding['system_id'] ?? 0);
-                                                        $findingSubsystemId2 = (int) ($finding['subsystem_id'] ?? 0);
+                                                        $findingSystemId2 = (int) ($finding['building_system_id'] ?? 0);
+                                                        $findingSubsystemId2 = (int) ($finding['building_subsystem_id'] ?? 0);
                                                         $selectedFindingType2 = old("findings.$fi.finding_type", $finding['finding_type'] ?? 'stand_alone');
                                                         $selectedImpactCategories2 = collect(old("findings.$fi.impact_categories", $finding['impact_categories'] ?? []))
                                                             ->map(fn($value) => (string) $value)
@@ -1142,7 +1142,7 @@
                                 <div class="alert alert-warning mb-3">
                                     <i class="mdi mdi-lock me-2"></i>
                                     <strong>Pricing is locked.</strong> The client approved a subset of findings.
-                                    The amounts below reflect <em>only the approved scope</em> and will be used when you complete the assessment.
+                                    The amounts below reflect <em>only the approved scope</em> and will be used when you complete the diagnosis.
                                     "Save &amp; Review Work Costing" is disabled while the quotation is approved.
                                 </div>
                                 <div class="row g-3 mb-3">
@@ -1381,17 +1381,32 @@
                                     <i class="mdi mdi-lock me-1"></i>
                                     Work costing and scope are <strong>locked to the approved quotation</strong>.
                                     Editing findings is disabled after client approval.
-                                    Click <strong>Complete Assessment</strong> below to generate the invoice using the approved amounts.
+                                    Click <strong>Complete Diagnosis</strong> below to generate the invoice using the approved amounts.
                                 </p>
                                 <div class="alert alert-warning mb-0">
                                     <i class="mdi mdi-alert-outline me-1"></i>
                                     No further edits are allowed after client approval.
                                 </div>
+                                @elseif(!$hasClientCommitted)
+                                <div class="alert alert-warning mb-3">
+                                    <i class="mdi mdi-account-clock-outline me-1"></i>
+                                    <strong>Deliverable costing is waiting on the client.</strong>
+                                    Share the diagnosis findings report first, then wait for the client to choose which findings should be priced now.
+                                    Deferred and declined findings must stay out of the first quotation.
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center gap-2">
+                                    <button type="submit" name="action" value="save_draft_back" class="btn btn-secondary" formnovalidate>
+                                        <i class="mdi mdi-content-save me-1"></i>Save Draft &amp; Back to Step 1
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary btn-lg" disabled>
+                                        <i class="mdi mdi-lock-outline me-1"></i>Waiting for Client Decisions
+                                    </button>
+                                </div>
                                 @else
                                 <p class="text-muted small mb-3">
                                     <i class="mdi mdi-information-outline me-1"></i>
                                     <strong>Save Draft &amp; Back</strong> returns you to Step 1 to review findings.
-                                    <strong>Save &amp; Review Work Costing</strong> calculates labour, materials, and trade partner work so you can review it. The assessment stays <em>in progress</em>.
+                                    <strong>Save &amp; Review Work Costing</strong> calculates labour, materials, and trade partner work so you can review it. The diagnosis stays <em>in progress</em>.
                                     Once you are satisfied, share the quotation with the client.
                                 </p>
                                 <div class="d-flex justify-content-between align-items-center gap-2">
@@ -1407,8 +1422,8 @@
                         </div>
                     </form>
 
-                    {{-- Complete Assessment: separate POST, only shown once work costing has been calculated --}}
-                    @if(($inspection->bdc_annual ?? 0) > 0 && $inspection->status !== 'completed')
+                    {{-- Complete Diagnosis: separate POST, only shown once work costing has been calculated --}}
+                    @if($hasClientCommitted && ($inspection->bdc_annual ?? 0) > 0 && $inspection->status !== 'completed')
                     <div class="card border-success mb-4">
                         <div class="card-header bg-success text-white py-2">
                             <strong><i class="mdi mdi-check-decagram me-1"></i>Work Costing Ready - Review Before Sharing</strong>
@@ -1468,7 +1483,7 @@
                                 $isQuotationShared = in_array($quotationStatus, ['shared', 'client_reviewing', 'client_responded'], true);
                             @endphp
                             <p class="text-muted small mb-3">
-                                Preview the report and contract draft exactly as the client will see them. Then share quotation with the client. Complete Assessment unlocks after quotation approval.
+                                Preview the report and contract draft exactly as the client will see them. Then share quotation with the client. Complete Diagnosis unlocks after quotation approval.
                             </p>
                             <div class="d-flex flex-wrap gap-2 mb-3">
                                 <a href="{{ route('inspections.preview-report', $inspection->id) }}" target="_blank"
@@ -1490,7 +1505,7 @@
 
                             <div class="alert {{ $isQuotationApproved ? 'alert-success' : ($isQuotationShared ? 'alert-warning' : 'alert-info') }} py-2 mb-3">
                                 @if($isQuotationApproved)
-                                    <strong>Quotation approved.</strong> You can now complete this assessment.
+                                    <strong>Quotation approved.</strong> You can now complete this diagnosis.
                                 @elseif($isQuotationShared)
                                     <strong>Quotation shared.</strong> Waiting for client response before completion.
                                 @else
@@ -1552,13 +1567,13 @@
                                     @if($isQuotationApproved)
                                         Satisfied with the pricing and contract? Complete to notify the client.
                                     @else
-                                        Complete Assessment is locked until quotation is approved by the client.
+                                        Complete Diagnosis is locked until quotation is approved by the client.
                                     @endif
                                 </small>
                                 <form method="POST" action="{{ route('inspections.complete-assessment', $inspection->id) }}" class="d-inline">
                                     @csrf
                                     <button type="submit" class="btn btn-success btn-lg" {{ $isQuotationApproved ? '' : 'disabled' }}>
-                                        <i class="mdi mdi-flag-checkered me-1"></i>Complete Assessment
+                                        <i class="mdi mdi-flag-checkered me-1"></i>Complete Diagnosis
                                     </button>
                                 </form>
                             </div>
@@ -1588,7 +1603,7 @@
             'default_unit_cost'=> (float) $item->default_unit_cost,
             'hst_rate'         => (float) ($item->hst_rate ?? 5.00),
             'pst_rate'         => (float) ($item->pst_rate ?? 7.00),
-            'subsystem_id'     => $item->subsystem_id,
+            'building_subsystem_id'     => $item->building_subsystem_id,
         ];
     })->values()->all();
 @endphp

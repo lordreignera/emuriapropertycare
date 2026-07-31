@@ -13,7 +13,7 @@ return [
     |
     */
 
-    'name' => env('APP_NAME', 'Emuria Regenerative Property Care'),
+    'name' => env('APP_NAME', 'ETOGO'),
 
     /*
     |--------------------------------------------------------------------------

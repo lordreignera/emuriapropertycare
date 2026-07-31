@@ -119,6 +119,7 @@
                                 </div>
 
                                 @include('inspections.partials.finding-understanding', ['f' => $f])
+                                @include('inspections.partials.finding-affected-areas', ['f' => $f])
                                 @include('inspections.partials.finding-evidence-photos', ['f' => $f, 'inspection' => $inspection, 'findingIndex' => $i])
                             </div>
                         </div>
@@ -130,13 +131,13 @@
                                 <i class="mdi mdi-file-document-check-outline me-1"></i>View PHAR Report
                             </a>
                             <a href="{{ route('inspections.show', $inspection->id) }}" class="btn btn-primary">
-                                <i class="mdi mdi-eye-outline me-1"></i>View Assessment
+                                <i class="mdi mdi-eye-outline me-1"></i>View Diagnosis
                             </a>
                         </div>
                     @elseif($inspection->assessment_finalised_at)
                         <div class="d-flex justify-content-end gap-2 mt-3">
                             <a href="{{ route('inspections.assessment-report', $inspection->id) }}" class="btn btn-primary">
-                                <i class="mdi mdi-file-document-check-outline me-1"></i>Open PHAR Assessment Report
+                                <i class="mdi mdi-file-document-check-outline me-1"></i>Open PHAR Diagnosis Report
                             </a>
                         </div>
                     @else
@@ -145,10 +146,10 @@
                                 <i class="mdi mdi-pencil-outline me-1"></i>Keep editing
                             </a>
                             <form method="POST" action="{{ route('inspections.finalise-assessment', $inspection->id) }}"
-                                  onsubmit="return confirm('Finalise this assessment? The findings will be locked and the official PHAR assessment report will be generated. You can reopen it for edits until it is shared with the client.');">
+                                  onsubmit="return confirm('Finalise this diagnosis? The findings will be locked and the official PHAR diagnosis report will be generated. You can reopen it for edits until it is shared with the client.');">
                                 @csrf
                                 <button type="submit" class="btn btn-primary">
-                                    <i class="mdi mdi-check-decagram me-1"></i>Finalise Assessment &amp; Generate Report
+                                    <i class="mdi mdi-check-decagram me-1"></i>Finalise Diagnosis &amp; Generate Report
                                 </button>
                             </form>
                         </div>

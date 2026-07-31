@@ -3,31 +3,37 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\BuildingComponent;
 use App\Models\FindingTemplateSetting;
-use App\Models\InspectionSystem;
-use App\Models\InspectionSubsystem;
+use App\Models\BuildingSystem;
+use App\Models\BuildingSubsystem;
+use App\Support\BuildingTaxonomyResolver;
 use Illuminate\Http\Request;
 
 class FindingTemplateSettingController extends Controller
 {
     public function index(Request $request)
     {
-        $systems = InspectionSystem::query()->orderBy('sort_order')->orderBy('name')->get(['id', 'name']);
+        $systems = BuildingSystem::query()->orderBy('sort_order')->orderBy('name')->get(['id', 'name']);
 
         $query = FindingTemplateSetting::query()
-            ->with(['system:id,name', 'subsystem:id,name']);
+            ->with(['system:id,name', 'subsystem:id,name', 'component:id,name']);
 
-        $systemId  = $request->integer('system_id') ?: null;
-        $subsystemId = $request->integer('subsystem_id') ?: null;
+        $systemId  = $request->integer('building_system_id') ?: null;
+        $subsystemId = $request->integer('building_subsystem_id') ?: null;
+        $componentId = $request->integer('building_component_id') ?: null;
         $category  = trim((string) $request->input('category', ''));
         $status    = $request->input('status', '');
         $search    = trim((string) $request->input('search', ''));
 
         if ($systemId) {
-            $query->where('system_id', $systemId);
+            $query->where('building_system_id', $systemId);
         }
         if ($subsystemId) {
-            $query->where('subsystem_id', $subsystemId);
+            $query->where('building_subsystem_id', $subsystemId);
+        }
+        if ($componentId) {
+            $query->where('building_component_id', $componentId);
         }
         if ($category !== '') {
             $query->where('category', $category);
@@ -54,18 +60,34 @@ class FindingTemplateSettingController extends Controller
             ->pluck('category');
 
         $subsystems = $systemId
-            ? InspectionSubsystem::query()->where('system_id', $systemId)->orderBy('sort_order')->orderBy('name')->get(['id', 'name'])
+            ? BuildingSubsystem::query()->where('building_system_id', $systemId)->orderBy('sort_order')->orderBy('name')->get(['id', 'name'])
+            : collect();
+
+        $components = $subsystemId
+            ? BuildingComponent::query()->where('building_subsystem_id', $subsystemId)->orderBy('sort_order')->orderBy('name')->get(['id', 'name'])
             : collect();
 
         return view('admin.pricing-system.finding-template-settings.index', compact(
-            'findings', 'systems', 'subsystems', 'categories', 'systemId', 'subsystemId', 'category', 'status', 'search'
+            'findings',
+            'systems',
+            'subsystems',
+            'components',
+            'categories',
+            'systemId',
+            'subsystemId',
+            'componentId',
+            'category',
+            'status',
+            'search'
         ));
     }
 
     public function create()
     {
-        $systems = InspectionSystem::query()
+        $systems = BuildingSystem::query()
             ->with(['subsystems' => function ($query) {
+                $query->where('is_active', true)->orderBy('sort_order')->orderBy('name');
+            }, 'subsystems.components' => function ($query) {
                 $query->where('is_active', true)->orderBy('sort_order')->orderBy('name');
             }])
             ->where('is_active', true)
@@ -80,8 +102,9 @@ class FindingTemplateSettingController extends Controller
     {
         $validated = $request->validate([
             'task_question'           => 'required|string|max:255',
-            'system_id'               => 'nullable|exists:systems,id',
-            'subsystem_id'            => 'nullable|exists:subsystems,id',
+            'building_system_id'               => 'nullable|exists:building_systems,id',
+            'building_subsystem_id'            => 'nullable|exists:building_subsystems,id',
+            'building_component_id'             => 'nullable|exists:building_components,id',
             'category'                => 'nullable|string|max:120',
             'default_included'        => 'nullable|boolean',
             'default_notes'           => 'nullable|string',
@@ -94,14 +117,22 @@ class FindingTemplateSettingController extends Controller
         $validated['default_included']      = $request->boolean('default_included', true);
         $validated['is_active']             = $request->boolean('is_active', true);
         $validated['sort_order']            = $validated['sort_order'] ?? 0;
-        $validated['subsystem_id']          = $validated['subsystem_id'] ?? null;
+        $validated['building_subsystem_id']          = $validated['building_subsystem_id'] ?? null;
+        $validated['building_component_id']          = $validated['building_component_id'] ?? null;
         $validated['default_recommendations'] = collect($request->input('default_recommendations', []))
             ->map(fn($r) => trim((string) $r))->filter()->values()->all();
 
-        if (!empty($validated['subsystem_id'])) {
-            $subsystem = InspectionSubsystem::query()->find($validated['subsystem_id']);
-            if ($subsystem && ((int) $subsystem->system_id !== (int) ($validated['system_id'] ?? 0))) {
-                return back()->withErrors(['subsystem_id' => 'Selected subsystem does not belong to the selected system.'])->withInput();
+        if (!empty($validated['building_subsystem_id'])) {
+            $subsystem = BuildingSubsystem::query()->find($validated['building_subsystem_id']);
+            if ($subsystem && ((int) $subsystem->building_system_id !== (int) ($validated['building_system_id'] ?? 0))) {
+                return back()->withErrors(['building_subsystem_id' => 'Selected subsystem does not belong to the selected system.'])->withInput();
+            }
+        }
+
+        if (!empty($validated['building_component_id'])) {
+            $component = BuildingComponent::query()->find($validated['building_component_id']);
+            if (!$validated['building_subsystem_id'] || ($component && (int) $component->building_subsystem_id !== (int) $validated['building_subsystem_id'])) {
+                return back()->withErrors(['building_component_id' => 'Selected component does not belong to the selected subsystem.'])->withInput();
             }
         }
 
@@ -113,8 +144,10 @@ class FindingTemplateSettingController extends Controller
 
     public function edit(FindingTemplateSetting $findingTemplateSetting)
     {
-        $systems = InspectionSystem::query()
+        $systems = BuildingSystem::query()
             ->with(['subsystems' => function ($query) {
+                $query->where('is_active', true)->orderBy('sort_order')->orderBy('name');
+            }, 'subsystems.components' => function ($query) {
                 $query->where('is_active', true)->orderBy('sort_order')->orderBy('name');
             }])
             ->where('is_active', true)
@@ -129,8 +162,9 @@ class FindingTemplateSettingController extends Controller
     {
         $validated = $request->validate([
             'task_question'             => 'required|string|max:255',
-            'system_id'                 => 'nullable|exists:systems,id',
-            'subsystem_id'              => 'nullable|exists:subsystems,id',
+            'building_system_id'                 => 'nullable|exists:building_systems,id',
+            'building_subsystem_id'              => 'nullable|exists:building_subsystems,id',
+            'building_component_id'               => 'nullable|exists:building_components,id',
             'category'                  => 'nullable|string|max:120',
             'default_included'          => 'nullable|boolean',
             'default_notes'             => 'nullable|string',
@@ -143,14 +177,22 @@ class FindingTemplateSettingController extends Controller
         $validated['default_included']      = $request->boolean('default_included');
         $validated['is_active']             = $request->boolean('is_active');
         $validated['sort_order']            = $validated['sort_order'] ?? 0;
-        $validated['subsystem_id']          = $validated['subsystem_id'] ?? null;
+        $validated['building_subsystem_id']          = $validated['building_subsystem_id'] ?? null;
+        $validated['building_component_id']          = $validated['building_component_id'] ?? null;
         $validated['default_recommendations'] = collect($request->input('default_recommendations', []))
             ->map(fn($r) => trim((string) $r))->filter()->values()->all();
 
-        if (!empty($validated['subsystem_id'])) {
-            $subsystem = InspectionSubsystem::query()->find($validated['subsystem_id']);
-            if ($subsystem && ((int) $subsystem->system_id !== (int) ($validated['system_id'] ?? 0))) {
-                return back()->withErrors(['subsystem_id' => 'Selected subsystem does not belong to the selected system.'])->withInput();
+        if (!empty($validated['building_subsystem_id'])) {
+            $subsystem = BuildingSubsystem::query()->find($validated['building_subsystem_id']);
+            if ($subsystem && ((int) $subsystem->building_system_id !== (int) ($validated['building_system_id'] ?? 0))) {
+                return back()->withErrors(['building_subsystem_id' => 'Selected subsystem does not belong to the selected system.'])->withInput();
+            }
+        }
+
+        if (!empty($validated['building_component_id'])) {
+            $component = BuildingComponent::query()->find($validated['building_component_id']);
+            if (!$validated['building_subsystem_id'] || ($component && (int) $component->building_subsystem_id !== (int) $validated['building_subsystem_id'])) {
+                return back()->withErrors(['building_component_id' => 'Selected component does not belong to the selected subsystem.'])->withInput();
             }
         }
 
@@ -170,28 +212,19 @@ class FindingTemplateSettingController extends Controller
 
     public function reloadDefaults()
     {
-        $systemMap = InspectionSystem::query()->pluck('id', 'name');
-        $subsystemMap = InspectionSubsystem::query()->get()->keyBy(function ($subsystem) {
-            return $subsystem->system_id . '|' . $subsystem->name;
-        });
         $activeReferences = [];
 
         foreach (FindingTemplateSetting::defaults() as $row) {
-            $systemId = $systemMap[$row['system_name']] ?? null;
-            $subsystemId = null;
-
-            if ($systemId !== null) {
-                $subsystemKey = $systemId . '|' . $row['subsystem_name'];
-                $subsystemId = optional($subsystemMap->get($subsystemKey))->id;
-            }
+            $taxonomy = BuildingTaxonomyResolver::resolve($row['system_name'] ?? null, $row['subsystem_name'] ?? null);
 
             $activeReferences[] = $row['task_question'];
 
             FindingTemplateSetting::updateOrCreate(
                 ['task_question' => $row['task_question']],
                 [
-                    'system_id'               => $systemId,
-                    'subsystem_id'            => $subsystemId,
+                    'building_system_id' => $taxonomy['building_system_id'],
+                    'building_subsystem_id' => $taxonomy['building_subsystem_id'],
+                    'building_component_id' => $taxonomy['building_component_id'],
                     'category'                => $row['category'],
                     'default_included'        => $row['default_included'],
                     'default_notes'           => $row['default_notes'],

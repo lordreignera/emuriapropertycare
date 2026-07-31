@@ -4,6 +4,41 @@
 
 @section('content')
 <div class="content-wrapper">
+    <style>
+        .service-request-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+            gap: 16px;
+        }
+
+        .service-request-card {
+            border: 1px solid #dfe6ef;
+            border-radius: 8px;
+            background: #fff;
+            padding: 16px;
+            box-shadow: 0 8px 22px rgba(16, 24, 40, .055);
+        }
+
+        .service-request-meta {
+            display: grid;
+            gap: 8px;
+            margin: 14px 0;
+        }
+
+        .service-request-meta-row {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            border-top: 1px solid #edf1f7;
+            padding-top: 8px;
+            font-size: .86rem;
+        }
+
+        .service-request-meta-row span:first-child {
+            color: #667085;
+            font-weight: 800;
+        }
+    </style>
     <div class="row">
         <div class="col-lg-12 grid-margin stretch-card">
             <div class="card">
@@ -12,7 +47,7 @@
                         <div>
                             <h4 class="card-title mb-0">{{ $type === 'addendum' ? 'Add-on Requests Queue' : 'Service Requests Queue' }}</h4>
                             <p class="text-muted small mb-0">
-                                {{ $type === 'addendum' ? 'Additional work requests waiting for review, assessment, quotation, and client approval' : 'Client-reported issues waiting for triage and assessment intake' }}
+                                {{ $type === 'addendum' ? 'Additional work requests waiting for review, diagnosis, quotation, and client approval' : 'Client-reported issues waiting for triage and diagnosis intake' }}
                             </p>
                         </div>
                         <a href="{{ route('admin.service-requests.create', ['type' => 'addendum']) }}" class="btn btn-primary btn-sm">
@@ -48,57 +83,55 @@
                         </li>
                     </ul>
 
-                    <div class="table-responsive">
-                        <table class="table table-striped align-middle">
-                            <thead>
-                                <tr>
-                                    <th>Request #</th>
-                                    <th>Client</th>
-                                    <th>Property</th>
-                                    <th>Type</th>
-                                    <th>Urgency</th>
-                                    <th>Status</th>
-                                    <th>Assigned</th>
-                                    <th>Submitted</th>
-                                    <th class="text-end">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @forelse($serviceRequests as $request)
-                                    <tr>
-                                        <td class="fw-semibold">{{ $request->request_number }}</td>
-                                        <td>{{ $request->user?->name ?? 'N/A' }}</td>
-                                        <td>
-                                            <div>{{ $request->property?->property_name ?? 'N/A' }}</div>
-                                            <small class="text-muted">{{ $request->property?->property_code ?? '' }}</small>
-                                        </td>
-                                        <td>
-                                            @if($request->request_type === 'change_request')
-                                                <span class="badge bg-primary">Add-on / Quotation</span>
-                                            @else
-                                                {{ ucwords(str_replace('_', ' ', $request->request_type)) }}
-                                            @endif
-                                        </td>
-                                        <td>
-                                            <span class="badge bg-{{ $request->urgency === 'critical' ? 'danger' : ($request->urgency === 'high' ? 'warning text-dark' : 'secondary') }}">
-                                                {{ ucfirst($request->urgency) }}
-                                            </span>
-                                        </td>
-                                        <td><span class="badge bg-info text-dark">{{ ucwords(str_replace('_', ' ', $request->status)) }}</span></td>
-                                        <td>{{ $request->assignedTo?->name ?? 'Unassigned' }}</td>
-                                        <td>{{ optional($request->submitted_at ?? $request->created_at)->format('M d, Y') }}</td>
-                                        <td class="text-end">
-                                            <a href="{{ route('admin.service-requests.show', $request) }}" class="btn btn-sm btn-outline-primary">View</a>
-                                        </td>
-                                    </tr>
-                                @empty
-                                    <tr>
-                                        <td colspan="9" class="text-center text-muted py-4">No service requests found.</td>
-                                    </tr>
-                                @endforelse
-                            </tbody>
-                        </table>
-                    </div>
+                    @if($serviceRequests->isEmpty())
+                        <div class="text-center text-muted py-5">
+                            <i class="mdi mdi-clipboard-text-search-outline" style="font-size:3rem;opacity:.35;"></i>
+                            <div class="mt-2">No service requests found.</div>
+                        </div>
+                    @else
+                        <div class="service-request-grid">
+                            @foreach($serviceRequests as $request)
+                                <article class="service-request-card">
+                                    <div class="d-flex justify-content-between align-items-start gap-2">
+                                        <div>
+                                            <div class="fw-bold text-primary">{{ $request->request_number }}</div>
+                                            <div class="text-muted small">Submitted {{ optional($request->submitted_at ?? $request->created_at)->format('M d, Y') }}</div>
+                                        </div>
+                                        <span class="badge bg-info text-dark">{{ ucwords(str_replace('_', ' ', $request->status)) }}</span>
+                                    </div>
+
+                                    <h5 class="fw-bold mt-3 mb-1">{{ $request->property?->property_name ?? 'N/A' }}</h5>
+                                    <div class="text-muted small">{{ $request->property?->property_code ?? '' }}</div>
+
+                                    <div class="d-flex flex-wrap gap-2 mt-3">
+                                        @if($request->request_type === 'change_request')
+                                            <span class="badge bg-primary">Add-on / Quotation</span>
+                                        @else
+                                            <span class="badge bg-light text-dark border">{{ ucwords(str_replace('_', ' ', $request->request_type)) }}</span>
+                                        @endif
+                                        <span class="badge bg-{{ $request->urgency === 'critical' ? 'danger' : ($request->urgency === 'high' ? 'warning text-dark' : 'secondary') }}">
+                                            {{ ucfirst($request->urgency) }}
+                                        </span>
+                                    </div>
+
+                                    <div class="service-request-meta">
+                                        <div class="service-request-meta-row">
+                                            <span>Client</span>
+                                            <strong class="text-end">{{ $request->user?->name ?? 'N/A' }}</strong>
+                                        </div>
+                                        <div class="service-request-meta-row">
+                                            <span>Assigned</span>
+                                            <strong class="text-end">{{ $request->assignedTo?->name ?? 'Unassigned' }}</strong>
+                                        </div>
+                                    </div>
+
+                                    <a href="{{ route('admin.service-requests.show', $request) }}" class="btn btn-sm btn-outline-primary w-100">
+                                        <i class="mdi mdi-eye-outline me-1"></i>View Request
+                                    </a>
+                                </article>
+                            @endforeach
+                        </div>
+                    @endif
 
                     <div class="mt-3">
                         {{ $serviceRequests->links() }}

@@ -8,9 +8,6 @@ use App\Models\Property;
 use App\Models\SpatialModel;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Queue;
-use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
@@ -23,7 +20,7 @@ class DigitalTwinVendorNeutralTest extends TestCase
         parent::setUp();
 
         $this->withoutMiddleware([
-            \App\Http\Middleware\CheckSubscription::class,
+            \App\Http\Middleware\CheckActiveSubscription::class,
         ]);
         $this->withoutVite();
     }
@@ -234,7 +231,7 @@ class DigitalTwinVendorNeutralTest extends TestCase
         $response->assertSee('"viewerType":"image"', false);
         $response->assertSee('"viewerType":"pdf"', false);
         $response->assertSee('"viewerType":"panorama"', false);
-        $response->assertSee('"viewerType":"conversion_needed"', false);
+        $response->assertSee('"viewerType":"stored_evidence"', false);
     }
 
     public function test_capture_source_requires_a_file_url_or_provider_identifier(): void
@@ -258,12 +255,8 @@ class DigitalTwinVendorNeutralTest extends TestCase
         $this->assertDatabaseCount('spatial_models', 0);
     }
 
-    public function test_raw_point_cloud_upload_is_queued_for_conversion(): void
+    public function test_raw_point_cloud_source_is_stored_as_cloud_managed_reference(): void
     {
-        Queue::fake();
-        Storage::fake('public');
-        config(['filesystems.default' => 'public']);
-
         $staff = $this->createUserWithRole('Project Manager');
         [, $inspection] = $this->createInspectionForClient();
         $inspection->property->update(['project_manager_id' => $staff->id]);
@@ -274,7 +267,7 @@ class DigitalTwinVendorNeutralTest extends TestCase
                 'capture_type' => 'point_cloud',
                 'source_type' => 'master_point_cloud',
                 'display_name' => 'Basement LiDAR point cloud',
-                'source_file' => UploadedFile::fake()->create('basement.xyz', 12, 'text/plain'),
+                'external_url' => 'https://cdn.example.test/twins/basement-point-cloud.e57',
                 'status' => 'active',
                 'processing_status' => 'ready',
                 'is_primary' => '1',
@@ -285,10 +278,14 @@ class DigitalTwinVendorNeutralTest extends TestCase
         $this->assertDatabaseHas('spatial_models', [
             'inspection_id' => $inspection->id,
             'source_type' => 'master_point_cloud',
-            'processing_status' => 'queued',
+            'processing_status' => 'ready',
         ]);
 
-        Queue::assertPushed(\App\Jobs\ConvertSpatialModelPointCloud::class);
+        $model = SpatialModel::where('inspection_id', $inspection->id)->firstOrFail();
+
+        $this->assertSame('external_link', $model->viewer_type);
+        $this->assertSame('https://cdn.example.test/twins/basement-point-cloud.e57', $model->external_url);
+        $this->assertNull($model->file_path);
     }
 
     private function createUserWithRole(string $roleName): User

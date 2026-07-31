@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Client;
 
 use App\Http\Controllers\Controller;
-use App\Models\InspectionSystem;
+use App\Models\BuildingSystem;
 use App\Models\Property;
 use App\Models\User;
 use App\Notifications\PropertyRegisteredNotification;
@@ -467,7 +467,7 @@ class PropertyController extends Controller
 
     protected function issueAreaOptions(): array
     {
-        $systems = InspectionSystem::query()
+        $systems = BuildingSystem::query()
             ->where('is_active', true)
             ->orderBy('sort_order')
             ->orderBy('name')

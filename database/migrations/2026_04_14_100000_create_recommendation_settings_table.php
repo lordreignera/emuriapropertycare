@@ -14,13 +14,14 @@ return new class extends Migration
         Schema::create('recommendation_settings', function (Blueprint $table) {
             $table->id();
             $table->string('recommendation', 500);
-            $table->foreignId('system_id')->nullable()->constrained('systems')->nullOnDelete();
-            $table->foreignId('subsystem_id')->nullable()->constrained('subsystems')->nullOnDelete();
+            $table->foreignId('building_system_id')->nullable()->constrained('building_systems')->nullOnDelete();
+            $table->foreignId('building_subsystem_id')->nullable()->constrained('building_subsystems')->nullOnDelete();
+            $table->foreignId('building_component_id')->nullable()->constrained('building_components')->nullOnDelete();
             $table->unsignedInteger('sort_order')->default(0);
             $table->boolean('is_active')->default(true);
             $table->timestamps();
 
-            $table->index(['system_id', 'subsystem_id']);
+            $table->index(['building_system_id', 'building_subsystem_id'], 'recommendation_building_system_subsystem_idx');
             $table->index(['is_active', 'sort_order']);
         });
     }

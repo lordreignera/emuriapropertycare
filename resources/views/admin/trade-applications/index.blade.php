@@ -37,6 +37,78 @@
     .trade-filter-bar .nav-link {
         min-width: 118px;
         text-align: center;
+        border: 1px solid #d7deea;
+        border-radius: 8px;
+        font-weight: 800;
+    }
+
+    .trade-application-number {
+        color: #0f3f8f;
+        font-weight: 900;
+        white-space: nowrap;
+    }
+
+    .trade-muted {
+        color: #667085;
+        font-size: .82rem;
+    }
+
+    .trade-status-pill {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 5px 10px;
+        font-size: .78rem;
+        font-weight: 900;
+    }
+
+    .trade-status-open {
+        background: #e0f2fe;
+        color: #075985;
+    }
+
+    .trade-status-approved {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .trade-status-rejected {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+
+    .trade-application-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 16px;
+    }
+
+    .trade-application-card {
+        border: 1px solid #dfe5ef;
+        border-radius: 8px;
+        background: #fff;
+        padding: 16px;
+        box-shadow: 0 8px 22px rgba(16, 24, 40, .055);
+    }
+
+    .trade-application-meta {
+        display: grid;
+        gap: 8px;
+        margin: 14px 0;
+    }
+
+    .trade-application-meta-item {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        border-top: 1px solid #edf1f7;
+        padding-top: 8px;
+        font-size: .86rem;
+    }
+
+    .trade-application-meta-item span:first-child {
+        color: #667085;
+        font-weight: 800;
     }
 </style>
 <div class="row">
@@ -54,7 +126,7 @@
                 <ul class="nav nav-pills trade-filter-bar">
                     <li class="nav-item">
                         <a class="nav-link {{ $status === 'open' ? 'active' : '' }}" href="{{ route('admin.trade-applications.index', ['status' => 'open']) }}">
-                            Open <span class="badge bg-light text-dark ms-1">{{ $openCount }}</span>
+                            Awaiting Review <span class="badge bg-light text-dark ms-1">{{ $openCount }}</span>
                         </a>
                     </li>
                     <li class="nav-item">
@@ -67,56 +139,64 @@
                             Rejected <span class="badge bg-light text-dark ms-1">{{ $rejectedCount }}</span>
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link {{ $status === 'all' ? 'active' : '' }}" href="{{ route('admin.trade-applications.index', ['status' => 'all']) }}">All</a>
-                    </li>
                 </ul>
 
-                <div class="table-responsive">
-                    <table class="table table-striped align-middle">
-                        <thead>
-                            <tr>
-                                <th>Application #</th>
-                                <th>Partner ID</th>
-                                <th>Company</th>
-                                <th>Contact</th>
-                                <th>Service Area</th>
-                                <th>Status</th>
-                                <th>Submitted</th>
-                                <th class="text-end">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @forelse($applications as $application)
-                                <tr>
-                                    <td class="fw-semibold">{{ $application->application_number }}</td>
-                                    <td>
-                                        @if($application->tradePartner)
-                                            <span class="badge bg-success">{{ $application->tradePartner->partner_number }}</span>
-                                        @else
-                                            <span class="text-muted">Pending approval</span>
-                                        @endif
-                                    </td>
-                                    <td>{{ $application->company_name }}</td>
-                                    <td>
-                                        <div>{{ $application->contact_person }}</div>
-                                        <small class="text-muted">{{ $application->email }}</small>
-                                    </td>
-                                    <td>{{ $application->service_area }}</td>
-                                    <td><span class="badge bg-info text-dark">{{ $application->statusLabel() }}</span></td>
-                                    <td>{{ optional($application->submitted_at ?? $application->created_at)->format('M d, Y') }}</td>
-                                    <td class="text-end">
-                                        <a href="{{ route('admin.trade-applications.show', $application) }}" class="btn btn-sm btn-outline-primary">Review</a>
-                                    </td>
-                                </tr>
-                            @empty
-                                <tr>
-                                    <td colspan="8" class="text-center text-muted py-4">No trade applications found.</td>
-                                </tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
+                @if($applications->isEmpty())
+                    <div class="text-center text-muted py-5">
+                        <i class="mdi mdi-briefcase-search-outline" style="font-size:3rem;opacity:.35;"></i>
+                        <div class="mt-2">No trade applications found.</div>
+                    </div>
+                @else
+                    <div class="trade-application-grid">
+                        @foreach($applications as $application)
+                            @php
+                                $displayStatus = match ($application->status) {
+                                    \App\Models\TradeApplication::STATUS_APPROVED => 'Approved',
+                                    \App\Models\TradeApplication::STATUS_REJECTED => 'Rejected',
+                                    default => 'Awaiting Review',
+                                };
+                                $statusClass = match ($application->status) {
+                                    \App\Models\TradeApplication::STATUS_APPROVED => 'trade-status-approved',
+                                    \App\Models\TradeApplication::STATUS_REJECTED => 'trade-status-rejected',
+                                    default => 'trade-status-open',
+                                };
+                            @endphp
+                            <article class="trade-application-card">
+                                <div class="d-flex justify-content-between align-items-start gap-2">
+                                    <div>
+                                        <div class="trade-application-number">{{ $application->application_number }}</div>
+                                        <div class="trade-muted">Submitted {{ optional($application->submitted_at ?? $application->created_at)->format('M d, Y') }}</div>
+                                    </div>
+                                    <span class="trade-status-pill {{ $statusClass }}">{{ $displayStatus }}</span>
+                                </div>
+
+                                <h5 class="fw-bold mt-3 mb-1">{{ $application->company_name }}</h5>
+                                <div class="trade-muted">{{ $application->service_area ?: 'Service area not provided' }}</div>
+
+                                <div class="trade-application-meta">
+                                    <div class="trade-application-meta-item">
+                                        <span>Partner ID</span>
+                                        <strong>
+                                            @if($application->tradePartner)
+                                                {{ $application->tradePartner->partner_number }}
+                                            @else
+                                                Created after approval
+                                            @endif
+                                        </strong>
+                                    </div>
+                                    <div class="trade-application-meta-item">
+                                        <span>Contact</span>
+                                        <strong class="text-end">{{ $application->contact_person }}<br><small class="trade-muted">{{ $application->email }}</small></strong>
+                                    </div>
+                                </div>
+
+                                <a href="{{ route('admin.trade-applications.show', $application) }}" class="btn btn-sm btn-outline-primary w-100">
+                                    <i class="mdi mdi-file-eye-outline me-1"></i>Review Application
+                                </a>
+                            </article>
+                        @endforeach
+                    </div>
+                @endif
 
                 <div class="mt-3">{{ $applications->links() }}</div>
             </div>

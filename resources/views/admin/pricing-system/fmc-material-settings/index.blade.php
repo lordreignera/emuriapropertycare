@@ -1,4 +1,4 @@
-﻿@extends('admin.layout')
+@extends('admin.layout')
 
 @section('content')
 <div class="row">
@@ -35,7 +35,7 @@
                     </div>
                     <div class="col-6 col-md-2">
                         <label class="form-label mb-1 small">System</label>
-                        <select name="system_id" class="form-control form-control-sm" id="filterSystemSelect">
+                        <select name="building_system_id" class="form-control form-control-sm" id="filterSystemSelect">
                             <option value="">All Systems</option>
                             @foreach($systems as $sys)
                                 <option value="{{ $sys->id }}" {{ (string)($systemId ?? '') === (string)$sys->id ? 'selected' : '' }}>{{ $sys->name }}</option>
@@ -44,7 +44,7 @@
                     </div>
                     <div class="col-6 col-md-2">
                         <label class="form-label mb-1 small">Subsystem</label>
-                        <select name="subsystem_id" class="form-control form-control-sm" id="filterSubsystemSelect">
+                        <select name="building_subsystem_id" class="form-control form-control-sm" id="filterSubsystemSelect">
                             <option value="">All Subsystems</option>
                             @foreach($subsystems as $sub)
                                 <option value="{{ $sub->id }}" {{ (string)($subsystemId ?? '') === (string)$sub->id ? 'selected' : '' }}>{{ $sub->name }}</option>
@@ -63,7 +63,7 @@
                         <button type="submit" class="btn btn-outline-primary btn-sm">
                             <i class="mdi mdi-filter"></i> Filter
                         </button>
-                        @if(request()->hasAny(['search','system_id','subsystem_id','status']))
+                        @if(request()->hasAny(['search','building_system_id','building_subsystem_id','status']))
                             <a href="{{ route('admin.fmc-material-settings.index') }}" class="btn btn-outline-secondary btn-sm" title="Clear filters">
                                 <i class="mdi mdi-close"></i> Clear
                             </a>

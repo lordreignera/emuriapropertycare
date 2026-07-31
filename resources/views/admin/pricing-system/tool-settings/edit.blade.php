@@ -25,8 +25,8 @@
                         return [
                             'id' => $finding->id,
                             'task_question' => $finding->task_question,
-                            'system_id' => $finding->system_id,
-                            'subsystem_id' => $finding->subsystem_id,
+                            'building_system_id' => $finding->building_system_id,
+                            'building_subsystem_id' => $finding->building_subsystem_id,
                         ];
                     })->values()->all();
                 @endphp
@@ -49,21 +49,21 @@
 
                     <div class="row">
                         <div class="col-md-6 form-group">
-                            <label for="system_id">System</label>
-                            <select class="form-control @error('system_id') is-invalid @enderror" id="system_id" name="system_id">
+                            <label for="building_system_id">System</label>
+                            <select class="form-control @error('building_system_id') is-invalid @enderror" id="building_system_id" name="building_system_id">
                                 <option value="">All Systems</option>
                                 @foreach(($systems ?? collect()) as $system)
-                                    <option value="{{ $system->id }}" {{ (string) old('system_id', $toolSetting->system_id) === (string) $system->id ? 'selected' : '' }}>{{ $system->name }}</option>
+                                    <option value="{{ $system->id }}" {{ (string) old('building_system_id', $toolSetting->building_system_id) === (string) $system->id ? 'selected' : '' }}>{{ $system->name }}</option>
                                 @endforeach
                             </select>
-                            @error('system_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            @error('building_system_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
                         <div class="col-md-6 form-group">
-                            <label for="subsystem_id">Subsystem</label>
-                            <select class="form-control @error('subsystem_id') is-invalid @enderror" id="subsystem_id" name="subsystem_id">
+                            <label for="building_subsystem_id">Subsystem</label>
+                            <select class="form-control @error('building_subsystem_id') is-invalid @enderror" id="building_subsystem_id" name="building_subsystem_id">
                                 <option value="">All Subsystems</option>
                             </select>
-                            @error('subsystem_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            @error('building_subsystem_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
                     </div>
 
@@ -123,11 +123,11 @@
                     (function () {
                         const systems = @json($systemsJson);
                         const findings = @json($findingsJson);
-                        const systemSelect = document.getElementById('system_id');
-                        const subsystemSelect = document.getElementById('subsystem_id');
+                        const systemSelect = document.getElementById('building_system_id');
+                        const subsystemSelect = document.getElementById('building_subsystem_id');
                         const findingSelect = document.getElementById('finding_template_setting_id');
 
-                        const selectedSubsystemId = "{{ old('subsystem_id', $toolSetting->subsystem_id) }}";
+                        const selectedSubsystemId = "{{ old('building_subsystem_id', $toolSetting->building_subsystem_id) }}";
                         const selectedFindingId = "{{ old('finding_template_setting_id', $toolSetting->finding_template_setting_id) }}";
 
                         function renderSubsystems(systemId) {
@@ -153,8 +153,8 @@
                             findingSelect.innerHTML = '<option value="">-- Select Finding --</option>';
 
                             findings.forEach((finding) => {
-                                const matchesSystem = !systemId || String(finding.system_id || '') === systemId;
-                                const matchesSubsystem = !subsystemId || String(finding.subsystem_id || '') === subsystemId;
+                                const matchesSystem = !systemId || String(finding.building_system_id || '') === systemId;
+                                const matchesSubsystem = !subsystemId || String(finding.building_subsystem_id || '') === subsystemId;
 
                                 if (!matchesSystem || !matchesSubsystem) return;
 

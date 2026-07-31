@@ -1,6 +1,6 @@
 @extends('admin.layout')
 
-@section('title', 'PHAR Assessment Report')
+@section('title', 'PHAR Diagnosis Report')
 
 @section('content')
 @php
@@ -32,10 +32,10 @@
                     <div>
                         <h4 class="card-title mb-1">
                             <i class="mdi mdi-file-document-check-outline me-2 text-primary"></i>
-                            PHAR Assessment Report &mdash; {{ $property?->property_name ?? 'Property' }}
+                            PHAR Diagnosis Report &mdash; {{ $property?->property_name ?? 'Property' }}
                         </h4>
                         <p class="text-muted small mb-0">
-                            Official assessment of the property's systems and subsystems.
+                            Official diagnosis of the property's systems and subsystems.
                             @if($inspection->assessment_finalised_at)
                                 Finalised on <strong>{{ optional($inspection->assessment_finalised_at)->format('M d, Y H:i') }}</strong>
                                 @if($inspection->finalisedBy) by <strong>{{ $inspection->finalisedBy->name }}</strong>@endif.
@@ -78,7 +78,7 @@
                     <div class="alert alert-light border" style="background:#f6fff8;border-left:4px solid #198754;">
                         <i class="mdi mdi-lock-check-outline me-1 text-success"></i>
                         <span class="small">
-                            The assessment is <strong>finalised and locked</strong>. Review it below, then share the
+                            The diagnosis is <strong>finalised and locked</strong>. Review it below, then share the
                             client-facing report. Need to change something? Reopen it first.
                         </span>
                     </div>
@@ -87,7 +87,7 @@
                 @include('inspections.partials.digital-twin-evidence-summary', ['inspection' => $inspection])
 
                 @if($findings->isEmpty())
-                    <div class="alert alert-warning">No findings were captured for this assessment.</div>
+                    <div class="alert alert-warning">No findings were captured for this diagnosis.</div>
                 @else
                     @include('inspections.partials.phar-executive-dashboard', [
                         'inspection' => $inspection,
@@ -97,7 +97,7 @@
 
                     <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
                         <div>
-                            <h5 class="mb-0 fw-bold">Assessment Detail Appendix</h5>
+                            <h5 class="mb-0 fw-bold">Diagnosis Detail Appendix</h5>
                             <p class="text-muted small mb-0">Inspector notes, client education, and evidence photos for each PHAR finding.</p>
                         </div>
                     </div>
@@ -124,6 +124,7 @@
                                 </div>
 
                                 @include('inspections.partials.finding-understanding', ['f' => $f])
+                                @include('inspections.partials.finding-affected-areas', ['f' => $f])
                                 @include('inspections.partials.finding-evidence-photos', ['f' => $f, 'inspection' => $inspection, 'findingIndex' => $i])
 
                                 @if($internalNotes !== '')
@@ -143,7 +144,7 @@
                             @unless($alreadyShared)
                                 @if(Auth::user()->hasAnyRole(['Super Admin', 'Administrator', 'Project Manager']))
                                 <form method="POST" action="{{ route('inspections.reopen-assessment', $inspection->id) }}"
-                                      onsubmit="return confirm('Reopen this assessment for editing? It will return to the in-progress state.');">
+                                      onsubmit="return confirm('Reopen this diagnosis for editing? It will return to the in-progress state.');">
                                     @csrf
                                     <button type="submit" class="btn btn-outline-secondary">
                                         <i class="mdi mdi-lock-open-variant-outline me-1"></i>Reopen to Edit
@@ -164,7 +165,7 @@
                                 @endif
                             @else
                                 <form method="POST" action="{{ route('inspections.share-findings-report', $inspection->id) }}"
-                                      onsubmit="return confirm('Share this assessment report with the client? They will be able to review the findings and commit to items for remediation.');">
+                                      onsubmit="return confirm('Share this diagnosis report with the client? They will be able to review the findings and commit to items for remediation.');">
                                     @csrf
                                     <button type="submit" class="btn btn-primary">
                                         <i class="mdi mdi-send-check-outline me-1"></i>Share Report with Client

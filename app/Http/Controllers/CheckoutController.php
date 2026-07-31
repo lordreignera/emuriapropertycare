@@ -27,6 +27,9 @@ class CheckoutController extends Controller
             'cadence' => 'required|in:monthly,annual',
         ]);
 
+        $tier = Tier::findOrFail($validated['tier_id']);
+        $stripePriceId = $this->getStripePriceId($tier, $validated['cadence']);
+
         try {
             DB::beginTransaction();
 
@@ -52,18 +55,12 @@ class CheckoutController extends Controller
             // Log the user in
             Auth::login($user);
 
-            // Get the tier
-            $tier = Tier::findOrFail($validated['tier_id']);
-            
             // Calculate price based on cadence
             $price = $validated['cadence'] === 'monthly' 
                 ? $tier->monthly_price 
                 : $tier->annual_price;
 
-            // Create Stripe Checkout Session
-            // Note: You need to create products in Stripe Dashboard first
-            // and add stripe_price_id_monthly and stripe_price_id_annual to tiers table
-            $checkout = $user->newSubscription('default', $this->getStripePriceId($tier, $validated['cadence']))
+            $checkout = $user->newSubscription('default', $stripePriceId)
                 ->checkout([
                     'success_url' => route('checkout.success') . '?session_id={CHECKOUT_SESSION_ID}',
                     'cancel_url' => route('checkout.cancel'),
@@ -141,14 +138,16 @@ class CheckoutController extends Controller
      */
     private function getStripePriceId(Tier $tier, string $cadence): string
     {
-        // TODO: Add stripe_price_id_monthly and stripe_price_id_annual columns to tiers table
-        // For now, return a placeholder. You'll need to create products in Stripe Dashboard
-        // and update this method to return the actual price IDs
-        
-        if ($cadence === 'monthly') {
-            return $tier->stripe_price_id_monthly ?? 'price_monthly_placeholder';
-        } else {
-            return $tier->stripe_price_id_annual ?? 'price_annual_placeholder';
+        $priceId = $cadence === 'monthly'
+            ? $tier->stripe_price_id_monthly
+            : $tier->stripe_price_id_annual;
+
+        if (blank($priceId)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'tier_id' => "The selected tier is missing its Stripe {$cadence} price ID. Run the Stripe product seeder or update the tier before checkout.",
+            ]);
         }
+
+        return $priceId;
     }
 }

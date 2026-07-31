@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <title>EMURIA Regenerative Property Care - Innovations & Maintenance</title>
+    <title>ETOGO - Innovations & Maintenance</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-    <meta name="description" content="EMURIA offers tiered property care membership plans with innovative maintenance solutions for your property needs.">
+    <meta name="description" content="ETOGO offers tiered property care membership plans with innovative maintenance solutions for your property needs.">
     
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css">
@@ -63,102 +63,163 @@
 
 		<!-- ========== SECTION: NAVIGATION MENU ========== -->
 		<style>
-			.emuria-navbar {
-				background: linear-gradient(180deg, #5260c6 0%, #4452b4 100%) !important;
-				border-top: 4px solid #b5162b;
-				min-height: 76px;
-				padding: 0.75rem 0;
+			.etogo-navbar {
+				position: absolute;
+				top: 0;
+				left: 0;
+				right: 0;
+				z-index: 20;
+				background: linear-gradient(180deg, rgba(8, 24, 56, .74), rgba(8, 24, 56, .28)) !important;
+				border-top: 5px solid #b5162b;
+				min-height: 96px;
+				padding: 0.9rem 0;
+				box-shadow: none;
+				backdrop-filter: blur(14px);
 			}
 
-			.emuria-navbar .container {
+			.etogo-navbar .container {
 				max-width: 1200px;
 				display: flex;
 				align-items: center;
 			}
 
-			.emuria-navbar .navbar-brand {
-				font-size: 1.45rem;
+			.etogo-navbar .navbar-brand {
+				display: inline-flex;
+				align-items: center;
+				gap: 14px;
+				font-size: 2rem;
 				font-weight: 800;
-				letter-spacing: -0.2px;
-				margin-right: 2rem;
+				letter-spacing: 0;
+				margin-right: 2.8rem;
 				white-space: nowrap;
+				color: #ffffff !important;
+				text-decoration: none;
+				text-shadow: 0 8px 24px rgba(0, 0, 0, .28);
 			}
 
-			.emuria-navbar .navbar-collapse {
+			.etogo-navbar .brand-logo {
+				height: 78px;
+				width: auto;
+				display: inline-block;
+			}
+
+			.etogo-navbar .brand-word {
+				display: inline-block;
+				line-height: 1;
+			}
+
+			.etogo-navbar .navbar-collapse {
 				align-items: center;
 			}
 
-			.emuria-navbar .navbar-nav.main-links {
+			.etogo-navbar .navbar-toggler {
+				color: #ffffff !important;
+				border: 2px solid rgba(255, 255, 255, .34);
+				border-radius: 10px;
+				padding: .65rem .85rem;
+			}
+
+			.etogo-navbar .navbar-nav.main-links {
 				gap: 0.25rem;
 			}
 
-			.emuria-navbar .nav-link {
+			.etogo-navbar .nav-link {
 				color: #ffffff !important;
 				font-weight: 700;
-				font-size: 0.93rem;
-				padding: 0.85rem 1rem !important;
-				border-radius: 6px;
+				font-size: 1.05rem;
+				padding: 0.95rem 1.1rem !important;
+				border-radius: 10px;
 			}
 
-			.emuria-navbar .nav-item.active .nav-link,
-			.emuria-navbar .main-links .nav-link:hover {
+			.etogo-navbar .nav-item.active .nav-link,
+			.etogo-navbar .main-links .nav-link:hover {
 				background: #ffc33a;
 				color: #111827 !important;
+				text-shadow: none;
 			}
 
-			.emuria-navbar .action-links {
+			.etogo-navbar .action-links {
 				gap: 0.55rem;
 				align-items: center;
 			}
 
-			.emuria-navbar .action-link {
-				min-height: 44px;
+			.etogo-navbar .action-link {
+				min-height: 50px;
 				display: inline-flex;
 				align-items: center;
 				justify-content: center;
-				border-radius: 6px;
-				padding: 0.65rem 1.1rem !important;
+				border-radius: 10px;
+				padding: 0.75rem 1.25rem !important;
 				line-height: 1.1;
+				box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
 			}
 
-			.emuria-navbar .action-trade {
+			.etogo-navbar .action-trade {
 				background: #ffc107;
 				color: #111827 !important;
 			}
 
-			.emuria-navbar .action-start {
+			.etogo-navbar .action-start {
 				background: #1fa843;
 				color: #ffffff !important;
 			}
 
-			.emuria-navbar .action-login {
+			.etogo-navbar .action-start .free-label {
+				font-size: .72rem;
+				font-weight: 800;
+				margin-left: 4px;
+				letter-spacing: 0;
+			}
+
+			.etogo-navbar .action-login {
 				background: #ffc33a;
-				color: #ffffff !important;
+				color: #111827 !important;
+			}
+
+			.hero-brand-title {
+				font-size: 7.5rem !important;
+				line-height: .9 !important;
+				font-weight: 900 !important;
+				letter-spacing: 0 !important;
+				text-shadow: 0 14px 36px rgba(15, 23, 42, .32);
 			}
 
 			@media (max-width: 991.98px) {
-				.emuria-navbar .container {
+				.etogo-navbar .container {
 					display: block;
 				}
 
-				.emuria-navbar .navbar-brand {
+				.etogo-navbar .navbar-brand {
 					display: inline-block;
 					margin-right: 0;
 				}
 
-				.emuria-navbar .navbar-collapse {
+				.etogo-navbar .brand-logo {
+					height: 62px;
+				}
+
+				.etogo-navbar .brand-word {
+					font-size: 1.75rem;
+				}
+
+				.etogo-navbar .navbar-collapse {
 					margin-top: 0.75rem;
 				}
 
-				.emuria-navbar .action-links {
+				.etogo-navbar .action-links {
 					margin-top: 0.75rem;
+				}
+
+				.hero-brand-title {
+					font-size: 4.8rem !important;
 				}
 			}
 		</style>
-		<nav class="navbar navbar-expand-lg navbar-dark ftco_navbar ftco-navbar-light emuria-navbar" id="ftco-navbar">
+		<nav class="navbar navbar-expand-lg navbar-dark ftco_navbar ftco-navbar-light etogo-navbar" id="ftco-navbar">
 	    <div class="container">
 				<a class="navbar-brand" href="index.html">
-					<span style="color: #ffffff;">EMURIA</span><span style="color: #FFB800;">PropertyCare</span>
+					<img class="brand-logo" src="/etogo%20log.png" alt="ETOGO">
+					<span class="brand-word">ETOGO</span>
 				</a>
 	      <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#ftco-nav" aria-controls="ftco-nav" aria-expanded="false" aria-label="Toggle navigation">
 	        <span class="fa fa-bars"></span> Menu
@@ -173,7 +234,7 @@
 	        </ul>
 	        <ul class="navbar-nav action-links ml-auto">
 	        	<li class="nav-item"><a href="/trade/register" class="nav-link action-link action-trade">Trade Partner</a></li>
-	        	<li class="nav-item"><a href="/register" class="nav-link action-link action-start">Get Started<br><small>FREE</small></a></li>
+						<li class="nav-item"><a href="/register" class="nav-link action-link action-start">Get Started<span class="free-label">FREE</span></a></li>
 	        	<li class="nav-item"><a href="/login" class="nav-link action-link action-login">Login</a></li>
 	        </ul>
 	      </div>
@@ -191,7 +252,7 @@
 		          <div class="col-md-12 ftco-animate">
 		          	<div class="text w-100 text-center">
 		          		<h2>Innovative Property Solutions</h2>
-			            <h1 class="mb-3">EMURIA Regenerative Property Care</h1>
+			            <h1 class="mb-3 hero-brand-title">ETOGO</h1>
 			            <p><a href="/register" class="btn btn-primary btn-lg px-5 py-3">Get Started FREE</a></p>
 		            </div>
 		          </div>
@@ -237,7 +298,7 @@
 		          	<div class="text w-100 text-center">
 		          		<h2>Trade Partner Network</h2>
 			            <h1 class="mb-3">Skilled Trades, Clear Scopes, Better Projects</h1>
-			            <p class="mb-4" style="color: #ffffff; font-weight: 600;">Join EMURIA's approved partner network and receive work backed by verified property assessments, documented scopes, and transparent standards.</p>
+			            <p class="mb-4" style="color: #ffffff; font-weight: 600;">Join ETOGO's approved partner network and receive work backed by verified property assessments, documented scopes, and transparent standards.</p>
 			            <p><a href="/trade/register" class="btn btn-primary btn-lg px-5 py-3">Apply as a Trade Partner</a></p>
 		            </div>
 		          </div>
@@ -347,9 +408,9 @@
     			<div class="col-md-6 pl-md-5">
     				<div class="row justify-content-start py-5">
 		          <div class="col-md-12 heading-section ftco-animate pl-md-4 py-md-4">
-		          	<span class="subheading">Welcome to EMURIA Property Care</span>
+								<span class="subheading">Welcome to ETOGO</span>
 		            <h2 class="mb-4">Regenerative Property Care Solutions</h2>
-		            <p>EMURIA Property Care offers innovative property maintenance and care through tiered membership plans. We focus on sustainability, innovation, and excellence in property management. Our services include property maintenance, innovative solutions, and regenerative care - currently, we do not offer construction services.</p>
+		            <p>ETOGO offers innovative property maintenance and care through tiered membership plans. We focus on sustainability, innovation, and excellence in property management. Our services include property maintenance, innovative solutions, and regenerative care - currently, we do not offer construction services.</p>
 		            <div class="tabulation-2 mt-4">
 									<ul class="nav nav-pills nav-fill d-md-flex d-block">
 									  <li class="nav-item mb-md-0 mb-2">
@@ -388,7 +449,7 @@
         <div class="row justify-content-center mb-5 pb-3">
           <div class="col-md-10 heading-section text-center ftco-animate">
           	<span class="subheading">Simple Process</span>
-            <h2 class="mb-4">How EMURIA Property Care Works</h2>
+            <h2 class="mb-4">How ETOGO Works</h2>
             <p>We believe in a diagnostic approach to property care - like a doctor prescribing care based on real data, not selling packages. Our intelligent system calculates the right solution for your specific property needs.</p>
           </div>
         </div>
@@ -468,7 +529,7 @@
             <a href="/register" class="btn btn-primary btn-lg px-5 py-3">
               Start Your Free Assessment
             </a>
-            <p class="mt-3 text-muted">Join hundreds of property owners who trust EMURIA</p>
+            <p class="mt-3 text-muted">Join hundreds of property owners who trust ETOGO</p>
           </div>
         </div>
       </div>
@@ -492,7 +553,7 @@
                 <div class="testimony-wrap py-4">
                 	<div class="icon d-flex align-items-center justify-content-center"><span class="fa fa-quote-left"></span></div>
                   <div class="text">
-                    <p class="mb-4">EMURIA's property care service has been exceptional. Their tiered approach allowed us to choose exactly what we needed, and the maintenance team is always responsive and professional.</p>
+                    <p class="mb-4">ETOGO's property care service has been exceptional. Their tiered approach allowed us to choose exactly what we needed, and the maintenance team is always responsive and professional.</p>
                     <div class="d-flex align-items-center">
                     	<div class="user-img" style="background-image: url(images/person_1.jpg)"></div>
                     	<div class="pl-3">
@@ -556,7 +617,7 @@
             <a href="#contact" class="btn btn-primary btn-lg px-5 py-3">
               <i class="fa fa-comment mr-2"></i> Submit Your Testimonial
             </a>
-            <p class="mt-3 text-muted">Share your story with the EMURIA Property Care community</p>
+            <p class="mt-3 text-muted">Share your story with the ETOGO community</p>
           </div>
         </div>
       </div>
@@ -600,7 +661,7 @@
 					<div class="col-md-9 py-5">
 						<div class="row">
 							<div class="col-md-4 mb-md-0 mb-4">
-								<h2 class="footer-heading">About EMURIA Property Care</h2>
+								<h2 class="footer-heading">About ETOGO</h2>
 								<p>Leading provider of regenerative property care solutions, focused on innovations and maintenance excellence for sustainable property management.</p>
 								<ul class="ftco-footer-social p-0">
 		              <li class="ftco-animate"><a href="#" data-toggle="tooltip" data-placement="top" title="Twitter"><span class="ion-logo-twitter"></span></a></li>
@@ -626,7 +687,7 @@
 											<div class="col-md-6 mb-md-0 mb-4">
 												<h2 class="footer-heading">Contact Info</h2>
 												<ul class="list-unstyled">
-						              <li><a href="mailto:emuriainvestments@gmail.com" class="py-1 d-block"><i class="fa fa-envelope mr-2"></i> emuriainvestments@gmail.com</a></li>
+						              <li><a href="mailto:admin@etogo.ca" class="py-1 d-block"><i class="fa fa-envelope mr-2"></i> admin@etogo.ca</a></li>
 						              <li><a href="tel:+256708356505" class="py-1 d-block"><i class="fa fa-phone mr-2"></i> +256 708 356 505</a></li>
 						              <li><a href="#" class="py-1 d-block"><i class="fa fa-clock-o mr-2"></i> Mon-Fri: 8AM - 6PM</a></li>
 						              <li><a href="#" class="py-1 d-block"><i class="fa fa-clock-o mr-2"></i> 24/7 Emergency Support</a></li>
@@ -640,7 +701,7 @@
 						<div class="row mt-md-5">
 							<div class="col-md-12">
 								<p class="copyright">
-					  Copyright &copy;<script>document.write(new Date().getFullYear());</script> EMURIA Regenerative Property Care. All rights reserved.
+					  Copyright &copy;<script>document.write(new Date().getFullYear());</script> ETOGO. All rights reserved.
 					  </p>
 							</div>
 						</div>

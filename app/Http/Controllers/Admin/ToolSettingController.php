@@ -4,8 +4,8 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\FindingTemplateSetting;
-use App\Models\InspectionSubsystem;
-use App\Models\InspectionSystem;
+use App\Models\BuildingSubsystem;
+use App\Models\BuildingSystem;
 use App\Models\InspectionToolAssignment;
 use App\Models\ToolSetting;
 use Illuminate\Http\Request;
@@ -15,23 +15,23 @@ class ToolSettingController extends Controller
 {
     public function index(Request $request)
     {
-        $systems = InspectionSystem::query()->orderBy('sort_order')->orderBy('name')->get(['id', 'name']);
+        $systems = BuildingSystem::query()->orderBy('sort_order')->orderBy('name')->get(['id', 'name']);
 
         $query = ToolSetting::query()
             ->with(['system:id,name', 'subsystem:id,name', 'findingTemplateSetting:id,task_question']);
 
-        $systemId = $request->integer('system_id') ?: null;
-        $subsystemId = $request->integer('subsystem_id') ?: null;
+        $systemId = $request->integer('building_system_id') ?: null;
+        $subsystemId = $request->integer('building_subsystem_id') ?: null;
         $ownership = trim((string) $request->input('ownership_status', ''));
         $availability = trim((string) $request->input('availability_status', ''));
         $status = trim((string) $request->input('status', ''));
         $search = trim((string) $request->input('search', ''));
 
         if ($systemId) {
-            $query->where('system_id', $systemId);
+            $query->where('building_system_id', $systemId);
         }
         if ($subsystemId) {
-            $query->where('subsystem_id', $subsystemId);
+            $query->where('building_subsystem_id', $subsystemId);
         }
         if (in_array($ownership, ['owned', 'hired'], true)) {
             $query->where('ownership_status', $ownership);
@@ -58,7 +58,7 @@ class ToolSettingController extends Controller
             ->withQueryString();
 
         $subsystems = $systemId
-            ? InspectionSubsystem::query()->where('system_id', $systemId)->orderBy('sort_order')->orderBy('name')->get(['id', 'name'])
+            ? BuildingSubsystem::query()->where('building_system_id', $systemId)->orderBy('sort_order')->orderBy('name')->get(['id', 'name'])
             : collect();
 
         return view('admin.pricing-system.tool-settings.index', compact(
@@ -68,7 +68,7 @@ class ToolSettingController extends Controller
 
     public function create()
     {
-        $systems = InspectionSystem::query()
+        $systems = BuildingSystem::query()
             ->with(['subsystems' => function ($query) {
                 $query->where('is_active', true)->orderBy('sort_order')->orderBy('name');
             }])
@@ -81,7 +81,7 @@ class ToolSettingController extends Controller
             ->where('is_active', true)
             ->orderBy('sort_order')
             ->orderBy('task_question')
-            ->get(['id', 'task_question', 'system_id', 'subsystem_id']);
+            ->get(['id', 'task_question', 'building_system_id', 'building_subsystem_id']);
 
         return view('admin.pricing-system.tool-settings.create', compact('systems', 'findingTemplates'));
     }
@@ -91,8 +91,8 @@ class ToolSettingController extends Controller
         $validated = $request->validate([
             'tool_name' => 'required|string|max:150',
             'quantity' => 'nullable|integer|min:1|max:999',
-            'system_id' => 'nullable|exists:systems,id',
-            'subsystem_id' => 'nullable|exists:subsystems,id',
+            'building_system_id' => 'nullable|exists:building_systems,id',
+            'building_subsystem_id' => 'nullable|exists:building_subsystems,id',
             'finding_template_setting_id' => 'nullable|exists:finding_template_settings,id',
             'ownership_status' => 'required|in:owned,hired',
             'availability_status' => 'required|in:available,non_available',
@@ -105,7 +105,7 @@ class ToolSettingController extends Controller
         $validated['quantity'] = max(1, (int) ($validated['quantity'] ?? 1));
         $validated['sort_order'] = $validated['sort_order'] ?? 0;
         $validated['is_active'] = $request->boolean('is_active', true);
-        $validated['subsystem_id'] = $validated['subsystem_id'] ?? null;
+        $validated['building_subsystem_id'] = $validated['building_subsystem_id'] ?? null;
         $validated['finding_template_setting_id'] = $validated['finding_template_setting_id'] ?? null;
 
         $this->validateScopeConsistency($validated);
@@ -118,7 +118,7 @@ class ToolSettingController extends Controller
 
     public function edit(ToolSetting $toolSetting)
     {
-        $systems = InspectionSystem::query()
+        $systems = BuildingSystem::query()
             ->with(['subsystems' => function ($query) {
                 $query->where('is_active', true)->orderBy('sort_order')->orderBy('name');
             }])
@@ -131,7 +131,7 @@ class ToolSettingController extends Controller
             ->where('is_active', true)
             ->orderBy('sort_order')
             ->orderBy('task_question')
-            ->get(['id', 'task_question', 'system_id', 'subsystem_id']);
+            ->get(['id', 'task_question', 'building_system_id', 'building_subsystem_id']);
 
         return view('admin.pricing-system.tool-settings.edit', compact('toolSetting', 'systems', 'findingTemplates'));
     }
@@ -141,8 +141,8 @@ class ToolSettingController extends Controller
         $validated = $request->validate([
             'tool_name' => 'required|string|max:150',
             'quantity' => 'nullable|integer|min:1|max:999',
-            'system_id' => 'nullable|exists:systems,id',
-            'subsystem_id' => 'nullable|exists:subsystems,id',
+            'building_system_id' => 'nullable|exists:building_systems,id',
+            'building_subsystem_id' => 'nullable|exists:building_subsystems,id',
             'finding_template_setting_id' => 'nullable|exists:finding_template_settings,id',
             'ownership_status' => 'required|in:owned,hired',
             'availability_status' => 'required|in:available,non_available',
@@ -155,7 +155,7 @@ class ToolSettingController extends Controller
         $validated['quantity'] = max(1, (int) ($validated['quantity'] ?? 1));
         $validated['sort_order'] = $validated['sort_order'] ?? 0;
         $validated['is_active'] = $request->boolean('is_active');
-        $validated['subsystem_id'] = $validated['subsystem_id'] ?? null;
+        $validated['building_subsystem_id'] = $validated['building_subsystem_id'] ?? null;
         $validated['finding_template_setting_id'] = $validated['finding_template_setting_id'] ?? null;
 
         $this->validateScopeConsistency($validated);
@@ -236,11 +236,11 @@ class ToolSettingController extends Controller
 
     private function validateScopeConsistency(array $validated): void
     {
-        if (!empty($validated['subsystem_id'])) {
-            $subsystem = InspectionSubsystem::query()->find($validated['subsystem_id']);
-            if ($subsystem && ((int) $subsystem->system_id !== (int) ($validated['system_id'] ?? 0))) {
+        if (!empty($validated['building_subsystem_id'])) {
+            $subsystem = BuildingSubsystem::query()->find($validated['building_subsystem_id']);
+            if ($subsystem && ((int) $subsystem->building_system_id !== (int) ($validated['building_system_id'] ?? 0))) {
                 throw ValidationException::withMessages([
-                    'subsystem_id' => 'Selected subsystem does not belong to the selected system.',
+                    'building_subsystem_id' => 'Selected subsystem does not belong to the selected system.',
                 ]);
             }
         }
@@ -248,8 +248,8 @@ class ToolSettingController extends Controller
         if (!empty($validated['finding_template_setting_id'])) {
             $finding = FindingTemplateSetting::query()->find($validated['finding_template_setting_id']);
             if ($finding) {
-                $systemMismatch = !empty($validated['system_id']) && (int) $finding->system_id !== (int) $validated['system_id'];
-                $subsystemMismatch = !empty($validated['subsystem_id']) && (int) $finding->subsystem_id !== (int) $validated['subsystem_id'];
+                $systemMismatch = !empty($validated['building_system_id']) && (int) $finding->building_system_id !== (int) $validated['building_system_id'];
+                $subsystemMismatch = !empty($validated['building_subsystem_id']) && (int) $finding->building_subsystem_id !== (int) $validated['building_subsystem_id'];
                 if ($systemMismatch || $subsystemMismatch) {
                     throw ValidationException::withMessages([
                         'finding_template_setting_id' => 'Selected finding does not match selected system/subsystem scope.',

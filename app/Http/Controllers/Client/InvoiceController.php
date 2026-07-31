@@ -30,6 +30,7 @@ class InvoiceController extends Controller
 
         $invoices = Invoice::with(['project.property'])
             ->where('user_id', $user->id)
+            ->where('status', '!=', 'draft')
             ->orderByDesc('issue_date')
             ->orderByDesc('id')
             ->paginate(10);
@@ -39,13 +40,15 @@ class InvoiceController extends Controller
 
     public function show(Invoice $invoice)
     {
-        $user = Auth::user();
-
-        if ((int) $invoice->user_id !== (int) $user->id) {
-            abort(403, 'Unauthorized invoice access.');
-        }
-
+        $this->authorizeInvoice($invoice);
         $invoice->load(['project.property']);
+
+        if ($invoice->isPropertyProcessInvoice()) {
+            return view('invoices.etogo', [
+                'invoice' => $invoice,
+                'mode' => 'client',
+            ]);
+        }
 
         $inspection = $this->resolveInspectionForInvoice($invoice);
 
@@ -109,10 +112,10 @@ class InvoiceController extends Controller
             'currency' => strtolower((string) config('cashier.currency', 'usd')),
             'metadata' => [
                 'payment_type' => 'invoice_payment',
-                'invoice_id' => $invoice->id,
-                'project_id' => $invoice->project_id,
-                'property_id' => $invoice->project?->property_id,
-                'client_user_id' => Auth::id(),
+                'invoice_id' => (string) $invoice->id,
+                'project_id' => (string) ($invoice->project_id ?? ''),
+                'property_id' => (string) ($invoice->project?->property_id ?? ''),
+                'client_user_id' => (string) Auth::id(),
                 'plan' => $plan,
             ],
         ]);
@@ -149,6 +152,8 @@ class InvoiceController extends Controller
                 throw new \RuntimeException('Payment reference does not match this invoice.');
             }
 
+            $this->assertPaymentIntentMatchesInvoice($paymentIntent, $invoice, $validated['plan']);
+
             $amount = round(((float) (($paymentIntent->amount_received ?? 0) ?: ($paymentIntent->amount ?? 0))) / 100, 2);
             $invoice = $this->invoicePaymentService->apply($invoice, $amount, $paymentIntent->id);
 
@@ -175,13 +180,20 @@ class InvoiceController extends Controller
 
     public function download(Invoice $invoice)
     {
-        $user = Auth::user();
+        $this->authorizeInvoice($invoice);
+        $invoice->load(['project.property']);
 
-        if ((int) $invoice->user_id !== (int) $user->id) {
-            abort(403, 'Unauthorized invoice access.');
+        if ($invoice->isPropertyProcessInvoice()) {
+            $pdf = Pdf::loadView('invoices.etogo', [
+                'invoice' => $invoice,
+                'mode' => 'pdf',
+            ])->setPaper('a4', 'landscape');
+
+            $safeInvoiceNumber = preg_replace('/[^A-Za-z0-9\-_]/', '_', (string) $invoice->invoice_number);
+
+            return $pdf->download('ETOGO_Invoice_' . $safeInvoiceNumber . '.pdf');
         }
 
-        $invoice->load(['project.property']);
         $inspection = $this->resolveInspectionForInvoice($invoice);
 
         $bdcAnnual = (float) ($inspection->bdc_annual ?? 0);
@@ -272,6 +284,50 @@ class InvoiceController extends Controller
         }
 
         $invoice->loadMissing(['project.property']);
+
+        if (($invoice->status ?? null) === 'draft') {
+            abort(404);
+        }
+    }
+
+    private function assertPaymentIntentMatchesInvoice(object $paymentIntent, Invoice $invoice, string $plan): void
+    {
+        $metadata = method_exists($paymentIntent->metadata, 'toArray')
+            ? $paymentIntent->metadata->toArray()
+            : (array) $paymentIntent->metadata;
+
+        $expectedMetadata = [
+            'payment_type' => 'invoice_payment',
+            'invoice_id' => (string) $invoice->id,
+            'project_id' => (string) ($invoice->project_id ?? ''),
+            'property_id' => (string) ($invoice->project?->property_id ?? ''),
+            'client_user_id' => (string) Auth::id(),
+            'plan' => $plan,
+        ];
+
+        foreach ($expectedMetadata as $key => $expectedValue) {
+            if ((string) ($metadata[$key] ?? '') !== (string) $expectedValue) {
+                throw new \RuntimeException("Payment reference {$key} does not match.");
+            }
+        }
+
+        $balance = round((float) ($invoice->balance ?? $invoice->total ?? 0), 2);
+        $total = round((float) ($invoice->total ?? 0), 2);
+        $expectedAmount = match ($plan) {
+            '30' => round(min($balance, $total * 0.30), 2),
+            '50' => round(min($balance, $total * 0.50), 2),
+            default => $balance,
+        };
+
+        $actualAmountCents = (int) (($paymentIntent->amount_received ?? 0) ?: ($paymentIntent->amount ?? 0));
+        if ($actualAmountCents !== (int) round($expectedAmount * 100)) {
+            throw new \RuntimeException('Payment amount does not match the expected invoice charge.');
+        }
+
+        $expectedCurrency = strtolower((string) config('cashier.currency', 'usd'));
+        if (strtolower((string) ($paymentIntent->currency ?? '')) !== $expectedCurrency) {
+            throw new \RuntimeException('Payment currency does not match.');
+        }
     }
 
     protected function resolveInspectionForInvoice(Invoice $invoice): ?Inspection

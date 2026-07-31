@@ -3,32 +3,21 @@
 namespace Database\Seeders;
 
 use App\Models\FmcMaterialSetting;
-use App\Models\InspectionSubsystem;
-use App\Models\InspectionSystem;
+use App\Support\BuildingTaxonomyResolver;
 use Illuminate\Database\Seeder;
 
 class FmcMaterialSettingsSeeder extends Seeder
 {
     public function run(): void
     {
-        $systemMap = InspectionSystem::query()->pluck('id', 'name');
-        $subsystemMap = InspectionSubsystem::query()->get()->keyBy(function ($subsystem) {
-            return $subsystem->system_id . '|' . $subsystem->name;
-        });
-
         foreach (FmcMaterialSetting::defaults() as $row) {
-            $systemId = $systemMap[$row['system_name']] ?? null;
-            $subsystemId = null;
-
-            if ($systemId !== null) {
-                $subsystemKey = $systemId . '|' . $row['subsystem_name'];
-                $subsystemId = optional($subsystemMap->get($subsystemKey))->id;
-            }
+            $taxonomy = BuildingTaxonomyResolver::resolve($row['system_name'] ?? null, $row['subsystem_name'] ?? null);
 
             $existing = FmcMaterialSetting::where([
                     'material_name' => $row['material_name'],
-                    'system_id'     => $systemId,
-                    'subsystem_id'  => $subsystemId,
+                    'building_system_id' => $taxonomy['building_system_id'],
+                    'building_subsystem_id' => $taxonomy['building_subsystem_id'],
+                    'building_component_id' => $taxonomy['building_component_id'],
                 ])->first();
 
             if ($existing) {
@@ -41,8 +30,9 @@ class FmcMaterialSettingsSeeder extends Seeder
             } else {
                 FmcMaterialSetting::create([
                     'material_name'     => $row['material_name'],
-                    'system_id'         => $systemId,
-                    'subsystem_id'      => $subsystemId,
+                    'building_system_id' => $taxonomy['building_system_id'],
+                    'building_subsystem_id' => $taxonomy['building_subsystem_id'],
+                    'building_component_id' => $taxonomy['building_component_id'],
                     'default_unit'      => $row['default_unit'],
                     'default_unit_cost' => $row['default_unit_cost'],
                     'hst_rate'          => $row['hst_rate']  ?? 5.00,

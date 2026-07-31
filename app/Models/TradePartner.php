@@ -67,16 +67,18 @@ class TradePartner extends Model
 
     public function selectedSystems()
     {
-        return InspectionSystem::query()
+        return BuildingSystem::query()
             ->whereIn('id', $this->system_ids ?? [])
+            ->orderBy('sort_order')
             ->orderBy('name')
             ->get();
     }
 
     public function selectedSubsystems()
     {
-        return InspectionSubsystem::with('system')
+        return BuildingSubsystem::with('system')
             ->whereIn('id', $this->subsystem_ids ?? [])
+            ->orderBy('sort_order')
             ->orderBy('name')
             ->get();
     }

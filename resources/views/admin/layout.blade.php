@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     
-    <title>{{ config('app.name', 'EMURIA Property Care') }} - @yield('title', 'Dashboard')</title>
-    <link rel="icon" type="image/png" href="{{ asset('etogo%20log.png') }}">
+    <title>{{ config('app.name', 'ETOGO') }} - @yield('title', 'Dashboard')</title>
+    <link rel="icon" type="image/png" href="{{ asset('ETOGO%20log.png') }}">
     
     @include('admin.partials.styles')
     
@@ -55,6 +55,143 @@
             background-color: #ffffff !important;
             color: #1a202c !important;
             border: 1px solid #d1d5db !important;
+        }
+
+        .admin-table-toolbar {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .admin-table-shell {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            background: #ffffff;
+        }
+
+        .admin-table-shell .table {
+            margin-bottom: 0;
+            width: 100%;
+        }
+
+        .admin-table-shell .table th,
+        .admin-table-shell .table td {
+            max-width: 260px;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            vertical-align: middle;
+        }
+
+        .admin-table-shell .table th:first-child,
+        .admin-table-shell .table td:first-child,
+        .admin-table-shell .table th:last-child,
+        .admin-table-shell .table td:last-child {
+            width: 1%;
+            max-width: 120px;
+            white-space: nowrap;
+        }
+
+        .admin-row-actions .dropdown-toggle::after {
+            display: none;
+        }
+
+        .admin-row-actions .dropdown-toggle {
+            width: 36px;
+            height: 32px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-color: #cbd5e1 !important;
+            background: #ffffff !important;
+            color: #1f2937 !important;
+        }
+
+        .admin-row-actions .dropdown-toggle:hover,
+        .admin-row-actions .dropdown-toggle:focus,
+        .admin-row-actions .dropdown-toggle.show {
+            border-color: #64748b !important;
+            background: #f1f5f9 !important;
+            color: #0f172a !important;
+            box-shadow: 0 0 0 3px rgba(100, 116, 139, .16) !important;
+        }
+
+        .admin-row-actions .dropdown-toggle i {
+            color: currentColor !important;
+            font-size: 1.2rem;
+            line-height: 1;
+        }
+
+        .admin-row-actions .dropdown-menu {
+            min-width: 10rem;
+            padding: 0.35rem;
+            background: #ffffff !important;
+            border: 1px solid #d7deea !important;
+            border-radius: 8px !important;
+            box-shadow: 0 18px 42px rgba(15, 23, 42, .18) !important;
+            overflow: hidden;
+        }
+
+        .admin-row-actions .dropdown-item {
+            border-radius: 6px;
+            font-size: 0.875rem;
+            width: 100%;
+            text-align: left;
+            color: #111827 !important;
+            background: transparent !important;
+            font-weight: 600;
+            padding: 0.55rem 0.7rem !important;
+            opacity: 1 !important;
+        }
+
+        .admin-row-actions .dropdown-item:hover,
+        .admin-row-actions .dropdown-item:focus,
+        .admin-row-actions .dropdown-item:active {
+            color: #0f172a !important;
+            background: #e8f0ff !important;
+            text-decoration: none;
+        }
+
+        .admin-row-actions .dropdown-item.text-danger {
+            color: #b91c1c !important;
+        }
+
+        .admin-row-actions .dropdown-item.text-danger:hover,
+        .admin-row-actions .dropdown-item.text-danger:focus,
+        .admin-row-actions .dropdown-item.text-danger:active {
+            color: #991b1b !important;
+            background: #fee2e2 !important;
+        }
+
+        .admin-row-actions form {
+            margin: 0;
+        }
+
+        .admin-table-expanded {
+            position: fixed !important;
+            inset: 72px 24px 24px 24px;
+            z-index: 1080;
+            overflow: auto !important;
+            padding: 1rem;
+            box-shadow: 0 20px 50px rgba(15, 23, 42, 0.25);
+        }
+
+        .admin-table-expanded .table th,
+        .admin-table-expanded .table td {
+            max-width: none;
+            white-space: nowrap;
+        }
+
+        body.admin-table-expanded-open {
+            overflow: hidden;
+        }
+
+        @media (max-width: 767.98px) {
+            .admin-table-shell .table th,
+            .admin-table-shell .table td {
+                max-width: 180px;
+                font-size: 0.8125rem;
+            }
         }
     </style>
 </head>
@@ -138,7 +275,7 @@
     <script>
         (function () {
             var MOBILE_BREAKPOINT = 992;
-            var STORAGE_KEY = 'etogo.sidebar.minimized';
+            var STORAGE_KEY = 'ETOGO.sidebar.minimized';
 
             function isMobile() {
                 return window.innerWidth < MOBILE_BREAKPOINT;
@@ -160,15 +297,46 @@
                 document.body.classList.remove('sidebar-icon-only', 'sidebar-hidden');
             }
 
+            function updateSidebarToggles() {
+                var minimized = document.body.classList.contains('sidebar-minimized');
+
+                document.querySelectorAll('[data-sidebar-minimize], .navbar-toggler[data-toggle="minimize"]').forEach(function (button) {
+                    button.setAttribute('aria-expanded', minimized ? 'false' : 'true');
+                    button.setAttribute('title', minimized ? 'Expand sidebar' : 'Minimize sidebar');
+
+                    if (button.matches('[data-sidebar-minimize]')) {
+                        button.setAttribute('aria-label', minimized ? 'Expand sidebar' : 'Minimize sidebar');
+                        button.innerHTML = minimized
+                            ? '<i class="mdi mdi-chevron-right"></i><span class="admin-sidebar-collapse-label">Expand sidebar</span>'
+                            : '<i class="mdi mdi-chevron-left"></i><span class="admin-sidebar-collapse-label">Minimize sidebar</span>';
+                    }
+                });
+            }
+
+            function setSidebarMinimized(minimized) {
+                removeLegacySidebarState();
+                document.body.classList.toggle('sidebar-minimized', minimized);
+
+                try {
+                    localStorage.setItem(STORAGE_KEY, minimized ? '1' : '0');
+                } catch (error) {
+                    // Ignore storage failures; the current page state still changes.
+                }
+
+                updateSidebarToggles();
+            }
+
             function applyDesktopSidebarState() {
                 removeLegacySidebarState();
 
                 if (isMobile()) {
                     document.body.classList.remove('sidebar-minimized');
+                    updateSidebarToggles();
                     return;
                 }
 
                 document.body.classList.toggle('sidebar-minimized', shouldMinimizeSidebar());
+                updateSidebarToggles();
             }
 
             document.addEventListener('DOMContentLoaded', function () {
@@ -185,9 +353,8 @@
                     });
                 }
 
-                // Desktop minimize toggler
-                var desktopToggler = document.querySelector('.navbar-toggler[data-toggle="minimize"]');
-                if (desktopToggler) {
+                // Desktop minimize togglers
+                document.querySelectorAll('[data-sidebar-minimize], .navbar-toggler[data-toggle="minimize"]').forEach(function (desktopToggler) {
                     desktopToggler.addEventListener('click', function (e) {
                         e.preventDefault();
                         e.stopImmediatePropagation();
@@ -198,15 +365,9 @@
                         }
 
                         var minimized = !document.body.classList.contains('sidebar-minimized');
-                        removeLegacySidebarState();
-                        document.body.classList.toggle('sidebar-minimized', minimized);
-                        try {
-                            localStorage.setItem(STORAGE_KEY, minimized ? '1' : '0');
-                        } catch (error) {
-                            // Ignore storage failures; the current page state still changes.
-                        }
+                        setSidebarMinimized(minimized);
                     });
-                }
+                });
 
                 if (backdrop) {
                     backdrop.addEventListener('click', closeSidebar);
@@ -265,6 +426,127 @@
                     }
                 });
             }
+        });
+    </script>
+
+    {{-- Admin table usability enhancements --}}
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            function enhanceTableActions(table) {
+                table.querySelectorAll('tbody tr').forEach(function (row) {
+                    var actionCell = row.querySelector('td:last-child');
+                    if (!actionCell || actionCell.querySelector('.admin-row-actions')) {
+                        return;
+                    }
+
+                    var actions = Array.from(actionCell.children).filter(function (child) {
+                        return child.matches('a.btn, button.btn, form');
+                    });
+
+                    if (actions.length === 0) {
+                        return;
+                    }
+
+                    var dropdown = document.createElement('div');
+                    dropdown.className = 'dropdown admin-row-actions';
+
+                    var toggle = document.createElement('button');
+                    toggle.type = 'button';
+                    toggle.className = 'btn btn-outline-secondary btn-sm dropdown-toggle';
+                    toggle.setAttribute('data-bs-toggle', 'dropdown');
+                    toggle.setAttribute('aria-expanded', 'false');
+                    toggle.setAttribute('aria-label', 'Row options');
+                    toggle.innerHTML = '<i class="mdi mdi-dots-vertical"></i>';
+
+                    var menu = document.createElement('div');
+                    menu.className = 'dropdown-menu dropdown-menu-end';
+
+                    actions.forEach(function (action) {
+                        if (action.matches('a.btn')) {
+                            action.classList.remove('btn', 'btn-sm', 'btn-primary', 'btn-secondary', 'btn-info', 'btn-warning', 'btn-danger', 'btn-light', 'btn-outline-primary', 'btn-outline-secondary');
+                            action.classList.add('dropdown-item');
+                            menu.appendChild(action);
+                            return;
+                        }
+
+                        if (action.matches('button.btn')) {
+                            action.classList.remove('btn', 'btn-sm', 'btn-primary', 'btn-secondary', 'btn-info', 'btn-warning', 'btn-danger', 'btn-light', 'btn-outline-primary', 'btn-outline-secondary');
+                            action.classList.add('dropdown-item');
+                            menu.appendChild(action);
+                            return;
+                        }
+
+                        if (action.matches('form')) {
+                            var button = action.querySelector('button');
+                            if (button) {
+                                button.classList.remove('btn', 'btn-sm', 'btn-primary', 'btn-secondary', 'btn-info', 'btn-warning', 'btn-danger', 'btn-light', 'btn-outline-primary', 'btn-outline-secondary');
+                                button.classList.add('dropdown-item', 'text-danger');
+                            }
+                            menu.appendChild(action);
+                        }
+                    });
+
+                    actionCell.innerHTML = '';
+                    dropdown.appendChild(toggle);
+                    dropdown.appendChild(menu);
+                    actionCell.appendChild(dropdown);
+                });
+            }
+
+            function enhanceTableShell(wrapper) {
+                if (wrapper.dataset.adminTableEnhanced === '1') {
+                    return;
+                }
+
+                if (wrapper.dataset.adminTablePlain === '1') {
+                    return;
+                }
+
+                var table = wrapper.querySelector('table');
+                if (!table || table.dataset.adminTablePlain === '1') {
+                    return;
+                }
+
+                wrapper.dataset.adminTableEnhanced = '1';
+                wrapper.classList.add('admin-table-shell');
+                enhanceTableActions(table);
+
+                var toolbar = document.createElement('div');
+                toolbar.className = 'admin-table-toolbar';
+
+                var expandButton = document.createElement('button');
+                expandButton.type = 'button';
+                expandButton.className = 'btn btn-outline-secondary btn-sm';
+                expandButton.innerHTML = '<i class="mdi mdi-arrow-expand"></i> Expand table';
+
+                expandButton.addEventListener('click', function () {
+                    var expanded = wrapper.classList.toggle('admin-table-expanded');
+                    document.body.classList.toggle('admin-table-expanded-open', expanded);
+                    expandButton.innerHTML = expanded
+                        ? '<i class="mdi mdi-arrow-collapse"></i> Normal view'
+                        : '<i class="mdi mdi-arrow-expand"></i> Expand table';
+                });
+
+                toolbar.appendChild(expandButton);
+                wrapper.parentNode.insertBefore(toolbar, wrapper);
+            }
+
+            document.querySelectorAll('.table-responsive').forEach(enhanceTableShell);
+
+            document.addEventListener('keydown', function (event) {
+                if (event.key !== 'Escape') {
+                    return;
+                }
+
+                document.querySelectorAll('.admin-table-expanded').forEach(function (wrapper) {
+                    wrapper.classList.remove('admin-table-expanded');
+                    var toolbarButton = wrapper.previousElementSibling?.querySelector('button');
+                    if (toolbarButton) {
+                        toolbarButton.innerHTML = '<i class="mdi mdi-arrow-expand"></i> Expand table';
+                    }
+                });
+                document.body.classList.remove('admin-table-expanded-open');
+            });
         });
     </script>
 </body>

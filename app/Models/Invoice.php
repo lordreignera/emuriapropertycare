@@ -68,6 +68,22 @@ class Invoice extends Model
         return !$this->isPaid() && $this->due_date < now();
     }
 
+    public function isPropertyProcessInvoice(): bool
+    {
+        return collect($this->line_items ?? [])->contains(function ($item) {
+            return in_array(($item['purpose'] ?? null), [
+                'property_process',
+                'property_facts',
+                'property_registry',
+                'property_documentation',
+                'property_twin',
+                'property_diagnosis',
+                'remediation_project',
+                'property_stewardship',
+            ], true);
+        });
+    }
+
     public function scopePending($query)
     {
         return $query->whereIn('status', ['draft', 'sent', 'partial', 'overdue']);

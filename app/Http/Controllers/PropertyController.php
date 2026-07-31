@@ -8,6 +8,8 @@ use App\Models\Project;
 use App\Models\Property;
 use App\Models\User;
 use App\Services\DiagnosisPricingService;
+use App\Services\PropertyProcessInvoiceService;
+use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -433,6 +435,39 @@ class PropertyController extends Controller
         return redirect()
             ->route('invoices.show', $invoice)
             ->with('success', 'Property facts and diagnosis invoice has been prepared for the client.');
+    }
+
+    public function previewProcessInvoice(Property $property, PropertyProcessInvoiceService $invoiceService)
+    {
+        $invoice = $invoiceService->draftForProperty($property);
+
+        return view('invoices.etogo', [
+            'invoice' => $invoice->load(['user', 'project.property']),
+            'mode' => 'preview',
+        ]);
+    }
+
+    public function shareProcessInvoice(Property $property, PropertyProcessInvoiceService $invoiceService)
+    {
+        $invoice = $invoiceService->share($invoiceService->draftForProperty($property));
+
+        return redirect()
+            ->route('invoices.show', $invoice)
+            ->with('success', 'ETOGO property-process invoice has been shared with the client.');
+    }
+
+    public function downloadProcessInvoice(Property $property, PropertyProcessInvoiceService $invoiceService)
+    {
+        $invoice = $invoiceService->draftForProperty($property);
+
+        $pdf = Pdf::loadView('invoices.etogo', [
+            'invoice' => $invoice->load(['user', 'project.property']),
+            'mode' => 'pdf',
+        ])->setPaper('a4', 'landscape');
+
+        $safeInvoiceNumber = preg_replace('/[^A-Za-z0-9\-_]/', '_', (string) $invoice->invoice_number);
+
+        return $pdf->download('ETOGO_Invoice_' . $safeInvoiceNumber . '.pdf');
     }
 
     private function nextInvoiceNumber(string $baseInvoiceNumber): string

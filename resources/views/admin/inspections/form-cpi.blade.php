@@ -11,7 +11,7 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
                             <h3 class="mb-2 fw-bold">
-                                <i class="mdi mdi-home-city-outline me-2"></i>Property Health Assessment Form
+                                <i class="mdi mdi-home-city-outline me-2"></i>Property Health Diagnosis Form
                             </h3>
                             <p class="mb-1 opacity-75">
                                 <span class="badge bg-light text-dark me-2">{{ $property->property_code }}</span>
@@ -30,7 +30,7 @@
                 </div>
             </div>
 
-            <form action="{{ route('inspections.store') }}" method="POST" enctype="multipart/form-data" id="inspectionSystemsForm">
+            <form action="{{ route('inspections.store') }}" method="POST" enctype="multipart/form-data" id="BuildingSystemsForm">
                 @csrf
                 <input type="hidden" name="property_id" value="{{ $property->id }}">
                 <input type="hidden" name="service_request_id" value="{{ old('service_request_id', $serviceRequest->id ?? '') }}">
@@ -154,7 +154,7 @@
                 <div class="card mb-4">
                     <div class="card-header bg-light">
                         <h5 class="mb-0">
-                            <i class="mdi mdi-view-list-outline me-2 text-primary"></i>Property Systems Inspection
+                            <i class="mdi mdi-view-list-outline me-2 text-primary"></i>Property Systems Diagnosis
                         </h5>
                     </div>
                     <div class="card-body">
@@ -180,20 +180,20 @@
                         @else
                             <div class="cpi-system-picker">
                                 <div class="form-group mb-0">
-                                    <label for="inspectionSystemPicker" class="form-label fw-semibold">Choose a system to inspect</label>
-                                    <select id="inspectionSystemPicker" class="form-control">
+                                    <label for="BuildingSystemPicker" class="form-label fw-semibold">Choose a system to inspect</label>
+                                    <select id="BuildingSystemPicker" class="form-control">
                                         <option value="">Select a system...</option>
                                         @foreach($systems as $system)
                                             <option value="{{ $system->id }}">{{ $system->name }}</option>
                                         @endforeach
                                     </select>
                                 </div>
-                                <button type="button" class="btn btn-outline-primary" id="addInspectionSystem">
+                                <button type="button" class="btn btn-outline-primary" id="addBuildingSystem">
                                     <i class="mdi mdi-plus"></i> Add System
                                 </button>
                             </div>
 
-                            <div class="cpi-system-empty" id="inspectionSystemsEmpty">
+                            <div class="cpi-system-empty" id="BuildingSystemsEmpty">
                                 No systems added yet. Choose a system above to begin recording findings.
                             </div>
 
@@ -207,9 +207,10 @@
                                                 <span class="text-muted ms-2 small">{{ $system->description }}</span>
                                             @endif
                                         </div>
-                                        <div class="d-flex gap-2">
-                                            <button type="button" class="btn btn-sm btn-outline-secondary" onclick="removeInspectionSystem({{ $system->id }})">
-                                                Remove System
+                                        <div class="cpi-system-actions">
+                                            <button type="button" class="btn btn-sm btn-light border" onclick="removeBuildingSystem({{ $system->id }})" title="Remove this system from the diagnosis">
+                                                <i class="mdi mdi-close"></i>
+                                                <span class="visually-hidden">Remove System</span>
                                             </button>
                                             <button type="button" class="btn btn-sm btn-outline-primary" onclick="addSystemFindingRow({{ $system->id }})">
                                                 <i class="mdi mdi-plus"></i> Add Finding
@@ -229,12 +230,12 @@
                 <div class="card mb-4">
                     <div class="card-header bg-light">
                         <h5 class="mb-0">
-                            <i class="mdi mdi-clipboard-text me-2 text-primary"></i>Overall Assessment
+                            <i class="mdi mdi-clipboard-text me-2 text-primary"></i>Overall Diagnosis
                         </h5>
                     </div>
                     <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-6">
+                        <div class="row g-3">
+                            <div class="col-lg-4">
                                 <div class="form-group">
                                     <label>Overall Condition</label>
                                     <select name="overall_condition" class="form-control">
@@ -247,18 +248,24 @@
                                     </select>
                                 </div>
                             </div>
-                        </div>
-                        <div class="form-group">
-                            <label>Inspector Notes</label>
-                            <textarea name="inspector_notes" class="form-control" rows="3" placeholder="Inspector observations">{{ old('inspector_notes', $inspection->inspector_notes ?? '') }}</textarea>
-                        </div>
-                        <div class="form-group">
-                            <label>Recommendations</label>
-                            <textarea name="recommendations" class="form-control" rows="3" placeholder="Final recommendations">{{ old('recommendations', $inspection->recommendations ?? '') }}</textarea>
-                        </div>
-                        <div class="form-group mb-0">
-                            <label>Risk Summary</label>
-                            <textarea name="risk_summary" class="form-control" rows="3" placeholder="Major risks identified">{{ old('risk_summary', $inspection->risk_summary ?? '') }}</textarea>
+                            <div class="col-lg-8">
+                                <div class="form-group">
+                                    <label>Inspector Notes</label>
+                                    <textarea name="inspector_notes" class="form-control" rows="3" placeholder="Summarize the site visit and overall observations.">{{ old('inspector_notes', $inspection->inspector_notes ?? '') }}</textarea>
+                                </div>
+                            </div>
+                            <div class="col-lg-6">
+                                <div class="form-group mb-0">
+                                    <label>Recommendations</label>
+                                    <textarea name="recommendations" class="form-control" rows="4" placeholder="Summarize recommended next actions after the client reviews the findings.">{{ old('recommendations', $inspection->recommendations ?? '') }}</textarea>
+                                </div>
+                            </div>
+                            <div class="col-lg-6">
+                                <div class="form-group mb-0">
+                                    <label>Risk Summary</label>
+                                    <textarea name="risk_summary" class="form-control" rows="4" placeholder="Summarize the major risks, urgency, and consequences of deferring work.">{{ old('risk_summary', $inspection->risk_summary ?? '') }}</textarea>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -320,9 +327,71 @@
         box-shadow: 0 10px 26px rgba(16, 24, 40, .07);
     }
 
+    .cpi-system-card .card-header {
+        gap: 12px;
+    }
+
+    .cpi-system-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+    }
+
+    .finding-card {
+        overflow: hidden;
+        border-color: #d9e1f2 !important;
+        box-shadow: 0 8px 20px rgba(16, 24, 40, .05);
+    }
+
+    .finding-card-header {
+        background: #f7f9ff;
+        border-bottom: 1px solid #e4e9f5;
+    }
+
+    .finding-section {
+        padding: 16px;
+        border-top: 1px solid #edf1f7;
+    }
+
+    .finding-section:first-of-type {
+        border-top: 0;
+    }
+
+    .finding-section-title {
+        color: #24315f;
+        font-size: .78rem;
+        font-weight: 800;
+        letter-spacing: .02em;
+        text-transform: uppercase;
+        margin-bottom: 10px;
+    }
+
+    .finding-section-soft {
+        background: #fbfcff;
+    }
+
+    .finding-section-warm {
+        background: #fffaf0;
+    }
+
+    .recommendation-builder .input-group {
+        max-width: 100%;
+    }
+
     @media (max-width: 767.98px) {
         .cpi-system-picker {
             grid-template-columns: 1fr;
+        }
+
+        .cpi-system-card .card-header {
+            align-items: flex-start !important;
+            flex-direction: column;
+        }
+
+        .cpi-system-actions {
+            justify-content: flex-start;
+            width: 100%;
         }
     }
 </style>
@@ -331,18 +400,19 @@
     $findingTemplatesRaw = \App\Models\FindingTemplateSetting::query()
         ->where('is_active', true)
         ->orderBy('sort_order')
-        ->get(['task_question', 'system_id', 'subsystem_id']);
+        ->get(['task_question', 'building_system_id', 'building_subsystem_id']);
 
     $recommendationSettingsRaw = \App\Models\RecommendationSetting::query()
         ->where('is_active', true)
         ->orderBy('sort_order')
         ->orderBy('recommendation')
-        ->get(['recommendation', 'system_id', 'subsystem_id']);
+        ->get(['recommendation', 'building_system_id', 'building_subsystem_id', 'building_component_id']);
 
     $recommendationConfig = [
         'global' => [],
         'system' => [],
         'subsystem' => [],
+        'component' => [],
     ];
 
     foreach ($recommendationSettingsRaw as $recommendationRow) {
@@ -351,15 +421,22 @@
             continue;
         }
 
-        if (!empty($recommendationRow->subsystem_id)) {
-            $key = (string) $recommendationRow->subsystem_id;
+        if (!empty($recommendationRow->building_component_id)) {
+            $key = (string) $recommendationRow->building_component_id;
+            $recommendationConfig['component'][$key] = $recommendationConfig['component'][$key] ?? [];
+            $recommendationConfig['component'][$key][] = $recommendationText;
+            continue;
+        }
+
+        if (!empty($recommendationRow->building_subsystem_id)) {
+            $key = (string) $recommendationRow->building_subsystem_id;
             $recommendationConfig['subsystem'][$key] = $recommendationConfig['subsystem'][$key] ?? [];
             $recommendationConfig['subsystem'][$key][] = $recommendationText;
             continue;
         }
 
-        if (!empty($recommendationRow->system_id)) {
-            $key = (string) $recommendationRow->system_id;
+        if (!empty($recommendationRow->building_system_id)) {
+            $key = (string) $recommendationRow->building_system_id;
             $recommendationConfig['system'][$key] = $recommendationConfig['system'][$key] ?? [];
             $recommendationConfig['system'][$key][] = $recommendationText;
             continue;
@@ -375,14 +452,17 @@
     $recommendationConfig['subsystem'] = collect($recommendationConfig['subsystem'])
         ->map(fn($rows) => array_values(array_unique($rows)))
         ->all();
+    $recommendationConfig['component'] = collect($recommendationConfig['component'])
+        ->map(fn($rows) => array_values(array_unique($rows)))
+        ->all();
 
     // Full PHAR catalog keyed by "system|subsystem|finding" for JS auto-fill
     $pharFindingCatalog = \App\Support\PharCatalog::findingCatalog();
 
     $systemsConfig = $systems->map(function ($system) use ($findingTemplatesRaw) {
         $systemLevelFindings = $findingTemplatesRaw
-            ->where('system_id', $system->id)
-            ->whereNull('subsystem_id')
+            ->where('building_system_id', $system->id)
+            ->whereNull('building_subsystem_id')
             ->pluck('task_question')
             ->values()
             ->all();
@@ -397,8 +477,14 @@
                     'id' => $subsystem->id,
                     'name' => $subsystem->name,
                     'recommended_actions' => collect($subsystem->recommended_actions ?? [])->values()->all(),
+                    'components' => $subsystem->components->map(fn ($component) => [
+                        'id' => $component->id,
+                        'name' => $component->name,
+                        'aliases' => $component->aliases ?? [],
+                        'recommended_actions' => collect($component->recommended_actions ?? [])->values()->all(),
+                    ])->values()->all(),
                     'findings' => $findingTemplatesRaw
-                        ->where('subsystem_id', $subsystem->id)
+                        ->where('building_subsystem_id', $subsystem->id)
                         ->pluck('task_question')
                         ->values()
                         ->all(),
@@ -419,6 +505,17 @@
             );
         }
     }
+
+    $recommendationConfigForJs = $recommendationConfig ?? [
+        'global' => [],
+        'system' => [],
+        'subsystem' => [],
+        'component' => [],
+    ];
+    $findingPhotoPathsForJs = array_map(
+        fn($f) => is_array($f['finding_photos'] ?? null) ? $f['finding_photos'] : [],
+        ($inspection->findings ?? [])
+    );
 @endphp
 
 <script>
@@ -429,18 +526,18 @@ const MATERIAL_UNITS = @json($materialUnits ?? []);
 const FMC_MATERIAL_SETTINGS = @json($fmcMaterialSettings ?? []);
 const PHAR_CATEGORIES = @json($pharCategories ?? []);
 const PHAR_FINDING_CATALOG = @json($pharFindingCatalog ?? []);
-const RECOMMENDATION_CONFIG = @json($recommendationConfig ?? ['global' => [], 'system' => [], 'subsystem' => []]);
+const RECOMMENDATION_CONFIG = @json($recommendationConfigForJs);
 const ACTIVE_TRADE_PARTNERS = @json($activeTradePartners ?? []);
 // Photo URLs pre-resolved server-side (works for local disk and private S3 signed URLs)
 const FINDING_PHOTO_URLS = @json($findingPhotoUrls ?? []);
 // Stored paths (for hidden input preservation on re-submit — keyed by [findingIndex][photoIndex])
-const FINDING_PHOTO_PATHS = @json(array_map(fn($f) => is_array($f['finding_photos'] ?? null) ? $f['finding_photos'] : [], ($inspection->findings ?? [])));
+const FINDING_PHOTO_PATHS = @json($findingPhotoPathsForJs);
 function getStoredPhotoPath(findingIdx, photoIdx) {
     return (FINDING_PHOTO_PATHS?.[findingIdx]?.[photoIdx]) ?? '';
 }
 
-function updateInspectionSystemEmptyState() {
-    const empty = document.getElementById('inspectionSystemsEmpty');
+function updateBuildingSystemEmptyState() {
+    const empty = document.getElementById('BuildingSystemsEmpty');
     if (!empty) {
         return;
     }
@@ -451,8 +548,8 @@ function updateInspectionSystemEmptyState() {
     empty.style.display = hasVisibleSystem ? 'none' : '';
 }
 
-function setInspectionSystemOptionDisabled(systemId, disabled) {
-    const picker = document.getElementById('inspectionSystemPicker');
+function setBuildingSystemOptionDisabled(systemId, disabled) {
+    const picker = document.getElementById('BuildingSystemPicker');
     if (!picker) {
         return;
     }
@@ -463,7 +560,7 @@ function setInspectionSystemOptionDisabled(systemId, disabled) {
     }
 }
 
-function showInspectionSystem(systemId, options = {}) {
+function showBuildingSystem(systemId, options = {}) {
     if (!systemId) {
         return null;
     }
@@ -476,14 +573,14 @@ function showInspectionSystem(systemId, options = {}) {
     const wasHidden = card.classList.contains('is-hidden');
     card.classList.remove('is-hidden');
     card.classList.add('is-selected');
-    setInspectionSystemOptionDisabled(systemId, true);
+    setBuildingSystemOptionDisabled(systemId, true);
 
-    const picker = document.getElementById('inspectionSystemPicker');
+    const picker = document.getElementById('BuildingSystemPicker');
     if (picker) {
         picker.value = '';
     }
 
-    updateInspectionSystemEmptyState();
+    updateBuildingSystemEmptyState();
 
     if (wasHidden && options.scroll !== false) {
         card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -492,16 +589,16 @@ function showInspectionSystem(systemId, options = {}) {
     return card;
 }
 
-function addSelectedInspectionSystem() {
-    const picker = document.getElementById('inspectionSystemPicker');
+function addSelectedBuildingSystem() {
+    const picker = document.getElementById('BuildingSystemPicker');
     if (!picker || !picker.value) {
         return;
     }
 
-    showInspectionSystem(picker.value);
+    showBuildingSystem(picker.value);
 }
 
-function removeInspectionSystem(systemId) {
+function removeBuildingSystem(systemId) {
     const card = document.querySelector(`[data-cpi-system="${systemId}"]`);
     const body = document.getElementById(`system-rows-${systemId}`);
     if (!card || !body) {
@@ -516,8 +613,8 @@ function removeInspectionSystem(systemId) {
     body.innerHTML = `<p class="text-muted small mb-0 px-1" id="system-empty-${systemId}">No findings added yet. Click <strong>Add Finding</strong> to record an issue.</p>`;
     card.classList.add('is-hidden');
     card.classList.remove('is-selected');
-    setInspectionSystemOptionDisabled(systemId, false);
-    updateInspectionSystemEmptyState();
+    setBuildingSystemOptionDisabled(systemId, false);
+    updateBuildingSystemEmptyState();
 }
 
 const initialFindings = @json(old('system_findings', $initialSystemFindings ?? []));
@@ -894,6 +991,114 @@ function getSubsystemConfig(systemId, subsystemId) {
     return system.subsystems.find(subsystem => String(subsystem.id) === String(subsystemId)) || null;
 }
 
+function buildComponentOptions(systemId, subsystemId, selectedComponentId = '') {
+    let options = '<option value="">Select component</option>';
+    const subsystem = getSubsystemConfig(systemId, subsystemId);
+
+    if (!subsystem || !Array.isArray(subsystem.components)) {
+        return options;
+    }
+
+    subsystem.components.forEach(component => {
+        const selected = String(component.id) === String(selectedComponentId) ? 'selected' : '';
+        options += `<option value="${component.id}" ${selected}>${escapeHtml(component.name)}</option>`;
+    });
+
+    return options;
+}
+
+function buildSystemOptions(selectedSystemId = '') {
+    let options = '<option value="">Select affected system</option>';
+    systemsConfig.forEach(system => {
+        options += `<option value="${system.id}" ${String(system.id) === String(selectedSystemId) ? 'selected' : ''}>${escapeHtml(system.name)}</option>`;
+    });
+    return options;
+}
+
+function affectedAreaRowTemplate(findingIndex, areaIndex, area = {}) {
+    const affectedSystemId = area.building_system_id || '';
+    const affectedSubsystemId = area.building_subsystem_id || '';
+    const affectedComponentId = area.building_component_id || '';
+    const severity = area.severity || 'moderate';
+
+    return `
+        <div class="affected-area-row border rounded p-3 mb-2 bg-white" data-affected-area-index="${areaIndex}">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <strong class="small text-secondary">Affected area #${areaIndex + 1}</strong>
+                <button type="button" class="btn btn-sm btn-light border text-danger py-0 px-2 affected-area-remove" title="Remove affected area">
+                    <i class="mdi mdi-close"></i>
+                    <span class="visually-hidden">Remove affected area</span>
+                </button>
+            </div>
+            <div class="row g-2">
+                <div class="col-md-3">
+                    <label class="form-label small fw-semibold text-muted mb-1">Affected System</label>
+                    <select name="system_findings[${findingIndex}][affected_areas][${areaIndex}][building_system_id]" class="form-select form-select-sm affected-system-select">
+                        ${buildSystemOptions(affectedSystemId)}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-semibold text-muted mb-1">Affected Subsystem</label>
+                    <select name="system_findings[${findingIndex}][affected_areas][${areaIndex}][building_subsystem_id]" class="form-select form-select-sm affected-subsystem-select">
+                        ${affectedSystemId ? buildSubsystemOptions(affectedSystemId, affectedSubsystemId) : '<option value="">Select subsystem</option>'}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-semibold text-muted mb-1">Affected Component</label>
+                    <select name="system_findings[${findingIndex}][affected_areas][${areaIndex}][building_component_id]" class="form-select form-select-sm affected-component-select">
+                        ${affectedSystemId && affectedSubsystemId ? buildComponentOptions(affectedSystemId, affectedSubsystemId, affectedComponentId) : '<option value="">Select component</option>'}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-semibold text-muted mb-1">Severity</label>
+                    <select name="system_findings[${findingIndex}][affected_areas][${areaIndex}][severity]" class="form-select form-select-sm">
+                        <option value="low" ${severity === 'low' ? 'selected' : ''}>Low</option>
+                        <option value="moderate" ${severity === 'moderate' || severity === 'medium' ? 'selected' : ''}>Moderate</option>
+                        <option value="high" ${severity === 'high' ? 'selected' : ''}>High</option>
+                        <option value="critical" ${severity === 'critical' ? 'selected' : ''}>Critical</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label small fw-semibold text-muted mb-1">Affected Location</label>
+                    <input type="text" name="system_findings[${findingIndex}][affected_areas][${areaIndex}][location]" class="form-control form-control-sm" value="${escapeHtml(area.location || '')}" placeholder="e.g. Interior north wall">
+                </div>
+                <div class="col-md-8">
+                    <label class="form-label small fw-semibold text-muted mb-1">How it was affected</label>
+                    <textarea name="system_findings[${findingIndex}][affected_areas][${areaIndex}][impact_description]" class="form-control form-control-sm" rows="2" placeholder="Describe the cascading impact, e.g. water staining and damaged wall finish.">${escapeHtml(area.impact_description || '')}</textarea>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function wireAffectedAreaRow(row) {
+    const systemSelect = row.querySelector('.affected-system-select');
+    const subsystemSelect = row.querySelector('.affected-subsystem-select');
+    const componentSelect = row.querySelector('.affected-component-select');
+    const removeButton = row.querySelector('.affected-area-remove');
+
+    systemSelect?.addEventListener('change', function () {
+        if (subsystemSelect) {
+            subsystemSelect.innerHTML = this.value ? buildSubsystemOptions(this.value, '') : '<option value="">Select subsystem</option>';
+        }
+        if (componentSelect) {
+            componentSelect.innerHTML = '<option value="">Select component</option>';
+        }
+    });
+
+    subsystemSelect?.addEventListener('change', function () {
+        if (componentSelect) {
+            componentSelect.innerHTML = systemSelect?.value && this.value
+                ? buildComponentOptions(systemSelect.value, this.value, '')
+                : '<option value="">Select component</option>';
+        }
+    });
+
+    removeButton?.addEventListener('click', function () {
+        row.remove();
+    });
+}
+
 function getMatchingTradePartners(systemId, subsystemId = '') {
     const sysId = Number.parseInt(systemId, 10);
     const subId = Number.parseInt(subsystemId, 10);
@@ -982,9 +1187,30 @@ function buildTradePartnerOptions(systemId, subsystemId = '', selectedApplicatio
     return options;
 }
 
-function collectRecommendationOptions(systemId, subsystemId = '') {
+function sanitizeDiagnosisTextClient(value) {
+    let text = String(value || '').replace(/\s+/g, ' ').trim();
+    if (!text) {
+        return '';
+    }
+
+    [
+        'an error occurred while processing your inspection request',
+        'an error occurred while processing your diagnosis request',
+        'please try again',
+        'an unexpected error occurred',
+    ].forEach(fragment => {
+        text = text.replace(new RegExp(fragment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '[\\.\\s]*', 'gi'), '');
+    });
+
+    return text.replace(/\s+/g, ' ').trim();
+}
+
+function collectRecommendationOptions(systemId, subsystemId = '', componentId = '') {
     const system = getSystemConfig(systemId);
     const subsystem = subsystemId ? getSubsystemConfig(systemId, subsystemId) : null;
+    const component = subsystem && componentId && Array.isArray(subsystem.components)
+        ? subsystem.components.find(item => String(item.id) === String(componentId))
+        : null;
     const globalRecommendations = Array.isArray(RECOMMENDATION_CONFIG?.global) ? RECOMMENDATION_CONFIG.global : [];
     const scopedSystemRecommendations = Array.isArray(RECOMMENDATION_CONFIG?.system?.[String(systemId)])
         ? RECOMMENDATION_CONFIG.system[String(systemId)]
@@ -992,18 +1218,24 @@ function collectRecommendationOptions(systemId, subsystemId = '') {
     const scopedSubsystemRecommendations = Array.isArray(RECOMMENDATION_CONFIG?.subsystem?.[String(subsystemId)])
         ? RECOMMENDATION_CONFIG.subsystem[String(subsystemId)]
         : [];
+    const scopedComponentRecommendations = Array.isArray(RECOMMENDATION_CONFIG?.component?.[String(componentId)])
+        ? RECOMMENDATION_CONFIG.component[String(componentId)]
+        : [];
     const systemRecommendations = Array.isArray(system?.recommended_actions) ? system.recommended_actions : [];
     const subsystemRecommendations = Array.isArray(subsystem?.recommended_actions) ? subsystem.recommended_actions : [];
+    const componentRecommendations = Array.isArray(component?.recommended_actions) ? component.recommended_actions : [];
 
     const unique = new Set();
     [
+        ...scopedComponentRecommendations,
         ...scopedSubsystemRecommendations,
         ...scopedSystemRecommendations,
         ...globalRecommendations,
+        ...componentRecommendations,
         ...subsystemRecommendations,
         ...systemRecommendations,
     ].forEach(item => {
-        const value = String(item || '').trim();
+        const value = sanitizeDiagnosisTextClient(item);
         if (value) {
             unique.add(value);
         }
@@ -1178,8 +1410,8 @@ function buildCpiMaterialPresetOptions(searchTerm = '', subsystemId = null) {
     const normalizedSearch = String(searchTerm || '').trim().toLowerCase();
 
     const scopedSettings = [...FMC_MATERIAL_SETTINGS].sort((left, right) => {
-        const leftScore = subsystemId && String(left.subsystem_id || '') === String(subsystemId) ? 1 : 0;
-        const rightScore = subsystemId && String(right.subsystem_id || '') === String(subsystemId) ? 1 : 0;
+        const leftScore = subsystemId && String(left.building_subsystem_id || '') === String(subsystemId) ? 1 : 0;
+        const rightScore = subsystemId && String(right.building_subsystem_id || '') === String(subsystemId) ? 1 : 0;
 
         if (leftScore !== rightScore) {
             return rightScore - leftScore;
@@ -1273,7 +1505,7 @@ function addSystemFindingRow(systemId, prefill = {}) {
         return;
     }
 
-    showInspectionSystem(systemId, { scroll: false });
+    showBuildingSystem(systemId, { scroll: false });
 
     // Hide the empty-state placeholder
     const emptyMsg = document.getElementById(`system-empty-${systemId}`);
@@ -1283,7 +1515,8 @@ function addSystemFindingRow(systemId, prefill = {}) {
     const parsedSourceIndex = Number.parseInt(prefill.__photo_index, 10);
     const sourceFindingIndex = Number.isFinite(parsedSourceIndex) ? parsedSourceIndex : currentIndex;
     const findingNumber = body.querySelectorAll('.finding-card').length + 1;
-    const subsystemOptions = buildSubsystemOptions(systemId, prefill.subsystem_id || '');
+    const subsystemOptions = buildSubsystemOptions(systemId, prefill.building_subsystem_id || '');
+    const componentOptions = buildComponentOptions(systemId, prefill.building_subsystem_id || '', prefill.building_component_id || '');
     const severityAliasMap = {
         urgent:                    'critical',
         health_safety_threatening: 'high',
@@ -1339,31 +1572,41 @@ function addSystemFindingRow(systemId, prefill = {}) {
     card.className = 'finding-card border rounded mb-2 bg-white';
     card.style.cssText = 'border-left: 4px solid ' + (severityColors[severity] || '#6c757d') + ' !important;';
     card.innerHTML = `
-        <input type="hidden" name="system_findings[${currentIndex}][system_id]" value="${systemId}">
-        <!-- Card header -->
-        <div class="d-flex justify-content-between align-items-center px-3 py-2" style="background:#f8f9fc; border-bottom:1px solid #e9ecef; border-radius:0.25rem 0.25rem 0 0;">
-            <span class="fw-semibold small text-secondary">Finding #${findingNumber}</span>
-            <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2" onclick="removeSystemFindingRow(this)" title="Remove finding">
-                <i class="mdi mdi-delete-outline"></i> Remove
+        <input type="hidden" name="system_findings[${currentIndex}][building_system_id]" value="${systemId}">
+        <div class="finding-card-header d-flex justify-content-between align-items-center px-3 py-2">
+            <div>
+                <span class="fw-bold text-dark">Finding #${findingNumber}</span>
+                <span class="small text-muted ms-2">Record the defect, where it is, and what it affects.</span>
+            </div>
+            <button type="button" class="btn btn-sm btn-light border text-danger" onclick="removeSystemFindingRow(this)" title="Remove finding">
+                <i class="mdi mdi-delete-outline"></i>
+                <span class="visually-hidden">Remove finding</span>
             </button>
         </div>
-        <!-- Row 1: Subsystem | Issue | Severity -->
-        <div class="row g-2 px-3 pt-2">
-            <div class="col-md-4">
+        <div class="finding-section">
+            <div class="finding-section-title">1. Classification</div>
+            <div class="row g-3">
+            <div class="col-md-3">
                 <label class="form-label small fw-semibold text-muted mb-1">Subsystem</label>
-                <select name="system_findings[${currentIndex}][subsystem_id]" class="form-select form-select-sm">
+                <select name="system_findings[${currentIndex}][building_subsystem_id]" class="form-select form-select-sm">
                     ${subsystemOptions}
                 </select>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold text-muted mb-1">Building Component</label>
+                <select name="system_findings[${currentIndex}][building_component_id]" class="form-select form-select-sm">
+                    ${componentOptions}
+                </select>
+            </div>
+            <div class="col-md-3">
                 <label class="form-label small fw-semibold text-muted mb-1">Issue / Finding</label>
                 <select class="form-select form-select-sm issue-preset-select">
-                    ${buildFindingOptions(systemId, prefill.subsystem_id || '', prefill.issue || '')}
+                    ${buildFindingOptions(systemId, prefill.building_subsystem_id || '', prefill.issue || '')}
                 </select>
                 <input type="text" class="form-control form-control-sm mt-1 issue-custom-text" placeholder="Describe the issue" style="display:none;">
                 <input type="hidden" name="system_findings[${currentIndex}][issue]" class="issue-hidden-value" value="${escapeHtml(prefill.issue || '')}">
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <label class="form-label small fw-semibold text-muted mb-1">Severity</label>
                 <select name="system_findings[${currentIndex}][severity]" class="form-select form-select-sm severity-select">
                     <option value="critical"       ${severity === 'critical'       ? 'selected' : ''}>&#x1F534; Safety &amp; Health (100)</option>
@@ -1373,23 +1616,19 @@ function addSystemFindingRow(systemId, prefill = {}) {
                     <option value="low"            ${severity === 'low'            ? 'selected' : ''}>&#x1F7E2; Non-Urgent (0)</option>
                 </select>
             </div>
+            </div>
         </div>
-        <!-- Row 1b: Issue Description -->
-        <div class="row g-2 px-3 pt-2">
+        <div class="finding-section finding-section-soft">
+            <div class="finding-section-title">2. What was found</div>
+            <div class="row g-3">
             <div class="col-12">
                 <label class="form-label small fw-semibold text-muted mb-1">Issue Description</label>
                 <textarea name="system_findings[${currentIndex}][issue_description]" class="form-control form-control-sm" rows="3" placeholder="Describe what you found in plain language the client will understand - what it is, what you saw, and how extensive it is...">${escapeHtml(prefill.issue_description || '')}</textarea>
             </div>
-        </div>
-        <!-- Row 1c: Risk / Impact -->
-        <div class="row g-2 px-3 pt-2">
             <div class="col-12">
                 <label class="form-label small fw-semibold text-muted mb-1">Risk / Impact</label>
                 <textarea name="system_findings[${currentIndex}][risk_impact]" class="form-control form-control-sm" rows="2" placeholder="Why this matters and what could happen if it is left unaddressed (safety, comfort, cost, property value)...">${escapeHtml(prefill.risk_impact || '')}</textarea>
             </div>
-        </div>
-        <!-- Row 2: Location | Spot -->
-        <div class="row g-2 px-3 pt-2">
             <div class="col-md-6">
                 <label class="form-label small fw-semibold text-muted mb-1">Location</label>
                 <input type="text" name="system_findings[${currentIndex}][location]" class="form-control form-control-sm" value="${escapeHtml(prefill.location || '')}" placeholder="e.g. North wall, Basement">
@@ -1397,6 +1636,7 @@ function addSystemFindingRow(systemId, prefill = {}) {
             <div class="col-md-6">
                 <label class="form-label small fw-semibold text-muted mb-1">Spot</label>
                 <input type="text" name="system_findings[${currentIndex}][spot]" class="form-control form-control-sm" value="${escapeHtml(prefill.spot || '')}" placeholder="e.g. Top-left corner">
+            </div>
             </div>
         </div>
         <!-- Row 2b: Internal fulfilment planning - MOVED to the Estimation step. Hidden here but kept in the DOM so existing trade JS bindings keep working without errors. -->
@@ -1412,7 +1652,7 @@ function addSystemFindingRow(systemId, prefill = {}) {
             <div class="col-md-4">
                 <label class="form-label small fw-semibold text-muted mb-1">Approved trade partner</label>
                 <select name="system_findings[${currentIndex}][trade_application_id]" class="form-select form-select-sm finding-trade-partner">
-                    ${buildTradePartnerOptions(systemId, prefill.subsystem_id || '', selectedTradeApplicationId)}
+                    ${buildTradePartnerOptions(systemId, prefill.building_subsystem_id || '', selectedTradeApplicationId)}
                 </select>
                 <div class="form-text small finding-trade-rate-note">Only active partners approved for this system/subsystem appear here.</div>
             </div>
@@ -1449,8 +1689,23 @@ function addSystemFindingRow(systemId, prefill = {}) {
                 <div class="small border rounded px-2 py-2 finding-trade-preview" style="background:#fff;">Choose an approved trade partner to preview partner cost and client price.</div>
             </div>
         </div>
-        <!-- Row 3: Recommendations | Notes -->
-        <div class="row g-2 px-3 pt-2 pb-3">
+        <!-- Row 2c: Cascading / affected systems -->
+        <div class="finding-section finding-section-warm">
+            <div class="finding-section-title">3. Cascading impact</div>
+            <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap mb-2">
+                <div>
+                    <div class="fw-semibold text-dark">Affected areas</div>
+                    <div class="form-text mt-0">Add another system, subsystem, component, or location only when this issue caused related damage elsewhere.</div>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-primary affected-area-add">
+                    <i class="mdi mdi-plus"></i> Add affected area
+                </button>
+            </div>
+            <div class="affected-areas-container"></div>
+        </div>
+        <div class="finding-section">
+            <div class="finding-section-title">4. Recommendation and notes</div>
+            <div class="row g-3">
             <div class="col-md-6">
                 <label class="form-label small fw-semibold text-muted mb-1">Recommendations</label>
                 <div class="recommendation-builder" data-index="${currentIndex}">
@@ -1476,9 +1731,10 @@ function addSystemFindingRow(systemId, prefill = {}) {
                 <label class="form-label small fw-semibold text-muted mb-1">Notes</label>
                 <textarea name="system_findings[${currentIndex}][notes]" class="form-control form-control-sm" rows="3" placeholder="Internal observations for the ETOGO team (not shown to the client)...">${escapeHtml(prefill.notes || '')}</textarea>
             </div>
+            </div>
         </div>
         <!-- Row 4: Finding Photos -->
-        <div class="row g-2 px-3 pt-2 pb-3" style="background:#fafbff;border-top:1px solid #e9ecef;">
+        <div class="finding-section finding-section-soft">
             <div class="col-12">
                 <label class="form-label small fw-semibold text-muted mb-1">
                     <i class="mdi mdi-camera-outline me-1"></i>Finding Photos
@@ -1535,7 +1791,7 @@ function addSystemFindingRow(systemId, prefill = {}) {
                         </div>
                         <div class="col-md-6">
                             <div class="input-group input-group-sm">
-                                <select class="form-select form-select-sm cpi-material-template">${buildCpiMaterialPresetOptions('', prefill.subsystem_id || null)}</select>
+                                <select class="form-select form-select-sm cpi-material-template">${buildCpiMaterialPresetOptions('', prefill.building_subsystem_id || null)}</select>
                                 <button type="button" class="btn btn-outline-primary btn-sm cpi-material-add-selected">Add Selected</button>
                             </div>
                         </div>
@@ -1588,9 +1844,31 @@ function addSystemFindingRow(systemId, prefill = {}) {
 
     body.appendChild(card);
 
+    const affectedAreasContainer = card.querySelector('.affected-areas-container');
+    const affectedAreaAddButton = card.querySelector('.affected-area-add');
+    let affectedAreaIndex = 0;
+
+    function addAffectedArea(area = {}) {
+        if (!affectedAreasContainer) {
+            return;
+        }
+
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = affectedAreaRowTemplate(currentIndex, affectedAreaIndex, area).trim();
+        const row = wrapper.firstElementChild;
+        affectedAreasContainer.appendChild(row);
+        wireAffectedAreaRow(row);
+        affectedAreaIndex++;
+    }
+
+    (Array.isArray(prefill.affected_areas) ? prefill.affected_areas : []).forEach(area => addAffectedArea(area));
+    affectedAreaAddButton?.addEventListener('click', function () {
+        addAffectedArea();
+    });
+
     const fulfillmentSelect = card.querySelector(`select[name="system_findings[${currentIndex}][fulfillment_type]"]`);
     const tradePartnerSelect = card.querySelector(`select[name="system_findings[${currentIndex}][trade_application_id]"]`);
-    const subsystemSelForTrade = card.querySelector(`select[name="system_findings[${currentIndex}][subsystem_id]"]`);
+    const subsystemSelForTrade = card.querySelector(`select[name="system_findings[${currentIndex}][building_subsystem_id]"]`);
     const tradeQuantityInput = card.querySelector(`input[name="system_findings[${currentIndex}][trade_quantity]"]`);
     const tradeUnitSelect = card.querySelector(`select[name="system_findings[${currentIndex}][trade_unit]"]`);
     const tradePreview = card.querySelector('.finding-trade-preview');
@@ -1732,7 +2010,7 @@ function addSystemFindingRow(systemId, prefill = {}) {
                 // Auto-fill PHAR fields from catalog when a known finding is selected
                 if (this.value) {
                     const sysName = getSystemConfig(systemId)?.name || '';
-                    const subSel  = card.querySelector(`select[name="system_findings[${currentIndex}][subsystem_id]"]`);
+                    const subSel  = card.querySelector(`select[name="system_findings[${currentIndex}][building_subsystem_id]"]`);
                     const subId   = subSel ? subSel.value : '';
                     const subName = subId ? (getSubsystemConfig(systemId, subId)?.name || '') : '';
                     applyPharCatalogToCard(card, sysName, subName, this.value, currentIndex);
@@ -1745,11 +2023,15 @@ function addSystemFindingRow(systemId, prefill = {}) {
         });
 
         // Refresh issue options when subsystem changes
-        const subsystemSelForIssue = card.querySelector(`select[name="system_findings[${currentIndex}][subsystem_id]"]`);
+        const subsystemSelForIssue = card.querySelector(`select[name="system_findings[${currentIndex}][building_subsystem_id]"]`);
         if (subsystemSelForIssue) {
             subsystemSelForIssue.addEventListener('change', function () {
                 const currentIssue = issueHiddenValue.value;
                 issuePresetSelect.innerHTML = buildFindingOptions(systemId, this.value, currentIssue);
+                const componentSelect = card.querySelector(`select[name="system_findings[${currentIndex}][building_component_id]"]`);
+                if (componentSelect) {
+                    componentSelect.innerHTML = buildComponentOptions(systemId, this.value, '');
+                }
                 if (issuePresetSelect.value === '__custom__') {
                     issueCustomText.style.display = '';
                     issueCustomText.value = currentIssue;
@@ -1768,7 +2050,7 @@ function addSystemFindingRow(systemId, prefill = {}) {
         card.style.cssText = 'border-left: 4px solid ' + (severityColors[this.value] || '#6c757d') + ' !important;';
     });
 
-    initRecommendationBuilder(card, currentIndex, recommendationItems, systemId, prefill.subsystem_id || '');
+    initRecommendationBuilder(card, currentIndex, recommendationItems, systemId, prefill.building_subsystem_id || '', prefill.building_component_id || '');
 
     // ── Labour & Materials wiring ──────────────────────────────────────────────
     let cpiMatIdx = 0;
@@ -1778,7 +2060,7 @@ function addSystemFindingRow(systemId, prefill = {}) {
     const matSearchInput     = card.querySelector('.cpi-material-search');
     const matTemplateSelect  = card.querySelector('.cpi-material-template');
     const matCustomInput     = card.querySelector('.cpi-material-custom-input');
-    const subsystemSelForMat = card.querySelector(`select[name="system_findings[${currentIndex}][subsystem_id]"]`);
+    const subsystemSelForMat = card.querySelector(`select[name="system_findings[${currentIndex}][building_subsystem_id]"]`);
 
     function updateCpiLineTotal(row) {
         const qty   = parseFloat(row.querySelector('.cpi-mat-qty')?.value  || 0);
@@ -1944,13 +2226,14 @@ function addSystemFindingRow(systemId, prefill = {}) {
     }
 }
 
-function initRecommendationBuilder(row, rowIndex, initialItems = [], systemId = '', initialSubsystemId = '') {
+function initRecommendationBuilder(row, rowIndex, initialItems = [], systemId = '', initialSubsystemId = '', initialComponentId = '') {
     const builder = row.querySelector('.recommendation-builder');
     if (!builder) {
         return;
     }
 
-    const subsystemSelect = row.querySelector(`select[name="system_findings[${rowIndex}][subsystem_id]"]`);
+    const subsystemSelect = row.querySelector(`select[name="system_findings[${rowIndex}][building_subsystem_id]"]`);
+    const componentSelect = row.querySelector(`select[name="system_findings[${rowIndex}][building_component_id]"]`);
     const recommendationSelect = builder.querySelector('.recommendation-select');
     const addSelectedButton = builder.querySelector('.recommendation-add-selected');
     const input = builder.querySelector('.recommendation-input');
@@ -1958,10 +2241,10 @@ function initRecommendationBuilder(row, rowIndex, initialItems = [], systemId = 
     const list = builder.querySelector('.recommendation-list');
     const hiddenInputs = builder.querySelector('.recommendation-hidden-inputs');
 
-    let recommendations = normalizeRecommendationItems(initialItems);
+    let recommendations = normalizeRecommendationItems(initialItems).map(sanitizeDiagnosisTextClient).filter(Boolean);
 
     function addRecommendationItem(value) {
-        const normalizedValue = String(value || '').trim();
+        const normalizedValue = sanitizeDiagnosisTextClient(value);
         if (!normalizedValue) {
             return;
         }
@@ -1973,8 +2256,8 @@ function initRecommendationBuilder(row, rowIndex, initialItems = [], systemId = 
         }
     }
 
-    function refreshRecommendationDropdown(selectedSubsystemId = '') {
-        const options = collectRecommendationOptions(systemId, selectedSubsystemId || '');
+    function refreshRecommendationDropdown(selectedSubsystemId = '', selectedComponentId = '') {
+        const options = collectRecommendationOptions(systemId, selectedSubsystemId || '', selectedComponentId || '');
         recommendationSelect.innerHTML = '<option value="">Select recommendation</option>';
 
         options.forEach(optionValue => {
@@ -2047,11 +2330,20 @@ function initRecommendationBuilder(row, rowIndex, initialItems = [], systemId = 
 
     if (subsystemSelect) {
         subsystemSelect.addEventListener('change', function () {
-            refreshRecommendationDropdown(this.value || '');
+            refreshRecommendationDropdown(this.value || '', componentSelect ? componentSelect.value : '');
         });
     }
 
-    refreshRecommendationDropdown(initialSubsystemId || (subsystemSelect ? subsystemSelect.value : ''));
+    if (componentSelect) {
+        componentSelect.addEventListener('change', function () {
+            refreshRecommendationDropdown(subsystemSelect ? subsystemSelect.value : initialSubsystemId, this.value || '');
+        });
+    }
+
+    refreshRecommendationDropdown(
+        initialSubsystemId || (subsystemSelect ? subsystemSelect.value : ''),
+        initialComponentId || (componentSelect ? componentSelect.value : '')
+    );
 
     renderRecommendations();
 }
@@ -2133,6 +2425,16 @@ function extractSystemFindingsFromPayload(payload) {
             return;
         }
 
+        const affectedAreaMatch = name.match(/^system_findings\[(\d+)\]\[affected_areas\]\[(\d+)\]\[([^\]]+)\]$/);
+        if (affectedAreaMatch) {
+            const [, findingIdx, areaIdx, areaField] = affectedAreaMatch;
+            findingsByIndex[findingIdx] = findingsByIndex[findingIdx] || {};
+            findingsByIndex[findingIdx].affected_areas = findingsByIndex[findingIdx].affected_areas || [];
+            findingsByIndex[findingIdx].affected_areas[areaIdx] = findingsByIndex[findingIdx].affected_areas[areaIdx] || {};
+            findingsByIndex[findingIdx].affected_areas[areaIdx][areaField] = value;
+            return;
+        }
+
         const fieldMatch = name.match(/^system_findings\[(\d+)\]\[([^\]]+)\](?:\[\])?$/);
         if (!fieldMatch) {
             return;
@@ -2154,10 +2456,17 @@ function extractSystemFindingsFromPayload(payload) {
             } else {
                 finding.recommendations = [];
             }
+            ['issue', 'issue_description', 'risk_impact', 'location', 'spot', 'notes', 'recommendation_details'].forEach(field => {
+                if (Object.prototype.hasOwnProperty.call(finding, field)) {
+                    finding[field] = sanitizeDiagnosisTextClient(finding[field]);
+                }
+            });
+            finding.recommendations = finding.recommendations.map(sanitizeDiagnosisTextClient).filter(Boolean);
             finding.materials = (finding.materials || []).filter(Boolean);
+            finding.affected_areas = (finding.affected_areas || []).filter(Boolean);
             return finding;
         })
-        .filter((finding) => finding.system_id);
+        .filter((finding) => finding.building_system_id);
 }
 
 function applyAutosavePayload(form, payload) {
@@ -2165,15 +2474,16 @@ function applyAutosavePayload(form, payload) {
         return;
     }
 
+    const cleanPayload = sanitizeAutosavePayload(payload);
     const fields = form.querySelectorAll('input[name], select[name], textarea[name]');
     const arrayIndexByName = {};
 
     fields.forEach((field) => {
-        if (!field.name || field.name === '_token' || !Object.prototype.hasOwnProperty.call(payload, field.name)) {
+        if (!field.name || field.name === '_token' || !Object.prototype.hasOwnProperty.call(cleanPayload, field.name)) {
             return;
         }
 
-        const rawValue = payload[field.name];
+        const rawValue = cleanPayload[field.name];
         let nextValue = rawValue;
         if (Array.isArray(rawValue)) {
             const idx = arrayIndexByName[field.name] || 0;
@@ -2194,8 +2504,53 @@ function applyAutosavePayload(form, payload) {
     });
 }
 
+function sanitizeAutosavePayload(payload) {
+    const cleaned = {};
+
+    Object.entries(payload || {}).forEach(([key, value]) => {
+        if (Array.isArray(value)) {
+            cleaned[key] = value.map(item => typeof item === 'string' ? sanitizeDiagnosisTextClient(item) : item).filter(item => item !== '');
+            return;
+        }
+
+        cleaned[key] = typeof value === 'string' ? sanitizeDiagnosisTextClient(value) : value;
+    });
+
+    return cleaned;
+}
+
+function autosavePayloadHasContent(payload) {
+    return Object.entries(payload || {}).some(([key, value]) => {
+        if (['_token', 'property_id', 'service_request_id', 'status', 'inspection_date', 'inspector_id'].includes(key)) {
+            return false;
+        }
+
+        if (Array.isArray(value)) {
+            return value.some(item => String(item || '').trim() !== '');
+        }
+
+        return typeof value === 'string' ? value.trim() !== '' : value !== null && value !== undefined && value !== false;
+    });
+}
+
+function sanitizeDiagnosisTextareas(form) {
+    [
+        'textarea[name="inspector_notes"]',
+        'textarea[name="recommendations"]',
+        'textarea[name="risk_summary"]',
+        'textarea[name$="[notes]"]',
+        'textarea[name$="[recommendation_details]"]',
+        'textarea[name$="[issue_description]"]',
+        'textarea[name$="[risk_impact]"]',
+    ].forEach(selector => {
+        form.querySelectorAll(selector).forEach(field => {
+            field.value = sanitizeDiagnosisTextClient(field.value);
+        });
+    });
+}
+
 function initializeFormAutosave() {
-    const form = document.getElementById('inspectionSystemsForm');
+    const form = document.getElementById('BuildingSystemsForm');
     if (!form) {
         return;
     }
@@ -2206,19 +2561,27 @@ function initializeFormAutosave() {
 
     const csrfToken = form.querySelector('input[name="_token"]')?.value || '';
 
+    sanitizeDiagnosisTextareas(form);
+
     try {
         const savedRaw = localStorage.getItem(AUTOSAVE_KEY);
         if (savedRaw) {
-            const savedData = JSON.parse(savedRaw);
+            const savedData = sanitizeAutosavePayload(JSON.parse(savedRaw));
+            if (!autosavePayloadHasContent(savedData)) {
+                localStorage.removeItem(AUTOSAVE_KEY);
+                setAutosaveStatus('Autosave: cleared stale local draft');
+                return;
+            }
             const restoredFindings = extractSystemFindingsFromPayload(savedData);
             const hasRenderedFindings = !!form.querySelector('.finding-card');
 
             if (!hasRenderedFindings && restoredFindings.length > 0) {
-                restoredFindings.forEach((finding) => addSystemFindingRow(finding.system_id, finding));
-                updateInspectionSystemEmptyState();
+                restoredFindings.forEach((finding) => addSystemFindingRow(finding.building_system_id, finding));
+                updateBuildingSystemEmptyState();
             }
 
             applyAutosavePayload(form, savedData);
+            sanitizeDiagnosisTextareas(form);
             setAutosaveStatus('Autosave: restored local draft');
         }
     } catch (_err) {
@@ -2227,7 +2590,7 @@ function initializeFormAutosave() {
 
     const persist = () => {
         try {
-            const payload = collectAutosavePayload(form);
+            const payload = sanitizeAutosavePayload(collectAutosavePayload(form));
             payload.status = 'in_progress';
             const snapshot = JSON.stringify(payload);
 
@@ -2295,15 +2658,15 @@ function initializeFormAutosave() {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
-    const addSystemButton = document.getElementById('addInspectionSystem');
-    const systemPicker = document.getElementById('inspectionSystemPicker');
+    const addSystemButton = document.getElementById('addBuildingSystem');
+    const systemPicker = document.getElementById('BuildingSystemPicker');
 
     if (addSystemButton) {
-        addSystemButton.addEventListener('click', addSelectedInspectionSystem);
+        addSystemButton.addEventListener('click', addSelectedBuildingSystem);
     }
 
     if (systemPicker) {
-        systemPicker.addEventListener('change', addSelectedInspectionSystem);
+        systemPicker.addEventListener('change', addSelectedBuildingSystem);
     }
 
     if (Array.isArray(initialFindings) && initialFindings.length > 0) {
@@ -2326,15 +2689,15 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         sorted.forEach(finding => {
-            if (!finding || !finding.system_id) {
+            if (!finding || !finding.building_system_id) {
                 return;
             }
 
-            addSystemFindingRow(finding.system_id, finding);
+            addSystemFindingRow(finding.building_system_id, finding);
         });
     }
 
-    updateInspectionSystemEmptyState();
+    updateBuildingSystemEmptyState();
     initializeFormAutosave();
 });
 

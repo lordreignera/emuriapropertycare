@@ -98,7 +98,7 @@
                         @foreach($invoice->line_items as $item)
                             <li class="list-group-item">
                                 <div class="fw-semibold">{{ $item['description'] ?? 'Item' }}</div>
-                                <small class="text-muted">Qty: {{ $item['quantity'] ?? 1 }} • Unit: ${{ number_format((float) ($item['unit_price'] ?? 0), 2) }}</small>
+                                <small class="text-muted">Qty: {{ $item['quantity'] ?? 1 }} - Unit: ${{ number_format((float) ($item['unit_price'] ?? 0), 2) }}</small>
                                 <div><strong>Total: ${{ number_format((float) ($item['total'] ?? 0), 2) }}</strong></div>
                             </li>
                         @endforeach
@@ -108,6 +108,22 @@
                 @endif
 
                 <div class="mt-3">
+                    @if($invoice->isPropertyProcessInvoice() && $invoice->project?->property)
+                        <a href="{{ route('properties.process-invoice.preview', $invoice->project->property) }}" class="btn btn-primary btn-sm">
+                            <i class="mdi mdi-receipt-text-eye me-1"></i>Preview ETOGO Invoice
+                        </a>
+                        <a href="{{ route('properties.process-invoice.download', $invoice->project->property) }}" class="btn btn-outline-dark btn-sm">
+                            <i class="mdi mdi-download me-1"></i>Download ETOGO PDF
+                        </a>
+                        @if($invoice->status === 'draft')
+                            <form action="{{ route('properties.process-invoice.share', $invoice->project->property) }}" method="POST" class="d-inline">
+                                @csrf
+                                <button type="submit" class="btn btn-success btn-sm">
+                                    <i class="mdi mdi-send me-1"></i>Share
+                                </button>
+                            </form>
+                        @endif
+                    @endif
                     <a href="{{ route('invoices.index') }}" class="btn btn-outline-secondary btn-sm">
                         <i class="mdi mdi-arrow-left me-1"></i>Back to Invoices
                     </a>

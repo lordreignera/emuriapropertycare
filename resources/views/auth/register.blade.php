@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>Register - EMURIA PropertyCare</title>
+    <title>Register - ETOGO</title>
     
     <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -21,7 +21,7 @@
 
         body {
             font-family: "Intel Clear", "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-            background: #ffffff;
+            background: #eef4fb;
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -34,16 +34,17 @@
             max-width: 1000px;
             width: 100%;
             background: white;
-            border-radius: 20px;
+            border: 2px solid #dbe6f3;
+            border-radius: 18px;
             overflow: hidden;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 18px 42px rgba(15, 23, 42, 0.10);
         }
 
         .register-left {
-            flex: 1;
-            background: linear-gradient(135deg, #5b67ca 0%, #4854b8 100%);
+            flex: .92;
+            background: linear-gradient(180deg, rgba(8, 43, 103, .96) 0%, #031b46 42%, #021437 100%);
             padding: 60px 40px;
-            color: white;
+            color: #eaf2ff;
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -58,13 +59,7 @@
             right: -50%;
             width: 200%;
             height: 200%;
-            background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
-            animation: pulse 15s ease-in-out infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.1); }
+            display: none;
         }
 
         .register-left-content {
@@ -73,21 +68,32 @@
         }
 
         .logo {
-            font-size: 2.5rem;
-            font-weight: 700;
-            margin-bottom: 20px;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            font-size: 1.55rem;
+            font-weight: 800;
+            margin-bottom: 18px;
+            text-shadow: none;
         }
 
-        .logo .highlight {
-            color: #FFB800;
+        .register-logo-mark {
+            width: 64px;
+            height: 64px;
+            object-fit: contain;
+            background: rgba(255,255,255,.08);
+            border: 1px solid rgba(255,255,255,.12);
+            border-radius: 12px;
+            padding: 10px;
+            box-shadow: 0 8px 18px rgba(2, 6, 23, .18);
         }
 
         .tagline {
-            font-size: 1.2rem;
-            font-weight: 300;
+            font-size: 1rem;
+            font-weight: 500;
             margin-bottom: 30px;
-            opacity: 0.95;
+            color: #93a8c7;
+            opacity: 1;
         }
 
         .features {
@@ -99,14 +105,22 @@
             display: flex;
             align-items: center;
             margin-bottom: 20px;
-            font-size: 1rem;
-            opacity: 0.9;
+            font-size: .96rem;
+            color: #eaf2ff;
+            opacity: 1;
         }
 
         .features li i {
-            font-size: 1.5rem;
+            width: 30px;
+            height: 30px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 7px;
+            background: rgba(255,255,255,.10);
+            font-size: .95rem;
             margin-right: 15px;
-            color: #FFB800;
+            color: #8fb7ff;
         }
 
         .register-right {
@@ -125,12 +139,12 @@
 
         .register-header h2 {
             font-size: 2rem;
-            color: #2d3748;
+            color: #172033;
             margin-bottom: 10px;
         }
 
         .register-header p {
-            color: #718096;
+            color: #667085;
             font-size: 0.95rem;
         }
 
@@ -186,11 +200,11 @@
         .form-control {
             width: 100%;
             padding: 14px 15px 14px 45px;
-            border: 2px solid #e2e8f0;
-            border-radius: 10px;
+            border: 2px solid #cfd8e3;
+            border-radius: 12px;
             font-size: 1rem;
-            transition: all 0.3s ease;
-            background: #f7fafc;
+            transition: border-color 0.18s ease, box-shadow 0.18s ease;
+            background: #ffffff;
         }
 
         .password-field {
@@ -199,9 +213,9 @@
 
         .form-control:focus {
             outline: none;
-            border-color: #5b67ca;
+            border-color: #2458d6;
             background: white;
-            box-shadow: 0 0 0 3px rgba(91, 103, 202, 0.1);
+            box-shadow: 0 0 0 3px rgba(36, 88, 214, 0.10);
         }
 
         .password-toggle {
@@ -225,7 +239,7 @@
         }
 
         .password-toggle:hover {
-            color: #5b67ca;
+            color: #2458d6;
         }
 
         .password-toggle:active {
@@ -244,7 +258,7 @@
             margin-right: 10px;
             margin-top: 2px;
             cursor: pointer;
-            accent-color: #5b67ca;
+            accent-color: #2458d6;
             flex-shrink: 0;
         }
 
@@ -257,7 +271,7 @@
         }
 
         .checkbox-wrapper label a {
-            color: #5b67ca;
+            color: #2458d6;
             text-decoration: none;
             font-weight: 500;
         }
@@ -269,15 +283,15 @@
         .btn-register {
             width: 100%;
             padding: 16px;
-            background: linear-gradient(135deg, #5b67ca 0%, #4854b8 100%);
+            background: #2458d6;
             color: white;
             border: none;
-            border-radius: 10px;
-            font-size: 1.1rem;
-            font-weight: 700;
+            border-radius: 12px;
+            font-size: 1rem;
+            font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 15px rgba(91, 103, 202, 0.3);
+            transition: background 0.18s ease, box-shadow 0.18s ease;
+            box-shadow: 0 8px 18px rgba(36, 88, 214, 0.22);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -285,8 +299,9 @@
         }
 
         .btn-register:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(91, 103, 202, 0.4);
+            background: #1f4fc4;
+            transform: none;
+            box-shadow: 0 10px 22px rgba(36, 88, 214, 0.26);
         }
 
         .btn-register:active {
@@ -325,7 +340,7 @@
         }
 
         .login-link a {
-            color: #5b67ca;
+            color: #2458d6;
             font-weight: 600;
             text-decoration: none;
         }
@@ -336,7 +351,7 @@
 
         .free-badge {
             display: inline-block;
-            background: #FFB800;
+            background: #ffc33a;
             color: #2d3748;
             padding: 4px 12px;
             border-radius: 20px;
@@ -380,7 +395,8 @@
         <div class="register-left">
             <div class="register-left-content">
                 <div class="logo">
-                    EMURIA<span class="highlight">PropertyCare</span>
+                    <img class="register-logo-mark" src="{{ asset('etogo%20log.png') }}" alt="ETOGO">
+                    <span>ETOGO</span>
                 </div>
                 <p class="tagline">
                     Join the Future of Property Management

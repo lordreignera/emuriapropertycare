@@ -2,19 +2,21 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\InspectionSystem;
+use App\Models\BuildingSystem;
+use App\Models\BuildingSubsystem;
 use App\Models\TradeApplication;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 use Throwable;
 
 class TradeApplicationController extends Controller
 {
     public function create()
     {
-        $systems = InspectionSystem::with(['subsystems' => function ($query) {
+        $systems = BuildingSystem::with(['subsystems' => function ($query) {
             $query->where('is_active', true)->orderBy('sort_order')->orderBy('name');
         }])
             ->where('is_active', true)
@@ -37,46 +39,44 @@ class TradeApplicationController extends Controller
             'technicians_count' => 'nullable|integer|min:0|max:1000',
             'company_description' => 'nullable|string|max:3000',
             'system_ids' => 'nullable|array',
-            'system_ids.*' => 'integer|exists:systems,id',
+            'system_ids.*' => [
+                'integer',
+                Rule::exists('building_systems', 'id')->where(fn ($query) => $query->where('is_active', true)),
+            ],
             'subsystem_ids' => 'nullable|array',
-            'subsystem_ids.*' => 'integer|exists:subsystems,id',
+            'subsystem_ids.*' => [
+                'integer',
+                Rule::exists('building_subsystems', 'id')->where(fn ($query) => $query->where('is_active', true)),
+            ],
             'system_pricing' => 'nullable|array',
             'system_pricing.*.units' => 'nullable|array',
-            'system_pricing.*.units.*' => 'nullable|in:sf,lf,ea,hr,day,ls,ton',
+            'system_pricing.*.units.*' => 'nullable|in:sf,lf,ea,pc,hr,day,ls,ton',
             'system_pricing.*.typical_rate' => 'nullable|numeric|min:0|max:999999.99',
-            'system_pricing.*.rate_unit' => 'nullable|in:sf,lf,ea,hr,day,ls,ton',
+            'system_pricing.*.rate_unit' => 'nullable|in:sf,lf,ea,pc,hr,day,ls,ton',
             'system_pricing.*.minimum_charge' => 'nullable|numeric|min:0|max:999999.99',
             'system_pricing.*.notes' => 'nullable|string|max:1000',
             'subsystem_pricing' => 'nullable|array',
-            'subsystem_pricing.*.pricing_unit' => 'nullable|in:sf,lf,ea,hr,day,ls,ton',
+            'subsystem_pricing.*.pricing_unit' => 'nullable|in:sf,lf,ea,pc,hr,day,ls,ton',
             'subsystem_pricing.*.typical_rate' => 'nullable|numeric|min:0|max:999999.99',
-            'subsystem_pricing.*.maximum_charge' => 'nullable|numeric|min:0|max:999999.99',
-            'subsystem_pricing.*.estimated_duration' => 'nullable|string|max:255',
-            'subsystem_pricing.*.notes' => 'nullable|string|max:1000',
+            'subsystem_pricing.*.estimated_hours' => 'nullable|numeric|min:0|max:99999.99',
             'custom_coverage' => 'nullable|array|max:10',
             'custom_coverage.*.system_name' => 'nullable|string|max:255',
             'custom_coverage.*.subsystem_name' => 'nullable|string|max:255',
-            'custom_coverage.*.pricing_unit' => 'nullable|in:sf,lf,ea,hr,day,ls,ton',
+            'custom_coverage.*.pricing_unit' => 'nullable|in:sf,lf,ea,pc,hr,day,ls,ton',
             'custom_coverage.*.typical_rate' => 'nullable|numeric|min:0|max:999999.99',
-            'custom_coverage.*.maximum_charge' => 'nullable|numeric|min:0|max:999999.99',
-            'custom_coverage.*.estimated_duration' => 'nullable|string|max:255',
-            'custom_coverage.*.notes' => 'nullable|string|max:1000',
+            'custom_coverage.*.estimated_hours' => 'nullable|numeric|min:0|max:99999.99',
             'availability' => 'nullable|array',
             'availability.*' => 'nullable|string|max:100',
             'minimum_service_charge' => 'nullable|numeric|min:0|max:999999.99',
             'emergency_premium' => 'nullable|string|max:255',
             'travel_charge_policy' => 'nullable|string|max:255',
             'travel_policy_document' => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
-            'material_policy' => 'nullable|string|max:255',
-            'material_policy_document' => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
             'equipment_policy' => 'nullable|string|max:255',
             'equipment_policy_document' => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
             'disposal_policy' => 'nullable|string|max:255',
             'disposal_policy_document' => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
             'standard_warranty' => 'nullable|string|max:255',
             'warranty_document' => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
-            'pricing_notes' => 'nullable|string|max:3000',
-            'pricing_policy_document' => 'nullable|file|mimes:pdf,jpg,jpeg,png,doc,docx|max:10240',
             'business_licence_status' => 'required|in:yes,no,pending,not_applicable',
             'business_licence_number' => 'nullable|string|max:255',
             'business_licence_expiry' => 'nullable|date',
@@ -103,6 +103,7 @@ class TradeApplicationController extends Controller
         ]);
 
         $validator->after(function ($validator) use ($request) {
+            $selectedSystemIds = array_values(array_unique(array_map('intval', (array) $request->input('system_ids', []))));
             $selectedSubsystemIds = array_values(array_unique(array_map('intval', (array) $request->input('subsystem_ids', []))));
             $subsystemPricing = (array) $request->input('subsystem_pricing', []);
             $customCoverage = collect((array) $request->input('custom_coverage', []))
@@ -110,11 +111,26 @@ class TradeApplicationController extends Controller
                     return collect((array) $coverage)->filter(fn ($value) => trim((string) $value) !== '')->isNotEmpty();
                 });
 
+            if (!empty($selectedSubsystemIds)) {
+                $subsystemParents = BuildingSubsystem::query()
+                    ->whereIn('id', $selectedSubsystemIds)
+                    ->pluck('building_system_id', 'id');
+
+                foreach ($selectedSubsystemIds as $subsystemId) {
+                    $parentSystemId = (int) ($subsystemParents[$subsystemId] ?? 0);
+
+                    if ($parentSystemId > 0 && !in_array($parentSystemId, $selectedSystemIds, true)) {
+                        $validator->errors()->add('subsystem_ids', 'Each selected subsystem must belong to one of the selected building systems.');
+                        break;
+                    }
+                }
+            }
+
             foreach ($selectedSubsystemIds as $subsystemId) {
                 $pricing = $subsystemPricing[(string) $subsystemId] ?? $subsystemPricing[$subsystemId] ?? [];
                 $unit = trim((string) ($pricing['pricing_unit'] ?? ''));
                 $rate = $pricing['typical_rate'] ?? null;
-                $maximum = $pricing['maximum_charge'] ?? null;
+                $hours = $pricing['estimated_hours'] ?? null;
 
                 if ($unit === '') {
                     $validator->errors()->add("subsystem_pricing.$subsystemId.pricing_unit", 'Choose how you price each selected subsystem.');
@@ -124,12 +140,8 @@ class TradeApplicationController extends Controller
                     $validator->errors()->add("subsystem_pricing.$subsystemId.typical_rate", 'Enter a typical trade rate for each selected subsystem.');
                 }
 
-                if ($maximum !== null && $maximum !== '') {
-                    $typicalRate = is_numeric($rate) ? (float) $rate : 0.0;
-
-                    if ((float) $maximum < $typicalRate) {
-                        $validator->errors()->add("subsystem_pricing.$subsystemId.maximum_charge", 'Maximum charge must be greater than the typical trade rate.');
-                    }
+                if ($hours === null || $hours === '') {
+                    $validator->errors()->add("subsystem_pricing.$subsystemId.estimated_hours", 'Enter estimated hours for each selected subsystem.');
                 }
             }
 
@@ -138,7 +150,7 @@ class TradeApplicationController extends Controller
                 $subsystemName = trim((string) ($coverage['subsystem_name'] ?? ''));
                 $unit = trim((string) ($coverage['pricing_unit'] ?? ''));
                 $rate = $coverage['typical_rate'] ?? null;
-                $maximum = $coverage['maximum_charge'] ?? null;
+                $hours = $coverage['estimated_hours'] ?? null;
 
                 if ($systemName === '') {
                     $validator->errors()->add("custom_coverage.$index.system_name", 'Enter the other system name.');
@@ -156,8 +168,8 @@ class TradeApplicationController extends Controller
                     $validator->errors()->add("custom_coverage.$index.typical_rate", 'Enter the typical CAD trade rate for this other coverage.');
                 }
 
-                if ($maximum !== null && $maximum !== '' && is_numeric($rate) && (float) $maximum < (float) $rate) {
-                    $validator->errors()->add("custom_coverage.$index.maximum_charge", 'Maximum charge must be greater than the typical trade rate.');
+                if ($hours === null || $hours === '') {
+                    $validator->errors()->add("custom_coverage.$index.estimated_hours", 'Enter estimated hours for this other coverage.');
                 }
             }
 
@@ -189,12 +201,10 @@ class TradeApplicationController extends Controller
                 return [
                     'pricing_unit' => $pricing['pricing_unit'] ?? null,
                     'typical_rate' => isset($pricing['typical_rate']) && $pricing['typical_rate'] !== '' ? (float) $pricing['typical_rate'] : null,
-                    'maximum_charge' => isset($pricing['maximum_charge']) && $pricing['maximum_charge'] !== '' ? (float) $pricing['maximum_charge'] : null,
-                    'estimated_duration' => trim((string) ($pricing['estimated_duration'] ?? '')),
-                    'notes' => trim((string) ($pricing['notes'] ?? '')),
+                    'estimated_hours' => isset($pricing['estimated_hours']) && $pricing['estimated_hours'] !== '' ? (float) $pricing['estimated_hours'] : null,
                 ];
             })
-            ->filter(fn ($pricing) => $pricing['pricing_unit'] !== null || $pricing['typical_rate'] !== null || $pricing['maximum_charge'] !== null || $pricing['estimated_duration'] !== '' || $pricing['notes'] !== '')
+            ->filter(fn ($pricing) => $pricing['pricing_unit'] !== null || $pricing['typical_rate'] !== null || $pricing['estimated_hours'] !== null)
             ->all();
         $validated['custom_coverage'] = collect($validated['custom_coverage'] ?? [])
             ->map(function ($coverage) {
@@ -203,12 +213,10 @@ class TradeApplicationController extends Controller
                     'subsystem_name' => trim((string) ($coverage['subsystem_name'] ?? '')),
                     'pricing_unit' => $coverage['pricing_unit'] ?? null,
                     'typical_rate' => isset($coverage['typical_rate']) && $coverage['typical_rate'] !== '' ? (float) $coverage['typical_rate'] : null,
-                    'maximum_charge' => isset($coverage['maximum_charge']) && $coverage['maximum_charge'] !== '' ? (float) $coverage['maximum_charge'] : null,
-                    'estimated_duration' => trim((string) ($coverage['estimated_duration'] ?? '')),
-                    'notes' => trim((string) ($coverage['notes'] ?? '')),
+                    'estimated_hours' => isset($coverage['estimated_hours']) && $coverage['estimated_hours'] !== '' ? (float) $coverage['estimated_hours'] : null,
                 ];
             })
-            ->filter(fn ($coverage) => $coverage['system_name'] !== '' || $coverage['subsystem_name'] !== '' || $coverage['pricing_unit'] !== null || $coverage['typical_rate'] !== null || $coverage['maximum_charge'] !== null || $coverage['estimated_duration'] !== '' || $coverage['notes'] !== '')
+            ->filter(fn ($coverage) => $coverage['system_name'] !== '' || $coverage['subsystem_name'] !== '' || $coverage['pricing_unit'] !== null || $coverage['typical_rate'] !== null || $coverage['estimated_hours'] !== null)
             ->values()
             ->all();
         $validated['availability'] = array_values($validated['availability'] ?? []);
@@ -223,11 +231,9 @@ class TradeApplicationController extends Controller
             'worksafebc_document',
             'gst_document',
             'travel_policy_document',
-            'material_policy_document',
             'equipment_policy_document',
             'disposal_policy_document',
             'warranty_document',
-            'pricing_policy_document',
         ];
 
         $requiredStatuses = [

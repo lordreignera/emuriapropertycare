@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>Login - EMURIA PropertyCare</title>
+    <title>Login - ETOGO</title>
     
     <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -34,8 +34,8 @@
             max-width: 1000px;
             width: 100%;
             background: white;
-            border: 1px solid #dbe6f3;
-            border-radius: 8px;
+            border: 2px solid #dbe6f3;
+            border-radius: 18px;
             overflow: hidden;
             box-shadow: 0 18px 42px rgba(15, 23, 42, 0.10);
         }
@@ -87,7 +87,7 @@
             object-fit: contain;
             background: rgba(255,255,255,.08);
             border: 1px solid rgba(255,255,255,.12);
-            border-radius: 8px;
+            border-radius: 12px;
             padding: 10px;
             box-shadow: 0 8px 18px rgba(2, 6, 23, .18);
         }
@@ -202,8 +202,8 @@
         .form-control {
             width: 100%;
             padding: 14px 15px 14px 45px;
-            border: 1px solid #cfd8e3;
-            border-radius: 7px;
+            border: 2px solid #cfd8e3;
+            border-radius: 12px;
             font-size: 1rem;
             transition: border-color 0.18s ease, box-shadow 0.18s ease;
             background: #ffffff;
@@ -275,7 +275,7 @@
             background: #2458d6;
             color: white;
             border: none;
-            border-radius: 7px;
+            border-radius: 12px;
             font-size: 1rem;
             font-weight: 600;
             cursor: pointer;
@@ -384,7 +384,7 @@
             <div class="login-left-content">
                 <div class="logo">
                     <img class="login-logo-mark" src="{{ asset('etogo%20log.png') }}" alt="ETOGO">
-                    <span>ETOGO<span class="highlight"> PropertyCare</span></span>
+                    <span>ETOGO</span>
                 </div>
                 <p class="tagline">
                     Regenerative Property Management Platform

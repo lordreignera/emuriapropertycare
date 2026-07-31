@@ -34,7 +34,7 @@
                     </div>
                     <div class="col-6 col-md-2">
                         <label class="form-label mb-1 small">System</label>
-                        <select name="system_id" class="form-control form-control-sm" id="filterSystemSelect">
+                        <select name="building_system_id" class="form-control form-control-sm" id="filterSystemSelect">
                             <option value="">All Systems</option>
                             @foreach($systems as $sys)
                                 <option value="{{ $sys->id }}" {{ (string)($systemId ?? '') === (string)$sys->id ? 'selected' : '' }}>{{ $sys->name }}</option>
@@ -43,10 +43,19 @@
                     </div>
                     <div class="col-6 col-md-2">
                         <label class="form-label mb-1 small">Subsystem</label>
-                        <select name="subsystem_id" class="form-control form-control-sm" id="filterSubsystemSelect">
+                        <select name="building_subsystem_id" class="form-control form-control-sm" id="filterSubsystemSelect">
                             <option value="">All Subsystems</option>
                             @foreach($subsystems as $sub)
                                 <option value="{{ $sub->id }}" {{ (string)($subsystemId ?? '') === (string)$sub->id ? 'selected' : '' }}>{{ $sub->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label class="form-label mb-1 small">Component</label>
+                        <select name="building_component_id" class="form-control form-control-sm" id="filterComponentSelect">
+                            <option value="">All Components</option>
+                            @foreach($components as $component)
+                                <option value="{{ $component->id }}" {{ (string)($componentId ?? '') === (string)$component->id ? 'selected' : '' }}>{{ $component->name }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -58,13 +67,13 @@
                             <option value="inactive" {{ ($status ?? '') === 'inactive' ? 'selected' : '' }}>Inactive</option>
                         </select>
                     </div>
-                    <div class="col-12 col-md-3 d-flex gap-1">
-                        <button type="submit" class="btn btn-outline-primary btn-sm">
+                    <div class="col-12 col-md-1 d-flex gap-1">
+                        <button type="submit" class="btn btn-outline-primary btn-sm w-100">
                             <i class="mdi mdi-filter"></i> Filter
                         </button>
-                        @if(request()->hasAny(['search','system_id','subsystem_id','status']))
-                            <a href="{{ route('admin.recommendation-settings.index') }}" class="btn btn-outline-secondary btn-sm" title="Clear filters">
-                                <i class="mdi mdi-close"></i> Clear
+                        @if(request()->hasAny(['search','building_system_id','building_subsystem_id','building_component_id','status']))
+                            <a href="{{ route('admin.recommendation-settings.index') }}" class="btn btn-outline-secondary btn-sm w-100" title="Clear filters">
+                                <i class="mdi mdi-close"></i>
                             </a>
                         @endif
                     </div>
@@ -81,6 +90,7 @@
                                 <th>#</th>
                                 <th>System</th>
                                 <th>Subsystem</th>
+                                <th>Component</th>
                                 <th>Recommendation</th>
                                 <th>Status</th>
                                 <th>Actions</th>
@@ -92,6 +102,7 @@
                                     <td>{{ $recommendations->firstItem() + $loop->index }}</td>
                                     <td>{{ $item->system?->name ?: 'All Systems' }}</td>
                                     <td>{{ $item->subsystem?->name ?: 'All Subsystems' }}</td>
+                                    <td>{{ $item->component?->name ?: 'All Components' }}</td>
                                     <td>{{ $item->recommendation }}</td>
                                     <td>
                                         @if($item->is_active)
@@ -115,7 +126,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="6" class="text-center py-4 text-muted">No recommendations found.</td>
+                                    <td colspan="7" class="text-center py-4 text-muted">No recommendations found.</td>
                                 </tr>
                             @endforelse
                         </tbody>
@@ -140,7 +151,22 @@
     if (systemSelect) {
         systemSelect.addEventListener('change', function () {
             const subSelect = document.getElementById('filterSubsystemSelect');
+            const componentSelect = document.getElementById('filterComponentSelect');
+
             if (subSelect) subSelect.value = '';
+            if (componentSelect) componentSelect.value = '';
+
+            document.getElementById('filterForm').submit();
+        });
+    }
+
+    const subsystemSelect = document.getElementById('filterSubsystemSelect');
+    if (subsystemSelect) {
+        subsystemSelect.addEventListener('change', function () {
+            const componentSelect = document.getElementById('filterComponentSelect');
+
+            if (componentSelect) componentSelect.value = '';
+
             document.getElementById('filterForm').submit();
         });
     }

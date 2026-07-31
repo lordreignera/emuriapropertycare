@@ -6,7 +6,7 @@
 <meta charset="UTF-8">
 <meta name="ProgId" content="Word.Document">
 <meta name="Generator" content="Microsoft Word">
-<title>Emuria Regenerative Property Care — System Workflow Document</title>
+<title>ETOGO — System Workflow Document</title>
 <style>
   @page {
     size: Letter;
@@ -152,12 +152,12 @@
 
 <!-- ============================================================ COVER PAGE -->
 <div class="cover">
-  <h1 class="first">Emuria Regenerative Property Care</h1>
+  <h1 class="first">ETOGO</h1>
   <p class="subtitle">System Workflow &amp; Technical Reference Document</p>
   <p class="subtitle" style="font-size:13pt; color:#1e7ab3;">Full End-to-End Operational Guide</p>
   <p class="meta">
     Version 1.0 &nbsp;|&nbsp; April 18, 2026<br>
-    Prepared by: Etogo Engineering<br>
+    Prepared by: ETOGO Engineering<br>
     Confidential — Internal Use Only
   </p>
 </div>
@@ -180,7 +180,7 @@
 <!-- ============================================================ SECTION 1 -->
 <h1>1. System Overview</h1>
 
-<p>Emuria Regenerative Property Care is a full-stack Laravel web application that manages the complete lifecycle of property health assessments, remediation agreements, and work scheduling for Etogo's property stewardship service.</p>
+<p>ETOGO is a full-stack Laravel web application that manages the complete lifecycle of property health assessments, remediation agreements, and work scheduling for ETOGO's property stewardship service.</p>
 
 <h2>Technology Stack</h2>
 <table>
@@ -258,10 +258,10 @@
     <td><code>work_payment_status = 'paid'</code>, <code>payment_plan</code>, <code>installment_months</code>, <code>installments_paid = 1</code>, <code>arp_total_locked</code></td>
   </tr>
   <tr>
-    <td>Phase 8<br>Etogo Countersignature</td>
+    <td>Phase 8<br>ETOGO Countersignature</td>
     <td>Admin / Project Manager</td>
-    <td>After client has signed AND payment is confirmed, an authorized Etogo representative countersigns from the admin inspection show page. This fully executes the agreement. The Work Visit Schedule input form then becomes available.</td>
-    <td><code>etogo_signed_by</code>, <code>etogo_signed_at</code></td>
+    <td>After client has signed AND payment is confirmed, an authorized ETOGO representative countersigns from the admin inspection show page. This fully executes the agreement. The Work Visit Schedule input form then becomes available.</td>
+    <td><code>ETOGO_signed_by</code>, <code>ETOGO_signed_at</code></td>
   </tr>
   <tr>
     <td>Phase 9<br>Work Scheduling</td>
@@ -383,9 +383,9 @@ MergeBridgeCalculator::saveToInspection()
     <td>Inspection must be completed</td>
   </tr>
   <tr>
-    <td><strong>Step 3</strong><br>Etogo Countersign</td>
+    <td><strong>Step 3</strong><br>ETOGO Countersign</td>
     <td>Admin / Project Manager</td>
-    <td>Authorized Etogo representative countersigns from admin inspection show page.</td>
+    <td>Authorized ETOGO representative countersigns from admin inspection show page.</td>
     <td>Client must have signed AND work payment must be confirmed. Role check: Super Admin / Admin / Project Manager only.</td>
   </tr>
 </table>
@@ -401,7 +401,7 @@ MergeBridgeCalculator::saveToInspection()
   <li><strong>Section 3:</strong> Project Timeline &amp; Work Schedule — start date, completion target, duration, <strong>working hours (Mon–Fri, 9 AM–5 PM)</strong>, confirmed visit dates table</li>
   <li><strong>Section 4:</strong> Pricing &amp; Payment Terms — labour, materials, tools breakdown; deposit/progress/final payment structure</li>
   <li><strong>Sections 5–13:</strong> Change orders, access requirements, quality assurance, warranty, liability, governing law (British Columbia)</li>
-  <li><strong>Section 14:</strong> Authorization — explicit three-step signing order with Client (Step 1) and Etogo Representative (Step 3) signature blocks</li>
+  <li><strong>Section 14:</strong> Authorization — explicit three-step signing order with Client (Step 1) and ETOGO Representative (Step 3) signature blocks</li>
 </ul>
 
 <h2>PDF Download</h2>
@@ -411,7 +411,7 @@ MergeBridgeCalculator::saveToInspection()
 <h1>6. Work Scheduling</h1>
 
 <h2>Overview</h2>
-<p>Once the agreement is fully executed (all three signing steps complete), the Etogo admin or project manager schedules the specific work visit dates. This is the only point where start/end dates are manually entered by staff.</p>
+<p>Once the agreement is fully executed (all three signing steps complete), the ETOGO admin or project manager schedules the specific work visit dates. This is the only point where start/end dates are manually entered by staff.</p>
 
 <h2>Rules</h2>
 <ul>
@@ -449,7 +449,7 @@ MergeBridgeCalculator::saveToInspection()
 </table>
 
 <h2>Client View</h2>
-<p>The client sees the confirmed visit schedule as a table on their inspection report page. If the agreement has been countersigned but no schedule has been saved yet, a message reads: <em>"Your work visit dates are being finalised by the Etogo team. You will see them here once confirmed."</em></p>
+<p>The client sees the confirmed visit schedule as a table on their inspection report page. If the agreement has been countersigned but no schedule has been saved yet, a message reads: <em>"Your work visit dates are being finalised by the ETOGO team. You will see them here once confirmed."</em></p>
 
 <h2>Date Lock Behaviour</h2>
 <p>The <code>AgreementScheduleService</code> runs automatically at several points (after sign, after payment, after countersign) to compute an estimated start date. Once the admin saves a manual schedule, these auto-calculated dates are frozen — subsequent <code>refresh()</code> calls will no longer overwrite <code>planned_start_date</code> or <code>target_completion_date</code>.</p>
@@ -478,7 +478,7 @@ MergeBridgeCalculator::saveToInspection()
   <tr><td><code>bdc_visits_per_year</code></td><td>decimal</td><td>Auto-derived: ceil(labour_hours / 8)</td></tr>
   <tr><td><code>estimated_task_hours</code></td><td>decimal</td><td>Sum of all phar_labour_hours in findings</td></tr>
   <tr><td><code>labour_hourly_rate</code></td><td>decimal</td><td>Loaded hourly rate from BDCSetting at time of calculation</td></tr>
-  <tr><td><code>bdc_distance_km</code></td><td>decimal</td><td>Travel distance from Etogo office to property (km)</td></tr>
+  <tr><td><code>bdc_distance_km</code></td><td>decimal</td><td>Travel distance from ETOGO office to property (km)</td></tr>
   <tr><td><code>bdc_time_minutes</code></td><td>decimal</td><td>One-way travel time in minutes</td></tr>
   <tr><td><code>bdc_rate_per_km</code></td><td>decimal</td><td>Rate per km (from BDCSetting)</td></tr>
   <tr><td><code>bdc_rate_per_minute</code></td><td>decimal</td><td>Rate per travel minute (from BDCSetting)</td></tr>
@@ -488,8 +488,8 @@ MergeBridgeCalculator::saveToInspection()
   <tr><td><code>approved_by_client</code></td><td>boolean</td><td>True when client digitally signs</td></tr>
   <tr><td><code>client_approved_at</code></td><td>datetime</td><td>When client signed</td></tr>
   <tr><td><code>client_full_name</code></td><td>string</td><td>Name typed by client as digital signature</td></tr>
-  <tr><td><code>etogo_signed_by</code></td><td>FK → users</td><td>User ID of Etogo rep who countersigned</td></tr>
-  <tr><td><code>etogo_signed_at</code></td><td>datetime</td><td>When Etogo countersigned</td></tr>
+  <tr><td><code>ETOGO_signed_by</code></td><td>FK → users</td><td>User ID of ETOGO rep who countersigned</td></tr>
+  <tr><td><code>ETOGO_signed_at</code></td><td>datetime</td><td>When ETOGO countersigned</td></tr>
   <tr><td><code>work_payment_status</code></td><td>string</td><td>'pending' or 'paid'</td></tr>
   <tr><td><code>payment_plan</code></td><td>string</td><td>'full' or 'per_visit'</td></tr>
   <tr><td><code>arp_total_locked</code></td><td>decimal</td><td>Locked total at payment time</td></tr>
@@ -516,8 +516,8 @@ MergeBridgeCalculator::saveToInspection()
   <tr><td><code>completeAssessment()</code></td><td>POST /inspections/{id}/complete-assessment</td><td>Seal inspection as completed</td></tr>
   <tr><td><code>previewReport()</code></td><td>GET /inspections/{id}/preview-report</td><td>Admin preview of client report (with banner)</td></tr>
   <tr><td><code>previewAgreement()</code></td><td>GET /inspections/{id}/preview-agreement</td><td>Admin preview of contract draft (with banner)</td></tr>
-  <tr><td><code>countersignAgreement()</code></td><td>POST /inspections/{id}/agreement/countersign</td><td>Etogo countersigns — requires client signed + payment paid</td></tr>
-  <tr><td><code>storeWorkSchedule()</code></td><td>POST /inspections/{id}/work-schedule</td><td>Save visit dates — requires etogo_signed_at set; rejects weekends</td></tr>
+  <tr><td><code>countersignAgreement()</code></td><td>POST /inspections/{id}/agreement/countersign</td><td>ETOGO countersigns — requires client signed + payment paid</td></tr>
+  <tr><td><code>storeWorkSchedule()</code></td><td>POST /inspections/{id}/work-schedule</td><td>Save visit dates — requires ETOGO_signed_at set; rejects weekends</td></tr>
 </table>
 
 <h2>Client InspectionController (<code>app/Http/Controllers/Client/InspectionController.php</code>)</h2>
@@ -583,11 +583,11 @@ MergeBridgeCalculator::saveToInspection()
   <tr><td>ARP total is locked at first payment and never changed</td><td>Stored in <code>arp_total_locked</code> at payment time; per-visit amount = <code>arp_total_locked ÷ installment_months</code></td></tr>
   <tr><td>Assessment must be previewed before completing</td><td><code>storePharData()</code> calculates pricing but does NOT complete — admin must explicitly click "Complete Assessment" after previewing</td></tr>
   <tr><td>Admin-set visit dates override auto-schedule permanently</td><td><code>AgreementScheduleService::refresh()</code> checks <code>!empty($inspection->work_schedule)</code> before writing dates</td></tr>
-  <tr><td>Work schedule form only appears after Etogo countersigns</td><td>Admin show page wraps the scheduling card in <code>@if($inspection->etogo_signed_at)</code></td></tr>
+  <tr><td>Work schedule form only appears after ETOGO countersigns</td><td>Admin show page wraps the scheduling card in <code>@if($inspection->ETOGO_signed_at)</code></td></tr>
   <tr><td>Only weekday visit dates are allowed</td><td>Server validates <code>dayOfWeek !== Saturday &amp;&amp; !== Sunday</code>; invalid dates listed in error message</td></tr>
   <tr><td>Commercial properties use number_of_units for per-unit cost breakdown</td><td><code>MergeBridgeCalculator</code> uses <code>$property->number_of_units</code> for commercial type; <code>$property->residential_units</code> for residential</td></tr>
-  <tr><td>Client signs before Etogo — order is enforced</td><td><code>countersignAgreement()</code> checks <code>$inspection->approved_by_client</code> before allowing countersign</td></tr>
-  <tr><td>Payment must be confirmed before Etogo countersigns</td><td><code>countersignAgreement()</code> checks <code>work_payment_status === 'paid'</code></td></tr>
+  <tr><td>Client signs before ETOGO — order is enforced</td><td><code>countersignAgreement()</code> checks <code>$inspection->approved_by_client</code> before allowing countersign</td></tr>
+  <tr><td>Payment must be confirmed before ETOGO countersigns</td><td><code>countersignAgreement()</code> checks <code>work_payment_status === 'paid'</code></td></tr>
   <tr><td>Per-visit payments cannot exceed total visits</td><td>Payment is blocked server-side when <code>installments_paid >= installment_months</code></td></tr>
   <tr><td>Governing law: British Columbia, Canada</td><td>Stated in contract Section 13 — not enforced in code</td></tr>
 </table>
@@ -599,7 +599,7 @@ MergeBridgeCalculator::saveToInspection()
 <br><br>
 <hr style="border:1pt solid #ccc;">
 <p style="text-align:center; color:#888; font-size:9pt;">
-  Emuria Regenerative Property Care &nbsp;|&nbsp; Etogo Proactive Property &amp; People Stewardship™<br>
+  ETOGO &nbsp;|&nbsp; ETOGO Proactive Property &amp; People Stewardship™<br>
   Document generated April 18, 2026 &nbsp;|&nbsp; Confidential — Internal Use Only
 </p>
 

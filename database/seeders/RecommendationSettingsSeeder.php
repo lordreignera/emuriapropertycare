@@ -3,8 +3,8 @@
 namespace Database\Seeders;
 
 use App\Models\FindingTemplateSetting;
-use App\Models\InspectionSubsystem;
-use App\Models\InspectionSystem;
+use App\Models\BuildingSubsystem;
+use App\Models\BuildingSystem;
 use App\Models\RecommendationSetting;
 use Illuminate\Database\Seeder;
 
@@ -14,57 +14,62 @@ class RecommendationSettingsSeeder extends Seeder
     {
         $entries = [];
 
-        $systems = InspectionSystem::query()->get(['id', 'recommended_actions']);
+        $systems = BuildingSystem::query()->get(['id', 'metadata']);
         foreach ($systems as $system) {
             foreach ((array) ($system->recommended_actions ?? []) as $recommendation) {
                 $entries[] = [
                     'recommendation' => $recommendation,
-                    'system_id' => $system->id,
-                    'subsystem_id' => null,
+                    'building_system_id' => $system->id,
+                    'building_subsystem_id' => null,
+                    'building_component_id' => null,
                 ];
             }
         }
 
-        $subsystems = InspectionSubsystem::query()->get(['id', 'system_id', 'recommended_actions']);
+        $subsystems = BuildingSubsystem::query()->get(['id', 'building_system_id', 'metadata']);
         foreach ($subsystems as $subsystem) {
             foreach ((array) ($subsystem->recommended_actions ?? []) as $recommendation) {
                 $entries[] = [
                     'recommendation' => $recommendation,
-                    'system_id' => $subsystem->system_id,
-                    'subsystem_id' => $subsystem->id,
+                    'building_system_id' => $subsystem->building_system_id,
+                    'building_subsystem_id' => $subsystem->id,
+                    'building_component_id' => null,
                 ];
             }
         }
 
         $findingTemplates = FindingTemplateSetting::query()
             ->where('is_active', true)
-            ->get(['system_id', 'subsystem_id', 'default_recommendations']);
+            ->get(['building_system_id', 'building_subsystem_id', 'building_component_id', 'default_recommendations']);
 
         foreach ($findingTemplates as $findingTemplate) {
             foreach ((array) ($findingTemplate->default_recommendations ?? []) as $recommendation) {
                 $entries[] = [
                     'recommendation' => $recommendation,
-                    'system_id' => $findingTemplate->system_id,
-                    'subsystem_id' => $findingTemplate->subsystem_id,
+                    'building_system_id' => $findingTemplate->building_system_id,
+                    'building_subsystem_id' => $findingTemplate->building_subsystem_id,
+                    'building_component_id' => $findingTemplate->building_component_id,
                 ];
             }
         }
 
         $uniqueEntries = [];
         foreach ($entries as $entry) {
-            $recommendationText = trim((string) ($entry['recommendation'] ?? ''));
+            $recommendationText = $this->sanitizeRecommendationText($entry['recommendation'] ?? '');
             if ($recommendationText === '') {
                 continue;
             }
 
-            $systemId = $entry['system_id'] !== null ? (int) $entry['system_id'] : null;
-            $subsystemId = $entry['subsystem_id'] !== null ? (int) $entry['subsystem_id'] : null;
-            $key = ($systemId ?? 'g') . '|' . ($subsystemId ?? 'g') . '|' . strtolower($recommendationText);
+            $systemId = $entry['building_system_id'] !== null ? (int) $entry['building_system_id'] : null;
+            $subsystemId = $entry['building_subsystem_id'] !== null ? (int) $entry['building_subsystem_id'] : null;
+            $componentId = $entry['building_component_id'] !== null ? (int) $entry['building_component_id'] : null;
+            $key = ($systemId ?? 'g') . '|' . ($subsystemId ?? 'g') . '|' . ($componentId ?? 'g') . '|' . strtolower($recommendationText);
 
             $uniqueEntries[$key] = [
                 'recommendation' => $recommendationText,
-                'system_id' => $systemId,
-                'subsystem_id' => $subsystemId,
+                'building_system_id' => $systemId,
+                'building_subsystem_id' => $subsystemId,
+                'building_component_id' => $componentId,
             ];
         }
 
@@ -73,16 +78,36 @@ class RecommendationSettingsSeeder extends Seeder
         $sortOrder = 0;
         foreach (array_values($uniqueEntries) as $entry) {
             RecommendationSetting::updateOrCreate(
-                [
-                    'recommendation' => $entry['recommendation'],
-                    'system_id' => $entry['system_id'],
-                    'subsystem_id' => $entry['subsystem_id'],
-                ],
+                    [
+                        'recommendation' => $entry['recommendation'],
+                        'building_system_id' => $entry['building_system_id'],
+                        'building_subsystem_id' => $entry['building_subsystem_id'],
+                        'building_component_id' => $entry['building_component_id'],
+                    ],
                 [
                     'sort_order' => $sortOrder++,
                     'is_active' => true,
                 ]
             );
         }
+    }
+
+    private function sanitizeRecommendationText($value): string
+    {
+        $text = preg_replace('/\s+/', ' ', trim((string) $value)) ?? '';
+        if ($text === '') {
+            return '';
+        }
+
+        foreach ([
+            'an error occurred while processing your inspection request',
+            'an error occurred while processing your diagnosis request',
+            'please try again',
+            'an unexpected error occurred',
+        ] as $fragment) {
+            $text = preg_replace('/' . preg_quote($fragment, '/') . '[\.\s]*/i', '', $text) ?? '';
+        }
+
+        return trim(preg_replace('/\s+/', ' ', $text) ?? '');
     }
 }

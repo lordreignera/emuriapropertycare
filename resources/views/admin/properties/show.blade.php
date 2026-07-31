@@ -11,7 +11,7 @@
                 <div>
                     <h3 class="mb-1">{{ $property->property_name }}</h3>
                     <p class="text-muted mb-0">
-                        <code>{{ $property->property_code }}</code> • 
+                        <code>{{ $property->property_code }}</code> -
                         Submitted {{ $property->created_at->format('M d, Y') }}
                     </p>
                 </div>
@@ -31,6 +31,18 @@
                                 <i class="mdi mdi-cube-scan me-2"></i>Open Digital Twin
                             </a>
                         @endif
+                        <a href="{{ route('properties.process-invoice.preview', $property) }}" class="btn btn-outline-info btn-sm">
+                            <i class="mdi mdi-receipt-text-eye me-2"></i>Preview ETOGO Invoice
+                        </a>
+                        <a href="{{ route('properties.process-invoice.download', $property) }}" class="btn btn-outline-dark btn-sm">
+                            <i class="mdi mdi-download me-2"></i>Download Invoice
+                        </a>
+                        <form action="{{ route('properties.process-invoice.share', $property) }}" method="POST" class="d-inline">
+                            @csrf
+                            <button type="submit" class="btn btn-success btn-sm">
+                                <i class="mdi mdi-send me-2"></i>Share Invoice
+                            </button>
+                        </form>
                     @endif
                     <a href="{{ $backUrl ?? route('properties.index') }}" class="btn btn-secondary btn-sm">
                         <i class="mdi mdi-arrow-left me-2"></i>Back to List

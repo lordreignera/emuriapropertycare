@@ -3,23 +3,26 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\InspectionSubsystem;
-use App\Models\InspectionSystem;
+use App\Models\BuildingSubsystem;
+use App\Models\BuildingSystem;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Str;
 
 class SubsystemController extends Controller
 {
     public function index()
     {
-        $systems = InspectionSystem::query()->orderBy('sort_order')->orderBy('name')->get();
+        $systems = BuildingSystem::query()->orderBy('sort_order')->orderBy('name')->get();
 
-        $query = InspectionSubsystem::query()
-            ->with('system');
+        $query = BuildingSubsystem::query()
+            ->with('system')
+            ->withCount('components');
 
-        $systemId = request()->integer('system_id');
+        $systemId = request()->integer('building_system_id');
         if ($systemId > 0) {
-            $query->where('system_id', $systemId);
+            $query->where('building_system_id', $systemId);
         }
 
         $subsystems = $query
@@ -33,7 +36,7 @@ class SubsystemController extends Controller
 
     public function create()
     {
-        $systems = InspectionSystem::query()->orderBy('sort_order')->orderBy('name')->get();
+        $systems = BuildingSystem::query()->orderBy('sort_order')->orderBy('name')->get();
 
         return view('admin.pricing-system.subsystems.create', compact('systems'));
     }
@@ -41,49 +44,85 @@ class SubsystemController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'system_id' => 'required|exists:systems,id',
-            'name' => 'required|string|max:255',
-            'slug' => 'nullable|string|max:255|unique:subsystems,slug',
+            'building_system_id' => 'required|exists:building_systems,id',
+            'code' => 'nullable|string|max:30|unique:building_subsystems,code',
+            'name' => 'required|string|max:150',
+            'slug' => [
+                'nullable',
+                'string',
+                'max:160',
+                Rule::unique('building_subsystems', 'slug')
+                    ->where(fn ($query) => $query->where('building_system_id', $request->input('building_system_id'))),
+            ],
             'description' => 'nullable|string',
             'sort_order' => 'nullable|integer|min:0',
             'is_active' => 'nullable|boolean',
         ]);
 
+        $validated['code'] = strtoupper($validated['code'] ?? ('USR-SUB-' . Str::upper(Str::random(6))));
         $validated['slug'] = !empty($validated['slug'])
             ? Str::slug($validated['slug'])
-            : Str::slug($validated['name'] . '-' . $validated['system_id']);
+            : Str::slug($validated['name']);
         $validated['sort_order'] = $validated['sort_order'] ?? 0;
         $validated['is_active'] = $request->boolean('is_active', true);
 
-        InspectionSubsystem::create($validated);
+        if (BuildingSubsystem::query()
+            ->where('building_system_id', $validated['building_system_id'])
+            ->where('slug', $validated['slug'])
+            ->exists()) {
+            throw ValidationException::withMessages([
+                'slug' => 'This building subsystem slug is already in use for the selected system.',
+            ]);
+        }
+
+        BuildingSubsystem::create($validated);
 
         return redirect()->route('admin.subsystems.index')
             ->with('success', 'Subsystem created successfully.');
     }
 
-    public function edit(InspectionSubsystem $subsystem)
+    public function edit(BuildingSubsystem $subsystem)
     {
-        $systems = InspectionSystem::query()->orderBy('sort_order')->orderBy('name')->get();
+        $systems = BuildingSystem::query()->orderBy('sort_order')->orderBy('name')->get();
 
         return view('admin.pricing-system.subsystems.edit', compact('subsystem', 'systems'));
     }
 
-    public function update(Request $request, InspectionSubsystem $subsystem)
+    public function update(Request $request, BuildingSubsystem $subsystem)
     {
         $validated = $request->validate([
-            'system_id' => 'required|exists:systems,id',
-            'name' => 'required|string|max:255',
-            'slug' => 'nullable|string|max:255|unique:subsystems,slug,' . $subsystem->id,
+            'building_system_id' => 'required|exists:building_systems,id',
+            'code' => 'nullable|string|max:30|unique:building_subsystems,code,' . $subsystem->id,
+            'name' => 'required|string|max:150',
+            'slug' => [
+                'nullable',
+                'string',
+                'max:160',
+                Rule::unique('building_subsystems', 'slug')
+                    ->where(fn ($query) => $query->where('building_system_id', $request->input('building_system_id')))
+                    ->ignore($subsystem->id),
+            ],
             'description' => 'nullable|string',
             'sort_order' => 'nullable|integer|min:0',
             'is_active' => 'nullable|boolean',
         ]);
 
+        $validated['code'] = strtoupper($validated['code'] ?? $subsystem->code);
         $validated['slug'] = !empty($validated['slug'])
             ? Str::slug($validated['slug'])
-            : Str::slug($validated['name'] . '-' . $validated['system_id']);
+            : Str::slug($validated['name']);
         $validated['sort_order'] = $validated['sort_order'] ?? 0;
         $validated['is_active'] = $request->boolean('is_active');
+
+        if (BuildingSubsystem::query()
+            ->where('building_system_id', $validated['building_system_id'])
+            ->where('slug', $validated['slug'])
+            ->whereKeyNot($subsystem->id)
+            ->exists()) {
+            throw ValidationException::withMessages([
+                'slug' => 'This building subsystem slug is already in use for the selected system.',
+            ]);
+        }
 
         $subsystem->update($validated);
 
@@ -91,7 +130,7 @@ class SubsystemController extends Controller
             ->with('success', 'Subsystem updated successfully.');
     }
 
-    public function destroy(InspectionSubsystem $subsystem)
+    public function destroy(BuildingSubsystem $subsystem)
     {
         $subsystem->delete();
 

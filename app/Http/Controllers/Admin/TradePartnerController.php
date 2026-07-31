@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\BuildingSubsystem;
+use App\Models\BuildingSystem;
 use App\Models\TradeApplication;
 use App\Models\TradePartner;
 use Illuminate\Http\Request;
@@ -29,6 +31,8 @@ class TradePartnerController extends Controller
             'activeCount' => TradePartner::where('status', TradePartner::STATUS_ACTIVE)->count(),
             'inactiveCount' => TradePartner::where('status', TradePartner::STATUS_INACTIVE)->count(),
             'suspendedCount' => TradePartner::where('status', TradePartner::STATUS_SUSPENDED)->count(),
+            'systemsById' => BuildingSystem::query()->pluck('name', 'id'),
+            'subsystemsById' => BuildingSubsystem::query()->pluck('name', 'id'),
         ]);
     }
 

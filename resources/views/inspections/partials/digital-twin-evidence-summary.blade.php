@@ -26,7 +26,6 @@
                                 <th>Layer</th>
                                 <th>Format</th>
                                 <th>Accuracy</th>
-                                <th>Status</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -39,11 +38,6 @@
                                     <td>{{ $model->source_type_label }}</td>
                                     <td>{{ $model->runtime_format ?: $model->original_format ?: 'Not recorded' }}</td>
                                     <td>{{ $model->accuracy_class ?: 'Not stated' }}</td>
-                                    <td>
-                                        <span class="badge {{ $model->processing_status === 'ready' ? 'bg-success' : 'bg-secondary' }}">
-                                            {{ ucfirst(str_replace('_', ' ', $model->processing_status)) }}
-                                        </span>
-                                    </td>
                                 </tr>
                             @endforeach
                         </tbody>

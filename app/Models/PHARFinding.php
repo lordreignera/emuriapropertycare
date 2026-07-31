@@ -14,8 +14,9 @@ class PHARFinding extends Model
     protected $fillable = [
         'inspection_id',
         'property_id',
-        'system_id',
-        'subsystem_id',
+        'building_system_id',
+        'building_subsystem_id',
+        'building_component_id',
         'parent_finding_id',
         'task_question',
         'category',
@@ -65,12 +66,17 @@ class PHARFinding extends Model
 
     public function system(): BelongsTo
     {
-        return $this->belongsTo(InspectionSystem::class, 'system_id');
+        return $this->belongsTo(BuildingSystem::class, 'building_system_id');
     }
 
     public function subsystem(): BelongsTo
     {
-        return $this->belongsTo(InspectionSubsystem::class, 'subsystem_id');
+        return $this->belongsTo(BuildingSubsystem::class, 'building_subsystem_id');
+    }
+
+    public function component(): BelongsTo
+    {
+        return $this->belongsTo(BuildingComponent::class, 'building_component_id');
     }
 
     public function parentFinding(): BelongsTo
@@ -81,6 +87,14 @@ class PHARFinding extends Model
     public function childFindings(): HasMany
     {
         return $this->hasMany(self::class, 'parent_finding_id');
+    }
+
+    public function affectedAreas(): HasMany
+    {
+        return $this->hasMany(PHARFindingAffectedArea::class, 'phar_finding_id')
+            ->with(['system', 'subsystem', 'component'])
+            ->orderBy('sort_order')
+            ->orderBy('id');
     }
 
     public function tradePricingItems(): HasMany

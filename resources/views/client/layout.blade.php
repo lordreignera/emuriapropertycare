@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     
-    <title>{{ config('app.name', 'EMURIA Property Care') }} - @yield('title', 'Dashboard')</title>
+    <title>{{ config('app.name', 'ETOGO') }} - @yield('title', 'Dashboard')</title>
     
     @include('admin.partials.styles')
     
@@ -158,7 +158,7 @@
     <script>
         (function () {
             var MOBILE_BREAKPOINT = 992;
-            var STORAGE_KEY = 'etogo.sidebar.minimized';
+            var STORAGE_KEY = 'ETOGO.sidebar.minimized';
             function isMobile() { return window.innerWidth < MOBILE_BREAKPOINT; }
             function shouldMinimizeSidebar() {
                 try {

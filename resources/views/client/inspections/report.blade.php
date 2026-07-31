@@ -256,9 +256,9 @@
                                         <td>{{ optional($inspection->target_completion_date)->format('M d, Y') ?? 'Pending' }}</td>
                                     </tr>
                                     <tr>
-                                        <th>Etogo Countersign:</th>
+                                        <th>ETOGO Countersign:</th>
                                         <td>
-                                            @if($inspection->etogo_signed_at)
+                                            @if($inspection->ETOGO_signed_at)
                                                 <span class="badge bg-success">Signed</span>
                                             @else
                                                 <span class="badge bg-secondary">Awaiting</span>
@@ -399,6 +399,11 @@
                         return [];
                     };
 
+                    $isVideoEvidencePath = function (string $path): bool {
+                        $cleanPath = strtolower(parse_url($path, PHP_URL_PATH) ?: $path);
+                        return (bool) preg_match('/\.(mp4|webm|mov|avi|mkv|m4v)$/', $cleanPath);
+                    };
+
                     $findingMatchKey = function ($issueOrTask, $category) {
                         $left = strtolower(trim((string) $issueOrTask));
                         $right = strtolower(trim((string) $category));
@@ -433,31 +438,6 @@
 
                     $groupedFindings = $indexedFindings->groupBy('severity');
 
-                    // Pricing scope: if quotation is approved, charge only approved findings.
-                    $pricedFindings = $isApprovedQuotation
-                        ? $indexedFindings->filter(fn($f) => ($f['__finding_quote_status'] ?? 'noted') === 'approved')->values()
-                        : $indexedFindings;
-
-                    if ($isApprovedQuotation && $pricedFindings->isEmpty()) {
-                        // Safety fallback for legacy edge cases where approved matching fails.
-                        $pricedFindings = $indexedFindings;
-                    }
-
-                    $pricingScopeApprovedOnly = $isApprovedQuotation && $pricedFindings->isNotEmpty();
-
-                    $hourlyRateForClient = (float) ($inspection->labour_hourly_rate ?? 165);
-                    $findingTradePartnerCost = function ($finding) {
-                        $tradePricing = is_array($finding['trade_pricing'] ?? null) ? $finding['trade_pricing'] : [];
-
-                        return (float) ($finding['trade_client_price'] ?? ($tradePricing['etogo_client_price'] ?? 0));
-                    };
-                    $totalLabourHrs  = $pricedFindings->sum(fn($f) => $findingTradePartnerCost($f) > 0 ? 0 : (float) ($f['phar_labour_hours'] ?? 0));
-                    $totalLabourCost = round((float) $pricedFindings->sum(fn($f) => $findingTradePartnerCost($f) > 0 ? 0 : ((float) ($f['phar_labour_hours'] ?? 0) * $hourlyRateForClient)), 2);
-                    $totalMatCost    = $pricedFindings->sum(fn($f) =>
-                        collect($f['phar_materials'] ?? [])->sum(fn($m) => (float)($m['line_total'] ?? 0))
-                    );
-                    $totalTradePartnerCost = round((float) $pricedFindings->sum(fn($f) => $findingTradePartnerCost($f)), 2);
-                    $clientVisibleTotal = round($totalLabourCost + $totalMatCost + $totalTradePartnerCost, 2);
                 @endphp
                 @if(count($inlineFindingsRaw) > 0)
                 <div class="card mb-4 findings-card">
@@ -471,11 +451,8 @@
                             <table class="table table-bordered mb-0" id="findingsTable">
                                 <thead class="table-dark">
                                     <tr>
-                                        <th width="3%">#</th>
-                                        <th width="43%">Finding Details</th>
-                                        <th width="15%" class="text-end">Labour</th>
-                                        <th width="29%">Materials Breakdown</th>
-                                        <th width="10%" class="text-end">Subtotal</th>
+                                        <th width="4%">#</th>
+                                        <th width="96%">Finding Details</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -484,7 +461,7 @@
                                     @if($groupedFindings->has($sev))
                                     @php $meta = $severityMeta[$sev]; @endphp
                                     <tr>
-                                        <td colspan="5" class="fw-bold text-white py-2 px-3" style="background:{{ $meta['color'] }};">
+                                        <td colspan="2" class="fw-bold text-white py-2 px-3" style="background:{{ $meta['color'] }};">
                                             {{ $meta['icon'] }} {{ $meta['label'] }}
                                             <span class="badge bg-white ms-2" style="color:{{ $meta['color'] }};">
                                                 {{ $groupedFindings[$sev]->count() }}
@@ -494,14 +471,21 @@
                                     @foreach($groupedFindings[$sev] as $finding)
                                     @php
                                         $rowNum++;
-                                        $pharMaterials  = $finding['phar_materials'] ?? [];
-                                        $findingMatCost = collect($pharMaterials)->sum(fn($m) => (float)($m['line_total'] ?? 0));
-                                        $findingLabourHours = (float)($finding['phar_labour_hours'] ?? 0);
-                                        $findingTradePartnerCostValue = $findingTradePartnerCost($finding);
-                                        $findingLabourCost = $findingTradePartnerCostValue > 0 ? 0 : round($findingLabourHours * $hourlyRateForClient, 2);
-                                        $findingSubtotal = round($findingLabourCost + $findingMatCost + $findingTradePartnerCostValue, 2);
                                         $recommendations = $finding['recommendations'] ?? [];
                                         $findingPhotos = $normalizePhotoPaths($finding['finding_photos'] ?? []);
+                                        $componentName = trim((string) ($finding['component'] ?? ''));
+                                        if ($componentName === '' && !empty($finding['building_component_id'])) {
+                                            $componentName = (string) (optional(\App\Models\BuildingComponent::find((int) $finding['building_component_id']))->name ?? '');
+                                        }
+                                        $affectedAreas = collect($finding['affected_areas'] ?? [])->filter(function ($area) {
+                                            return is_array($area) && (
+                                                !empty($area['building_system_id'])
+                                                || !empty($area['building_subsystem_id'])
+                                                || !empty($area['building_component_id'])
+                                                || trim((string) ($area['location'] ?? '')) !== ''
+                                                || trim((string) ($area['impact_description'] ?? '')) !== ''
+                                            );
+                                        })->values();
                                         $rowKey = $findingMatchKey(
                                             $finding['task_question'] ?? ($finding['issue'] ?? ''),
                                             $finding['phar_category'] ?? ($finding['category'] ?? '')
@@ -533,6 +517,11 @@
                                             @if(!empty($finding['system']))
                                                 <br><small class="text-muted">{{ $finding['system'] }}{{ !empty($finding['subsystem']) ? ' › '.$finding['subsystem'] : '' }}</small>
                                             @endif
+                                            @if($componentName !== '')
+                                                <div class="mt-1" style="font-size:.8rem;color:#555;">
+                                                    <strong>Component:</strong> {{ $componentName }}
+                                                </div>
+                                            @endif
                                             @if(!empty($finding['location']) || !empty($finding['spot']))
                                                 <div class="mt-1" style="font-size:.8rem;color:#555;">
                                                     <i class="mdi mdi-map-marker-outline"></i>
@@ -542,6 +531,11 @@
                                             @if(!empty($finding['issue_description']))
                                                 <div class="mt-1" style="font-size:.8rem;color:#444;">
                                                     <strong>Issue Description:</strong> {{ $finding['issue_description'] }}
+                                                </div>
+                                            @endif
+                                            @if(!empty($finding['risk_impact']))
+                                                <div class="mt-1" style="font-size:.8rem;color:#444;">
+                                                    <strong>Risk / Impact:</strong> {{ $finding['risk_impact'] }}
                                                 </div>
                                             @endif
                                             @if(!empty($recommendations))
@@ -556,12 +550,39 @@
                                                     <strong>Recommendation Description:</strong> {{ $finding['recommendation_details'] }}
                                                 </div>
                                             @endif
+                                            @if($affectedAreas->isNotEmpty())
+                                                <div class="mt-2 p-2 rounded" style="background:#fff8e8;border:1px solid #f1d9a6;font-size:.78rem;color:#444;">
+                                                    <strong>Cascading / affected areas:</strong>
+                                                    @foreach($affectedAreas as $area)
+                                                        @php
+                                                            $affectedSystem = !empty($area['building_system_id']) ? optional(\App\Models\BuildingSystem::find((int) $area['building_system_id']))->name : null;
+                                                            $affectedSubsystem = !empty($area['building_subsystem_id']) ? optional(\App\Models\BuildingSubsystem::find((int) $area['building_subsystem_id']))->name : null;
+                                                            $affectedComponent = !empty($area['building_component_id']) ? optional(\App\Models\BuildingComponent::find((int) $area['building_component_id']))->name : null;
+                                                            $affectedPath = implode(' > ', array_filter([$affectedSystem, $affectedSubsystem, $affectedComponent]));
+                                                        @endphp
+                                                        <div class="mt-1">
+                                                            {{ $affectedPath ?: 'Affected area' }}
+                                                            @if(!empty($area['location']))
+                                                                <span class="text-muted"> - {{ $area['location'] }}</span>
+                                                            @endif
+                                                            @if(!empty($area['impact_description']))
+                                                                <div>{{ $area['impact_description'] }}</div>
+                                                            @endif
+                                                        </div>
+                                                    @endforeach
+                                                </div>
+                                            @endif
                                             @if(!empty($findingPhotos))
                                                 <div class="d-flex flex-wrap gap-1 mt-2">
                                                     @foreach($findingPhotos as $fp)
-                                                        <a href="{{ $inspection->getStorageUrl($fp) }}" target="_blank" title="View photo">
-                                                            <img src="{{ $inspection->getStorageUrl($fp) }}" style="height:52px;width:52px;object-fit:cover;border-radius:4px;border:1px solid #dee2e6;" alt="Finding photo">
-                                                        </a>
+                                                        @php $mediaUrl = $inspection->getStorageUrl($fp); @endphp
+                                                        @if($isVideoEvidencePath($fp))
+                                                            <video src="{{ $mediaUrl }}" controls preload="metadata" style="height:64px;width:104px;object-fit:cover;border-radius:4px;border:1px solid #dee2e6;background:#000;"></video>
+                                                        @else
+                                                            <a href="{{ $mediaUrl }}" target="_blank" title="View photo">
+                                                                <img src="{{ $mediaUrl }}" style="height:52px;width:52px;object-fit:cover;border-radius:4px;border:1px solid #dee2e6;" alt="Finding photo">
+                                                            </a>
+                                                        @endif
                                                     @endforeach
                                                 </div>
                                             @endif
@@ -569,131 +590,16 @@
                                                 <small class="text-muted d-block mt-2">No diagnosis photo uploaded for this finding.</small>
                                             @endif
                                         </td>
-                                        <td class="text-end align-top">
-                                            <div><small class="text-muted d-block">Hours</small><strong>{{ number_format($findingLabourHours, 1) }} hrs</strong></div>
-                                            <div class="mt-1"><small class="text-muted d-block">Cost</small>
-                                                @if($findingLabourCost > 0)
-                                                    <strong>${{ number_format($findingLabourCost, 2) }}</strong>
-                                                @elseif($findingTradePartnerCostValue > 0)
-                                                    <span class="text-muted">Handled by trade partner</span>
-                                                @else
-                                                    <span class="text-muted">—</span>
-                                                @endif
-                                            </div>
-                                        </td>
-                                        <td class="align-top">
-                                            @if(!empty($pharMaterials))
-                                                <div class="small text-muted mb-1">{{ count($pharMaterials) }} item(s)</div>
-                                                <div class="d-flex flex-column gap-1">
-                                                    @foreach($pharMaterials as $mat)
-                                                        <div class="border rounded px-2 py-1" style="font-size:.78rem;">
-                                                            <div class="fw-semibold">{{ $mat['material_name'] ?? 'Unnamed material' }}</div>
-                                                            <div class="text-muted">
-                                                                {{ number_format((float)($mat['quantity'] ?? 0), 2) }} {{ $mat['unit'] ?? 'ea' }}
-                                                                &times; ${{ number_format((float)($mat['unit_cost'] ?? 0), 2) }}
-                                                            </div>
-                                                            <div class="text-end fw-semibold">${{ number_format((float)($mat['line_total'] ?? 0), 2) }}</div>
-                                                        </div>
-                                                    @endforeach
-                                                </div>
-                                            @else
-                                                <span class="text-muted">No materials assigned</span>
-                                            @endif
-                                        </td>
-                                        <td class="text-end align-top">
-                                            @if($findingSubtotal > 0)
-                                                <strong class="fs-6">${{ number_format($findingSubtotal, 2) }}</strong>
-                                            @else
-                                                <span class="text-muted">—</span>
-                                            @endif
-                                            @if($findingTradePartnerCostValue > 0)
-                                                <div class="small text-muted mt-1">Includes Trade Partner Work: ${{ number_format($findingTradePartnerCostValue, 2) }}</div>
-                                            @else
-                                                <div class="small text-muted mt-1">Labour + Materials</div>
-                                            @endif
-                                        </td>
                                     </tr>
                                     @endforeach
                                     @endif
                                 @endforeach
                                 </tbody>
-                                <tfoot class="table-secondary fw-bold">
-                                    <tr>
-                                        <th colspan="2" class="text-end">{{ $pricingScopeApprovedOnly ? 'APPROVED TOTALS:' : 'TOTALS:' }}</th>
-                                        <th class="text-end">{{ number_format($totalLabourHrs, 1) }} hrs / ${{ number_format($totalLabourCost, 2) }}</th>
-                                        <th class="text-end">${{ number_format($totalMatCost, 2) }}</th>
-                                        <th class="text-end">${{ number_format($clientVisibleTotal, 2) }}</th>
-                                    </tr>
-                                </tfoot>
                             </table>
                         </div>
                     </div>
                 </div>
                 @endif
-
-                <!-- Client Pricing Summary -->
-                <div class="card mb-4">
-                    <div class="card-header bg-success text-white">
-                        <h5 class="mb-0">
-                            <i class="mdi mdi-calculator me-2"></i>Client Pricing Summary
-                        </h5>
-                    </div>
-                    <div class="card-body">
-
-                        <div class="row">
-                            <div class="col-md-3">
-                                <div class="card border-primary">
-                                    <div class="card-body">
-                                        <h6 class="text-muted mb-1">Labour</h6>
-                                        <div class="fs-4 text-primary">${{ number_format($totalLabourCost, 2) }}</div>
-                                        <small class="text-muted">{{ number_format($totalLabourHrs, 1) }} hrs @ ${{ number_format($hourlyRateForClient, 2) }}/hr</small>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="card border-primary">
-                                    <div class="card-body">
-                                        <h6 class="text-muted mb-1">Materials</h6>
-                                        <div class="fs-4 text-primary">${{ number_format($totalMatCost, 2) }}</div>
-                                        <small class="text-muted">
-                                            {{ $pricingScopeApprovedOnly ? 'Total assigned materials across approved findings' : 'Total assigned materials across all findings' }}
-                                        </small>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="card border-primary">
-                                    <div class="card-body">
-                                        <h6 class="text-muted mb-1">Trade Partner Work</h6>
-                                        <div class="fs-4 text-primary">${{ number_format($totalTradePartnerCost, 2) }}</div>
-                                        <small class="text-muted">Approved trade partner price</small>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-3">
-                                <div class="card border-success bg-light">
-                                    <div class="card-body">
-                                        <h6 class="text-muted mb-1">Total</h6>
-                                        <div class="fs-3 text-success"><strong>${{ number_format($clientVisibleTotal, 2) }}</strong></div>
-                                        <small class="text-muted">Labour + Materials + Trade Partner Work</small>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="mt-3">
-                            <small class="text-muted">
-                                Pricing shown to client includes labour, materials, and trade partner work by finding.
-                                {{ $pricingScopeApprovedOnly ? 'Totals above are scoped to approved quotation findings only.' : 'Totals above reflect all findings currently listed.' }}
-                            </small>
-                        </div>
-                        </div>
-
-                        <!-- Per-Unit Breakdown (Multi-Unit Properties) -->
-                        @include('shared.inspections._per-unit-breakdown', ['inspection' => $inspection])
-
-                    </div>
-                </div>
 
                 <!-- Diagnosis Photos -->
                 @php $inspectionPhotos = is_array($inspection->photos) ? $inspection->photos : (json_decode($inspection->getRawOriginal('photos') ?? '[]', true) ?? []); @endphp
@@ -719,7 +625,7 @@
                 </div>
                 @endif
 
-                <!-- Inspector Assessment -->
+                <!-- Inspector Diagnosis -->
                 @php
                     $clientRecommendationItems = [];
                     $rawClientRecommendations = $inspection->recommendations;
@@ -744,7 +650,7 @@
                 <div class="card mb-4">
                     <div class="card-header bg-light">
                         <h5 class="mb-0">
-                            <i class="mdi mdi-text-box-outline me-2 text-primary"></i>Inspector Assessment
+                            <i class="mdi mdi-text-box-outline me-2 text-primary"></i>Inspector Diagnosis
                         </h5>
                     </div>
                     <div class="card-body">
@@ -773,101 +679,6 @@
                         </div>
                         @endif
                     </div>
-                </div>
-                @endif
-
-                <!-- Work Payment (if not yet paid) -->
-                @if($inspection->status === 'completed' && ($inspection->work_payment_status ?? 'pending') !== 'paid')
-                @php
-                    $rptFullAmt  = (float) ($clientVisibleTotal ?? 0);
-                    if ($rptFullAmt <= 0) {
-                        $rptFullAmt = (float) ($inspection->frlc_annual ?? 0) + (float) ($inspection->fmc_annual ?? 0);
-                    }
-                    if ($rptFullAmt <= 0) {
-                        $rptFullAmt = (float) ($inspection->trc_annual ?? $inspection->arp_equivalent_final ?? 0);
-                    }
-                    $rptVisits   = max(1, (int) ($inspection->bdc_visits_per_year ?? 1));
-                    $rptPerVisit = (float) ($inspection->trc_per_visit ?? ($rptVisits > 0 ? round($rptFullAmt / $rptVisits, 2) : 0));
-                @endphp
-                <div class="card mb-4 border-success">
-                    <div class="card-header bg-success text-white">
-                        <h5 class="mb-0"><i class="mdi mdi-credit-card me-2"></i>Start Remediation Work</h5>
-                    </div>
-                    <div class="card-body">
-                        <p class="mb-2">Your diagnosis is complete. Total project cost: <strong>${{ number_format($rptFullAmt, 2) }}</strong> across <strong>{{ $rptVisits }} visit(s)</strong>.</p>
-                        <div class="d-flex gap-2 flex-wrap no-print">
-                            <a href="{{ route('client.inspections.work-payment', ['inspection' => $inspection->id, 'plan' => 'full']) }}" class="btn btn-success">
-                                <i class="mdi mdi-cash-check me-1"></i>Pay in Full (${{ number_format($rptFullAmt, 2) }})
-                            </a>
-                            <a href="{{ route('client.inspections.work-payment', ['inspection' => $inspection->id, 'plan' => 'per_visit']) }}" class="btn btn-outline-primary">
-                                <i class="mdi mdi-calendar-check me-1"></i>Pay Per Visit (${{ number_format($rptPerVisit, 2) }}/visit &times; {{ $rptVisits }})
-                            </a>
-                            <a href="{{ route('client.inspections.work-payment', ['inspection' => $inspection->id, 'plan' => 'installment']) }}" class="btn btn-outline-warning">
-                                <i class="mdi mdi-percent me-1"></i>Pay 50% Deposit (${{ number_format($rptFullAmt * 0.5, 2) }} now)
-                            </a>
-                        </div>
-                    </div>
-                </div>
-                @endif
-
-                {{-- Per-visit payment progress tracker (shown after work starts on per_visit plan) --}}
-                @if(
-                    ($inspection->work_payment_status ?? 'pending') === 'paid'
-                    && in_array(($inspection->payment_plan ?? 'full'), ['per_visit', 'installment'], true)
-                    && !$inspection->arp_fully_paid_at
-                )
-                @php
-                    $isPerVisitPlan = ($inspection->payment_plan ?? 'full') === 'per_visit';
-                    $instPaid   = (int) ($inspection->installments_paid ?? 0);
-                    $instTotal  = (int) ($inspection->installment_months ?? 1);
-                    $instAmt    = (float) ($inspection->installment_amount ?? 0);
-                    $instArpTot = (float) ($inspection->arp_total_locked ?? 0);
-                    $instPaidAmt = round($instAmt * $instPaid, 2);
-                    $instRemaining = max(0, $instArpTot - $instPaidAmt);
-                    $instPct = $instTotal > 0 ? round(($instPaid / $instTotal) * 100) : 0;
-                @endphp
-                <div class="card mb-4 border-primary">
-                    <div class="card-header bg-primary text-white">
-                        <h5 class="mb-0"><i class="mdi mdi-calendar-clock me-2"></i>{{ $isPerVisitPlan ? 'Visit Payment Progress' : 'Installment Payment Progress' }}</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between small text-muted mb-1">
-                            <span>{{ $instPaid }} of {{ $instTotal }} {{ $isPerVisitPlan ? 'visits' : 'installments' }} paid</span>
-                            <span>${{ number_format($instPaidAmt, 2) }} of ${{ number_format($instArpTot, 2) }}</span>
-                        </div>
-                        <div class="progress mb-3" style="height:12px;">
-                            <div class="progress-bar bg-primary" style="width:{{ $instPct }}%;"></div>
-                        </div>
-                        <div class="row text-center mb-3">
-                            <div class="col-4">
-                                <div class="fw-bold text-success">${{ number_format($instPaidAmt, 2) }}</div>
-                                <small class="text-muted">Paid so far</small>
-                            </div>
-                            <div class="col-4">
-                                <div class="fw-bold text-primary">${{ number_format($instAmt, 2) }}</div>
-                                <small class="text-muted">{{ $isPerVisitPlan ? 'Per visit' : 'Per installment' }}</small>
-                            </div>
-                            <div class="col-4">
-                                <div class="fw-bold text-danger">${{ number_format($instRemaining, 2) }}</div>
-                                <small class="text-muted">Remaining</small>
-                            </div>
-                        </div>
-                        <div class="no-print">
-                            <a href="{{ route('client.inspections.pay-installment', $inspection->id) }}" class="btn btn-primary">
-                                <i class="mdi mdi-credit-card me-1"></i>
-                                {{ $isPerVisitPlan ? 'Pay Visit' : 'Pay Installment' }} {{ $instPaid + 1 }} of {{ $instTotal }} (${{ number_format($instAmt, 2) }})
-                            </a>
-                        </div>
-                    </div>
-                </div>
-                @endif
-
-                {{-- Fully paid badge --}}
-                @if(($inspection->work_payment_status ?? 'pending') === 'paid' && $inspection->arp_fully_paid_at)
-                <div class="alert alert-success mb-4">
-                    <i class="mdi mdi-check-circle me-2"></i>
-                    <strong>Project Cost Fully Paid</strong> — Settled on
-                    {{ \Carbon\Carbon::parse($inspection->arp_fully_paid_at)->format('M d, Y') }}.
                 </div>
                 @endif
 
@@ -916,10 +727,10 @@
                         </div>
                     </div>
                 </div>
-                @elseif($inspection->etogo_signed_at)
+                @elseif($inspection->ETOGO_signed_at)
                 <div class="alert alert-info mb-4">
                     <i class="mdi mdi-calendar-clock me-2"></i>
-                    <strong>Visit Schedule Pending</strong> — Your work visit dates are being finalised by the Etogo team. You will see them here once confirmed.
+                    <strong>Visit Schedule Pending</strong> — Your work visit dates are being finalised by the ETOGO team. You will see them here once confirmed.
                 </div>
                 @endif
 
@@ -1009,3 +820,5 @@
 }
 </style>
 @endsection
+
+

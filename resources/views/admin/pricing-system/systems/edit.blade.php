@@ -12,6 +12,12 @@
                     @method('PUT')
 
                     <div class="form-group">
+                        <label for="code">Code</label>
+                        <input type="text" class="form-control @error('code') is-invalid @enderror" id="code" name="code" value="{{ old('code', $system->code) }}">
+                        @error('code')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+
+                    <div class="form-group">
                         <label for="name">Name <span class="text-danger">*</span></label>
                         <input type="text" class="form-control @error('name') is-invalid @enderror" id="name" name="name" value="{{ old('name', $system->name) }}" required>
                         @error('name')<div class="invalid-feedback">{{ $message }}</div>@enderror
@@ -46,6 +52,13 @@
                         <label class="form-check-label">
                             <input type="checkbox" class="form-check-input" name="is_active" value="1" {{ old('is_active', $system->is_active) ? 'checked' : '' }}>
                             Active
+                        </label>
+                    </div>
+
+                    <div class="form-check">
+                        <label class="form-check-label">
+                            <input type="checkbox" class="form-check-input" name="is_core" value="1" {{ old('is_core', $system->is_core) ? 'checked' : '' }}>
+                            Core building system
                         </label>
                     </div>
 

@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class Property extends Model
 {
@@ -247,8 +248,8 @@ class Property extends Model
      */
     public static function generateTenantPassword(): string
     {
-        return strtoupper(substr(md5(uniqid()), 0, 8));
-        // Example: 5F4A9C2E
+        return strtoupper(Str::random(10));
+        // Example: A8N4QZP2KM
     }
 
     /**

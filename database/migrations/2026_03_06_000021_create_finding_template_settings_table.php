@@ -11,8 +11,9 @@ return new class extends Migration
         Schema::create('finding_template_settings', function (Blueprint $table) {
             $table->id();
             $table->string('task_question', 255);
-            $table->foreignId('system_id')->nullable()->constrained('systems')->nullOnDelete();
-            $table->foreignId('subsystem_id')->nullable()->constrained('subsystems')->nullOnDelete();
+            $table->foreignId('building_system_id')->nullable()->constrained('building_systems')->nullOnDelete();
+            $table->foreignId('building_subsystem_id')->nullable()->constrained('building_subsystems')->nullOnDelete();
+            $table->foreignId('building_component_id')->nullable()->constrained('building_components')->nullOnDelete();
             $table->string('category', 120)->nullable();
             $table->boolean('default_included')->default(true);
             $table->text('default_notes')->nullable();
@@ -22,7 +23,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->index(['is_active', 'sort_order']);
-            $table->index(['system_id', 'subsystem_id'], 'fts_system_subsystem_idx');
+            $table->index(['building_system_id', 'building_subsystem_id'], 'fts_building_system_subsystem_idx');
         });
     }
 

@@ -158,6 +158,7 @@
         body.sidebar-minimized .client-clean-sidebar .client-link > span:not(.client-summary-left):not(.client-badge),
         body.sidebar-minimized .admin-client-sidebar .admin-client-summary-left > span,
         body.sidebar-minimized .client-clean-sidebar .client-summary-left > span,
+        body.sidebar-minimized .admin-client-sidebar .admin-sidebar-collapse-label,
         body.sidebar-minimized .admin-client-sidebar .admin-client-version-label,
         body.sidebar-minimized .client-clean-sidebar .client-version-label {
             display: none !important;
@@ -199,6 +200,11 @@
         body.sidebar-minimized .client-version-button {
             justify-content: center !important;
             padding: 4px !important;
+        }
+
+        body.sidebar-minimized .admin-sidebar-collapse-button {
+            justify-content: center !important;
+            padding: 8px !important;
         }
 
         body.sidebar-minimized .admin-client-version-badge,
@@ -541,7 +547,41 @@
         display: flex !important;
         align-items: center !important;
         justify-content: center !important;
+        flex-direction: column !important;
+        gap: 8px !important;
         border-top: 1px solid var(--etogo-sidebar-line) !important;
+    }
+
+    .admin-sidebar-collapse-button {
+        width: 100% !important;
+        min-height: 36px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        gap: .5rem !important;
+        padding: 8px 10px !important;
+        border: 1px solid rgba(255, 255, 255, .14) !important;
+        border-radius: 8px !important;
+        background: rgba(255, 255, 255, .06) !important;
+        color: #eaf2ff !important;
+        font-size: .82rem !important;
+        font-weight: 700 !important;
+        line-height: 1.1 !important;
+        cursor: pointer !important;
+        transition: background .16s ease, border-color .16s ease, color .16s ease !important;
+    }
+
+    .admin-sidebar-collapse-button:hover,
+    .admin-sidebar-collapse-button:focus {
+        background: rgba(255, 255, 255, .11) !important;
+        border-color: rgba(255, 255, 255, .24) !important;
+        color: #ffffff !important;
+        outline: none !important;
+    }
+
+    .admin-sidebar-collapse-button i {
+        font-size: 1.05rem !important;
+        line-height: 1 !important;
     }
 
     .admin-client-version-button,

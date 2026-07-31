@@ -14,8 +14,9 @@ return new class extends Migration
             $table->foreignId('property_id')->nullable()->constrained('properties')->nullOnDelete();
             $table->foreignId('phar_finding_id')->nullable()->constrained('phar_findings')->nullOnDelete();
             $table->unsignedInteger('finding_index')->nullable();
-            $table->foreignId('system_id')->nullable()->constrained('systems')->nullOnDelete();
-            $table->foreignId('subsystem_id')->nullable()->constrained('subsystems')->nullOnDelete();
+            $table->foreignId('building_system_id')->nullable()->constrained('building_systems')->nullOnDelete();
+            $table->foreignId('building_subsystem_id')->nullable()->constrained('building_subsystems')->nullOnDelete();
+            $table->foreignId('building_component_id')->nullable()->constrained('building_components')->nullOnDelete();
             $table->foreignId('trade_application_id')->nullable()->constrained('trade_applications')->nullOnDelete();
             $table->string('trade_company_name')->nullable();
             $table->string('fulfillment_type', 30)->default('trade_partner');
@@ -35,7 +36,7 @@ return new class extends Migration
             $table->timestamps();
 
             $table->index(['inspection_id', 'finding_index']);
-            $table->index(['system_id', 'subsystem_id']);
+            $table->index(['building_system_id', 'building_subsystem_id'], 'itpi_building_system_subsystem_idx');
             $table->unique(['inspection_id', 'finding_index'], 'inspection_trade_pricing_unique_finding');
         });
     }

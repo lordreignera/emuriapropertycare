@@ -34,6 +34,9 @@
 
     $scheduledInspectionsCount = 0;
     $unscheduledInspectionsCount = 0;
+    $inProgressInspectionsCount = 0;
+    $completedDiagnosisCount = 0;
+    $awaitingEstimationCount = 0;
     $awaitingQuotationCount = 0;
 
     if ($user->hasRole(['Super Admin', 'Administrator'])) {
@@ -44,6 +47,14 @@
             ->where('status', 'scheduled')
             ->count();
 
+        $inProgressInspectionsCount = \App\Models\Inspection::whereIn('project_id', $projectIds)
+            ->where('status', 'in_progress')
+            ->count();
+
+        $completedDiagnosisCount = \App\Models\Inspection::whereIn('project_id', $projectIds)
+            ->where('status', 'completed')
+            ->count();
+
         $awaitingQuotationCount = \App\Models\Inspection::whereIn('project_id', $projectIds)
             ->where('status', '!=', 'completed')
             ->where(function ($q) {
@@ -51,10 +62,23 @@
                     ->orWhereIn('quotation_status', ['shared', 'client_reviewing', 'client_responded']);
             })
             ->count();
+
+        $awaitingEstimationCount = \App\Models\Inspection::whereIn('project_id', $projectIds)
+            ->whereIn('status', ['client_committed', 'estimation_in_progress', 'estimation_completed'])
+            ->whereNotNull('client_committed_at')
+            ->count();
     } elseif ($user->hasRole('Inspector')) {
         $scheduledInspectionsCount = \App\Models\Property::where('inspector_id', $user->id)
             ->where('status', 'awaiting_inspection')
             ->whereNotNull('inspection_scheduled_at')
+            ->count();
+
+        $inProgressInspectionsCount = \App\Models\Inspection::where('inspector_id', $user->id)
+            ->where('status', 'in_progress')
+            ->count();
+
+        $completedDiagnosisCount = \App\Models\Inspection::where('inspector_id', $user->id)
+            ->where('status', 'completed')
             ->count();
 
         $unscheduledInspectionsCount = \App\Models\Property::where('inspector_id', $user->id)
@@ -67,6 +91,18 @@
             ->whereNotNull('inspection_scheduled_at')
             ->count();
 
+        $inProgressInspectionsCount = \App\Models\Inspection::whereHas('property', function ($q) use ($user) {
+                $q->where('project_manager_id', $user->id);
+            })
+            ->where('status', 'in_progress')
+            ->count();
+
+        $completedDiagnosisCount = \App\Models\Inspection::whereHas('property', function ($q) use ($user) {
+                $q->where('project_manager_id', $user->id);
+            })
+            ->where('status', 'completed')
+            ->count();
+
         $unscheduledInspectionsCount = \App\Models\Property::where('project_manager_id', $user->id)
             ->where('status', 'awaiting_inspection')
             ->whereNull('inspection_scheduled_at')
@@ -77,7 +113,7 @@
     $awaitingToolAssignmentCount = $user->hasRole('Store Manager')
         ? \App\Models\Inspection::whereNotNull('client_signature')
             ->where('work_payment_status', 'paid')
-            ->whereNull('etogo_signed_at')
+            ->whereNull('ETOGO_signed_at')
             ->whereDoesntHave('toolAssignments', function ($tq) {
                 $tq->whereNull('returned_at')->where('quantity', '>', 0);
             })
@@ -85,9 +121,9 @@
         : 0;
 
     // Stage 1: Client signed + paid, but setup is incomplete (tools and/or schedule missing)
-    $pendingEtogoCount = \App\Models\Inspection::whereNotNull('client_signature')
+    $pendingETOGOCount = \App\Models\Inspection::whereNotNull('client_signature')
         ->where('work_payment_status', 'paid')
-        ->whereNull('etogo_signed_at')
+        ->whereNull('ETOGO_signed_at')
         ->where(function ($q) {
             $q->whereDoesntHave('toolAssignments', function ($tq) {
                 $tq->whereNull('returned_at')->where('quantity', '>', 0);
@@ -97,10 +133,10 @@
         })
         ->count();
 
-    // Stage 2: Ready for ETOGO signoff (tools + schedule done, Etogo not signed yet)
+    // Stage 2: Ready for ETOGO signoff (tools + schedule done, ETOGO not signed yet)
     $awaitingScheduleCount = \App\Models\Inspection::whereNotNull('client_signature')
         ->where('work_payment_status', 'paid')
-        ->whereNull('etogo_signed_at')
+        ->whereNull('ETOGO_signed_at')
         ->whereHas('toolAssignments', function ($q) {
             $q->whereNull('returned_at')->where('quantity', '>', 0);
         })
@@ -115,7 +151,7 @@
         $completedWorkCount = 0;
 
         $workInspections = \App\Models\Inspection::with(['maintenanceVisitLogs', 'pharFindings'])
-            ->whereNotNull('etogo_signed_at')
+            ->whereNotNull('ETOGO_signed_at')
             ->whereNotNull('work_schedule')
             ->where('work_schedule', '!=', '[]')
             ->get();
@@ -223,7 +259,7 @@
     $unpaidInvoicesCount = \App\Models\Invoice::pending()->count();
 
     $unreturnedToolCount = \App\Models\InspectionToolAssignment::whereNull('returned_at')
-        ->whereHas('inspection', fn($q) => $q->whereNotNull('etogo_signed_at'))
+        ->whereHas('inspection', fn($q) => $q->whereNotNull('ETOGO_signed_at'))
         ->count();
 
     $openServiceRequestsCount = \App\Models\ServiceRequest::whereIn('status', ['submitted', 'triaged', 'awaiting_assessment'])
@@ -242,7 +278,7 @@
     <div class="admin-client-sidebar-inner">
         <div class="admin-client-brand">
             <a href="{{ route('dashboard') }}" aria-label="ETOGO dashboard">
-                <img src="{{ asset('etogo%20log.png') }}" alt="ETOGO" class="admin-client-brand-logo">
+                <img src="{{ asset('ETOGO%20log.png') }}" alt="ETOGO" class="admin-client-brand-logo">
             </a>
         </div>
 
@@ -253,53 +289,62 @@
         </a>
 
         @if(($user->hasRole(['Inspector', 'Project Manager', 'Super Admin', 'Administrator']) || $user->can('view-inspections')) && !$user->hasRole('Store Manager'))
-            <div class="admin-client-section-title">Inspection Workflow</div>
+            <div class="admin-client-section-title">Diagnosis</div>
             <details class="admin-client-group" {{ $inspectionsOpen ? 'open' : '' }}>
                 <summary class="admin-client-link {{ $inspectionsOpen ? 'is-active' : '' }}">
                     <span class="admin-client-summary-left">
                         <i class="mdi mdi-clipboard-check admin-client-icon admin-client-icon-services"></i>
-                        <span>PHAR Assessment Workflow</span>
+                        <span>PHAR Diagnosis</span>
                     </span>
                     <span class="admin-client-arrow">▾</span>
                 </summary>
                 <div class="admin-client-submenu">
                     @if($user->hasRole(['Super Admin', 'Administrator']))
+                        <a class="admin-client-sublink {{ request()->routeIs('properties.index') && !request()->get('status') ? 'is-active' : '' }}" href="{{ route('properties.index') }}">
+                            <span class="admin-client-sublabel">Property Registry</span>
+                        </a>
                         <a class="admin-client-sublink {{ request()->get('status') == 'scheduled' ? 'is-active' : '' }}" href="{{ route('inspections.index') }}?status=scheduled">
-                            <span class="admin-client-sublabel">Awaiting Assessment</span>
+                            <span class="admin-client-sublabel">Awaiting Diagnosis</span>
                             @if($scheduledInspectionsCount > 0)
                                 <span class="admin-client-badge">{{ $scheduledInspectionsCount }}</span>
                             @endif
                         </a>
+                        <a class="admin-client-sublink {{ request()->get('status') == 'in_progress' ? 'is-active' : '' }}" href="{{ route('inspections.index') }}?status=in_progress">
+                            <span class="admin-client-sublabel">Diagnosis In Progress</span>
+                            @if($inProgressInspectionsCount > 0)
+                                <span class="admin-client-badge">{{ $inProgressInspectionsCount }}</span>
+                            @endif
+                        </a>
                         <a class="admin-client-sublink {{ request()->routeIs('inspections.*') && request()->get('view') == 'awaiting-quotation' ? 'is-active' : '' }}" href="{{ route('inspections.index') }}?view=awaiting-quotation">
-                            <span class="admin-client-sublabel">Findings Awaiting Decisions</span>
+                            <span class="admin-client-sublabel">Diagnosed Reports</span>
                             @if($awaitingQuotationCount > 0)
                                 <span class="admin-client-badge">{{ $awaitingQuotationCount }}</span>
                             @endif
                         </a>
-                        <a class="admin-client-sublink {{ request()->get('status') == 'completed' ? 'is-active' : '' }}" href="{{ route('inspections.index') }}?status=completed">
-                            <span class="admin-client-sublabel">Completed PHAR Assessments</span>
+                        <a class="admin-client-sublink {{ request()->routeIs('inspections.*') && request()->get('view') == 'awaiting-estimation' ? 'is-active' : '' }}" href="{{ route('inspections.index') }}?view=awaiting-estimation">
+                            <span class="admin-client-sublabel">Decided Findings / Pricing</span>
+                            @if($awaitingEstimationCount > 0)
+                                <span class="admin-client-badge">{{ $awaitingEstimationCount }}</span>
+                            @endif
                         </a>
-                        <a class="admin-client-sublink {{ request()->routeIs('properties.*') && request()->get('status') == 'inspected_completed' ? 'is-active' : '' }}" href="{{ route('properties.index') }}?status=inspected_completed">
-                            <span class="admin-client-sublabel">Assessed Property Registry</span>
-                        </a>
+                    @else
                         <a class="admin-client-sublink {{ request()->routeIs('properties.index') && !request()->get('status') ? 'is-active' : '' }}" href="{{ route('properties.index') }}">
                             <span class="admin-client-sublabel">Property Registry</span>
                         </a>
-                    @else
                         <a class="admin-client-sublink {{ request()->get('status') == 'scheduled' ? 'is-active' : '' }}" href="{{ route('inspections.index') }}?status=scheduled">
-                            <span class="admin-client-sublabel">Scheduled</span>
+                            <span class="admin-client-sublabel">Awaiting Diagnosis</span>
                             @if($scheduledInspectionsCount > 0)
                                 <span class="admin-client-badge">{{ $scheduledInspectionsCount }}</span>
                             @endif
                         </a>
-                        <a class="admin-client-sublink {{ request()->get('status') == 'unscheduled' ? 'is-active' : '' }}" href="{{ route('inspections.index') }}?status=unscheduled">
-                            <span class="admin-client-sublabel">Unscheduled</span>
-                            @if($unscheduledInspectionsCount > 0)
-                                <span class="admin-client-badge">{{ $unscheduledInspectionsCount }}</span>
+                        <a class="admin-client-sublink {{ request()->get('status') == 'in_progress' ? 'is-active' : '' }}" href="{{ route('inspections.index') }}?status=in_progress">
+                            <span class="admin-client-sublabel">Diagnosis In Progress</span>
+                            @if($inProgressInspectionsCount > 0)
+                                <span class="admin-client-badge">{{ $inProgressInspectionsCount }}</span>
                             @endif
                         </a>
-                        <a class="admin-client-sublink {{ !request()->has('status') ? 'is-active' : '' }}" href="{{ route('inspections.index') }}">
-                            <span class="admin-client-sublabel">All PHAR Assessments</span>
+                        <a class="admin-client-sublink {{ request()->get('status') == 'completed' ? 'is-active' : '' }}" href="{{ route('inspections.index') }}?status=completed">
+                            <span class="admin-client-sublabel">Diagnosed Reports</span>
                         </a>
                     @endif
                 </div>
@@ -308,7 +353,7 @@
             @role('Super Admin|Administrator')
                 <a class="admin-client-link {{ request()->routeIs('admin.trade-applications.*') ? 'is-active' : '' }}" href="{{ route('admin.trade-applications.index') }}">
                     <span class="admin-client-summary-left">
-                        <i class="mdi mdi-account-hard-hat admin-client-icon admin-client-icon-services"></i>
+                        <i class="mdi mdi-file-document-box admin-client-icon admin-client-icon-services"></i>
                         <span>Trade Applications</span>
                     </span>
                     @if($openTradeApplicationsCount > 0)
@@ -342,11 +387,11 @@
                     @if($user->hasRole(['Project Manager', 'Super Admin', 'Administrator']) || $user->can('view-all-projects'))
 
                         {{-- Stage 1: tools + scheduling setup before ETOGO signoff --}}
-                        <a class="admin-client-sublink {{ request()->routeIs('inspections.index') && request()->get('view') == 'pending-etogo' ? 'is-active' : '' }}"
-                           href="{{ route('inspections.index') }}?view=pending-etogo">
+                        <a class="admin-client-sublink {{ request()->routeIs('inspections.index') && request()->get('view') == 'pending-ETOGO' ? 'is-active' : '' }}"
+                           href="{{ route('inspections.index') }}?view=pending-ETOGO">
                         <span class="admin-client-sublabel">Remediation Setup</span>
-                            @if($pendingEtogoCount > 0)
-                                <span class="admin-client-badge">{{ $pendingEtogoCount }}</span>
+                            @if($pendingETOGOCount > 0)
+                                <span class="admin-client-badge">{{ $pendingETOGOCount }}</span>
                             @endif
                         </a>
 
@@ -362,8 +407,8 @@
                     @elseif($user->hasRole('Store Manager'))
 
                         {{-- Store Manager: show properties awaiting tool assignment --}}
-                        <a class="admin-client-sublink {{ request()->routeIs('inspections.index') && request()->get('view') == 'pending-etogo' ? 'is-active' : '' }}"
-                           href="{{ route('inspections.index') }}?view=pending-etogo">
+                        <a class="admin-client-sublink {{ request()->routeIs('inspections.index') && request()->get('view') == 'pending-ETOGO' ? 'is-active' : '' }}"
+                           href="{{ route('inspections.index') }}?view=pending-ETOGO">
                             <span class="admin-client-sublabel">Awaiting Tool Assignment</span>
                             @if($awaitingToolAssignmentCount > 0)
                                 <span class="admin-client-badge">{{ $awaitingToolAssignmentCount }}</span>
@@ -500,8 +545,9 @@
                     <span class="admin-client-arrow">▾</span>
                 </summary>
                 <div class="admin-client-submenu">
-                    <a class="admin-client-sublink {{ request()->routeIs('admin.systems.*') ? 'is-active' : '' }}" href="{{ route('admin.systems.index') }}"><span class="admin-client-sublabel">Property Systems</span></a>
-                    <a class="admin-client-sublink {{ request()->routeIs('admin.subsystems.*') ? 'is-active' : '' }}" href="{{ route('admin.subsystems.index') }}"><span class="admin-client-sublabel">Property Subsystems</span></a>
+                    <a class="admin-client-sublink {{ request()->routeIs('admin.systems.*') ? 'is-active' : '' }}" href="{{ route('admin.systems.index') }}"><span class="admin-client-sublabel">Building Systems</span></a>
+                    <a class="admin-client-sublink {{ request()->routeIs('admin.subsystems.*') ? 'is-active' : '' }}" href="{{ route('admin.subsystems.index') }}"><span class="admin-client-sublabel">Building Subsystems</span></a>
+                    <a class="admin-client-sublink {{ request()->routeIs('admin.components.*') ? 'is-active' : '' }}" href="{{ route('admin.components.index') }}"><span class="admin-client-sublabel">Building Components</span></a>
                     <a class="admin-client-sublink {{ request()->routeIs('admin.settings.bdc*') ? 'is-active' : '' }}" href="{{ route('admin.settings.bdc') }}"><span class="admin-client-sublabel">BDC Calibration Engine</span></a>
                     <a class="admin-client-sublink {{ request()->routeIs('admin.fmc-material-settings.*') ? 'is-active' : '' }}" href="{{ route('admin.fmc-material-settings.index') }}"><span class="admin-client-sublabel">FMC Material Settings</span></a>
                     <a class="admin-client-sublink {{ request()->routeIs('admin.finding-template-settings.*') ? 'is-active' : '' }}" href="{{ route('admin.finding-template-settings.index') }}"><span class="admin-client-sublabel">Findings Template Settings</span></a>
@@ -540,6 +586,10 @@
         @endrole
     </div>
     <div class="admin-client-version-bar">
+        <button type="button" class="admin-sidebar-collapse-button" data-sidebar-minimize aria-label="Minimize sidebar" aria-expanded="true">
+            <i class="mdi mdi-chevron-left"></i>
+            <span class="admin-sidebar-collapse-label">Minimize sidebar</span>
+        </button>
         <button type="button" class="admin-client-version-button" aria-label="Application version 1.0">
             <span class="admin-client-version-label">Version</span>
             <span class="admin-client-version-badge">1.0</span>

@@ -11,16 +11,22 @@
                     @csrf
 
                     <div class="form-group">
-                        <label for="system_id">System <span class="text-danger">*</span></label>
-                        <select class="form-control @error('system_id') is-invalid @enderror" id="system_id" name="system_id" required>
+                        <label for="building_system_id">System <span class="text-danger">*</span></label>
+                        <select class="form-control @error('building_system_id') is-invalid @enderror" id="building_system_id" name="building_system_id" required>
                             <option value="">Select system</option>
                             @foreach($systems as $system)
-                                <option value="{{ $system->id }}" {{ (string) old('system_id') === (string) $system->id ? 'selected' : '' }}>
+                                <option value="{{ $system->id }}" {{ (string) old('building_system_id') === (string) $system->id ? 'selected' : '' }}>
                                     {{ $system->name }}
                                 </option>
                             @endforeach
                         </select>
-                        @error('system_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                        @error('building_system_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    </div>
+
+                    <div class="form-group">
+                        <label for="code">Code</label>
+                        <input type="text" class="form-control @error('code') is-invalid @enderror" id="code" name="code" value="{{ old('code') }}" placeholder="Auto-generated if empty">
+                        @error('code')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     </div>
 
                     <div class="form-group">

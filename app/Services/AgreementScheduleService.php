@@ -90,8 +90,8 @@ class AgreementScheduleService
     private function resolveRequiredTools(array $findings)
     {
         $findingsCollection = collect($findings);
-        $systemIds = $findingsCollection->pluck('system_id')->filter()->unique()->values();
-        $subsystemIds = $findingsCollection->pluck('subsystem_id')->filter()->unique()->values();
+        $systemIds = $findingsCollection->pluck('building_system_id')->filter()->unique()->values();
+        $subsystemIds = $findingsCollection->pluck('building_subsystem_id')->filter()->unique()->values();
 
         $tools = ToolSetting::query()
             ->where('is_active', true)
@@ -102,16 +102,16 @@ class AgreementScheduleService
         }
 
         return $tools->filter(function (ToolSetting $tool) use ($systemIds, $subsystemIds) {
-            if (is_null($tool->system_id) && is_null($tool->subsystem_id)) {
+            if (is_null($tool->building_system_id) && is_null($tool->building_subsystem_id)) {
                 return true;
             }
 
-            if (!is_null($tool->subsystem_id)) {
-                return $subsystemIds->contains((int) $tool->subsystem_id);
+            if (!is_null($tool->building_subsystem_id)) {
+                return $subsystemIds->contains((int) $tool->building_subsystem_id);
             }
 
-            return !is_null($tool->system_id)
-                ? $systemIds->contains((int) $tool->system_id)
+            return !is_null($tool->building_system_id)
+                ? $systemIds->contains((int) $tool->building_system_id)
                 : false;
         })->values();
     }

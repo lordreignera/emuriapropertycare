@@ -13,8 +13,9 @@ return new class extends Migration
             $table->foreignId('inspection_id')->constrained()->cascadeOnDelete();
             $table->foreignId('property_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('tool_setting_id')->nullable()->constrained('tool_settings')->nullOnDelete();
-            $table->foreignId('system_id')->nullable()->constrained('systems')->nullOnDelete();
-            $table->foreignId('subsystem_id')->nullable()->constrained('subsystems')->nullOnDelete();
+            $table->foreignId('building_system_id')->nullable()->constrained('building_systems')->nullOnDelete();
+            $table->foreignId('building_subsystem_id')->nullable()->constrained('building_subsystems')->nullOnDelete();
+            $table->foreignId('building_component_id')->nullable()->constrained('building_components')->nullOnDelete();
             $table->string('tool_name');
             $table->unsignedSmallInteger('quantity')->default(0);
             $table->string('ownership_status', 30)->nullable();

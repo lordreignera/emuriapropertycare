@@ -142,6 +142,10 @@ class SpatialModel extends Model
             return 'potree';
         }
 
+        if ($this->external_url) {
+            return 'external_link';
+        }
+
         if ($this->source_type === 'panorama_set' && in_array($extension, ['jpg', 'jpeg', 'png', 'webp'], true)) {
             return 'panorama';
         }
@@ -154,14 +158,6 @@ class SpatialModel extends Model
             return 'pdf';
         }
 
-        if (in_array($extension, ['obj', 'fbx', 'dae', 'ply', 'e57', 'las', 'laz', 'pts', 'ptx', 'xyz', 'zip'], true)) {
-            return 'conversion_needed';
-        }
-
-        if ($this->external_url) {
-            return 'external_link';
-        }
-
         return 'stored_evidence';
     }
 
@@ -169,14 +165,6 @@ class SpatialModel extends Model
     {
         return $this->source_type === 'master_point_cloud'
             || in_array($this->detected_extension, ['e57', 'las', 'laz', 'pts', 'ptx', 'xyz'], true);
-    }
-
-    public function needsPointCloudConversion(): bool
-    {
-        return $this->isRawPointCloud()
-            && $this->status === 'active'
-            && in_array($this->processing_status, ['queued', 'failed'], true)
-            && filled($this->file_path);
     }
 
     private function storageUrl(string $path): string

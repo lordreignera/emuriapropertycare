@@ -15,7 +15,7 @@
                 <form method="GET" action="{{ route('admin.subsystems.index') }}" class="row g-2 mb-4 align-items-end">
                     <div class="col-md-4 col-lg-3">
                         <label class="form-label mb-1">Filter by System</label>
-                        <select name="system_id" class="form-control">
+                        <select name="building_system_id" class="form-control">
                             <option value="">All Systems</option>
                             @foreach($systems as $system)
                                 <option value="{{ $system->id }}" {{ (string) ($systemId ?? '') === (string) $system->id ? 'selected' : '' }}>
@@ -47,10 +47,12 @@
                             <tr>
                                 <th>#</th>
                                 <th>Name</th>
+                                <th>Code</th>
                                 <th>System</th>
                                 <th>Slug</th>
                                 <th>Sort</th>
                                 <th>Status</th>
+                                <th>Components</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -59,6 +61,7 @@
                                 <tr>
                                     <td>{{ $subsystems->firstItem() + $loop->index }}</td>
                                     <td><strong>{{ $subsystem->name }}</strong></td>
+                                    <td><code>{{ $subsystem->code }}</code></td>
                                     <td>{{ $subsystem->system?->name ?? 'N/A' }}</td>
                                     <td><code>{{ $subsystem->slug }}</code></td>
                                     <td>{{ $subsystem->sort_order }}</td>
@@ -69,7 +72,11 @@
                                             <span class="badge badge-secondary">Inactive</span>
                                         @endif
                                     </td>
+                                    <td>{{ $subsystem->components_count }}</td>
                                     <td>
+                                        <a href="{{ route('admin.components.index', ['building_subsystem_id' => $subsystem->id]) }}" class="btn btn-sm btn-info">
+                                            <i class="mdi mdi-shape-outline"></i> Components
+                                        </a>
                                         <a href="{{ route('admin.subsystems.edit', $subsystem) }}" class="btn btn-sm btn-warning">
                                             <i class="mdi mdi-pencil"></i> Edit
                                         </a>
@@ -84,7 +91,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="7" class="text-center py-4 text-muted">No subsystems found.</td>
+                                    <td colspan="9" class="text-center py-4 text-muted">No subsystems found.</td>
                                 </tr>
                             @endforelse
                         </tbody>

@@ -22,11 +22,14 @@ class DatabaseSeeder extends Seeder
             DemoClientSeeder::class,
             CPIPricingSystemSeeder::class,
             BDCSettingsSeeder::class,
-            InspectionSystemsSeeder::class,
+            BuildingSystemSeeder::class,
+            BuildingSubsystemSeeder::class,
+            BuildingComponentSeeder::class,
             FmcMaterialSettingsSeeder::class,
             FindingTemplateSettingsSeeder::class,
             ToolSettingsSeeder::class,
             RecommendationSettingsSeeder::class,
+            TestTradePartnerSeeder::class,
             // TierSeeder::class, // REMOVED: Tiers are now generated per client after inspection
         ]);
         

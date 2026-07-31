@@ -187,11 +187,11 @@ class InspectionController extends Controller
         if (($inspection->status ?? null) !== 'completed') {
             if ($activeQuotation) {
                 return redirect()->route('client.inspections.quotation', $inspection->id)
-                    ->with('info', 'Review the quotation first. The report and agreement become available after approval and assessment completion.');
+                    ->with('info', 'Review the quotation first. The report and agreement become available after approval and diagnosis completion.');
             }
 
             return redirect()->route('client.inspections.index')
-                ->with('info', 'The report is not available yet. It will appear after assessment completion.');
+                ->with('info', 'The report is not available yet. It will appear after diagnosis completion.');
         }
 
         $inspection = $this->agreementScheduleService->refresh($inspection);
@@ -204,7 +204,8 @@ class InspectionController extends Controller
             'issueMarkers.pharFinding',
         ]);
 
-        $findings = \App\Models\PHARFinding::where('inspection_id', $inspection->id)
+        $findings = \App\Models\PHARFinding::with('affectedAreas')
+            ->where('inspection_id', $inspection->id)
             ->orderBy('id')
             ->get();
 
@@ -289,7 +290,7 @@ class InspectionController extends Controller
 
         $validated = $request->validate([
             'finding_photos' => 'required|array|min:1',
-            'finding_photos.*' => 'required|image|max:10240',
+            'finding_photos.*' => 'required|file|mimetypes:image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,video/mp4,video/webm,video/quicktime,video/x-msvideo,video/x-matroska|max:51200',
         ]);
 
         $findings = is_array($inspection->findings)
@@ -317,7 +318,30 @@ class InspectionController extends Controller
         $inspection->findings = $findings;
         $inspection->save();
 
-        return back()->with('success', 'Finding photos uploaded successfully.');
+        $jsonFinding = $findings[$findingIndex] ?? [];
+        $pharFinding = $inspection->pharFindings()
+            ->orderBy('id')
+            ->get()
+            ->first(function ($row, $idx) use ($findingIndex, $jsonFinding) {
+                if ((int) $idx === (int) $findingIndex) {
+                    return true;
+                }
+
+                $jsonTitle = trim((string) ($jsonFinding['issue'] ?? $jsonFinding['finding'] ?? $jsonFinding['task_question'] ?? ''));
+                $rowTitle = trim((string) ($row->task_question ?? ''));
+
+                return $jsonTitle !== '' && $jsonTitle === $rowTitle;
+            });
+
+        if ($pharFinding) {
+            $pharFinding->photo_ids = array_values(array_unique(array_merge(
+                (array) ($pharFinding->photo_ids ?? []),
+                $findings[$findingIndex]['finding_photos']
+            )));
+            $pharFinding->save();
+        }
+
+        return back()->with('success', 'Finding evidence uploaded successfully.');
     }
 
     /**
@@ -345,7 +369,8 @@ class InspectionController extends Controller
                 ->with('info', 'The findings report has not been shared with you yet. You will be notified once it is ready for review.');
         }
 
-        $findings = \App\Models\PHARFinding::where('inspection_id', $inspection->id)
+        $findings = \App\Models\PHARFinding::with('affectedAreas')
+            ->where('inspection_id', $inspection->id)
             ->orderByRaw("
                 CASE severity
                     WHEN 'critical' THEN 1
@@ -490,7 +515,7 @@ class InspectionController extends Controller
         if (!$quotation) {
             if (($inspection->status ?? null) === 'completed') {
                 return redirect()->route('client.inspections.report', $inspection->id)
-                    ->with('error', 'No active quotation is available for this completed assessment.');
+                    ->with('error', 'No active quotation is available for this completed diagnosis.');
             }
 
             return redirect()->route('client.inspections.index')
@@ -859,14 +884,14 @@ class InspectionController extends Controller
         $stripe = new \Stripe\StripeClient(config('cashier.secret'));
         $paymentIntent = $stripe->paymentIntents->create([
             'amount'   => (int) round($chargeAmount * 100),
-            'currency' => 'usd',
+            'currency' => strtolower((string) config('cashier.currency', 'usd')),
             'metadata' => [
-                'inspection_id' => $inspection->id,
-                'property_id'   => $inspection->property_id,
-                'project_id'    => $inspection->project_id,
+                'inspection_id' => (string) $inspection->id,
+                'property_id'   => (string) $inspection->property_id,
+                'project_id'    => (string) ($inspection->project_id ?? ''),
                 'payment_type'  => 'work_start',
                 'plan'          => $plan,
-                'client_user_id'=> Auth::id(),
+                'client_user_id'=> (string) Auth::id(),
             ],
         ]);
 
@@ -909,6 +934,20 @@ class InspectionController extends Controller
             $totalVisits = max(1, (int) ($inspection->bdc_visits_per_year ?? 1));
             $perVisit    = round($arpTotal / $totalVisits, 2);
             $depositAmount = round($arpTotal * 0.5, 2);
+            $expectedAmountCents = match ($plan) {
+                'per_visit' => (int) round($perVisit * 100),
+                'installment' => (int) round($depositAmount * 100),
+                default => (int) round($arpTotal * 100),
+            };
+
+            $this->assertPaymentIntentMatches($paymentIntent, [
+                'payment_type' => 'work_start',
+                'inspection_id' => (string) $inspection->id,
+                'property_id' => (string) $inspection->property_id,
+                'project_id' => (string) ($inspection->project_id ?? ''),
+                'client_user_id' => (string) Auth::id(),
+                'plan' => $plan,
+            ], $expectedAmountCents);
 
             $fields = [
                 'work_payment_status'          => 'paid',
@@ -1011,14 +1050,14 @@ class InspectionController extends Controller
         $stripe = new \Stripe\StripeClient(config('cashier.secret'));
         $paymentIntent = $stripe->paymentIntents->create([
             'amount'   => (int) round($installAmount * 100),
-            'currency' => 'usd',
+            'currency' => strtolower((string) config('cashier.currency', 'usd')),
             'metadata' => [
-                'inspection_id'      => $inspection->id,
-                'property_id'        => $inspection->property_id,
+                'inspection_id'      => (string) $inspection->id,
+                'property_id'        => (string) $inspection->property_id,
                 'payment_type'       => 'per_visit',
-                'visit_number'       => $installmentNumber,
+                'visit_number'       => (string) $installmentNumber,
                 'payment_plan'       => $paymentPlan,
-                'client_user_id'     => Auth::id(),
+                'client_user_id'     => (string) Auth::id(),
             ],
         ]);
 
@@ -1061,6 +1100,16 @@ class InspectionController extends Controller
 
             $paid  = (int) ($inspection->installments_paid ?? 0) + 1;
             $total = (int) ($inspection->installment_months ?? 1);
+            $installAmount = (float) ($inspection->installment_amount ?? 0);
+
+            $this->assertPaymentIntentMatches($paymentIntent, [
+                'payment_type' => 'per_visit',
+                'inspection_id' => (string) $inspection->id,
+                'property_id' => (string) $inspection->property_id,
+                'client_user_id' => (string) Auth::id(),
+                'visit_number' => (string) $paid,
+                'payment_plan' => (string) ($inspection->payment_plan ?? ''),
+            ], (int) round($installAmount * 100));
 
             $fields = [
                 'installments_paid'          => $paid,
@@ -1136,6 +1185,29 @@ class InspectionController extends Controller
             (float) ($inspection->arp_monthly ?? 0),
             (float) ($inspection->trc_monthly ?? 0),
         );
+    }
+
+    private function assertPaymentIntentMatches(object $paymentIntent, array $expectedMetadata, int $expectedAmountCents): void
+    {
+        $metadata = method_exists($paymentIntent->metadata, 'toArray')
+            ? $paymentIntent->metadata->toArray()
+            : (array) $paymentIntent->metadata;
+
+        foreach ($expectedMetadata as $key => $expectedValue) {
+            if ((string) ($metadata[$key] ?? '') !== (string) $expectedValue) {
+                throw new \RuntimeException("Payment reference {$key} does not match.");
+            }
+        }
+
+        $actualAmountCents = (int) (($paymentIntent->amount_received ?? 0) ?: ($paymentIntent->amount ?? 0));
+        if ($actualAmountCents !== $expectedAmountCents) {
+            throw new \RuntimeException('Payment amount does not match the expected charge.');
+        }
+
+        $expectedCurrency = strtolower((string) config('cashier.currency', 'usd'));
+        if (strtolower((string) ($paymentIntent->currency ?? '')) !== $expectedCurrency) {
+            throw new \RuntimeException('Payment currency does not match.');
+        }
     }
 
     /**

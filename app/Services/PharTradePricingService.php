@@ -30,8 +30,8 @@ class PharTradePricingService
 
     public function priceFinding(Inspection $inspection, array $finding, int $index): array
     {
-        $systemId = !empty($finding['system_id']) ? (int) $finding['system_id'] : null;
-        $subsystemId = !empty($finding['subsystem_id']) ? (int) $finding['subsystem_id'] : null;
+        $systemId = !empty($finding['building_system_id']) ? (int) $finding['building_system_id'] : null;
+        $subsystemId = !empty($finding['building_subsystem_id']) ? (int) $finding['building_subsystem_id'] : null;
         $systemName = trim((string) ($finding['system'] ?? ''));
         $issue = trim((string) ($finding['issue'] ?? $finding['task_question'] ?? 'PHAR finding'));
         $fulfillmentType = $this->normalizeFulfillmentType($finding['fulfillment_type'] ?? null);
@@ -62,8 +62,8 @@ class PharTradePricingService
             'inspection_id' => $inspection->id,
             'property_id' => $inspection->property_id,
             'finding_index' => $index,
-            'system_id' => $systemId,
-            'subsystem_id' => $subsystemId,
+            'building_system_id' => $systemId,
+            'building_subsystem_id' => $subsystemId,
             'trade_application_id' => $rate['trade_application_id'],
             'trade_company_name' => $rate['trade_company_name'],
             'fulfillment_type' => $fulfillmentType,

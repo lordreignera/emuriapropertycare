@@ -16,14 +16,15 @@ return new class extends Migration
             $table->decimal('hst_rate', 5, 2)->default(5.00)->comment('HST % applied to unit cost (e.g. 5 for 5%)');
             $table->decimal('pst_rate', 5, 2)->default(7.00)->comment('PST % applied to unit cost (e.g. 7 for 7%)');
             $table->text('description')->nullable();
-            $table->foreignId('system_id')->nullable()->constrained('systems')->nullOnDelete();
-            $table->foreignId('subsystem_id')->nullable()->constrained('subsystems')->nullOnDelete();
+            $table->foreignId('building_system_id')->nullable()->constrained('building_systems')->nullOnDelete();
+            $table->foreignId('building_subsystem_id')->nullable()->constrained('building_subsystems')->nullOnDelete();
+            $table->foreignId('building_component_id')->nullable()->constrained('building_components')->nullOnDelete();
             $table->boolean('is_active')->default(true);
             $table->integer('sort_order')->default(0);
             $table->timestamps();
 
             $table->index(['is_active', 'sort_order']);
-            $table->index(['system_id', 'subsystem_id'], 'fms_system_subsystem_idx');
+            $table->index(['building_system_id', 'building_subsystem_id'], 'fms_building_system_subsystem_idx');
         });
     }
 

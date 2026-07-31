@@ -115,7 +115,7 @@ class ServiceRequestController extends Controller
         }
 
         $successMessage = $serviceRequest->request_type === 'change_request'
-            ? 'Additional work request submitted successfully. Our team will review it and prepare the assessment path for a quotation.'
+            ? 'Additional work request submitted successfully. Our team will review it and prepare the diagnosis path for a quotation.'
             : 'Service request submitted successfully. Our team will triage it shortly.';
 
         return redirect()->route('client.service-requests.show', $serviceRequest)

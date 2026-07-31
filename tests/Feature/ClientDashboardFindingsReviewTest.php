@@ -4,6 +4,10 @@ namespace Tests\Feature;
 
 use App\Models\Inspection;
 use App\Models\PHARFinding;
+use App\Models\BuildingComponent;
+use App\Models\BuildingSubsystem;
+use App\Models\BuildingSystem;
+use App\Models\PHARFindingAffectedArea;
 use App\Models\Property;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -48,7 +52,7 @@ class ClientDashboardFindingsReviewTest extends TestCase
             ->get(route('client.inspections.findings-report', $inspection));
 
         $response->assertOk();
-        $response->assertSee('Assessment Report');
+        $response->assertSee('Diagnosis Report');
         $response->assertSee('Property &amp; Finding Photos', false);
         $response->assertDontSee('Open Full Twin');
         $response->assertSee('Client reported under Gutters: gutters broken');
@@ -57,11 +61,37 @@ class ClientDashboardFindingsReviewTest extends TestCase
         $response->assertSee('What should be done next?');
         $response->assertSee('Recommended action');
         $response->assertSee('Repair or replace damaged gutter sections');
+        $response->assertSee('Cascading / affected areas');
+        $response->assertSee('Building Envelope');
+        $response->assertSee('Exterior Wall Assemblies');
+        $response->assertSee('Brick Veneer');
+        $response->assertSee('Water staining below the roof edge');
         $response->assertSee('Evidence photos');
         $response->assertSee('demo-gutter.jpg');
         $response->assertSee('Client Decisions');
         $response->assertSee('Do now - include in proposal');
         $response->assertDontSee('An error occurred while processing your inspection request');
+    }
+
+    public function test_admin_cannot_start_deliverable_costing_before_client_commits_findings(): void
+    {
+        [, $inspection] = $this->createClientWithSharedFindings();
+
+        Role::firstOrCreate([
+            'name' => 'Administrator',
+            'guard_name' => 'web',
+        ]);
+
+        $admin = User::factory()->create();
+        $admin->assignRole('Administrator');
+
+        $this->actingAs($admin)
+            ->get(route('inspections.estimation', $inspection))
+            ->assertRedirect(route('inspections.findings-preview', $inspection));
+
+        $this->actingAs($admin)
+            ->post(route('inspections.share-quotation', $inspection))
+            ->assertRedirect(route('inspections.findings-preview', $inspection));
     }
 
     /**
@@ -70,7 +100,7 @@ class ClientDashboardFindingsReviewTest extends TestCase
     private function createClientWithSharedFindings(): array
     {
         $this->withoutMiddleware([
-            \App\Http\Middleware\CheckSubscription::class,
+            \App\Http\Middleware\CheckActiveSubscription::class,
         ]);
 
         $clientRole = Role::firstOrCreate([
@@ -115,7 +145,34 @@ class ClientDashboardFindingsReviewTest extends TestCase
             'property_type_snapshot' => $property->type,
         ]);
 
-        PHARFinding::create([
+        $system = BuildingSystem::create([
+            'code' => 'ENV',
+            'name' => 'Building Envelope',
+            'slug' => 'building-envelope',
+            'sort_order' => 10,
+            'is_core' => true,
+            'is_active' => true,
+        ]);
+
+        $subsystem = BuildingSubsystem::create([
+            'building_system_id' => $system->id,
+            'code' => 'ENV-WALL',
+            'name' => 'Exterior Wall Assemblies',
+            'slug' => 'exterior-wall-assemblies',
+            'sort_order' => 20,
+            'is_active' => true,
+        ]);
+
+        $component = BuildingComponent::create([
+            'building_subsystem_id' => $subsystem->id,
+            'code' => 'ENV-WALL-001',
+            'name' => 'Brick Veneer',
+            'slug' => 'brick-veneer',
+            'sort_order' => 10,
+            'is_active' => true,
+        ]);
+
+        $finding = PHARFinding::create([
             'inspection_id' => $inspection->id,
             'property_id' => $property->id,
             'task_question' => 'gutters broken',
@@ -127,6 +184,17 @@ class ClientDashboardFindingsReviewTest extends TestCase
             'consequence_if_ignored' => 'An error occurred while processing your inspection request. Please try again.',
             'photo_ids' => ['inspections/finding-photos/demo-gutter.jpg'],
             'workflow_status' => 'decision_pending',
+        ]);
+
+        PHARFindingAffectedArea::create([
+            'phar_finding_id' => $finding->id,
+            'building_system_id' => $system->id,
+            'building_subsystem_id' => $subsystem->id,
+            'building_component_id' => $component->id,
+            'location' => 'North elevation',
+            'impact_description' => 'Water staining below the roof edge',
+            'severity' => 'moderate',
+            'sort_order' => 10,
         ]);
 
         return [$client, $inspection];

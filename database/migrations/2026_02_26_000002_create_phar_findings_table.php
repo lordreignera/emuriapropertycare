@@ -15,8 +15,9 @@ return new class extends Migration
             $table->id();
             $table->foreignId('inspection_id')->constrained('inspections')->onDelete('cascade');
             $table->foreignId('property_id')->constrained('properties')->onDelete('cascade');
-            $table->unsignedBigInteger('system_id')->nullable();
-            $table->unsignedBigInteger('subsystem_id')->nullable();
+            $table->foreignId('building_system_id')->nullable()->constrained('building_systems')->nullOnDelete();
+            $table->foreignId('building_subsystem_id')->nullable()->constrained('building_subsystems')->nullOnDelete();
+            $table->foreignId('building_component_id')->nullable()->constrained('building_components')->nullOnDelete();
             $table->unsignedBigInteger('parent_finding_id')->nullable();
             
             // Finding Details
@@ -61,8 +62,8 @@ return new class extends Migration
             
             $table->index(['inspection_id', 'included_yn']);
             $table->index('property_id');
-            $table->index('system_id');
-            $table->index('subsystem_id');
+            $table->index(['building_system_id', 'building_subsystem_id'], 'phar_findings_building_system_subsystem_idx');
+            $table->index('building_component_id');
             $table->index('parent_finding_id');
             $table->index(['severity', 'finding_type']);
         });

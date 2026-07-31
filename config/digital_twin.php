@@ -3,17 +3,14 @@
 return [
     /*
     |--------------------------------------------------------------------------
-    | Point Cloud Conversion
+    | Digital Twin Source Storage
     |--------------------------------------------------------------------------
     |
-    | E57/LAS/LAZ source files are too heavy for direct browser rendering.
-    | Configure these commands when the local machine or worker has PDAL and
-    | PotreeConverter installed.
+    | ETOGO stores property twin metadata and cloud references. Heavy capture
+    | files, point-cloud conversion, and browser-ready tiles should be managed
+    | in Azure, AWS, Matterport, or another external twin-processing service.
     |
     */
 
-    'pdal_binary' => env('DIGITAL_TWIN_PDAL_BINARY', 'pdal'),
-    'potree_converter_binary' => env('DIGITAL_TWIN_POTREE_CONVERTER_BINARY', 'PotreeConverter'),
-    'conversion_timeout' => (int) env('DIGITAL_TWIN_CONVERSION_TIMEOUT', 3600),
     'upload_max_kilobytes' => (int) env('DIGITAL_TWIN_UPLOAD_MAX_KB', 102400),
 ];

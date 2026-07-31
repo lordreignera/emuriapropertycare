@@ -12,8 +12,9 @@ return new class extends Migration
             $table->id();
             $table->string('tool_name', 150);
             $table->unsignedSmallInteger('quantity')->default(1)->comment('Number of units of this tool owned');
-            $table->foreignId('system_id')->nullable()->constrained('systems')->nullOnDelete();
-            $table->foreignId('subsystem_id')->nullable()->constrained('subsystems')->nullOnDelete();
+            $table->foreignId('building_system_id')->nullable()->constrained('building_systems')->nullOnDelete();
+            $table->foreignId('building_subsystem_id')->nullable()->constrained('building_subsystems')->nullOnDelete();
+            $table->foreignId('building_component_id')->nullable()->constrained('building_components')->nullOnDelete();
             $table->foreignId('finding_template_setting_id')->nullable()->constrained('finding_template_settings')->nullOnDelete();
             $table->enum('ownership_status', ['owned', 'hired'])->default('owned');
             $table->enum('availability_status', ['available', 'non_available'])->default('available');
@@ -22,7 +23,7 @@ return new class extends Migration
             $table->boolean('is_active')->default(true);
             $table->timestamps();
 
-            $table->index(['system_id', 'subsystem_id']);
+            $table->index(['building_system_id', 'building_subsystem_id'], 'tool_building_system_subsystem_idx');
             $table->index(['ownership_status', 'availability_status']);
             $table->index(['is_active', 'sort_order']);
         });

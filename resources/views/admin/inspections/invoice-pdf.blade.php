@@ -618,7 +618,7 @@
 <!-- ════ INSPECTOR ASSESSMENT ════ -->
 @if($inspection->summary || $recommendationItems->isNotEmpty() || $inspection->risk_summary)
 <div class="section">
-    <div class="section-title">Inspector Assessment</div>
+    <div class="section-title">Inspector Diagnosis</div>
     <div class="section-body">
         <div class="notes-block">
             @if($inspection->summary)
@@ -647,7 +647,7 @@
 
 <!-- ════ FOOTER ════ -->
 <div class="footer">
-    <strong>EMURIA Regenerative Property Care</strong> &mdash;
+    <strong>ETOGO</strong> &mdash;
     Generated {{ date('F d, Y \a\t h:i A') }} &mdash;
     Report #{{ $inspection->property?->property_code }}-{{ date('Ymd') }}<br>
     This document contains proprietary pricing calculations and should be kept confidential.

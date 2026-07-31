@@ -1,6 +1,6 @@
 @extends('client.layout')
 
-@section('title', ($viewMode ?? 'inspections') === 'quotations' ? 'Remediation Proposals' : 'PHAR Assessments')
+@section('title', ($viewMode ?? 'inspections') === 'quotations' ? 'Remediation Proposals' : 'PHAR Diagnoses')
 
 @section('content')
 @if(($viewMode ?? 'inspections') !== 'quotations' && !empty($findingsReadyInspections) && $findingsReadyInspections->isNotEmpty())
@@ -16,7 +16,7 @@
                         <div>
                             <h4 class="mb-1 fw-bold">Your PHAR report is ready</h4>
                             <p class="text-muted mb-0">
-                                Open the report to review the assessment findings, photos, and plain-language explanation before choosing what should move forward.
+                                Open the report to review the diagnosis findings, photos, and plain-language explanation before choosing what should move forward.
                             </p>
                         </div>
                     </div>
@@ -35,7 +35,7 @@
                             <div class="client-report-ready-item">
                                 <div class="fw-semibold text-dark">{{ $inspection->property?->property_name ?? 'Property' }}</div>
                                 <div class="small text-muted mb-3">
-                                    {{ $inspection->property?->property_code ?? 'Assessment #' . $inspection->id }}
+                                    {{ $inspection->property?->property_code ?? 'Diagnosis #' . $inspection->id }}
                                     <span class="mx-1">.</span>
                                     {{ (int) ($inspection->phar_findings_count ?? 0) }} finding{{ (int) ($inspection->phar_findings_count ?? 0) === 1 ? '' : 's' }}
                                 </div>
@@ -61,7 +61,7 @@
                     @if(($viewMode ?? 'inspections') === 'quotations')
                         <i class="mdi mdi-file-check-outline me-2"></i>Remediation Proposals
                     @else
-                        <i class="mdi mdi-clipboard-check me-2"></i>PHAR Assessments
+                        <i class="mdi mdi-clipboard-check me-2"></i>PHAR Diagnoses
                     @endif
                 </h5>
             </div>

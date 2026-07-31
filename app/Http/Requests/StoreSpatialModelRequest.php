@@ -53,7 +53,6 @@ class StoreSpatialModelRequest extends FormRequest
         $this->merge([
             'provider_model_id' => $providerModelId ?: null,
             'status' => $this->input('status', 'active'),
-            'processing_status' => $this->input('processing_status', 'ready'),
             'is_primary' => $this->boolean('is_primary'),
         ]);
     }
@@ -79,7 +78,6 @@ class StoreSpatialModelRequest extends FormRequest
             ],
             'thumbnail_file' => ['nullable', 'image', 'max:10240'],
             'status' => ['required', Rule::in(['draft', 'active', 'archived'])],
-            'processing_status' => ['required', Rule::in(['queued', 'processing', 'ready', 'failed'])],
             'is_primary' => ['boolean'],
             'accuracy_class' => ['nullable', 'string', 'max:80'],
             'captured_at' => ['nullable', 'date'],
@@ -102,9 +100,6 @@ class StoreSpatialModelRequest extends FormRequest
                 $validator->errors()->add('provider_model_id', 'Matterport capture sources need a Matterport model ID or hosted tour URL.');
             }
 
-            if ($this->input('source_type') === 'master_point_cloud' && !$hasSourceFile && $this->input('processing_status') === 'queued') {
-                $validator->errors()->add('source_file', 'Upload the point-cloud file before queuing conversion. External point-cloud links can be stored as references, but cannot be converted by the local worker.');
-            }
         });
     }
 

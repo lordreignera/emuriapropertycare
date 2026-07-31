@@ -3,15 +3,16 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\InspectionSystem;
+use App\Models\BuildingSystem;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class SystemController extends Controller
 {
     public function index()
     {
-        $systems = InspectionSystem::query()
+        $systems = BuildingSystem::query()
             ->orderBy('sort_order')
             ->orderBy('name')
             ->paginate(20);
@@ -27,47 +28,76 @@ class SystemController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'name' => 'required|string|max:255|unique:systems,name',
-            'slug' => 'nullable|string|max:255|unique:systems,slug',
+            'code' => 'nullable|string|max:20|unique:building_systems,code',
+            'name' => 'required|string|max:150',
+            'slug' => 'nullable|string|max:160|unique:building_systems,slug',
             'description' => 'nullable|string',
             'sort_order' => 'nullable|integer|min:0',
-            'weight' => 'required|integer|min:0|max:20',
+            'weight' => 'nullable|integer|min:0|max:1000',
+            'is_core' => 'nullable|boolean',
             'is_active' => 'nullable|boolean',
         ]);
 
+        $validated['code'] = strtoupper($validated['code'] ?? ('USR-' . Str::upper(Str::random(6))));
         $validated['slug'] = !empty($validated['slug'])
             ? Str::slug($validated['slug'])
             : Str::slug($validated['name']);
         $validated['sort_order'] = $validated['sort_order'] ?? 0;
+        $validated['is_core'] = $request->boolean('is_core');
         $validated['is_active'] = $request->boolean('is_active', true);
+        $validated['metadata'] = ['cpi_weight' => (int) ($validated['weight'] ?? 10)];
+        unset($validated['weight']);
 
-        InspectionSystem::create($validated);
+        if (BuildingSystem::query()->where('slug', $validated['slug'])->exists()) {
+            throw ValidationException::withMessages([
+                'slug' => 'This building system slug is already in use.',
+            ]);
+        }
+
+        BuildingSystem::create($validated);
 
         return redirect()->route('admin.systems.index')
             ->with('success', 'System created successfully.');
     }
 
-    public function edit(InspectionSystem $system)
+    public function edit(BuildingSystem $system)
     {
         return view('admin.pricing-system.systems.edit', compact('system'));
     }
 
-    public function update(Request $request, InspectionSystem $system)
+    public function update(Request $request, BuildingSystem $system)
     {
         $validated = $request->validate([
-            'name' => 'required|string|max:255|unique:systems,name,' . $system->id,
-            'slug' => 'nullable|string|max:255|unique:systems,slug,' . $system->id,
+            'code' => 'nullable|string|max:20|unique:building_systems,code,' . $system->id,
+            'name' => 'required|string|max:150',
+            'slug' => 'nullable|string|max:160|unique:building_systems,slug,' . $system->id,
             'description' => 'nullable|string',
             'sort_order' => 'nullable|integer|min:0',
-            'weight' => 'required|integer|min:0|max:20',
+            'weight' => 'nullable|integer|min:0|max:1000',
+            'is_core' => 'nullable|boolean',
             'is_active' => 'nullable|boolean',
         ]);
 
+        $validated['code'] = strtoupper($validated['code'] ?? $system->code);
         $validated['slug'] = !empty($validated['slug'])
             ? Str::slug($validated['slug'])
             : Str::slug($validated['name']);
         $validated['sort_order'] = $validated['sort_order'] ?? 0;
+        $validated['is_core'] = $request->boolean('is_core');
         $validated['is_active'] = $request->boolean('is_active');
+        $validated['metadata'] = array_merge($system->metadata ?? [], [
+            'cpi_weight' => (int) ($validated['weight'] ?? $system->weight),
+        ]);
+        unset($validated['weight']);
+
+        if (BuildingSystem::query()
+            ->where('slug', $validated['slug'])
+            ->whereKeyNot($system->id)
+            ->exists()) {
+            throw ValidationException::withMessages([
+                'slug' => 'This building system slug is already in use.',
+            ]);
+        }
 
         $system->update($validated);
 
@@ -75,7 +105,7 @@ class SystemController extends Controller
             ->with('success', 'System updated successfully.');
     }
 
-    public function destroy(InspectionSystem $system)
+    public function destroy(BuildingSystem $system)
     {
         $system->delete();
 

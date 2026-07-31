@@ -19,7 +19,7 @@
                     <a href="{{ ($adminPreview ?? false) ? route('inspections.agreement.download', $inspection->id) : route('client.inspections.agreement.download', $inspection->id) }}" class="btn btn-outline-light btn-sm">
                         <i class="mdi mdi-download me-1"></i>Download PDF
                     </a>
-                    <a href="{{ ($adminPreview ?? false) ? (($forCountersign ?? false) ? route('inspections.index', ['view' => 'pending-etogo']) : route('inspections.show', $inspection->id)) : route('client.inspections.index') }}" class="btn btn-light btn-sm">
+                    <a href="{{ ($adminPreview ?? false) ? (($forCountersign ?? false) ? route('inspections.index', ['view' => 'pending-ETOGO']) : route('inspections.show', $inspection->id)) : route('client.inspections.index') }}" class="btn btn-light btn-sm">
                         <i class="mdi mdi-arrow-left me-1"></i>Back to Diagnoses
                     </a>
                 </div>
@@ -53,7 +53,7 @@
                         <span class="badge bg-warning text-dark">Pending</span>
                     @endif
                     <br>
-                    3. Etogo countersign: {!! $inspection->etogo_signed_at ? '<span class="badge bg-success">Completed</span>' : '<span class="badge bg-secondary">Awaiting</span>' !!}
+                    3. ETOGO countersign: {!! $inspection->ETOGO_signed_at ? '<span class="badge bg-success">Completed</span>' : '<span class="badge bg-secondary">Awaiting</span>' !!}
                     @if(!empty($inspection->schedule_blocked_reason))
                         <div class="mt-2 mb-0"><small>{{ $inspection->schedule_blocked_reason }}</small></div>
                     @endif
@@ -64,15 +64,15 @@
                 <hr class="my-4">
 
                 @if($adminPreview ?? false)
-                    @if($inspection->etogo_signed_at)
+                    @if($inspection->ETOGO_signed_at)
                         <div class="alert alert-success mb-0">
-                            <strong>Etogo Staff Signature Completed</strong><br>
-                            Signed by staff user ID: {{ $inspection->etogo_signed_by ?? '-' }}<br>
-                            Date: {{ optional($inspection->etogo_signed_at)->format('M d, Y h:i A') ?: '-' }}
-                            @if($inspection->etogo_signature_image_path)
+                            <strong>ETOGO Staff Signature Completed</strong><br>
+                            Signed by staff user ID: {{ $inspection->ETOGO_signed_by ?? '-' }}<br>
+                            Date: {{ optional($inspection->ETOGO_signed_at)->format('M d, Y h:i A') ?: '-' }}
+                            @if($inspection->ETOGO_signature_image_path)
                                 <div class="mt-2 border rounded bg-white p-2 d-inline-block">
-                                    <img src="{{ \Illuminate\Support\Facades\Storage::disk(config('filesystems.default','public'))->url($inspection->etogo_signature_image_path) }}"
-                                         alt="Etogo Signature"
+                                    <img src="{{ \Illuminate\Support\Facades\Storage::disk(config('filesystems.default','public'))->url($inspection->ETOGO_signature_image_path) }}"
+                                         alt="ETOGO Signature"
                                          style="max-height:60px;max-width:220px;object-fit:contain;">
                                 </div>
                             @endif
@@ -80,17 +80,17 @@
                     @elseif(!$inspection->approved_by_client)
                         <div class="alert alert-info mb-0">
                             <strong>Awaiting Client Signature</strong><br>
-                            Etogo staff can sign only after the client has signed this agreement.
+                            ETOGO staff can sign only after the client has signed this agreement.
                         </div>
                     @elseif(($forCountersign ?? false) && (($inspection->work_payment_status ?? 'pending') !== 'paid'))
                         <div class="alert alert-warning mb-0">
                             <strong>Work Payment Pending</strong><br>
-                            Deposit/work payment must be confirmed before Etogo countersign.
+                            Deposit/work payment must be confirmed before ETOGO countersign.
                         </div>
                     @elseif($forCountersign ?? false)
                         <div class="card border-warning mb-0">
                             <div class="card-header bg-warning text-dark fw-semibold">
-                                <i class="mdi mdi-draw me-1"></i>Etogo Countersign Agreement
+                                <i class="mdi mdi-draw me-1"></i>ETOGO Countersign Agreement
                             </div>
                             <div class="card-body">
                                 <p class="small text-muted mb-3">
@@ -107,7 +107,7 @@
                                     </div>
                                     <small class="text-muted d-block mt-1">
                                         <i class="mdi mdi-check-circle text-success me-1"></i>
-                                        This signature image will be attached as the Etogo countersignature.
+                                        This signature image will be attached as the ETOGO countersignature.
                                         <a href="{{ route('profile.settings') }}" target="_blank" class="ms-1">Change</a>
                                     </small>
                                 </div>
@@ -132,7 +132,7 @@
                                     <div class="form-check mb-3">
                                         <input class="form-check-input @error('staff_acknowledgment') is-invalid @enderror" type="checkbox" value="1" id="staff_acknowledgment" name="staff_acknowledgment" required>
                                         <label class="form-check-label" for="staff_acknowledgment">
-                                            I confirm that I have reviewed this client-signed agreement and I countersign on behalf of Etogo.
+                                            I confirm that I have reviewed this client-signed agreement and I countersign on behalf of ETOGO.
                                         </label>
                                         @error('staff_acknowledgment')
                                             <div class="invalid-feedback d-block">{{ $message }}</div>
@@ -149,7 +149,7 @@
                     @else
                         <div class="alert alert-secondary mb-0">
                             <strong>Preview Only</strong><br>
-                            To countersign from operations queue, open Pending Etogo and click <em>Review &amp; Countersign</em>.
+                            To countersign from operations queue, open Pending ETOGO and click <em>Review &amp; Countersign</em>.
                         </div>
                     @endif
                 @elseif($inspection->approved_by_client)

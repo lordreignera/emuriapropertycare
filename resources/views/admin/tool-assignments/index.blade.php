@@ -1,6 +1,15 @@
-﻿@extends('admin.layout')
+@extends('admin.layout')
 
 @section('content')
+<style>
+    .tool-assignment-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; padding: 14px; }
+    .tool-assignment-card { border: 1px solid #dfe6ef; border-radius: 8px; background: #fff; padding: 14px; }
+    .tool-assignment-card.is-returned { background: #f0fff4; border-color: #bbf7d0; }
+    .tool-assignment-card.is-pending { background: #f8fafc; }
+    .tool-assignment-metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0; }
+    .tool-assignment-metric { border: 1px solid #edf1f7; border-radius: 7px; padding: 8px; text-align: center; background: #fbfcfe; }
+    .tool-assignment-metric small { display: block; color: #667085; font-size: .68rem; font-weight: 700; text-transform: uppercase; }
+</style>
 <div class="row">
     <div class="col-lg-12 grid-margin stretch-card">
         <div class="card">
@@ -14,7 +23,7 @@
                             Tool Assignment &amp; Return
                         </h4>
                         <p class="text-muted small mb-0 mt-1">
-                            Assign tools to client-signed, deposit-paid projects before Etogo countersign.
+                            Assign tools to client-signed, deposit-paid projects before ETOGO countersign.
                             Track quantities deployed and returned.
                         </p>
                     </div>
@@ -132,7 +141,7 @@
                                     </div>
                                     <div class="small text-muted mt-1">
                                         <i class="mdi mdi-file-sign me-1"></i>
-                                        Signed: {{ $inspection->etogo_signed_at?->format('d M Y') ?? '&mdash;' }}
+                                        Signed: {{ $inspection->ETOGO_signed_at?->format('d M Y') ?? '&mdash;' }}
                                         @if($inspection->work_schedule && $inspection->work_schedule !== '[]')
                                             &nbsp;|&nbsp;<i class="mdi mdi-calendar-check me-1"></i>Scheduled
                                         @else
@@ -152,109 +161,74 @@
                             </div>
                         </div>
 
-                        <div class="table-responsive">
-                            <table class="table table-sm table-hover mb-0 align-middle">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Tool</th>
-                                        <th class="text-center">Stock Total</th>
-                                        <th class="text-center">Remaining</th>
-                                        <th class="text-center">Available Now</th>
-                                        <th class="text-center">Assigned Qty</th>
-                                        <th class="text-center">Ownership</th>
-                                        <th>Last Updated</th>
-                                        <th>Status</th>
-                                        <th>Returned By</th>
-                                        <th>Return Notes</th>
-                                        <th class="text-center">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    @foreach($propertyAssignments as $assignment)
-                                        @php
-                                            $ts         = $assignment->toolSetting;
-                                            $stockTotal = $ts ? (int)$ts->quantity : 0;
-                                            $deployed   = $ts ? (int)($deployedByTool[$ts->id] ?? 0) : 0;
-                                            $remaining  = max(0, $stockTotal - $deployed);
-                                            $maxForRow  = $remaining + (int)$assignment->quantity;
-                                            $effectiveAssigned = $assignment->isReturned() ? 0 : (int) $assignment->quantity;
-                                        @endphp
-                                        <tr class="{{ $assignment->isReturned() ? 'table-success' : ($assignment->quantity > 0 ? '' : 'table-light') }}">
-                                            <td><strong>{{ $assignment->tool_name }}</strong></td>
-                                            <td class="text-center fw-semibold">{{ $stockTotal ?: '&mdash;' }}</td>
-                                            <td class="text-center">
-                                                @if($ts)
-                                                    <span class="badge {{ $remaining <= 0 ? 'bg-danger' : ($remaining < 3 ? 'bg-warning text-dark' : 'bg-success') }}">
-                                                        {{ $remaining }}
-                                                    </span>
-                                                @else
-                                                    <span class="text-muted">&mdash;</span>
-                                                @endif
-                                            </td>
-                                            <td class="text-center">
-                                                @if($ts)
-                                                    <span class="fw-semibold {{ $remaining <= 0 ? 'text-danger' : 'text-success' }}">{{ $remaining }}</span>
-                                                    <div class="text-muted" style="font-size:0.75rem;">in store now</div>
-                                                @else
-                                                    <span class="text-muted">&mdash;</span>
-                                                @endif
-                                            </td>
-                                            <td class="text-center">
-                                                @if($assignment->isReturned())
-                                                    <span class="badge bg-success">0</span>
-                                                    <div class="text-muted" style="font-size:0.75rem;">Returned {{ $assignment->quantity }}</div>
-                                                @elseif($effectiveAssigned > 0)
-                                                    <span class="badge bg-primary">{{ $effectiveAssigned }}</span>
-                                                @else
-                                                    <span class="text-muted small">Not assigned</span>
-                                                @endif
-                                            </td>
-                                            <td class="text-center">
-                                                <span class="badge {{ $assignment->ownership_status === 'owned' ? 'bg-primary' : 'bg-secondary' }}">
-                                                    {{ ucfirst($assignment->ownership_status ?? '&mdash;') }}
-                                                </span>
-                                            </td>
-                                            <td class="text-nowrap" style="font-size:0.85rem;">
-                                                {{ $assignment->updated_at?->format('d M Y') }}
-                                            </td>
-                                            <td>
-                                                @if($assignment->isReturned())
-                                                    <span class="badge bg-success"><i class="mdi mdi-check-circle me-1"></i>Returned</span>
-                                                    <div class="text-muted" style="font-size:0.78rem;">{{ $assignment->returned_at->format('d M Y, H:i') }}</div>
-                                                @elseif($assignment->quantity > 0)
-                                                    <span class="badge bg-danger"><i class="mdi mdi-clock-outline me-1"></i>Out</span>
-                                                @else
-                                                    <span class="badge bg-secondary">Pending</span>
-                                                @endif
-                                            </td>
-                                            <td style="font-size:0.85rem;">{{ optional($assignment->returnedBy)->name ?? '&mdash;' }}</td>
-                                            <td style="font-size:0.82rem;max-width:160px;">{{ $assignment->return_notes ?? '&mdash;' }}</td>
-                                            <td class="text-center">
-                                                <div class="d-flex gap-1 justify-content-center flex-nowrap">
-                                                    @if(! $assignment->isReturned())
-                                                        <button class="btn btn-sm btn-outline-primary"
-                                                                data-bs-toggle="modal"
-                                                                data-bs-target="#assignModal{{ $assignment->id }}"
-                                                                title="Assign / Update Quantity">
-                                                            <i class="mdi mdi-package-variant-closed"></i>
-                                                        </button>
-                                                        @if($assignment->quantity > 0)
-                                                            <button class="btn btn-sm btn-outline-success"
-                                                                    data-bs-toggle="modal"
-                                                                    data-bs-target="#returnModal{{ $assignment->id }}"
-                                                                    title="Mark Returned">
-                                                                <i class="mdi mdi-keyboard-return"></i>
-                                                            </button>
-                                                        @endif
-                                                    @else
-                                                        <span class="text-success small"><i class="mdi mdi-check"></i> Done</span>
-                                                    @endif
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    @endforeach
-                                </tbody>
-                            </table>
+                        <div class="tool-assignment-grid">
+                            @foreach($propertyAssignments as $assignment)
+                                @php
+                                    $ts = $assignment->toolSetting;
+                                    $stockTotal = $ts ? (int) $ts->quantity : 0;
+                                    $deployed = $ts ? (int) ($deployedByTool[$ts->id] ?? 0) : 0;
+                                    $remaining = max(0, $stockTotal - $deployed);
+                                    $effectiveAssigned = $assignment->isReturned() ? 0 : (int) $assignment->quantity;
+                                    $toolCardClass = $assignment->isReturned() ? 'is-returned' : ($assignment->quantity > 0 ? '' : 'is-pending');
+                                @endphp
+                                <article class="tool-assignment-card {{ $toolCardClass }}">
+                                    <div class="d-flex justify-content-between align-items-start gap-2">
+                                        <div>
+                                            <h6 class="fw-bold mb-1">{{ $assignment->tool_name }}</h6>
+                                            <span class="badge {{ $assignment->ownership_status === 'owned' ? 'bg-primary' : 'bg-secondary' }}">{{ ucfirst($assignment->ownership_status ?? 'N/A') }}</span>
+                                        </div>
+                                        <div class="text-end">
+                                            @if($assignment->isReturned())
+                                                <span class="badge bg-success"><i class="mdi mdi-check-circle me-1"></i>Returned</span>
+                                                <div class="text-muted" style="font-size:0.78rem;">{{ $assignment->returned_at->format('d M Y, H:i') }}</div>
+                                            @elseif($assignment->quantity > 0)
+                                                <span class="badge bg-danger"><i class="mdi mdi-clock-outline me-1"></i>Out</span>
+                                            @else
+                                                <span class="badge bg-secondary">Pending</span>
+                                            @endif
+                                        </div>
+                                    </div>
+                                    <div class="tool-assignment-metrics">
+                                        <div class="tool-assignment-metric"><strong>{{ $stockTotal ?: '-' }}</strong><small>Stock</small></div>
+                                        <div class="tool-assignment-metric">
+                                            @if($ts)
+                                                <strong class="{{ $remaining <= 0 ? 'text-danger' : 'text-success' }}">{{ $remaining }}</strong>
+                                            @else
+                                                <strong>-</strong>
+                                            @endif
+                                            <small>Available</small>
+                                        </div>
+                                        <div class="tool-assignment-metric">
+                                            @if($assignment->isReturned())
+                                                <strong class="text-success">0</strong><small>Returned {{ $assignment->quantity }}</small>
+                                            @elseif($effectiveAssigned > 0)
+                                                <strong class="text-primary">{{ $effectiveAssigned }}</strong><small>Assigned</small>
+                                            @else
+                                                <strong>-</strong><small>Assigned</small>
+                                            @endif
+                                        </div>
+                                    </div>
+                                    <div class="small text-muted mb-2">
+                                        <i class="mdi mdi-calendar-edit me-1"></i>{{ $assignment->updated_at?->format('d M Y') }}
+                                        @if($assignment->returnedBy)
+                                            <span class="ms-2"><i class="mdi mdi-account-check-outline me-1"></i>{{ $assignment->returnedBy->name }}</span>
+                                        @endif
+                                    </div>
+                                    @if($assignment->return_notes)
+                                        <div class="small border rounded p-2 mb-2 bg-light">{{ $assignment->return_notes }}</div>
+                                    @endif
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        @if(! $assignment->isReturned())
+                                            <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#assignModal{{ $assignment->id }}" title="Assign / Update Quantity"><i class="mdi mdi-package-variant-closed me-1"></i>Assign</button>
+                                            @if($assignment->quantity > 0)
+                                                <button class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#returnModal{{ $assignment->id }}" title="Mark Returned"><i class="mdi mdi-keyboard-return me-1"></i>Return</button>
+                                            @endif
+                                        @else
+                                            <span class="text-success small"><i class="mdi mdi-check me-1"></i>Done</span>
+                                        @endif
+                                    </div>
+                                </article>
+                            @endforeach
                         </div>
                     </div>
                 @endforeach
@@ -512,7 +486,7 @@ document.addEventListener('DOMContentLoaded', function () {
             // Restore original text first (strip any previously injected badge)
             opt.textContent = originalOptionText[opt.value] || opt.textContent;
             if (recommendedIds.includes(opt.value)) {
-                opt.textContent = '⭐ [Suggested] ' + (originalOptionText[opt.value] || opt.textContent);
+                opt.textContent = '? [Suggested] ' + (originalOptionText[opt.value] || opt.textContent);
             }
         });
     };

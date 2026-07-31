@@ -118,7 +118,7 @@
                     </a>
                 @endif
                 <a href="{{ route('client.inspections.index') }}" class="btn btn-light btn-sm">
-                    <i class="mdi mdi-arrow-left me-1"></i>Back to PHAR Assessments
+                    <i class="mdi mdi-arrow-left me-1"></i>Back to PHAR Diagnoses
                 </a>
             </div>
         </div>
@@ -158,7 +158,7 @@
                 <div class="card-body p-4">
                     <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-3">
                         <div>
-                            <h4 class="fw-bold mb-1">Assessment Report</h4>
+                            <h4 class="fw-bold mb-1">Diagnosis Report</h4>
                             <p class="text-muted mb-0">
                                 This report shows what was found, the supporting photos, why it matters, and what ETOGO recommends.
                             </p>
@@ -198,6 +198,8 @@
                                 </div>
 
                                 @include('inspections.partials.finding-understanding', ['f' => $f])
+
+                                @include('inspections.partials.finding-affected-areas', ['f' => $f])
 
                                 @if($recommendation)
                                     <div class="client-recommendation-box">
@@ -346,6 +348,19 @@
     border-radius: 8px;
     background: #f1fbf5;
     color: #163c28;
+}
+
+.finding-affected-list {
+    display: grid;
+    gap: 8px;
+}
+
+.finding-affected-item {
+    border: 1px solid #f1d9a6;
+    border-left: 4px solid #f59f00;
+    border-radius: 8px;
+    background: #fffaf0;
+    padding: 10px 12px;
 }
 
 </style>

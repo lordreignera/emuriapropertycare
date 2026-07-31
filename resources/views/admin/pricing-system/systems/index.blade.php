@@ -25,6 +25,7 @@
                             <tr>
                                 <th>#</th>
                                 <th>Name</th>
+                                <th>Code</th>
                                 <th>Slug</th>
                                 <th>Sort</th>
                                 <th title="CPI system weight used in scoring formula (max 20, total 197)">Weight <i class="mdi mdi-information-outline text-muted" style="font-size:.85rem;"></i></th>
@@ -37,7 +38,13 @@
                             @forelse($systems as $system)
                                 <tr>
                                     <td>{{ $systems->firstItem() + $loop->index }}</td>
-                                    <td><strong>{{ $system->name }}</strong></td>
+                                    <td>
+                                        <strong>{{ $system->name }}</strong>
+                                        @if($system->is_core)
+                                            <span class="badge bg-info ms-1">Core</span>
+                                        @endif
+                                    </td>
+                                    <td><code>{{ $system->code }}</code></td>
                                     <td><code>{{ $system->slug }}</code></td>
                                     <td>{{ $system->sort_order }}</td>
                                     <td>
@@ -52,8 +59,11 @@
                                     </td>
                                     <td>{{ $system->subsystems()->count() }}</td>
                                     <td>
-                                        <a href="{{ route('admin.subsystems.index', ['system_id' => $system->id]) }}" class="btn btn-sm btn-info">
+                                        <a href="{{ route('admin.subsystems.index', ['building_system_id' => $system->id]) }}" class="btn btn-sm btn-info">
                                             <i class="mdi mdi-format-list-bulleted"></i> Manage Subsystems
+                                        </a>
+                                        <a href="{{ route('admin.components.index', ['building_system_id' => $system->id]) }}" class="btn btn-sm btn-secondary">
+                                            <i class="mdi mdi-shape-outline"></i> Components
                                         </a>
                                         <a href="{{ route('admin.systems.edit', $system) }}" class="btn btn-sm btn-warning">
                                             <i class="mdi mdi-pencil"></i> Edit
@@ -69,7 +79,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="8" class="text-center py-4 text-muted">No systems found.</td>
+                                    <td colspan="9" class="text-center py-4 text-muted">No systems found.</td>
                                 </tr>
                             @endforelse
                         </tbody>

@@ -3,37 +3,26 @@
 namespace Database\Seeders;
 
 use App\Models\FindingTemplateSetting;
-use App\Models\InspectionSubsystem;
-use App\Models\InspectionSystem;
+use App\Support\BuildingTaxonomyResolver;
 use Illuminate\Database\Seeder;
 
 class FindingTemplateSettingsSeeder extends Seeder
 {
     public function run(): void
     {
-        $systemMap = InspectionSystem::query()->pluck('id', 'name');
-        $subsystemMap = InspectionSubsystem::query()->get()->keyBy(function ($subsystem) {
-            return $subsystem->system_id . '|' . $subsystem->name;
-        });
-
         $activeReferences = [];
 
         foreach (FindingTemplateSetting::defaults() as $row) {
-            $systemId = $systemMap[$row['system_name']] ?? null;
-            $subsystemId = null;
-
-            if ($systemId !== null) {
-                $subsystemKey = $systemId . '|' . $row['subsystem_name'];
-                $subsystemId = optional($subsystemMap->get($subsystemKey))->id;
-            }
+            $taxonomy = BuildingTaxonomyResolver::resolve($row['system_name'] ?? null, $row['subsystem_name'] ?? null);
 
             $activeReferences[] = $row['task_question'];
 
             FindingTemplateSetting::updateOrCreate(
                 ['task_question' => $row['task_question']],
                 [
-                    'system_id'               => $systemId,
-                    'subsystem_id'            => $subsystemId,
+                    'building_system_id' => $taxonomy['building_system_id'],
+                    'building_subsystem_id' => $taxonomy['building_subsystem_id'],
+                    'building_component_id' => $taxonomy['building_component_id'],
                     'category'                => $row['category'],
                     'default_included'        => $row['default_included'],
                     'default_notes'           => $row['default_notes'],

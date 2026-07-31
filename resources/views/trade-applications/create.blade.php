@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Trade Partner Onboarding | {{ config('app.name', 'EMURIA') }}</title>
+    <title>Trade Partner Onboarding | {{ config('app.name', 'ETOGO') }}</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <style>
         :root {
@@ -302,6 +302,30 @@
             padding: 14px;
         }
 
+        .subsystem-pricing-row.is-modal-open {
+            position: fixed;
+            z-index: 80;
+            top: 50%;
+            left: 50%;
+            width: min(760px, calc(100vw - 32px));
+            max-height: calc(100vh - 64px);
+            overflow: auto;
+            transform: translate(-50%, -50%);
+            background: #fff;
+            border: 2px solid rgba(68, 82, 180, .35);
+            border-radius: 8px;
+            box-shadow: 0 30px 90px rgba(15, 23, 42, .34);
+            padding: 22px;
+        }
+
+        .subsystem-pricing-row.is-modal-open::before {
+            content: '';
+            position: fixed;
+            inset: -100vh -100vw;
+            z-index: -1;
+            background: rgba(15, 23, 42, .44);
+        }
+
         .subsystem-pricing-row[hidden] {
             display: none;
         }
@@ -312,6 +336,22 @@
             border-radius: 8px;
             background: #f8fafc;
             padding: 16px;
+        }
+
+        .custom-coverage-card[hidden] {
+            display: none;
+        }
+
+        .coverage-choice-card {
+            margin-top: 18px;
+            border: 1px solid #d9dee8;
+            border-radius: 8px;
+            background: #fff;
+            padding: 16px;
+            display: flex;
+            gap: 14px;
+            justify-content: space-between;
+            align-items: center;
         }
 
         .subsystem-pricing-head {
@@ -330,6 +370,13 @@
             color: var(--muted);
             font-size: 0.78rem;
             font-weight: 800;
+        }
+
+        .pricing-modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 16px;
         }
 
         .field-error,
@@ -473,8 +520,8 @@
         <div class="wizard-wrap">
             <div class="hero-panel">
                 <div>
-                    <a href="/home/index.html" class="back-link">Back to EMURIA</a>
-                    <h1>Become an EMURIA Trade Partner</h1>
+                    <a href="/home/index.html" class="back-link">Back to ETOGO</a>
+                    <h1>Become an ETOGO Trade Partner</h1>
                     <p>Tell us who you are, the systems you service, and upload your compliance documents. Approved partners can be matched to clear, documented work scopes.</p>
                 </div>
             </div>
@@ -498,6 +545,7 @@
                         'sf' => '(SF) Square Foot',
                         'lf' => '(LF) Linear Foot',
                         'ea' => '(EA) Each',
+                        'pc' => '(PC) Pieces',
                         'hr' => '(HR) Hour',
                         'day' => '(DAY) Day',
                         'ls' => '(LS) Lump Sum',
@@ -558,13 +606,16 @@
                         <section class="form-step" data-step="1">
                             <div class="step-kicker">Step 2 of 5</div>
                             <h2 class="step-title">Systems and subsystems</h2>
-                            <p class="step-copy">Add one system at a time, then choose the subsystems your company can safely handle.</p>
+                            <p class="step-copy">Add one system at a time, then choose each subsystem and enter its trade pricing.</p>
 
                             @php
                                 $selectedSystemIds = collect(old('system_ids', []))->map(fn($id) => (string) $id)->all();
                                 $selectedSubsystemIds = collect(old('subsystem_ids', []))->map(fn($id) => (string) $id)->all();
                                 $oldSubsystemPricing = old('subsystem_pricing', []);
-                                $oldCustomCoverage = old('custom_coverage', [[]]);
+                                $oldCustomCoverage = old('custom_coverage', []);
+                                $showCustomCoverage = collect($oldCustomCoverage)->filter(fn($coverage) => collect((array) $coverage)->filter(fn($value) => trim((string) $value) !== '')->isNotEmpty())->isNotEmpty()
+                                    || $errors->has('custom_coverage')
+                                    || collect(array_keys($errors->getMessages()))->contains(fn($key) => str_starts_with($key, 'custom_coverage.'));
                             @endphp
 
                             <div class="coverage-picker">
@@ -614,7 +665,7 @@
                                                 <div class="subsystem-pricing-row" data-subsystem-pricing="{{ $subsystem->id }}" {{ $subsystemSelected ? '' : 'hidden' }}>
                                                     <div class="subsystem-pricing-head">
                                                         <strong>{{ $system->name }} / {{ $subsystem->name }}</strong>
-                                                        <span class="currency-note">All rates in CAD</span>
+                                                        <span class="currency-note">Subsystem pricing - CAD</span>
                                                     </div>
                                                     <div class="mini-grid">
                                                         <div class="field">
@@ -630,27 +681,22 @@
                                                             @enderror
                                                         </div>
                                                         <div class="field">
-                                                            <label>Typical trade rate (CAD)</label>
+                                                            <label>Trade rate (CAD)</label>
                                                             <input type="number" min="0" step="0.01" name="subsystem_pricing[{{ $subsystem->id }}][typical_rate]" value="{{ $subsystemPricing['typical_rate'] ?? '' }}" placeholder="Example: 100.00" data-subsystem-required="{{ $subsystem->id }}">
                                                             @error("subsystem_pricing.$subsystem->id.typical_rate")
                                                                 <div class="field-error">{{ $message }}</div>
                                                             @enderror
                                                         </div>
                                                         <div class="field">
-                                                            <label>Maximum charge (CAD)</label>
-                                                            <input type="number" min="0" step="0.01" name="subsystem_pricing[{{ $subsystem->id }}][maximum_charge]" value="{{ $subsystemPricing['maximum_charge'] ?? '' }}" placeholder="Optional">
-                                                            @error("subsystem_pricing.$subsystem->id.maximum_charge")
+                                                            <label>Estimated hours</label>
+                                                            <input type="number" min="0" step="0.25" name="subsystem_pricing[{{ $subsystem->id }}][estimated_hours]" value="{{ $subsystemPricing['estimated_hours'] ?? '' }}" placeholder="Example: 4">
+                                                            @error("subsystem_pricing.$subsystem->id.estimated_hours")
                                                                 <div class="field-error">{{ $message }}</div>
                                                             @enderror
                                                         </div>
-                                                        <div class="field">
-                                                            <label>Estimated duration</label>
-                                                            <input name="subsystem_pricing[{{ $subsystem->id }}][estimated_duration]" value="{{ $subsystemPricing['estimated_duration'] ?? '' }}" placeholder="Example: 3 days, 4 hours">
-                                                        </div>
-                                                        <div class="field" style="grid-column: span 2;">
-                                                            <label>Pricing notes</label>
-                                                            <input name="subsystem_pricing[{{ $subsystem->id }}][notes]" value="{{ $subsystemPricing['notes'] ?? '' }}" placeholder="Materials, exclusions, access rules, warranty limits">
-                                                        </div>
+                                                    </div>
+                                                    <div class="pricing-modal-actions">
+                                                        <button type="button" class="btn-wizard btn-secondary" data-close-pricing="{{ $subsystem->id }}">Done</button>
                                                     </div>
                                                 </div>
                                             @endforeach
@@ -662,12 +708,20 @@
                                 @endforeach
                             </div>
 
-                            <div class="custom-coverage-card">
+                            <div class="coverage-choice-card">
+                                <div>
+                                    <strong>Other system or subsystem not listed?</strong>
+                                    <p class="step-copy" style="margin: 4px 0 0;">Only add this when your trade covers work that is not yet in our system list.</p>
+                                </div>
+                                <button type="button" class="btn-wizard btn-secondary" id="showCustomCoverage">Add Other Coverage</button>
+                            </div>
+
+                            <div class="custom-coverage-card" id="customCoverageCard" {{ $showCustomCoverage ? '' : 'hidden' }}>
                                 <div class="subsystem-pricing-head">
                                     <strong>Other system or subsystem not listed</strong>
                                     <span class="currency-note">Optional, all rates in CAD</span>
                                 </div>
-                                <p class="step-copy" style="margin-bottom: 14px;">Use this when your trade covers work that is not yet in our system list.</p>
+                                <p class="step-copy" style="margin-bottom: 14px;">Enter only the system, subsystem, pricing unit, trade rate and estimated hours.</p>
 
                                 <div id="customCoverageRows">
                                     @foreach(array_values($oldCustomCoverage ?: [[]]) as $customIndex => $customCoverage)
@@ -700,26 +754,18 @@
                                                     @enderror
                                                 </div>
                                                 <div class="field">
-                                                    <label>Typical trade rate (CAD)</label>
+                                                    <label>Trade rate (CAD)</label>
                                                     <input type="number" min="0" step="0.01" name="custom_coverage[{{ $customIndex }}][typical_rate]" value="{{ $customCoverage['typical_rate'] ?? '' }}" placeholder="Example: 100.00">
                                                     @error("custom_coverage.$customIndex.typical_rate")
                                                         <div class="field-error">{{ $message }}</div>
                                                     @enderror
                                                 </div>
                                                 <div class="field">
-                                                    <label>Maximum charge (CAD)</label>
-                                                    <input type="number" min="0" step="0.01" name="custom_coverage[{{ $customIndex }}][maximum_charge]" value="{{ $customCoverage['maximum_charge'] ?? '' }}" placeholder="Optional">
-                                                    @error("custom_coverage.$customIndex.maximum_charge")
+                                                    <label>Estimated hours</label>
+                                                    <input type="number" min="0" step="0.25" name="custom_coverage[{{ $customIndex }}][estimated_hours]" value="{{ $customCoverage['estimated_hours'] ?? '' }}" placeholder="Example: 6">
+                                                    @error("custom_coverage.$customIndex.estimated_hours")
                                                         <div class="field-error">{{ $message }}</div>
                                                     @enderror
-                                                </div>
-                                                <div class="field">
-                                                    <label>Estimated duration</label>
-                                                    <input name="custom_coverage[{{ $customIndex }}][estimated_duration]" value="{{ $customCoverage['estimated_duration'] ?? '' }}" placeholder="Example: 2 days">
-                                                </div>
-                                                <div class="field" style="grid-column: span 2;">
-                                                    <label>Pricing notes</label>
-                                                    <input name="custom_coverage[{{ $customIndex }}][notes]" value="{{ $customCoverage['notes'] ?? '' }}" placeholder="Materials, exclusions, access rules">
                                                 </div>
                                             </div>
                                         </div>
@@ -782,11 +828,9 @@
                                         <div class="field"><label>Minimum service charge (CAD)</label><input type="number" min="0" step="0.01" name="minimum_service_charge" value="{{ old('minimum_service_charge') }}" placeholder="Example: CAD 350.00"></div>
                                         <div class="field"><label>Emergency premium</label><input name="emergency_premium" value="{{ old('emergency_premium') }}" placeholder="Example: 1.5x after hours"></div>
                                         <div class="field"><label>Travel charge policy</label><input name="travel_charge_policy" value="{{ old('travel_charge_policy') }}" placeholder="Included, per trip, per zone, per km"><input type="file" name="travel_policy_document" aria-label="Upload travel charge policy document"></div>
-                                        <div class="field"><label>Material policy</label><input name="material_policy" value="{{ old('material_policy') }}" placeholder="Included, excluded, case by case"><input type="file" name="material_policy_document" aria-label="Upload material policy document"></div>
                                         <div class="field"><label>Equipment policy</label><input name="equipment_policy" value="{{ old('equipment_policy') }}" placeholder="Included or separately disclosed"><input type="file" name="equipment_policy_document" aria-label="Upload equipment policy document"></div>
                                         <div class="field"><label>Disposal policy</label><input name="disposal_policy" value="{{ old('disposal_policy') }}" placeholder="Onsite bin, trade removal, dump fees"><input type="file" name="disposal_policy_document" aria-label="Upload disposal policy document"></div>
                                         <div class="field"><label>Standard warranty</label><input name="standard_warranty" value="{{ old('standard_warranty') }}" placeholder="Example: 1 year labour"><input type="file" name="warranty_document" aria-label="Upload warranty document"></div>
-                                        <div class="field"><label>Pricing notes</label><input name="pricing_notes" value="{{ old('pricing_notes') }}" placeholder="Anything admin should know about your pricing"><input type="file" name="pricing_policy_document" aria-label="Upload pricing policy document"></div>
                                     </div>
                                 </div>
 
@@ -821,19 +865,19 @@
                         <section class="form-step" data-step="4">
                             <div class="step-kicker">Step 5 of 5</div>
                             <h2 class="step-title">Review and agreement</h2>
-                            <p class="step-copy">Before submitting, confirm that your information is accurate and that you agree to EMURIA's partner review terms.</p>
+                            <p class="step-copy">Before submitting, confirm that your information is accurate and that you agree to ETOGO's partner review terms.</p>
 
                             <div class="terms-box">
                                 <strong>Trade partner submission terms</strong>
                                 <ul>
                                     <li>The information and documents submitted are accurate to the best of your knowledge.</li>
-                                    <li>EMURIA may review, verify, approve, conditionally approve, reject, or suspend applications.</li>
+                                    <li>ETOGO may review, verify, approve, conditionally approve, reject, or suspend applications.</li>
                                     <li>Approval is required before receiving work orders or being included in trade pricing workflows.</li>
                                     <li>Uploaded documents may be used for compliance review and work-readiness assessment.</li>
                                 </ul>
                                 <label class="mt-4 flex items-start gap-3" style="display: flex; margin-top: 18px;">
                                     <input type="checkbox" name="terms_accepted" value="1" required style="margin-top: 4px;" {{ old('terms_accepted') ? 'checked' : '' }}>
-                                    <span>I agree to the EMURIA trade partner submission terms and confirm that the information provided is true and complete.</span>
+                                    <span>I agree to the ETOGO trade partner submission terms and confirm that the information provided is true and complete.</span>
                                 </label>
                             </div>
                         </section>
@@ -867,6 +911,8 @@
             var coverageCards = Array.prototype.slice.call(document.querySelectorAll('[data-coverage-system]'));
             var customCoverageRows = document.getElementById('customCoverageRows');
             var addCustomCoverage = document.getElementById('addCustomCoverage');
+            var showCustomCoverage = document.getElementById('showCustomCoverage');
+            var customCoverageCard = document.getElementById('customCoverageCard');
             var initialStep = {{ (int) $initialStep }};
 
             function showStep(index) {
@@ -986,6 +1032,7 @@
 
                     row.hidden = !checkbox.checked;
                     if (!checkbox.checked) {
+                        row.classList.remove('is-modal-open');
                         row.querySelectorAll('input, select, textarea').forEach(function (field) {
                             field.classList.remove('is-invalid');
                         });
@@ -994,6 +1041,30 @@
                         });
                     }
                 });
+            }
+
+            function openSubsystemPricing(subsystemId) {
+                var row = document.querySelector('[data-subsystem-pricing="' + subsystemId + '"]');
+                if (!row) {
+                    return;
+                }
+
+                row.hidden = false;
+                document.querySelectorAll('.subsystem-pricing-row.is-modal-open').forEach(function (openRow) {
+                    openRow.classList.remove('is-modal-open');
+                });
+                row.classList.add('is-modal-open');
+                var firstField = row.querySelector('select, input');
+                if (firstField) {
+                    firstField.focus({ preventScroll: true });
+                }
+            }
+
+            function closeSubsystemPricing(subsystemId) {
+                var row = document.querySelector('[data-subsystem-pricing="' + subsystemId + '"]');
+                if (row) {
+                    row.classList.remove('is-modal-open');
+                }
             }
 
             function rowHasAnyValue(row) {
@@ -1041,14 +1112,15 @@
                     var subsystemField = row.querySelector('input[name$="[subsystem_name]"]');
                     var unitField = row.querySelector('select[name$="[pricing_unit]"]');
                     var rateField = row.querySelector('input[name$="[typical_rate]"]');
-                    var maximumField = row.querySelector('input[name$="[maximum_charge]"]');
+                    var hoursField = row.querySelector('input[name$="[estimated_hours]"]');
                     var rowComplete = true;
 
                     [
                         [systemField, 'Enter the other system name.'],
                         [subsystemField, 'Enter the other subsystem or work type.'],
                         [unitField, 'Choose the pricing unit for this other coverage.'],
-                        [rateField, 'Enter the typical CAD rate for this other coverage.']
+                        [rateField, 'Enter the CAD trade rate for this other coverage.'],
+                        [hoursField, 'Enter estimated hours for this other coverage.']
                     ].forEach(function (pair) {
                         if (pair[0] && !pair[0].value) {
                             addClientError(pair[0], pair[1]);
@@ -1056,12 +1128,6 @@
                             rowComplete = false;
                         }
                     });
-
-                    if (maximumField && maximumField.value && rateField && rateField.value && parseFloat(maximumField.value) < parseFloat(rateField.value)) {
-                        addClientError(maximumField, 'Maximum charge must be greater than the typical trade rate.');
-                        firstInvalid = firstInvalid || maximumField;
-                        rowComplete = false;
-                    }
 
                     if (rowComplete) {
                         hasCompleteCustomCoverage = true;
@@ -1126,10 +1192,16 @@
                             if (!field.value) {
                                 addClientError(field, field.tagName === 'SELECT'
                                     ? 'Choose the pricing unit for this subsystem.'
-                                    : 'Enter the typical CAD rate for this subsystem.');
+                                    : 'Enter the CAD trade rate for this subsystem.');
                                 firstInvalid = firstInvalid || field;
                             }
                         });
+
+                        var hoursField = row.querySelector('input[name$="[estimated_hours]"]');
+                        if (hoursField && !hoursField.value) {
+                            addClientError(hoursField, 'Enter estimated hours for this subsystem.');
+                            firstInvalid = firstInvalid || hoursField;
+                        }
                     });
                 }
 
@@ -1184,8 +1256,29 @@
             });
 
             document.querySelectorAll('[data-subsystem-checkbox]').forEach(function (checkbox) {
-                checkbox.addEventListener('change', syncSubsystemPricing);
+                checkbox.addEventListener('change', function () {
+                    syncSubsystemPricing();
+                    if (checkbox.checked) {
+                        openSubsystemPricing(checkbox.value);
+                    }
+                });
             });
+
+            document.querySelectorAll('[data-close-pricing]').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    closeSubsystemPricing(button.getAttribute('data-close-pricing'));
+                });
+            });
+
+            if (showCustomCoverage && customCoverageCard) {
+                showCustomCoverage.addEventListener('click', function () {
+                    customCoverageCard.hidden = false;
+                    var firstField = customCoverageCard.querySelector('input, select');
+                    if (firstField) {
+                        firstField.focus();
+                    }
+                });
+            }
 
             if (addCustomCoverage) {
                 addCustomCoverage.addEventListener('click', addCustomCoverageRow);

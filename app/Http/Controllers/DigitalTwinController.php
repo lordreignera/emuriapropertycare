@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreIssueMarkerRequest;
 use App\Http\Requests\StoreSpatialModelRequest;
-use App\Jobs\ConvertSpatialModelPointCloud;
 use App\Models\CaptureSession;
 use App\Models\Inspection;
 use App\Models\IssueMarker;
@@ -101,7 +100,7 @@ class DigitalTwinController extends Controller
             ? $request->file('thumbnail_file')->store("digital-twins/{$inspection->property_id}/thumbnails", $disk)
             : null;
 
-        $spatialModel = DB::transaction(function () use ($inspection, $validated, $sourceFilePath, $thumbnailPath) {
+        $spatialModel = DB::transaction(function () use ($inspection, $validated, $sourceFilePath, $thumbnailPath, $disk) {
             if (!empty($validated['is_primary'])) {
                 SpatialModel::where('inspection_id', $inspection->id)->update(['is_primary' => false]);
             }
@@ -114,7 +113,7 @@ class DigitalTwinController extends Controller
                 'capture_type' => $validated['capture_type'],
                 'device_name' => $validated['device_name'] ?? null,
                 'device_serial' => $validated['device_serial'] ?? null,
-                'status' => $validated['processing_status'] === 'ready' ? 'ready' : 'processing',
+                'status' => 'ready',
                 'accuracy_class' => $validated['accuracy_class'] ?? null,
                 'captured_at' => $validated['captured_at'] ?? null,
                 'notes' => $validated['notes'] ?? null,
@@ -140,13 +139,16 @@ class DigitalTwinController extends Controller
                 'file_path' => $sourceFilePath,
                 'thumbnail_path' => $thumbnailPath,
                 'status' => $validated['status'],
-                'processing_status' => $validated['processing_status'],
+                'processing_status' => 'ready',
                 'is_primary' => !empty($validated['is_primary']),
                 'accuracy_class' => $validated['accuracy_class'] ?? null,
-                'processed_at' => $validated['processing_status'] === 'ready' ? now() : null,
+                'processed_at' => now(),
                 'metadata' => [
                     'notes' => $validated['notes'] ?? null,
                     'stored_as_vendor_neutral_twin_source' => true,
+                    'storage_owner' => 'cloud',
+                    'storage_disk' => $sourceFilePath ? $disk : null,
+                    'cloud_reference_url' => $validated['external_url'] ?? null,
                 ],
             ]);
 
@@ -170,55 +172,9 @@ class DigitalTwinController extends Controller
             return $spatialModel;
         });
 
-        if ($spatialModel->isRawPointCloud() && filled($spatialModel->file_path)) {
-            $spatialModel->update([
-                'processing_status' => 'queued',
-                'metadata' => array_merge($spatialModel->metadata ?? [], [
-                    'conversion_queued_at' => now()->toIso8601String(),
-                    'conversion_target' => 'potree',
-                ]),
-            ]);
-
-            ConvertSpatialModelPointCloud::dispatch($spatialModel->id);
-        }
-
         return redirect()
             ->route('inspections.digital-twin', $inspection)
-            ->with('success', $spatialModel->isRawPointCloud()
-                ? 'Point-cloud source added and queued for Potree conversion.'
-                : 'Capture source added to the property digital twin.');
-    }
-
-    public function convertSpatialModel(Inspection $inspection, SpatialModel $spatialModel): RedirectResponse
-    {
-        $this->authorizeInspectionAccess($inspection);
-
-        if (!$this->canManageDigitalTwin($inspection)) {
-            abort(403, 'You do not have permission to convert digital twin sources.');
-        }
-
-        if ((int) $spatialModel->inspection_id !== (int) $inspection->id) {
-            abort(404, 'This source does not belong to this inspection.');
-        }
-
-        if (!$spatialModel->isRawPointCloud()) {
-            return back()->with('error', 'Only raw point-cloud sources can be converted.');
-        }
-
-        $spatialModel->update([
-            'processing_status' => 'queued',
-            'metadata' => array_merge($spatialModel->metadata ?? [], [
-                'conversion_queued_at' => now()->toIso8601String(),
-                'conversion_target' => 'potree',
-                'conversion_error' => null,
-            ]),
-        ]);
-
-        ConvertSpatialModelPointCloud::dispatch($spatialModel->id);
-
-        return redirect()
-            ->route('inspections.digital-twin', $inspection)
-            ->with('success', 'Point-cloud conversion queued. Run the digital-twin queue worker to process it.');
+            ->with('success', 'Cloud-hosted capture source added to the property digital twin.');
     }
 
     public function storeIssueMarker(StoreIssueMarkerRequest $request, Inspection $inspection): RedirectResponse

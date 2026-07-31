@@ -4,29 +4,30 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\FmcMaterialSetting;
-use App\Models\InspectionSystem;
-use App\Models\InspectionSubsystem;
+use App\Models\BuildingSystem;
+use App\Models\BuildingSubsystem;
+use App\Support\BuildingTaxonomyResolver;
 use Illuminate\Http\Request;
 
 class FmcMaterialSettingController extends Controller
 {
     public function index(Request $request)
     {
-        $systems = InspectionSystem::query()->orderBy('sort_order')->orderBy('name')->get(['id', 'name']);
+        $systems = BuildingSystem::query()->orderBy('sort_order')->orderBy('name')->get(['id', 'name']);
 
         $query = FmcMaterialSetting::query()
             ->with(['system:id,name', 'subsystem:id,name']);
 
-        $systemId    = $request->integer('system_id') ?: null;
-        $subsystemId = $request->integer('subsystem_id') ?: null;
+        $systemId    = $request->integer('building_system_id') ?: null;
+        $subsystemId = $request->integer('building_subsystem_id') ?: null;
         $status      = $request->input('status', '');
         $search      = trim((string) $request->input('search', ''));
 
         if ($systemId) {
-            $query->where('system_id', $systemId);
+            $query->where('building_system_id', $systemId);
         }
         if ($subsystemId) {
-            $query->where('subsystem_id', $subsystemId);
+            $query->where('building_subsystem_id', $subsystemId);
         }
         if ($status === 'active') {
             $query->where('is_active', true);
@@ -44,7 +45,7 @@ class FmcMaterialSettingController extends Controller
             ->withQueryString();
 
         $subsystems = $systemId
-            ? InspectionSubsystem::query()->where('system_id', $systemId)->orderBy('sort_order')->orderBy('name')->get(['id', 'name'])
+            ? BuildingSubsystem::query()->where('building_system_id', $systemId)->orderBy('sort_order')->orderBy('name')->get(['id', 'name'])
             : collect();
 
         return view('admin.pricing-system.fmc-material-settings.index', compact(
@@ -54,7 +55,7 @@ class FmcMaterialSettingController extends Controller
 
     public function create()
     {
-        $systems = InspectionSystem::query()
+        $systems = BuildingSystem::query()
             ->with(['subsystems' => function ($query) {
                 $query->where('is_active', true)->orderBy('sort_order')->orderBy('name');
             }])
@@ -77,20 +78,20 @@ class FmcMaterialSettingController extends Controller
             'description'      => 'nullable|string',
             'sort_order'       => 'nullable|integer|min:0',
             'is_active'        => 'nullable|boolean',
-            'system_id'        => 'nullable|exists:systems,id',
-            'subsystem_id'     => 'nullable|exists:subsystems,id',
+            'building_system_id'        => 'nullable|exists:building_systems,id',
+            'building_subsystem_id'     => 'nullable|exists:building_subsystems,id',
         ]);
 
         $validated['is_active']    = $request->boolean('is_active', true);
         $validated['sort_order']   = $validated['sort_order'] ?? 0;
-        $validated['subsystem_id'] = $validated['subsystem_id'] ?? null;
+        $validated['building_subsystem_id'] = $validated['building_subsystem_id'] ?? null;
         $validated['hst_rate']     = $validated['hst_rate'] ?? 5.00;
         $validated['pst_rate']     = $validated['pst_rate'] ?? 7.00;
 
-        if (!empty($validated['subsystem_id'])) {
-            $subsystem = InspectionSubsystem::query()->find($validated['subsystem_id']);
-            if ($subsystem && ((int) $subsystem->system_id !== (int) ($validated['system_id'] ?? 0))) {
-                return back()->withErrors(['subsystem_id' => 'Selected subsystem does not belong to the selected system.'])->withInput();
+        if (!empty($validated['building_subsystem_id'])) {
+            $subsystem = BuildingSubsystem::query()->find($validated['building_subsystem_id']);
+            if ($subsystem && ((int) $subsystem->building_system_id !== (int) ($validated['building_system_id'] ?? 0))) {
+                return back()->withErrors(['building_subsystem_id' => 'Selected subsystem does not belong to the selected system.'])->withInput();
             }
         }
 
@@ -102,7 +103,7 @@ class FmcMaterialSettingController extends Controller
 
     public function edit(FmcMaterialSetting $fmcMaterialSetting)
     {
-        $systems = InspectionSystem::query()
+        $systems = BuildingSystem::query()
             ->with(['subsystems' => function ($query) {
                 $query->where('is_active', true)->orderBy('sort_order')->orderBy('name');
             }])
@@ -125,20 +126,20 @@ class FmcMaterialSettingController extends Controller
             'description'      => 'nullable|string',
             'sort_order'       => 'nullable|integer|min:0',
             'is_active'        => 'nullable|boolean',
-            'system_id'        => 'nullable|exists:systems,id',
-            'subsystem_id'     => 'nullable|exists:subsystems,id',
+            'building_system_id'        => 'nullable|exists:building_systems,id',
+            'building_subsystem_id'     => 'nullable|exists:building_subsystems,id',
         ]);
 
         $validated['is_active']    = $request->boolean('is_active');
         $validated['sort_order']   = $validated['sort_order'] ?? 0;
-        $validated['subsystem_id'] = $validated['subsystem_id'] ?? null;
+        $validated['building_subsystem_id'] = $validated['building_subsystem_id'] ?? null;
         $validated['hst_rate']     = $validated['hst_rate'] ?? 5.00;
         $validated['pst_rate']     = $validated['pst_rate'] ?? 7.00;
 
-        if (!empty($validated['subsystem_id'])) {
-            $subsystem = InspectionSubsystem::query()->find($validated['subsystem_id']);
-            if ($subsystem && ((int) $subsystem->system_id !== (int) ($validated['system_id'] ?? 0))) {
-                return back()->withErrors(['subsystem_id' => 'Selected subsystem does not belong to the selected system.'])->withInput();
+        if (!empty($validated['building_subsystem_id'])) {
+            $subsystem = BuildingSubsystem::query()->find($validated['building_subsystem_id']);
+            if ($subsystem && ((int) $subsystem->building_system_id !== (int) ($validated['building_system_id'] ?? 0))) {
+                return back()->withErrors(['building_subsystem_id' => 'Selected subsystem does not belong to the selected system.'])->withInput();
             }
         }
 
@@ -158,25 +159,15 @@ class FmcMaterialSettingController extends Controller
 
     public function reloadDefaults()
     {
-        $systemMap = InspectionSystem::query()->pluck('id', 'name');
-        $subsystemMap = InspectionSubsystem::query()->get()->keyBy(function ($subsystem) {
-            return $subsystem->system_id . '|' . $subsystem->name;
-        });
-
         foreach (FmcMaterialSetting::defaults() as $row) {
-            $systemId = $systemMap[$row['system_name']] ?? null;
-            $subsystemId = null;
-
-            if ($systemId !== null) {
-                $subsystemKey = $systemId . '|' . $row['subsystem_name'];
-                $subsystemId = optional($subsystemMap->get($subsystemKey))->id;
-            }
+            $taxonomy = BuildingTaxonomyResolver::resolve($row['system_name'] ?? null, $row['subsystem_name'] ?? null);
 
             FmcMaterialSetting::updateOrCreate(
                 [
                     'material_name' => $row['material_name'],
-                    'system_id'     => $systemId,
-                    'subsystem_id'  => $subsystemId,
+                    'building_system_id' => $taxonomy['building_system_id'],
+                    'building_subsystem_id' => $taxonomy['building_subsystem_id'],
+                    'building_component_id' => $taxonomy['building_component_id'],
                 ],
                 [
                     'default_unit'     => $row['default_unit'],

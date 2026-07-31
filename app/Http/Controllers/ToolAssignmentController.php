@@ -4,8 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Inspection;
 use App\Models\FindingTemplateSetting;
-use App\Models\InspectionSystem;
-use App\Models\InspectionSubsystem;
+use App\Models\BuildingSystem;
+use App\Models\BuildingSubsystem;
 use App\Models\InspectionToolAssignment;
 use App\Models\ToolSetting;
 use Illuminate\Http\Request;
@@ -85,7 +85,7 @@ class ToolAssignmentController extends Controller
         $activeTools = ToolSetting::query()
             ->where('is_active', true)
             ->orderBy('tool_name')
-            ->get(['id', 'tool_name', 'quantity', 'ownership_status', 'availability_status', 'system_id', 'subsystem_id', 'finding_template_setting_id']);
+            ->get(['id', 'tool_name', 'quantity', 'ownership_status', 'availability_status', 'building_system_id', 'building_subsystem_id', 'finding_template_setting_id']);
 
         // Build recommendation map: inspection_id => [tool_setting_id, ...]
         //
@@ -117,26 +117,26 @@ class ToolAssignmentController extends Controller
         $templatesByQuestion = FindingTemplateSetting::query()
             ->when($allQuestions->isNotEmpty(), fn($q) => $q->whereIn('task_question', $allQuestions))
             ->when($allQuestions->isEmpty(), fn($q) => $q->whereRaw('1=0'))
-            ->get(['id', 'task_question', 'category', 'system_id', 'subsystem_id'])
+            ->get(['id', 'task_question', 'category', 'building_system_id', 'building_subsystem_id'])
             ->groupBy(fn($tpl) => trim((string) $tpl->task_question));
 
         $templatesByCategory = FindingTemplateSetting::query()
             ->when($allCategories->isNotEmpty(), fn($q) => $q->whereIn('category', $allCategories))
             ->when($allCategories->isEmpty(), fn($q) => $q->whereRaw('1=0'))
-            ->get(['id', 'category', 'system_id', 'subsystem_id'])
+            ->get(['id', 'category', 'building_system_id', 'building_subsystem_id'])
             ->groupBy(fn($tpl) => trim((string) $tpl->category));
 
         // Path 3: Match category names directly against systems/subsystems names
-        $systemsByName = InspectionSystem::query()
+        $systemsByName = BuildingSystem::query()
             ->when($allCategories->isNotEmpty(), fn($q) => $q->whereIn('name', $allCategories))
             ->when($allCategories->isEmpty(), fn($q) => $q->whereRaw('1=0'))
             ->get(['id', 'name'])
             ->keyBy(fn($s) => trim((string) $s->name));
 
-        $subsystemsByName = InspectionSubsystem::query()
+        $subsystemsByName = BuildingSubsystem::query()
             ->when($allCategories->isNotEmpty(), fn($q) => $q->whereIn('name', $allCategories))
             ->when($allCategories->isEmpty(), fn($q) => $q->whereRaw('1=0'))
-            ->get(['id', 'name', 'system_id'])
+            ->get(['id', 'name', 'building_system_id'])
             ->keyBy(fn($s) => trim((string) $s->name));
 
         foreach ($eligibleInspections as $inspection) {
@@ -169,8 +169,8 @@ class ToolAssignmentController extends Controller
             // Merge template-derived system/subsystem ids (paths 1 + 2)
             $allMatchedTemplates = $questionTemplates->merge($categoryTemplates)->unique('id');
             $templateIds  = $allMatchedTemplates->pluck('id')->filter()->map(fn($v) => (int) $v)->unique();
-            $systemIds    = $allMatchedTemplates->pluck('system_id')->filter()->map(fn($v) => (int) $v)->unique();
-            $subsystemIds = $allMatchedTemplates->pluck('subsystem_id')->filter()->map(fn($v) => (int) $v)->unique();
+            $systemIds    = $allMatchedTemplates->pluck('building_system_id')->filter()->map(fn($v) => (int) $v)->unique();
+            $subsystemIds = $allMatchedTemplates->pluck('building_subsystem_id')->filter()->map(fn($v) => (int) $v)->unique();
 
             // Path 3: category name ↔ system/subsystem name
             $nameSystemIds    = $inspectionCategories->map(fn($c) => optional($systemsByName->get($c))->id)->filter()->map(fn($v) => (int) $v)->unique();
@@ -182,8 +182,8 @@ class ToolAssignmentController extends Controller
             $recommendedToolIds = $activeTools
                 ->filter(function ($tool) use ($templateIds, $systemIds, $subsystemIds) {
                     $templateMatch  = !empty($tool->finding_template_setting_id) && $templateIds->contains((int) $tool->finding_template_setting_id);
-                    $subsystemMatch = !empty($tool->subsystem_id) && $subsystemIds->contains((int) $tool->subsystem_id);
-                    $systemMatch    = !empty($tool->system_id) && $systemIds->contains((int) $tool->system_id);
+                    $subsystemMatch = !empty($tool->building_subsystem_id) && $subsystemIds->contains((int) $tool->building_subsystem_id);
+                    $systemMatch    = !empty($tool->building_system_id) && $systemIds->contains((int) $tool->building_system_id);
 
                     return $templateMatch || $subsystemMatch || $systemMatch;
                 })
@@ -263,8 +263,8 @@ class ToolAssignmentController extends Controller
         $payload = [
             'property_id' => $inspection->property_id,
             'tool_setting_id' => $toolSetting->id,
-            'system_id' => $toolSetting->system_id,
-            'subsystem_id' => $toolSetting->subsystem_id,
+            'building_system_id' => $toolSetting->building_system_id,
+            'building_subsystem_id' => $toolSetting->building_subsystem_id,
             'tool_name' => trim((string) $toolSetting->tool_name),
             'quantity' => $newQty,
             'ownership_status' => $toolSetting->ownership_status,

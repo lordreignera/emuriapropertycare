@@ -27,15 +27,14 @@
                     </div>
                 @endif
 
-                {{-- Filter bar --}}
                 <form method="GET" action="{{ route('admin.finding-template-settings.index') }}" class="row g-2 mb-4 align-items-end" id="filterForm">
                     <div class="col-12 col-md-3">
                         <label class="form-label mb-1 small">Search</label>
-                        <input type="text" name="search" class="form-control form-control-sm" placeholder="Search issue / finding…" value="{{ $search ?? '' }}">
+                        <input type="text" name="search" class="form-control form-control-sm" placeholder="Search issue / finding..." value="{{ $search ?? '' }}">
                     </div>
                     <div class="col-6 col-md-2">
                         <label class="form-label mb-1 small">System</label>
-                        <select name="system_id" class="form-control form-control-sm" id="filterSystemSelect">
+                        <select name="building_system_id" class="form-control form-control-sm" id="filterSystemSelect">
                             <option value="">All Systems</option>
                             @foreach($systems as $sys)
                                 <option value="{{ $sys->id }}" {{ (string)($systemId ?? '') === (string)$sys->id ? 'selected' : '' }}>{{ $sys->name }}</option>
@@ -44,10 +43,19 @@
                     </div>
                     <div class="col-6 col-md-2">
                         <label class="form-label mb-1 small">Subsystem</label>
-                        <select name="subsystem_id" class="form-control form-control-sm" id="filterSubsystemSelect">
+                        <select name="building_subsystem_id" class="form-control form-control-sm" id="filterSubsystemSelect">
                             <option value="">All Subsystems</option>
                             @foreach($subsystems as $sub)
                                 <option value="{{ $sub->id }}" {{ (string)($subsystemId ?? '') === (string)$sub->id ? 'selected' : '' }}>{{ $sub->name }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div class="col-6 col-md-2">
+                        <label class="form-label mb-1 small">Component</label>
+                        <select name="building_component_id" class="form-control form-control-sm" id="filterComponentSelect">
+                            <option value="">All Components</option>
+                            @foreach($components as $component)
+                                <option value="{{ $component->id }}" {{ (string)($componentId ?? '') === (string)$component->id ? 'selected' : '' }}>{{ $component->name }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -60,11 +68,11 @@
                             @endforeach
                         </select>
                     </div>
-                    <div class="col-6 col-md-2">
+                    <div class="col-6 col-md-1">
                         <label class="form-label mb-1 small">Status</label>
                         <select name="status" class="form-control form-control-sm">
                             <option value="">All</option>
-                            <option value="active"   {{ ($status ?? '') === 'active'   ? 'selected' : '' }}>Active</option>
+                            <option value="active" {{ ($status ?? '') === 'active' ? 'selected' : '' }}>Active</option>
                             <option value="inactive" {{ ($status ?? '') === 'inactive' ? 'selected' : '' }}>Inactive</option>
                         </select>
                     </div>
@@ -72,7 +80,7 @@
                         <button type="submit" class="btn btn-outline-primary btn-sm w-100">
                             <i class="mdi mdi-filter"></i> Filter
                         </button>
-                        @if(request()->hasAny(['search','system_id','subsystem_id','category','status']))
+                        @if(request()->hasAny(['search','building_system_id','building_subsystem_id','building_component_id','category','status']))
                             <a href="{{ route('admin.finding-template-settings.index') }}" class="btn btn-outline-secondary btn-sm w-100" title="Clear filters">
                                 <i class="mdi mdi-close"></i>
                             </a>
@@ -81,7 +89,7 @@
                 </form>
 
                 <div class="text-muted small mb-2">
-                    Showing {{ $findings->firstItem() ?? 0 }}–{{ $findings->lastItem() ?? 0 }} of {{ $findings->total() }} results
+                    Showing {{ $findings->firstItem() ?? 0 }}-{{ $findings->lastItem() ?? 0 }} of {{ $findings->total() }} results
                 </div>
 
                 <div class="table-responsive">
@@ -91,6 +99,7 @@
                                 <th>#</th>
                                 <th>System</th>
                                 <th>Subsystem</th>
+                                <th>Component</th>
                                 <th>Issue / Finding</th>
                                 <th>Category</th>
                                 <th>Recommendations</th>
@@ -103,10 +112,11 @@
                             @forelse($findings as $finding)
                                 <tr>
                                     <td>{{ $findings->firstItem() + $loop->index }}</td>
-                                    <td>{{ $finding->system?->name ?: '—' }}</td>
-                                    <td>{{ $finding->subsystem?->name ?: '—' }}</td>
+                                    <td>{{ $finding->system?->name ?: '-' }}</td>
+                                    <td>{{ $finding->subsystem?->name ?: '-' }}</td>
+                                    <td>{{ $finding->component?->name ?: '-' }}</td>
                                     <td><strong>{{ $finding->task_question }}</strong></td>
-                                    <td>{{ $finding->category ?: '—' }}</td>
+                                    <td>{{ $finding->category ?: '-' }}</td>
                                     <td>
                                         @php $recs = $finding->default_recommendations ?? []; @endphp
                                         @if(count($recs) > 0)
@@ -115,11 +125,11 @@
                                             </span>
                                             <div class="mt-1">
                                                 @foreach($recs as $rec)
-                                                    <div class="small text-muted" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;" title="{{ $rec }}">• {{ $rec }}</div>
+                                                    <div class="small text-muted" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;" title="{{ $rec }}">- {{ $rec }}</div>
                                                 @endforeach
                                             </div>
                                         @else
-                                            <span class="text-muted">—</span>
+                                            <span class="text-muted">-</span>
                                         @endif
                                     </td>
                                     <td>
@@ -151,7 +161,7 @@
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="9" class="text-center py-4 text-muted">No finding templates found.</td>
+                                    <td colspan="10" class="text-center py-4 text-muted">No finding templates found.</td>
                                 </tr>
                             @endforelse
                         </tbody>
@@ -173,15 +183,28 @@
 @push('scripts')
 <script>
 (function () {
-    // When System filter changes, reload the page so subsystem options update
     const systemSelect = document.getElementById('filterSystemSelect');
     if (systemSelect) {
         systemSelect.addEventListener('change', function () {
             const form = document.getElementById('filterForm');
-            // Clear subsystem selection when system changes
             const subSelect = document.getElementById('filterSubsystemSelect');
+            const componentSelect = document.getElementById('filterComponentSelect');
+
             if (subSelect) subSelect.value = '';
+            if (componentSelect) componentSelect.value = '';
+
             form.submit();
+        });
+    }
+
+    const subsystemSelect = document.getElementById('filterSubsystemSelect');
+    if (subsystemSelect) {
+        subsystemSelect.addEventListener('change', function () {
+            const componentSelect = document.getElementById('filterComponentSelect');
+
+            if (componentSelect) componentSelect.value = '';
+
+            document.getElementById('filterForm').submit();
         });
     }
 })();

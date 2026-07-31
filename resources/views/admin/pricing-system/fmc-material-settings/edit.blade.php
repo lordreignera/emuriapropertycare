@@ -1,4 +1,4 @@
-﻿@extends('admin.layout')
+@extends('admin.layout')
 
 @section('content')
 <div class="row">
@@ -34,21 +34,21 @@
 
                     <div class="row">
                         <div class="col-md-6 form-group">
-                            <label for="system_id">System</label>
-                            <select class="form-control @error('system_id') is-invalid @enderror" id="system_id" name="system_id">
+                            <label for="building_system_id">System</label>
+                            <select class="form-control @error('building_system_id') is-invalid @enderror" id="building_system_id" name="building_system_id">
                                 <option value="">-- Select System --</option>
                                 @foreach(($systems ?? collect()) as $system)
-                                    <option value="{{ $system->id }}" {{ (string) old('system_id', $fmcMaterialSetting->system_id) === (string) $system->id ? 'selected' : '' }}>{{ $system->name }}</option>
+                                    <option value="{{ $system->id }}" {{ (string) old('building_system_id', $fmcMaterialSetting->building_system_id) === (string) $system->id ? 'selected' : '' }}>{{ $system->name }}</option>
                                 @endforeach
                             </select>
-                            @error('system_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            @error('building_system_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
                         <div class="col-md-6 form-group">
-                            <label for="subsystem_id">Subsystem</label>
-                            <select class="form-control @error('subsystem_id') is-invalid @enderror" id="subsystem_id" name="subsystem_id">
+                            <label for="building_subsystem_id">Subsystem</label>
+                            <select class="form-control @error('building_subsystem_id') is-invalid @enderror" id="building_subsystem_id" name="building_subsystem_id">
                                 <option value="">-- Select Subsystem --</option>
                             </select>
-                            @error('subsystem_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                            @error('building_subsystem_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
                         </div>
                     </div>
 
@@ -134,9 +134,9 @@
 
                         // System/subsystem cascading
                         const systems = @json($systemsJson);
-                        const systemSelect = document.getElementById('system_id');
-                        const subsystemSelect = document.getElementById('subsystem_id');
-                        const selectedSubsystemId = "{{ old('subsystem_id', $fmcMaterialSetting->subsystem_id) }}";
+                        const systemSelect = document.getElementById('building_system_id');
+                        const subsystemSelect = document.getElementById('building_subsystem_id');
+                        const selectedSubsystemId = "{{ old('building_subsystem_id', $fmcMaterialSetting->building_subsystem_id) }}";
 
                         function renderSubsystems(systemId) {
                             subsystemSelect.innerHTML = '<option value="">-- Select Subsystem --</option>';
