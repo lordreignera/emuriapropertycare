@@ -49,6 +49,27 @@ class InspectionController extends Controller
         $user = Auth::user();
 
         $countsBaseQuery = Inspection::query()->whereNotNull('property_id');
+        $diagnosedReportStatuses = ['findings_captured', 'findings_shared'];
+        $pricingQueueStatuses = ['client_committed', 'estimation_in_progress', 'estimation_completed'];
+        $defaultDiagnosisStatuses = array_merge(['scheduled', 'in_progress'], $diagnosedReportStatuses, $pricingQueueStatuses);
+        $diagnosisLifecycleStatuses = array_merge($defaultDiagnosisStatuses, ['completed']);
+
+        $latestByProperty = function (array $statuses, ?callable $callback = null) use ($user) {
+            $query = Inspection::query()
+                ->selectRaw('MAX(id) as id')
+                ->whereNotNull('property_id')
+                ->whereIn('status', $statuses);
+
+            if ($callback) {
+                $callback($query);
+            }
+
+            if ($user->hasRole('Inspector')) {
+                $query->where('inspector_id', $user->id);
+            }
+
+            return $query->groupBy('property_id');
+        };
 
         if ($user->hasRole('Inspector')) {
             $countsBaseQuery->where('inspector_id', $user->id);
@@ -60,47 +81,36 @@ class InspectionController extends Controller
             ->whereDoesntHave('property.inspections', function ($q) {
                 $q->where('status', 'completed');
             })
+            ->whereIn('id', $latestByProperty($diagnosisLifecycleStatuses))
             ->count();
-
-        $latestInProgressByProperty = Inspection::query()
-            ->selectRaw('MAX(id) as id')
-            ->where('status', 'in_progress')
-            ->whereNotNull('property_id')
-            ->groupBy('property_id');
-
-        if ($user->hasRole('Inspector')) {
-            $latestInProgressByProperty->where('inspector_id', $user->id);
-        }
 
         $inProgressCount = (clone $countsBaseQuery)
             ->where('status', 'in_progress')
-            ->whereIn('id', $latestInProgressByProperty)
+            ->whereIn('id', $latestByProperty($diagnosisLifecycleStatuses))
             ->count();
 
         // ETOGO workflow queues
+        $awaitingQuotationCount = (clone $countsBaseQuery)
+            ->whereIn('status', $diagnosedReportStatuses)
+            ->whereIn('id', $latestByProperty($diagnosisLifecycleStatuses))
+            ->count();
+
         // Findings shared with client, waiting on the client to commit (informational)
         $awaitingClientCount = (clone $countsBaseQuery)
             ->where('status', 'findings_shared')
+            ->whereIn('id', $latestByProperty($diagnosisLifecycleStatuses))
             ->count();
 
         // Client has committed findings — ready for admin to attach pricing (action needed)
         $awaitingEstimationCount = (clone $countsBaseQuery)
-            ->whereIn('status', ['client_committed', 'estimation_in_progress'])
+            ->whereIn('status', $pricingQueueStatuses)
+            ->whereNotNull('client_committed_at')
+            ->whereIn('id', $latestByProperty($diagnosisLifecycleStatuses))
             ->count();
-
-        $latestCompletedByProperty = Inspection::query()
-            ->selectRaw('MAX(id) as id')
-            ->where('status', 'completed')
-            ->whereNotNull('property_id')
-            ->groupBy('property_id');
-
-        if ($user->hasRole('Inspector')) {
-            $latestCompletedByProperty->where('inspector_id', $user->id);
-        }
 
         $completedCount = (clone $countsBaseQuery)
             ->where('status', 'completed')
-            ->whereIn('id', $latestCompletedByProperty)
+            ->whereIn('id', $latestByProperty($diagnosisLifecycleStatuses))
             ->count();
 
         $inspectionListQuery = static fn () => Inspection::with(['property.user', 'property.projectManager', 'inspector', 'assignedBy', 'project.manager', 'toolAssignments', 'activeQuotation', 'activeMatterportModel', 'activeSpatialModels'])
@@ -117,37 +127,20 @@ class InspectionController extends Controller
                       ->whereHas('property')
                       ->whereDoesntHave('property.inspections', function ($q) {
                           $q->where('status', 'completed');
-                      });
+                      })
+                      ->whereIn('id', $latestByProperty($diagnosisLifecycleStatuses));
             } elseif ($request->status === 'in_progress') {
-                $latestInProgressByProperty = Inspection::query()
-                    ->selectRaw('MAX(id) as id')
-                    ->where('status', 'in_progress')
-                    ->whereNotNull('property_id')
-                    ->groupBy('property_id');
-
-                if ($user->hasRole('Inspector')) {
-                    $latestInProgressByProperty->where('inspector_id', $user->id);
-                }
-
                 $query->where('status', 'in_progress')
-                    ->whereIn('id', $latestInProgressByProperty);
+                    ->whereIn('id', $latestByProperty($diagnosisLifecycleStatuses));
             } elseif ($request->status === 'completed') {
-                $latestCompletedByProperty = Inspection::query()
-                    ->selectRaw('MAX(id) as id')
-                    ->where('status', 'completed')
-                    ->groupBy('property_id');
-
                 $query->where('status', 'completed')
-                    ->whereIn('id', $latestCompletedByProperty);
+                    ->whereIn('id', $latestByProperty($diagnosisLifecycleStatuses));
             }
         } else {
             // By default, show all in-flight inspections (scheduled, in_progress, and the
-            // ETOGO assessment/estimation phases) so none silently disappear from the list.
-            $query->whereIn('status', [
-                'scheduled', 'in_progress',
-                'findings_shared', 'client_committed',
-                'estimation_in_progress', 'estimation_completed',
-            ]);
+            // ETOGO diagnosis/estimation phases) so none silently disappear from the list.
+            $query->whereIn('status', $defaultDiagnosisStatuses)
+                ->whereIn('id', $latestByProperty($diagnosisLifecycleStatuses));
         }
 
         // Ready-to-countersign view: client signed + paid + tools assigned + schedule set, but ETOGO not yet countersigned
@@ -171,12 +164,8 @@ class InspectionController extends Controller
         // Pre-assessment view: quotation shared and waiting for client approval/response
         if ($request->get('view') === 'awaiting-quotation') {
             $query = $inspectionListQuery()
-                ->where('status', '!=', 'completed');
-
-            $query->where(function ($q) {
-                $q->where('status', 'in_progress')
-                    ->orWhereIn('quotation_status', ['shared', 'client_reviewing', 'client_responded']);
-            });
+                ->whereIn('status', $diagnosedReportStatuses)
+                ->whereIn('id', $latestByProperty($diagnosisLifecycleStatuses));
 
             if ($user->hasRole('Inspector')) {
                 $query->where('inspector_id', $user->id);
@@ -186,8 +175,9 @@ class InspectionController extends Controller
         // ETOGO Stage D queue: client committed to findings — ready for admin to attach pricing
         if ($request->get('view') === 'awaiting-estimation') {
             $query = $inspectionListQuery()
-                ->whereIn('status', ['client_committed', 'estimation_in_progress', 'estimation_completed'])
-                ->whereNotNull('client_committed_at');
+                ->whereIn('status', $pricingQueueStatuses)
+                ->whereNotNull('client_committed_at')
+                ->whereIn('id', $latestByProperty($diagnosisLifecycleStatuses));
 
             if ($user->hasRole('Inspector')) {
                 $query->where('inspector_id', $user->id);
@@ -243,7 +233,7 @@ class InspectionController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
-        return view('admin.inspections.index', compact('inspections', 'scheduledCount', 'inProgressCount', 'completedCount', 'awaitingClientCount', 'awaitingEstimationCount', 'inspectors', 'projectManagers', 'technicians'));
+        return view('admin.inspections.index', compact('inspections', 'scheduledCount', 'inProgressCount', 'completedCount', 'awaitingQuotationCount', 'awaitingClientCount', 'awaitingEstimationCount', 'inspectors', 'projectManagers', 'technicians'));
     }
 
     /**
@@ -280,8 +270,7 @@ class InspectionController extends Controller
         // Get the current editable diagnosis for this property. Pending drafts
         // are valid here; opening the form must not create another duplicate.
         $inspection = Inspection::where('property_id', $property->id)
-            ->whereIn('status', ['in_progress', 'scheduled'])
-            ->orderByRaw("CASE status WHEN 'in_progress' THEN 1 WHEN 'scheduled' THEN 2 ELSE 3 END")
+            ->whereIn('status', ['in_progress', 'scheduled', 'findings_captured'])
             ->latest('id')
             ->first();
 
@@ -587,8 +576,7 @@ class InspectionController extends Controller
         );
 
         $inspection = Inspection::where('property_id', $property->id)
-            ->whereIn('status', ['in_progress', 'scheduled'])
-            ->orderByRaw("CASE status WHEN 'in_progress' THEN 1 WHEN 'scheduled' THEN 2 ELSE 3 END")
+            ->whereIn('status', ['in_progress', 'scheduled', 'findings_captured'])
             ->latest('id')
             ->first();
 
@@ -607,7 +595,9 @@ class InspectionController extends Controller
         $inspection->scheduled_date = $validated['inspection_date']
             ?? $inspection->scheduled_date
             ?? now();
-        $inspection->status = 'in_progress';
+        if ($inspection->status !== 'findings_captured') {
+            $inspection->status = 'in_progress';
+        }
         $inspection->weather_conditions = $validated['weather_conditions'] ?? null;
 
         $inspection->owner_name = $property->user->name ?? null;
@@ -853,8 +843,7 @@ class InspectionController extends Controller
         // only to paid inspections; pending diagnosis drafts must also be updated
         // instead of creating a new row each time the inspector saves/previews.
         $inspection = Inspection::where('property_id', $property->id)
-            ->whereIn('status', ['in_progress', 'scheduled'])
-            ->orderByRaw("CASE status WHEN 'in_progress' THEN 1 WHEN 'scheduled' THEN 2 ELSE 3 END")
+            ->whereIn('status', ['in_progress', 'scheduled', 'findings_captured'])
             ->latest('id')
             ->first();
 
@@ -1071,6 +1060,13 @@ class InspectionController extends Controller
         $this->computeWeightedCPI($inspection, $normalizedFindings, $priorityScores);
         $this->computeASI($inspection);
 
+        $proceedToPhar = $request->input('next_stage') === 'phar';
+        $proceedToPreview = $request->input('next_stage') === 'preview';
+
+        if ($proceedToPreview && !empty($normalizedFindings) && in_array($inspection->status, ['scheduled', 'in_progress'], true)) {
+            $inspection->status = 'findings_captured';
+        }
+
         // Handle photos upload
         if ($request->hasFile('photos')) {
             $photosPaths = [];
@@ -1118,9 +1114,6 @@ class InspectionController extends Controller
 
         // NOTE: We don't run full calculations here anymore - only basic save
         // Full calculations happen after PHAR data collection in storePharData()
-
-        $proceedToPhar = $request->input('next_stage') === 'phar';
-        $proceedToPreview = $request->input('next_stage') === 'preview';
 
         $message = $proceedToPhar
             ? 'CPI scoring saved. Proceed to PHAR diagnosis.'

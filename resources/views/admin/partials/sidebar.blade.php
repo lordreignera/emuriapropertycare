@@ -38,47 +38,73 @@
     $completedDiagnosisCount = 0;
     $awaitingEstimationCount = 0;
     $awaitingQuotationCount = 0;
+    $diagnosisLifecycleStatuses = [
+        'scheduled',
+        'in_progress',
+        'findings_captured',
+        'findings_shared',
+        'client_committed',
+        'estimation_in_progress',
+        'estimation_completed',
+        'completed',
+    ];
 
     if ($user->hasRole(['Super Admin', 'Administrator'])) {
         $propertyIds = \App\Models\Property::where('status', '!=', 'archived')->pluck('id');
-        $projectIds = \App\Models\Project::whereIn('property_id', $propertyIds)->pluck('id');
+        $latestDiagnosisIds = function () use ($propertyIds, $diagnosisLifecycleStatuses) {
+            return \App\Models\Inspection::query()
+                ->selectRaw('MAX(id) as id')
+                ->whereIn('property_id', $propertyIds)
+                ->whereNotNull('property_id')
+                ->whereIn('status', $diagnosisLifecycleStatuses)
+                ->groupBy('property_id');
+        };
 
-        $scheduledInspectionsCount = \App\Models\Inspection::whereIn('project_id', $projectIds)
+        $scheduledInspectionsCount = \App\Models\Inspection::whereIn('id', $latestDiagnosisIds())
             ->where('status', 'scheduled')
             ->count();
 
-        $inProgressInspectionsCount = \App\Models\Inspection::whereIn('project_id', $projectIds)
+        $inProgressInspectionsCount = \App\Models\Inspection::whereIn('id', $latestDiagnosisIds())
             ->where('status', 'in_progress')
             ->count();
 
-        $completedDiagnosisCount = \App\Models\Inspection::whereIn('project_id', $projectIds)
+        $completedDiagnosisCount = \App\Models\Inspection::whereIn('id', $latestDiagnosisIds())
             ->where('status', 'completed')
             ->count();
 
-        $awaitingQuotationCount = \App\Models\Inspection::whereIn('project_id', $projectIds)
-            ->where('status', '!=', 'completed')
-            ->where(function ($q) {
-                $q->where('status', 'in_progress')
-                    ->orWhereIn('quotation_status', ['shared', 'client_reviewing', 'client_responded']);
-            })
+        $awaitingQuotationCount = \App\Models\Inspection::whereIn('id', $latestDiagnosisIds())
+            ->whereIn('status', ['findings_captured', 'findings_shared'])
             ->count();
 
-        $awaitingEstimationCount = \App\Models\Inspection::whereIn('project_id', $projectIds)
+        $awaitingEstimationCount = \App\Models\Inspection::whereIn('id', $latestDiagnosisIds())
             ->whereIn('status', ['client_committed', 'estimation_in_progress', 'estimation_completed'])
             ->whereNotNull('client_committed_at')
             ->count();
     } elseif ($user->hasRole('Inspector')) {
+        $latestDiagnosisIds = function () use ($user, $diagnosisLifecycleStatuses) {
+            return \App\Models\Inspection::query()
+                ->selectRaw('MAX(id) as id')
+                ->where('inspector_id', $user->id)
+                ->whereNotNull('property_id')
+                ->whereIn('status', $diagnosisLifecycleStatuses)
+                ->groupBy('property_id');
+        };
+
         $scheduledInspectionsCount = \App\Models\Property::where('inspector_id', $user->id)
             ->where('status', 'awaiting_inspection')
             ->whereNotNull('inspection_scheduled_at')
             ->count();
 
-        $inProgressInspectionsCount = \App\Models\Inspection::where('inspector_id', $user->id)
+        $inProgressInspectionsCount = \App\Models\Inspection::whereIn('id', $latestDiagnosisIds())
             ->where('status', 'in_progress')
             ->count();
 
-        $completedDiagnosisCount = \App\Models\Inspection::where('inspector_id', $user->id)
+        $completedDiagnosisCount = \App\Models\Inspection::whereIn('id', $latestDiagnosisIds())
             ->where('status', 'completed')
+            ->count();
+
+        $awaitingQuotationCount = \App\Models\Inspection::whereIn('id', $latestDiagnosisIds())
+            ->whereIn('status', ['findings_captured', 'findings_shared'])
             ->count();
 
         $unscheduledInspectionsCount = \App\Models\Property::where('inspector_id', $user->id)
@@ -86,21 +112,32 @@
             ->whereNull('inspection_scheduled_at')
             ->count();
     } elseif ($user->hasRole('Project Manager')) {
+        $latestDiagnosisIds = function () use ($user, $diagnosisLifecycleStatuses) {
+            return \App\Models\Inspection::query()
+                ->selectRaw('MAX(id) as id')
+                ->whereHas('property', function ($q) use ($user) {
+                    $q->where('project_manager_id', $user->id);
+                })
+                ->whereNotNull('property_id')
+                ->whereIn('status', $diagnosisLifecycleStatuses)
+                ->groupBy('property_id');
+        };
+
         $scheduledInspectionsCount = \App\Models\Property::where('project_manager_id', $user->id)
             ->where('status', 'awaiting_inspection')
             ->whereNotNull('inspection_scheduled_at')
             ->count();
 
-        $inProgressInspectionsCount = \App\Models\Inspection::whereHas('property', function ($q) use ($user) {
-                $q->where('project_manager_id', $user->id);
-            })
+        $inProgressInspectionsCount = \App\Models\Inspection::whereIn('id', $latestDiagnosisIds())
             ->where('status', 'in_progress')
             ->count();
 
-        $completedDiagnosisCount = \App\Models\Inspection::whereHas('property', function ($q) use ($user) {
-                $q->where('project_manager_id', $user->id);
-            })
+        $completedDiagnosisCount = \App\Models\Inspection::whereIn('id', $latestDiagnosisIds())
             ->where('status', 'completed')
+            ->count();
+
+        $awaitingQuotationCount = \App\Models\Inspection::whereIn('id', $latestDiagnosisIds())
+            ->whereIn('status', ['findings_captured', 'findings_shared'])
             ->count();
 
         $unscheduledInspectionsCount = \App\Models\Property::where('project_manager_id', $user->id)
@@ -343,8 +380,11 @@
                                 <span class="admin-client-badge">{{ $inProgressInspectionsCount }}</span>
                             @endif
                         </a>
-                        <a class="admin-client-sublink {{ request()->get('status') == 'completed' ? 'is-active' : '' }}" href="{{ route('inspections.index') }}?status=completed">
+                        <a class="admin-client-sublink {{ request()->routeIs('inspections.*') && request()->get('view') == 'awaiting-quotation' ? 'is-active' : '' }}" href="{{ route('inspections.index') }}?view=awaiting-quotation">
                             <span class="admin-client-sublabel">Diagnosed Reports</span>
+                            @if($awaitingQuotationCount > 0)
+                                <span class="admin-client-badge">{{ $awaitingQuotationCount }}</span>
+                            @endif
                         </a>
                     @endif
                 </div>

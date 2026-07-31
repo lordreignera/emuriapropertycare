@@ -75,10 +75,10 @@
                             </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {{ request('status') == 'completed' ? 'active' : '' }}"
-                               href="{{ route('inspections.index', ['status' => 'completed']) }}">
+                            <a class="nav-link {{ request('view') === 'awaiting-quotation' ? 'active' : '' }}"
+                               href="{{ route('inspections.index', ['view' => 'awaiting-quotation']) }}">
                                 Diagnosed Reports
-                                <span class="badge bg-info ms-1">{{ $completedCount }}</span>
+                                <span class="badge bg-info ms-1">{{ $awaitingQuotationCount ?? 0 }}</span>
                             </a>
                         </li>
                     </ul>
@@ -112,6 +112,7 @@
 
                     <form method="GET" action="{{ route('inspections.index') }}" class="mb-3">
                         <input type="hidden" name="status" value="{{ request('status') }}">
+                        <input type="hidden" name="view" value="{{ request('view') }}">
                         <div class="input-group">
                             <input type="text" name="search" class="form-control"
                                    placeholder="Search by property name, code, or city..."
@@ -120,7 +121,7 @@
                                 <i class="mdi mdi-magnify"></i> Search
                             </button>
                             @if(request('search'))
-                            <a href="{{ route('inspections.index', ['status' => request('status')]) }}" class="btn btn-secondary">
+                            <a href="{{ route('inspections.index', ['status' => request('status'), 'view' => request('view')]) }}" class="btn btn-secondary">
                                 <i class="mdi mdi-close"></i> Clear
                             </a>
                             @endif
@@ -178,6 +179,7 @@
                                 $statusColor = match($inspection->status) {
                                     'scheduled' => 'bg-success',
                                     'in_progress' => 'bg-warning text-dark',
+                                    'findings_captured' => 'bg-info',
                                     'findings_shared' => 'bg-warning text-dark',
                                     'client_committed' => 'bg-primary',
                                     'estimation_in_progress' => 'bg-primary',
@@ -189,6 +191,7 @@
                                 $statusLabel = match($inspection->status) {
                                     'scheduled' => 'Awaiting Diagnosis',
                                     'in_progress' => 'Diagnosis In Progress',
+                                    'findings_captured' => 'Ready to Share',
                                     'findings_shared' => 'Findings Shared',
                                     'client_committed' => 'Owner Approved',
                                     'estimation_in_progress' => 'Costing',
