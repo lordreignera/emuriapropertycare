@@ -38,18 +38,20 @@ Matterport sources must include either:
 
 - Matterport model SID
 - Matterport hosted URL, such as `https://my.matterport.com/show/?m=MODEL_ID`
+- MatterPak ZIP export
 
 ## Supported Upload Formats
 
 | Format | Extensions / Input | Typical Capture Provider | Browser Viewer | Converter Needed |
 |---|---|---|---|---|
 | Matterport hosted tour | Matterport SID or hosted URL | Matterport | Embedded hosted tour iframe | No |
+| MatterPak source package | `.zip` containing OBJ/MTL/textures, XYZ, JPG/PDF plans | Matterport | GLB after queued Blender conversion | Yes |
 | GLB / glTF model | `.glb`, `.gltf` | Phone camera, LiDAR, BIM/CAD, manual upload | Interactive Three.js 3D viewer | No |
-| Image evidence | `.jpg`, `.jpeg`, `.png`, `.webp`, `.heic`, `.heif` | Phone camera, DSLR, drone, thermal, manual upload | Image preview | No, but HEIC/HEIF browser support may vary |
+| Image evidence | `.jpg`, `.jpeg`, `.png`, `.webp` | Phone camera, DSLR, drone, thermal, manual upload | Image preview | No |
 | PDF/document evidence | `.pdf` | RESOLV, BIM/CAD, inspection report, manual upload | Embedded PDF iframe | No |
 | 360 panorama | `.jpg`, `.jpeg`, `.png`, `.webp` with twin layer `panorama_set` | 360 camera, Matterport export, manual upload | Interactive panorama viewer | No |
-| Raw point cloud | `.e57`, `.las`, `.laz`, `.pts`, `.ptx`, `.xyz` | LiDAR, Matterport export, drone scan, survey capture | Stored first, converted to Potree tiles | Yes |
-| Mesh/source package | `.obj`, `.fbx`, `.dae`, `.ply`, `.zip` | BIM/CAD, photogrammetry, manual upload | Stored as source evidence | Yes, but current converter does not process these yet |
+| Raw point cloud | `.e57`, `.las`, `.laz` | LiDAR, drone scan, survey capture | Preserved as source file | Later |
+| Mesh/source package | `.obj`, `.zip` | BIM/CAD, photogrammetry, manual upload | Stored as source evidence | Yes |
 
 ## Formats That Do Not Need Conversion
 
@@ -73,36 +75,32 @@ Raw point clouds need conversion before browser viewing:
 - `.e57`
 - `.las`
 - `.laz`
-- `.pts`
-- `.ptx`
-- `.xyz`
 
-When one of these files is uploaded locally as a `Master Point Cloud`, the system queues a conversion job automatically.
+When one of these files is uploaded as a `Master Point Cloud`, the system preserves the original source file and marks it `awaiting_processing`. ETOGO does not attempt to open E57/LAS/LAZ directly in Three.js.
 
-Mesh/source packages are stored but not converted by the current local converter:
+Mesh/source packages are stored as source files:
 
 - `.obj`
-- `.fbx`
-- `.dae`
-- `.ply`
 - `.zip`
 
-These can be retained as source evidence, but should be converted externally to `.glb`/`.gltf` or another supported runtime format before interactive browser viewing.
+MatterPak ZIP packages can be converted by the queued Blender worker when Blender is configured. Generic OBJ uploads are preserved as source packages and can be converted externally or by a later adapter.
 
-## Point Cloud Conversion
+## MatterPak Conversion
 
-The current built-in point-cloud conversion flow uses:
+The current MatterPak flow uses:
 
-- PDAL for `.e57`, `.pts`, `.ptx`, and `.xyz` normalization
-- PotreeConverter for browser-ready Potree tile output
-
-`.las` and `.laz` are passed directly to PotreeConverter.
+- The original MatterPak ZIP as the immutable source package.
+- Extracted `OBJ`, `MTL`, texture images, `XYZ`, floor-plan images, and PDF plan files as child `twin_source_files`.
+- A `twin_processing_jobs` row with `job_type = matterpak_obj_to_glb`.
+- Blender on a Laravel queue worker to convert OBJ/MTL/textures to a browser-ready GLB.
+- An existing `spatial_models` row only after GLB generation succeeds.
 
 Required environment settings:
 
 ```env
-DIGITAL_TWIN_PDAL_BINARY=pdal
-DIGITAL_TWIN_POTREE_CONVERTER_BINARY=PotreeConverter
+DIGITAL_TWIN_DISK=s3
+DIGITAL_TWIN_BLENDER_BINARY=/path/to/blender
+DIGITAL_TWIN_PROCESSING_QUEUE=digital-twin
 DIGITAL_TWIN_CONVERSION_TIMEOUT=3600
 DIGITAL_TWIN_UPLOAD_MAX_KB=102400
 ```
@@ -110,10 +108,19 @@ DIGITAL_TWIN_UPLOAD_MAX_KB=102400
 Run the queue worker with:
 
 ```bash
-php artisan queue:work --queue=digital-twin,default
+php artisan queue:work --queue=digital-twin,default --timeout=3600 --tries=1
 ```
 
-External point-cloud URLs can be stored as references, but the local converter currently needs an uploaded local file to process.
+On Laravel Cloud, use Laravel Object Storage through the `s3` disk for persistent source files. The application filesystem is temporary and should only be used for extraction/conversion working files during one job.
+
+## Point Cloud Processing
+
+Point-cloud processing is intentionally deferred:
+
+- E57/LAS/LAZ uploads are preserved as private source files.
+- They are marked `awaiting_processing`.
+- No Potree/Cesium/PDAL conversion is attempted in this phase.
+- Future point-cloud workers must create browser-streamable output and then attach it as an existing `spatial_models` layer.
 
 ## How Staff Upload A Capture Source
 
@@ -127,7 +134,7 @@ External point-cloud URLs can be stored as references, but the local converter c
 8. Choose whether the source should be the primary twin layer.
 9. Click `Add Capture Source`.
 
-For raw point-cloud uploads, the source is saved and queued for conversion. For GLB/glTF, image, PDF, panorama, and Matterport hosted sources, the viewer can load them without a conversion step.
+For MatterPak uploads, the source is saved and queued for Blender conversion if the queue worker is configured. For raw point-cloud uploads, the source is preserved and marked `awaiting_processing`. For GLB/glTF, image, PDF, panorama, and Matterport hosted sources, the viewer can load them without a conversion step.
 
 ## Issue Markers
 
@@ -142,7 +149,7 @@ For GLB/glTF layers, staff can click directly on the 3D model surface to fill ma
 ## Current Limitations
 
 - Large point-cloud files depend on PHP/WAMP upload limits and `DIGITAL_TWIN_UPLOAD_MAX_KB`.
-- Point-cloud conversion requires local filesystem storage.
-- PDAL and PotreeConverter must be installed and available to the queue worker.
-- Mesh formats such as `.obj`, `.fbx`, `.dae`, and `.ply` are accepted as source evidence, but the current converter does not transform them to GLB.
-- HEIC/HEIF uploads are accepted, but not all browsers preview them consistently.
+- Laravel Cloud production should use Object Storage/S3 for `DIGITAL_TWIN_DISK`.
+- Blender must be installed and available to the queue worker before MatterPak conversion can complete.
+- Generic OBJ uploads are preserved as source evidence; the current automatic Blender conversion is scoped to MatterPak ZIP.
+- E57/LAS/LAZ point-cloud conversion is planned for a later phase.

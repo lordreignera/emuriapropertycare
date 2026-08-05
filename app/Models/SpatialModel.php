@@ -82,6 +82,16 @@ class SpatialModel extends Model
         return $this->hasMany(IssueMarker::class);
     }
 
+    public function sourceFiles(): HasMany
+    {
+        return $this->hasMany(TwinSourceFile::class);
+    }
+
+    public function processingJobs(): HasMany
+    {
+        return $this->hasMany(TwinProcessingJob::class);
+    }
+
     public function getProviderLabelAttribute(): string
     {
         return CaptureSession::PROVIDERS[$this->provider] ?? ucfirst(str_replace('_', ' ', (string) $this->provider));
@@ -125,6 +135,10 @@ class SpatialModel extends Model
 
     public function getViewerTypeAttribute(): string
     {
+        if ($this->processing_status && $this->processing_status !== 'ready') {
+            return 'awaiting_processing';
+        }
+
         $extension = $this->detected_extension;
         $runtimeFormat = strtolower((string) $this->runtime_format);
         $originalFormat = strtolower((string) $this->original_format);

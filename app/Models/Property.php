@@ -160,6 +160,16 @@ class Property extends Model
         return $this->hasMany(SpatialModel::class);
     }
 
+    public function twinSourceFiles(): HasMany
+    {
+        return $this->hasMany(TwinSourceFile::class);
+    }
+
+    public function twinProcessingJobs(): HasMany
+    {
+        return $this->hasMany(TwinProcessingJob::class);
+    }
+
     public function primarySpatialModel(): HasOne
     {
         return $this->hasOne(SpatialModel::class)

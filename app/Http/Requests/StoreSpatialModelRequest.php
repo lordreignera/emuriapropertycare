@@ -59,6 +59,8 @@ class StoreSpatialModelRequest extends FormRequest
 
     public function rules(): array
     {
+        $supportedExtensions = implode(',', (array) config('digital_twin.supported_extensions', []));
+
         return [
             'provider' => ['required', Rule::in(array_keys(CaptureSession::PROVIDERS))],
             'capture_type' => ['required', Rule::in(array_keys(CaptureSession::CAPTURE_TYPES))],
@@ -73,7 +75,7 @@ class StoreSpatialModelRequest extends FormRequest
             'source_file' => [
                 'nullable',
                 'file',
-                'extensions:glb,gltf,obj,fbx,dae,ply,e57,las,laz,pts,ptx,xyz,zip,jpg,jpeg,png,webp,pdf,heic,heif',
+                'extensions:' . $supportedExtensions,
                 'max:' . config('digital_twin.upload_max_kilobytes', 102400),
             ],
             'thumbnail_file' => ['nullable', 'image', 'max:10240'],
@@ -96,11 +98,65 @@ class StoreSpatialModelRequest extends FormRequest
                 $validator->errors()->add('source_file', 'Attach a file, external URL, or provider model ID for this capture source.');
             }
 
-            if ($this->input('provider') === 'matterport' && !$hasExternalUrl && !$hasProviderModelId) {
-                $validator->errors()->add('provider_model_id', 'Matterport capture sources need a Matterport model ID or hosted tour URL.');
+            if ($this->input('provider') === 'matterport' && !$hasExternalUrl && !$hasProviderModelId && !$hasSourceFile) {
+                $validator->errors()->add('provider_model_id', 'Matterport capture sources need a Matterport model ID, hosted tour URL, or MatterPak ZIP upload.');
+            }
+
+            if ($hasSourceFile) {
+                $file = $this->file('source_file');
+                $extension = strtolower((string) $file->getClientOriginalExtension());
+                $mimeType = strtolower((string) $file->getMimeType());
+                $allowedMimeTypes = array_map('strtolower', (array) config("digital_twin.mime_types.{$extension}", []));
+
+                if ($allowedMimeTypes !== [] && !in_array($mimeType, $allowedMimeTypes, true)) {
+                    $validator->errors()->add(
+                        'source_file',
+                        'The selected capture source does not match the expected file type for .' . $extension . ' files.'
+                    );
+                }
+
+                if ($extension === 'zip' && !class_exists(\ZipArchive::class)) {
+                    $validator->errors()->add('source_file', 'ZIP twin uploads require the PHP ZipArchive extension.');
+                }
+
+                if ($extension === 'zip' && class_exists(\ZipArchive::class)) {
+                    $zip = new \ZipArchive();
+                    $containsObj = false;
+                    $opened = false;
+
+                    if ($zip->open($file->getRealPath()) === true) {
+                        $opened = true;
+
+                        for ($index = 0; $index < $zip->numFiles; $index++) {
+                            $name = strtolower((string) $zip->getNameIndex($index));
+
+                            if (str_ends_with($name, '.obj')) {
+                                $containsObj = true;
+                                break;
+                            }
+                        }
+
+                        $zip->close();
+                    }
+
+                    if (!$opened) {
+                        $validator->errors()->add('source_file', 'The ZIP twin upload could not be opened.');
+                    }
+
+                    if (!$containsObj) {
+                        $validator->errors()->add('source_file', 'MatterPak or OBJ ZIP uploads must contain an OBJ mesh file.');
+                    }
+                }
             }
 
         });
+    }
+
+    public function messages(): array
+    {
+        return [
+            'source_file.extensions' => 'Upload a supported twin source file: GLB, glTF, OBJ, MatterPak or OBJ ZIP bundle, E57, LAS, LAZ, JPG, JPEG, PNG, WEBP, or PDF.',
+        ];
     }
 
     private function userCanManageDigitalTwin(): bool

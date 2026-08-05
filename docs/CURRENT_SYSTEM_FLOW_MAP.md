@@ -1,6 +1,6 @@
 # Current System Flow Map
 
-Updated: July 21, 2026
+Updated: August 5, 2026
 
 This document describes the current ETOGO flow after the shift from a Matterport-first, pay-before-inspection model to a vendor-neutral property facts and diagnosis model.
 
@@ -123,6 +123,8 @@ Core tables/models:
 
 - `capture_sessions`
 - `spatial_models`
+- `twin_source_files`
+- `twin_processing_jobs`
 - `issue_markers`
 - `matterport_models` for legacy Matterport compatibility
 
@@ -156,7 +158,9 @@ Current supported capture types:
 How capture is stored:
 
 - A `CaptureSession` records who captured/uploaded the source, provider, capture type, device details, accuracy class, capture date, status, and metadata.
-- A `SpatialModel` records the model/evidence layer: provider, source type, runtime format, original format, hosted URL, uploaded file, thumbnail, status, processing status, primary flag, accuracy class, coordinate transform, and metadata.
+- A `TwinSourceFile` records original uploads and extracted package files: storage disk/path, original filename, checksum, extension, source type, file role, processing status, and processing errors.
+- A `SpatialModel` records only displayable model/evidence layers or browser-ready derivatives: provider, source type, runtime format, original format, hosted URL, generated/uploaded file, thumbnail, status, processing status, primary flag, accuracy class, coordinate transform, and metadata.
+- A `TwinProcessingJob` records conversion work such as MatterPak OBJ-to-GLB processing.
 - Matterport is optional. If provider is Matterport and a provider model ID exists, a legacy `MatterportModel` row is also updated for backward compatibility.
 
 Current viewer behavior:
@@ -164,58 +168,68 @@ Current viewer behavior:
 - Hosted Matterport URLs can still be displayed as hosted walkthroughs.
 - GLB/glTF is recognized as a Three.js model type.
 - Images and PDFs are treated as viewable evidence.
-- OBJ, FBX, PLY, E57, LAS, LAZ, PTX, PTS, XYZ, and ZIP are accepted as sources but marked as conversion-needed unless a browser-ready derivative exists.
+- MatterPak ZIP is stored privately, extracted into source-file metadata, and queued for Blender OBJ-to-GLB conversion where a worker is configured.
+- E57, LAS, and LAZ are accepted as preserved source files and marked `awaiting_processing`; they are not opened directly in Three.js.
+- Generic OBJ/ZIP uploads are preserved as source packages unless a browser-ready derivative exists.
 
 Current limitation:
 
 - The application stores vendor-neutral model/evidence records now.
-- Raw point clouds can now be queued for Potree conversion.
-- Actual conversion requires PDAL and PotreeConverter to be installed on the machine running the queue worker.
-- OBJ/FBX mesh-to-GLB conversion is still a later processing-worker phase.
+- GLB/glTF can be viewed immediately.
+- MatterPak conversion requires Blender to be installed on the queue worker.
+- E57/LAS/LAZ point-cloud processing is still a later processing-worker phase.
 
-## Point-Cloud Conversion
+## MatterPak Processing
 
-Supported source formats for the current point-cloud conversion pipeline:
+Supported MatterPak source:
 
-- E57
-- LAS
-- LAZ
-- PTS
-- PTX
-- XYZ
+- ZIP export containing OBJ mesh, MTL/material files, texture images, XYZ colour point cloud, and JPG/PDF floor plans.
 
 Current conversion target:
 
-- Potree browser tiles, stored as a new `SpatialModel` layer with `source_type = point_cloud_tiles` and `runtime_format = potree`.
+- GLB model, stored as a browser-ready `SpatialModel` layer with `source_type = runtime_3d_model` and `runtime_format = glb`.
 
 How it works:
 
-1. Staff uploads a raw point cloud as `Master Point Cloud`.
-2. The source `SpatialModel` is marked `queued`.
-3. A `ConvertSpatialModelPointCloud` job is placed on the `digital-twin` queue.
-4. The worker uses PDAL where normalization is needed.
-5. The worker uses PotreeConverter to create browser-viewable point-cloud tiles.
-6. A converted Potree layer is created and displayed in the digital twin viewer.
-7. If tools are missing, the source model is marked `failed` and the error is shown on the digital twin page.
+1. Staff uploads a MatterPak ZIP from the digital twin workspace.
+2. The original ZIP is stored privately through Laravel Storage.
+3. A parent `twin_source_files` record is created for the archive.
+4. A `twin_processing_jobs` record is created with `job_type = matterpak_obj_to_glb`.
+5. The worker extracts the ZIP into a temporary job folder and creates child `twin_source_files` records for OBJ, MTL, textures, XYZ, JPG and PDF files.
+6. The worker uses Blender to convert OBJ/MTL/textures into GLB.
+7. The generated GLB is uploaded to private storage.
+8. A browser-ready `spatial_models` record is created or updated only after GLB generation succeeds.
+9. If Blender or source files are missing, the job/source records are marked `failed` and no ready spatial model is created.
 
 Worker command:
 
 ```bash
-php artisan queue:work --queue=digital-twin,default
+php artisan queue:work --queue=digital-twin,default --timeout=3600 --tries=1
 ```
 
 Environment keys:
 
 ```env
-DIGITAL_TWIN_PDAL_BINARY=pdal
-DIGITAL_TWIN_POTREE_CONVERTER_BINARY=PotreeConverter
+DIGITAL_TWIN_DISK=s3
+DIGITAL_TWIN_BLENDER_BINARY=/path/to/blender
+DIGITAL_TWIN_PROCESSING_QUEUE=digital-twin
 DIGITAL_TWIN_CONVERSION_TIMEOUT=3600
 ```
 
 Local status:
 
-- The upload and queue feature exists.
-- The current WAMP machine still needs PDAL and PotreeConverter installed or configured on PATH before real conversion can complete.
+- The MatterPak upload and queue feature exists.
+- The queue worker still needs Blender installed/configured before real conversion can complete.
+- On Laravel Cloud, use Object Storage/S3 for persistent twin files. The app filesystem is temporary and should only hold per-job extraction files.
+
+## Point-Cloud Processing
+
+Current point-cloud behavior:
+
+- E57/LAS/LAZ uploads are stored as `twin_source_files`.
+- Processing status is set to `awaiting_processing`.
+- No PDAL, Potree, Cesium, or point-cloud tiling is attempted in this phase.
+- Future point-cloud processing should create browser-streamable output and attach it through the existing `spatial_models` table.
 
 ## Issue Markers and PHAR Findings
 
@@ -237,6 +251,8 @@ Marker fields include:
 - status
 - x/y/z position
 - surface normal
+- camera position and target
+- clicked object UUID
 - room name
 - surface label
 - source reference
@@ -247,13 +263,9 @@ Marker fields include:
 Current behavior:
 
 - Staff can manually add issue markers from the digital twin workspace.
+- For GLB/glTF layers, staff can click the 3D model surface and the viewer saves x/y/z, camera data, optional surface normal, and optional clicked object UUID.
 - Markers can be linked to a PHAR finding through `phar_finding_id`.
 - Clients can view their own property twin but cannot manage models or markers.
-
-Current limitation:
-
-- Manual marker coordinate entry exists.
-- Full click-on-3D-model marker placement with Three.js raycasting is not yet complete.
 
 ## Property Facts and Diagnosis Invoice
 
@@ -453,7 +465,9 @@ Language alignment:
 - `projects` groups operational work for a property.
 - `inspections` currently represents the diagnosis/assessment job.
 - `capture_sessions` records capture events and devices.
-- `spatial_models` records vendor-neutral digital twin sources and browser/viewer derivatives.
+- `twin_source_files` records immutable original/source capture files and extracted package members.
+- `twin_processing_jobs` records conversion status for source packages such as MatterPak.
+- `spatial_models` records vendor-neutral browser/viewer layers and ready derivatives.
 - `issue_markers` records spatial issue locations and can link to PHAR findings.
 - `phar_findings` records diagnosis findings.
 - `invoices` records billable property facts, diagnosis, remediation, and other charges.
@@ -474,13 +488,15 @@ The current migration set is treated as the deployment baseline after consolidat
 5. Add floor-plan/twin delivery status and client notification.
 6. Add invoice line-item templates for property facts and diagnosis.
 7. Add production large-file upload/import path for S3-hosted camera/scanner outputs.
+8. Add E57/LAS/LAZ point-cloud processing after choosing Potree/Cesium worker architecture.
 
 Recently addressed:
 
 - Admin dashboard queues now surface awaiting contact, property facts pending, invoice needed, and diagnosis in progress.
 - GLB/glTF digital twin viewer supports click-on-model issue marker placement with Three.js raycasting.
 - Reports now present a property lifecycle summary covering property facts, diagnosis, spatial markers, remediation, and verification.
-- Point-cloud conversion jobs exist for E57/LAS/LAZ-style master files where PDAL and PotreeConverter are configured.
+- Reports now include uploaded twin source files and processing status, not only ready viewer layers.
+- MatterPak ZIP uploads are stored privately, recorded in `twin_source_files`, and queued through `twin_processing_jobs` for Blender OBJ-to-GLB conversion.
 
 ## Recommended Immediate Flow
 

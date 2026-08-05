@@ -136,6 +136,8 @@ Route::middleware([
             Route::post('/assessment-schedule', [App\Http\Controllers\InspectionController::class, 'updateAssessmentSchedule'])->name('assessment-schedule.update');
             Route::get('/digital-twin', [App\Http\Controllers\DigitalTwinController::class, 'show'])->name('digital-twin');
             Route::post('/digital-twin/models', [App\Http\Controllers\DigitalTwinController::class, 'storeSpatialModel'])->name('digital-twin.models.store');
+            Route::get('/digital-twin/models/{spatialModel}/file', [App\Http\Controllers\DigitalTwinController::class, 'spatialModelFile'])->name('digital-twin.models.file');
+            Route::get('/digital-twin/source-files/{twinSourceFile}/download', [App\Http\Controllers\DigitalTwinController::class, 'sourceFileDownload'])->name('digital-twin.source-files.download');
             Route::post('/digital-twin/markers', [App\Http\Controllers\DigitalTwinController::class, 'storeIssueMarker'])->name('digital-twin.markers.store');
             Route::get('/matterport', fn (App\Models\Inspection $inspection) => redirect()->route('inspections.digital-twin', $inspection))->name('matterport');
             Route::post('/matterport-model', [App\Http\Controllers\MatterportModelController::class, 'store'])->name('matterport-model.store');

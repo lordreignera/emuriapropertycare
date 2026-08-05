@@ -274,6 +274,16 @@ class Inspection extends Model
         return $this->hasMany(SpatialModel::class);
     }
 
+    public function twinSourceFiles(): HasMany
+    {
+        return $this->hasMany(TwinSourceFile::class);
+    }
+
+    public function twinProcessingJobs(): HasMany
+    {
+        return $this->hasMany(TwinProcessingJob::class);
+    }
+
     public function activeSpatialModels(): HasMany
     {
         return $this->hasMany(SpatialModel::class)

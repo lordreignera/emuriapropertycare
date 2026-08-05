@@ -9,6 +9,27 @@ use Illuminate\Validation\Rule;
 
 class StoreIssueMarkerRequest extends FormRequest
 {
+    protected function prepareForValidation(): void
+    {
+        $decoded = [];
+
+        foreach (['camera_position', 'camera_target', 'provenance'] as $field) {
+            $value = $this->input($field);
+
+            if (is_string($value) && trim($value) !== '') {
+                $json = json_decode($value, true);
+
+                if (json_last_error() === JSON_ERROR_NONE && is_array($json)) {
+                    $decoded[$field] = $json;
+                }
+            }
+        }
+
+        if ($decoded !== []) {
+            $this->merge($decoded);
+        }
+    }
+
     public function authorize(): bool
     {
         $user = $this->user();
@@ -49,6 +70,16 @@ class StoreIssueMarkerRequest extends FormRequest
             'normal_x' => ['nullable', 'numeric'],
             'normal_y' => ['nullable', 'numeric'],
             'normal_z' => ['nullable', 'numeric'],
+            'camera_position' => ['nullable', 'array'],
+            'camera_position.x' => ['nullable', 'numeric'],
+            'camera_position.y' => ['nullable', 'numeric'],
+            'camera_position.z' => ['nullable', 'numeric'],
+            'camera_target' => ['nullable', 'array'],
+            'camera_target.x' => ['nullable', 'numeric'],
+            'camera_target.y' => ['nullable', 'numeric'],
+            'camera_target.z' => ['nullable', 'numeric'],
+            'object_uuid' => ['nullable', 'string', 'max:191'],
+            'provenance' => ['nullable', 'array'],
             'room_name' => ['nullable', 'string', 'max:255'],
             'surface_label' => ['nullable', 'string', 'max:255'],
             'source_reference' => ['nullable', 'string', 'max:255'],

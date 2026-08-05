@@ -7,11 +7,18 @@
 @php
     $propertyName = $property?->property_name ?: 'Property';
     $inspectionReference = 'Diagnosis #' . $inspection->id;
+    $processingJobs = $processingJobs ?? collect();
+    $supportedUploadExtensions = collect(config('digital_twin.supported_extensions', []))
+        ->map(fn ($extension) => '.' . ltrim($extension, '.'))
+        ->implode(',');
     $primaryModel = $spatialModels->firstWhere('is_primary', true) ?? $spatialModels->first();
     $legacyMatterportModel = $legacyMatterportModel ?? null;
     $statusLabel = str_replace('_', ' ', ucfirst((string) ($inspection->status ?? 'scheduled')));
-    $viewerSources = $spatialModels->map(function ($model) {
+    $viewerSources = $spatialModels->map(function ($model) use ($inspection) {
         $externalUrl = $model->external_url;
+        $storedFileUrl = $model->file_path
+            ? route('inspections.digital-twin.models.file', [$inspection, $model])
+            : null;
 
         if ($model->provider === 'matterport' && $model->provider_model_id) {
             $externalUrl = $externalUrl ?: 'https://my.matterport.com/show/?' . http_build_query([
@@ -29,15 +36,16 @@
             'providerLabel' => $model->provider_label,
             'sourceTypeLabel' => $model->source_type_label,
             'viewerType' => $model->viewer_type,
-            'fileUrl' => $model->file_url,
-            'thumbnailUrl' => $model->thumbnail_url,
+            'fileUrl' => $storedFileUrl,
+            'thumbnailUrl' => null,
             'externalUrl' => $externalUrl,
-            'downloadUrl' => $model->file_url ?: $externalUrl,
+            'downloadUrl' => $storedFileUrl ?: $externalUrl,
             'runtimeFormat' => $model->runtime_format,
             'originalFormat' => $model->original_format,
             'accuracyClass' => $model->accuracy_class,
             'isPrimary' => (bool) $model->is_primary,
             'extension' => $model->detected_extension,
+            'processingStatus' => $model->processing_status,
         ];
     })->values();
 
@@ -80,6 +88,13 @@
         max(1, (int) config('digital_twin.upload_max_kilobytes', 102400)) * 1024
     );
     $serverUploadMb = max(1, (int) floor($serverUploadBytes / 1024 / 1024));
+    $statusBadgeClass = fn ($status) => match ($status) {
+        'ready' => 'bg-success',
+        'queued', 'processing', 'awaiting_processing' => 'bg-warning text-dark',
+        'failed' => 'bg-danger',
+        'cancelled' => 'bg-secondary',
+        default => 'bg-light text-dark',
+    };
 @endphp
 
 <style>
@@ -409,6 +424,11 @@
         box-shadow: none;
     }
 
+    .twin-list-item.is-child-source {
+        margin-left: 18px;
+        border-left: 4px solid #dbeafe;
+    }
+
     .twin-item-title {
         color: #0f172a;
         font-weight: 700;
@@ -547,11 +567,11 @@
                                 name="source_file"
                                 type="file"
                                 class="form-control"
-                                accept=".glb,.gltf,.obj,.fbx,.dae,.ply,.e57,.las,.laz,.pts,.ptx,.xyz,.zip,.jpg,.jpeg,.png,.webp,.pdf,.heic,.heif"
+                                accept="{{ $supportedUploadExtensions }}"
                                 data-max-upload-bytes="{{ $serverUploadBytes }}"
                                 data-max-upload-mb="{{ $serverUploadMb }}"
                             >
-                            <small class="twin-help">Files are saved to the configured cloud disk. For large LiDAR/E57 packages, paste a cloud URL instead of uploading through the browser.</small>
+                            <small class="twin-help">GLB/glTF opens in the viewer. MatterPak ZIP is stored privately, extracted, and queued for Blender GLB conversion. E57/LAS/LAZ are preserved for later point-cloud processing.</small>
                             <div class="twin-upload-warning" id="sourceFileWarning"></div>
                         </div>
                         <div>
@@ -700,6 +720,9 @@
                                         <div class="twin-item-title">{{ $model->display_name ?: $model->source_type_label }}</div>
                                         <div class="d-flex flex-wrap gap-1 justify-content-end">
                                             <span class="badge {{ $model->is_primary ? 'bg-primary' : 'bg-light text-dark' }}">{{ $model->is_primary ? 'Primary' : ucfirst($model->status) }}</span>
+                                            <span class="badge {{ $model->processing_status === 'ready' ? 'bg-success' : 'bg-warning text-dark' }}">
+                                                {{ ucfirst(str_replace('_', ' ', $model->processing_status)) }}
+                                            </span>
                                         </div>
                                     </div>
                                     <div class="twin-meta">
@@ -718,6 +741,103 @@
                         </div>
                     @else
                         <div class="twin-empty">No spatial models or evidence layers have been attached to this diagnosis yet.</div>
+                    @endif
+                </div>
+            </section>
+
+            <section class="twin-panel">
+                <div class="twin-panel-header">
+                    <h3>Uploaded Source Files</h3>
+                    <span class="badge bg-light text-dark">{{ $sourceFiles->count() }}</span>
+                </div>
+                <div class="twin-panel-body">
+                    @if($sourceFiles->isNotEmpty())
+                        <div class="twin-list">
+                            @foreach($sourceFiles as $sourceFile)
+                                <div class="twin-list-item {{ $sourceFile->parent_source_file_id ? 'is-child-source' : '' }}">
+                                    <div class="d-flex justify-content-between gap-2">
+                                        <div class="twin-item-title">
+                                            @if($sourceFile->parent_source_file_id)
+                                                <span class="text-muted">Extracted:</span>
+                                            @endif
+                                            {{ $sourceFile->relative_path ?: $sourceFile->original_filename }}
+                                        </div>
+                                        <span class="badge {{ $statusBadgeClass($sourceFile->processing_status) }}">
+                                            {{ $sourceFile->processing_status_label }}
+                                        </span>
+                                    </div>
+                                    <div class="twin-meta">
+                                        <span><i class="mdi mdi-file-outline me-1"></i>{{ strtoupper($sourceFile->extension) }}</span>
+                                        <span>{{ $sourceFile->source_type_label }}</span>
+                                        @if($sourceFile->file_role)
+                                            <span>{{ ucfirst(str_replace('_', ' ', $sourceFile->file_role)) }}</span>
+                                        @endif
+                                        @if($sourceFile->file_size)
+                                            <span>{{ number_format($sourceFile->file_size / 1024 / 1024, 2) }} MB</span>
+                                        @endif
+                                        @if($sourceFile->storage_path)
+                                            <a href="{{ route('inspections.digital-twin.source-files.download', [$inspection, $sourceFile]) }}" target="_blank" rel="noopener noreferrer">Open source</a>
+                                        @endif
+                                    </div>
+                                    @if($sourceFile->processing_status === 'awaiting_processing')
+                                        <div class="small text-muted mt-2">
+                                            This source is preserved and is waiting for the configured processing worker.
+                                        </div>
+                                    @elseif($sourceFile->processing_status === 'failed' && $sourceFile->processing_error)
+                                        <div class="small text-danger mt-2">
+                                            {{ $sourceFile->processing_error }}
+                                        </div>
+                                    @endif
+                                </div>
+                            @endforeach
+                        </div>
+                    @else
+                        <div class="twin-empty">No original source files have been uploaded for this diagnosis yet.</div>
+                    @endif
+                </div>
+            </section>
+
+            <section class="twin-panel">
+                <div class="twin-panel-header">
+                    <h3>Twin Processing Jobs</h3>
+                    <span class="badge bg-light text-dark">{{ $processingJobs->count() }}</span>
+                </div>
+                <div class="twin-panel-body">
+                    @if($processingJobs->isNotEmpty())
+                        <div class="twin-list">
+                            @foreach($processingJobs as $processingJob)
+                                <div class="twin-list-item">
+                                    <div class="d-flex justify-content-between gap-2">
+                                        <div class="twin-item-title">{{ ucfirst(str_replace('_', ' ', $processingJob->job_type)) }}</div>
+                                        <span class="badge {{ $statusBadgeClass($processingJob->status) }}">
+                                            {{ $processingJob->status_label }}
+                                        </span>
+                                    </div>
+                                    <div class="twin-meta">
+                                        <span><i class="mdi mdi-cog-outline me-1"></i>{{ ucfirst($processingJob->processor) }}</span>
+                                        @if($processingJob->sourceFile)
+                                            <span><i class="mdi mdi-archive-outline me-1"></i>{{ $processingJob->sourceFile->original_filename }}</span>
+                                        @endif
+                                        @if($processingJob->queue_name)
+                                            <span>Queue: {{ $processingJob->queue_name }}</span>
+                                        @endif
+                                        @if($processingJob->started_at)
+                                            <span>Started {{ $processingJob->started_at->format('M j, Y g:i A') }}</span>
+                                        @endif
+                                        @if($processingJob->completed_at)
+                                            <span>Completed {{ $processingJob->completed_at->format('M j, Y g:i A') }}</span>
+                                        @endif
+                                    </div>
+                                    @if($processingJob->processing_error)
+                                        <div class="small text-danger mt-2">{{ $processingJob->processing_error }}</div>
+                                    @elseif($processingJob->status === 'queued')
+                                        <div class="small text-muted mt-2">Waiting for the digital twin queue worker to run Blender conversion.</div>
+                                    @endif
+                                </div>
+                            @endforeach
+                        </div>
+                    @else
+                        <div class="twin-empty">No source-processing jobs have been queued for this diagnosis yet.</div>
                     @endif
                 </div>
             </section>
@@ -828,6 +948,9 @@
                             <input type="hidden" id="normal_x" name="normal_x" value="{{ old('normal_x') }}" data-marker-field="normal_x">
                             <input type="hidden" id="normal_y" name="normal_y" value="{{ old('normal_y') }}" data-marker-field="normal_y">
                             <input type="hidden" id="normal_z" name="normal_z" value="{{ old('normal_z') }}" data-marker-field="normal_z">
+                            <input type="hidden" id="camera_position" name="camera_position" value="{{ old('camera_position') }}" data-marker-field="camera_position">
+                            <input type="hidden" id="camera_target" name="camera_target" value="{{ old('camera_target') }}" data-marker-field="camera_target">
+                            <input type="hidden" id="object_uuid" name="object_uuid" value="{{ old('object_uuid') }}" data-marker-field="object_uuid">
                             <div class="mb-3">
                                 <label class="twin-label" for="room_name">Room / area</label>
                                 <input id="room_name" name="room_name" type="text" class="form-control" value="{{ old('room_name') }}" placeholder="Kitchen, roof, north wall">
@@ -853,6 +976,9 @@
                             <button type="submit" class="btn btn-primary w-100">
                                 <i class="mdi mdi-map-marker-plus-outline me-1"></i>Add Marker
                             </button>
+                            <a href="{{ route('inspections.phar-data', $inspection) }}" class="btn btn-outline-primary w-100 mt-2">
+                                <i class="mdi mdi-clipboard-plus-outline me-1"></i>Create or edit PHAR finding
+                            </a>
                         </form>
                     </div>
                 </section>
@@ -918,7 +1044,7 @@
                 return;
             }
 
-            var pointCloudExtensions = ['e57', 'las', 'laz', 'pts', 'ptx', 'xyz'];
+            var pointCloudExtensions = ['e57', 'las', 'laz'];
             var imageExtensions = ['jpg', 'jpeg', 'png', 'webp'];
 
             function setSelectValue(select, value) {
@@ -968,8 +1094,14 @@
                 if (pointCloudExtensions.includes(extension)) {
                     setSelectValue(captureType, 'point_cloud');
                     setSelectValue(sourceType, 'master_point_cloud');
-                    if (runtimeFormat && !runtimeFormat.value) {
-                        runtimeFormat.value = 'cloud_reference';
+                    if (runtimeFormat) {
+                        runtimeFormat.value = '';
+                    }
+                } else if (extension === 'obj' || extension === 'zip') {
+                    setSelectValue(captureType, 'obj_mesh');
+                    setSelectValue(sourceType, 'runtime_3d_model');
+                    if (runtimeFormat) {
+                        runtimeFormat.value = '';
                     }
                 } else if (extension === 'glb' || extension === 'gltf') {
                     setSelectValue(captureType, 'glb_model');

@@ -75,6 +75,16 @@ class CaptureSession extends Model
         return $this->hasMany(SpatialModel::class);
     }
 
+    public function twinSourceFiles(): HasMany
+    {
+        return $this->hasMany(TwinSourceFile::class);
+    }
+
+    public function twinProcessingJobs(): HasMany
+    {
+        return $this->hasMany(TwinProcessingJob::class);
+    }
+
     public function issueMarkers(): HasMany
     {
         return $this->hasMany(IssueMarker::class);

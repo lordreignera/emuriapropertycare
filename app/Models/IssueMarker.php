@@ -25,12 +25,16 @@ class IssueMarker extends Model
         'normal_x',
         'normal_y',
         'normal_z',
+        'camera_position',
+        'camera_target',
+        'object_uuid',
         'room_name',
         'surface_label',
         'source_reference',
         'confidence',
         'attachments',
         'metadata',
+        'provenance',
         'description',
     ];
 
@@ -41,9 +45,12 @@ class IssueMarker extends Model
         'normal_x' => 'decimal:6',
         'normal_y' => 'decimal:6',
         'normal_z' => 'decimal:6',
+        'camera_position' => 'array',
+        'camera_target' => 'array',
         'confidence' => 'decimal:2',
         'attachments' => 'array',
         'metadata' => 'array',
+        'provenance' => 'array',
     ];
 
     public function property(): BelongsTo

@@ -276,7 +276,7 @@ function renderThreeModel(stage, source) {
             ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize()
             : new THREE.Vector3(0, 1, 0);
 
-        fillMarkerForm(source, hit.point, worldNormal);
+        fillMarkerForm(source, hit.point, worldNormal, camera, controls, hit.object);
         markerPin = placeMarkerPin(container, markerPin, event.clientX - rect.left, event.clientY - rect.top);
         updatePlacementHint(container, hit.point);
     }
@@ -442,7 +442,7 @@ function placeMarkerPin(container, existingPin, x, y) {
     return pin;
 }
 
-function fillMarkerForm(source, point, normal) {
+function fillMarkerForm(source, point, normal, camera = null, controls = null, object = null) {
     const form = document.querySelector('[data-issue-marker-form]');
 
     if (!form) {
@@ -457,6 +457,9 @@ function fillMarkerForm(source, point, normal) {
     setField(form, 'normal_x', formatNormal(normal.x));
     setField(form, 'normal_y', formatNormal(normal.y));
     setField(form, 'normal_z', formatNormal(normal.z));
+    setField(form, 'camera_position', vectorToJson(camera?.position));
+    setField(form, 'camera_target', vectorToJson(controls?.target));
+    setField(form, 'object_uuid', object?.uuid || '');
 
     const sourceReference = [
         source.title,
@@ -499,11 +502,26 @@ function formatNormal(value) {
     return Number(value || 0).toFixed(6);
 }
 
+function vectorToJson(vector) {
+    if (!vector) {
+        return '';
+    }
+
+    return JSON.stringify({
+        x: Number(vector.x || 0).toFixed(4),
+        y: Number(vector.y || 0).toFixed(4),
+        z: Number(vector.z || 0).toFixed(4),
+    });
+}
+
 function renderSource(root, stage, source) {
     clearStage(stage);
     setActiveButton(root, source.id);
 
     switch (source.viewerType) {
+        case 'awaiting_processing':
+            renderCard(stage, source, source.title, 'This source is preserved, but it is awaiting processing before it can be opened in the browser viewer.', 'Open Source File');
+            break;
         case 'hosted_tour':
             renderHostedTour(stage, source);
             break;
