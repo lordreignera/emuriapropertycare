@@ -6,8 +6,12 @@
 @section('content')
 @php
     $propertyName = $property?->property_name ?: 'Property';
-    $inspectionReference = 'Diagnosis #' . $inspection->id;
+    $propertyDiagnosisNumber = (int) ($propertyDiagnosisNumber ?? 0);
+    $inspectionReference = 'Diagnosis #' . ($propertyDiagnosisNumber ?: $inspection->id);
+    $inspectionRecordReference = 'Inspection record #' . $inspection->id;
     $processingJobs = $processingJobs ?? collect();
+    $buildingSystems = $buildingSystems ?? collect();
+    $viewerMarkers = collect($viewerMarkers ?? []);
     $supportedUploadExtensions = collect(config('digital_twin.supported_extensions', []))
         ->map(fn ($extension) => '.' . ltrim($extension, '.'))
         ->implode(',');
@@ -46,8 +50,249 @@
             'isPrimary' => (bool) $model->is_primary,
             'extension' => $model->detected_extension,
             'processingStatus' => $model->processing_status,
+            'icon' => match ($model->viewer_type) {
+                'hosted_tour' => 'mdi-home-analytics',
+                'three_model' => 'mdi-cube-outline',
+                'potree' => 'mdi-dots-triangle',
+                'point_cloud_preview' => 'mdi-dots-triangle',
+                'image', 'panorama' => 'mdi-image-outline',
+                'pdf' => 'mdi-file-pdf-box',
+                default => 'mdi-layers-outline',
+            },
         ];
     })->values();
+
+    $sourceViewerType = function ($sourceFile) {
+        if (!in_array($sourceFile->processing_status, ['ready', 'uploaded'], true)) {
+            return 'awaiting_processing';
+        }
+
+        $extension = strtolower((string) $sourceFile->extension);
+
+        if ($sourceFile->file_role === 'point_cloud_preview' && $extension === 'json') {
+            return 'point_cloud_preview';
+        }
+
+        if ($sourceFile->source_type === 'panorama' && in_array($extension, ['jpg', 'jpeg', 'png', 'webp'], true)) {
+            return 'panorama';
+        }
+
+        if (in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true)) {
+            return 'image';
+        }
+
+        if ($extension === 'pdf') {
+            return 'pdf';
+        }
+
+        return 'stored_evidence';
+    };
+
+    $sourceRoleLabel = function (?string $role) {
+        return match ($role) {
+            'floor_plan' => 'Floor plan',
+            'reflected_ceiling_plan' => 'Ceiling plan',
+            'texture' => 'Texture map',
+            'point_cloud_preview' => 'Point cloud preview',
+            'colour_point_cloud' => 'Point cloud',
+            'material_library' => 'Material library',
+            'obj_mesh' => 'OBJ mesh',
+            'matterpak_archive' => 'MatterPak package',
+            'supporting_source' => 'Supporting source',
+            default => 'Source file',
+        };
+    };
+
+    $sourceIcon = function (string $viewerType, ?string $role = null) {
+        if ($role === 'floor_plan') {
+            return 'mdi-floor-plan';
+        }
+
+        if ($role === 'reflected_ceiling_plan') {
+            return 'mdi-file-image-outline';
+        }
+
+        if ($role === 'texture') {
+            return 'mdi-image-multiple-outline';
+        }
+
+        if ($role === 'point_cloud_preview') {
+            return 'mdi-dots-triangle';
+        }
+
+        return match ($viewerType) {
+            'three_model' => 'mdi-cube-outline',
+            'hosted_tour' => 'mdi-home-analytics',
+            'image', 'panorama' => 'mdi-image-outline',
+            'pdf' => 'mdi-file-pdf-box',
+            'media_gallery' => 'mdi-image-multiple-outline',
+            'point_cloud_preview' => 'mdi-dots-triangle',
+            'potree' => 'mdi-dots-triangle',
+            default => 'mdi-layers-outline',
+        };
+    };
+
+    $sourceFileTitle = function ($sourceFile) use ($sourceRoleLabel) {
+        $basename = basename((string) ($sourceFile->relative_path ?: $sourceFile->original_filename));
+        $label = $sourceRoleLabel($sourceFile->file_role);
+
+        if (in_array($sourceFile->file_role, ['floor_plan', 'reflected_ceiling_plan'], true)) {
+            return 'MatterPak ' . strtolower($label) . ' - ' . $basename;
+        }
+
+        if ($sourceFile->file_role === 'supporting_source') {
+            return 'MatterPak document - ' . $basename;
+        }
+
+        if ($sourceFile->file_role === 'point_cloud_preview') {
+            return 'MatterPak point cloud preview';
+        }
+
+        return $sourceFile->relative_path ?: $sourceFile->original_filename;
+    };
+
+    $sourceViewerSources = $sourceFiles
+        ->filter(fn ($sourceFile) => !$sourceFile->spatial_model_id && !$sourceFile->parent_source_file_id)
+        ->map(function ($sourceFile) use ($inspection, $sourceViewerType) {
+            $viewerType = $sourceViewerType($sourceFile);
+            $downloadUrl = $sourceFile->storage_path
+                ? route('inspections.digital-twin.source-files.download', [$inspection, $sourceFile])
+                : ($sourceFile->metadata['external_url'] ?? null);
+
+            return [
+                'id' => 'source-' . $sourceFile->id,
+                'title' => $sourceFile->relative_path ?: $sourceFile->original_filename,
+                'spatialModelId' => null,
+                'sourceFileId' => $sourceFile->id,
+                'captureSessionId' => $sourceFile->capture_session_id,
+                'provider' => $sourceFile->metadata['selected_provider'] ?? $sourceFile->captureSession?->provider ?? 'manual_upload',
+                'providerLabel' => $sourceFile->captureSession?->provider_label ?? 'Source file',
+                'sourceTypeLabel' => $sourceFile->source_type_label,
+                'viewerType' => $viewerType,
+                'fileUrl' => $downloadUrl,
+                'thumbnailUrl' => null,
+                'externalUrl' => $sourceFile->metadata['external_url'] ?? null,
+                'downloadUrl' => $downloadUrl,
+                'runtimeFormat' => null,
+                'originalFormat' => $sourceFile->extension,
+                'accuracyClass' => $sourceFile->captureSession?->accuracy_class,
+                'isPrimary' => false,
+                'extension' => $sourceFile->extension,
+                'processingStatus' => $sourceFile->processing_status,
+                'icon' => 'mdi-layers-outline',
+            ];
+        })
+        ->values();
+
+    $matterPakViewableMediaRoles = ['floor_plan', 'reflected_ceiling_plan', 'point_cloud_preview', 'supporting_source'];
+    $matterPakRoleOrder = [
+        'floor_plan' => 0,
+        'reflected_ceiling_plan' => 1,
+        'point_cloud_preview' => 2,
+        'supporting_source' => 3,
+    ];
+    $matterPakMediaSources = $sourceFiles
+        ->filter(function ($sourceFile) use ($matterPakViewableMediaRoles, $sourceViewerType) {
+            return $sourceFile->parent_source_file_id
+                && in_array($sourceFile->file_role, $matterPakViewableMediaRoles, true)
+                && in_array($sourceViewerType($sourceFile), ['image', 'pdf', 'point_cloud_preview'], true);
+        })
+        ->sortBy(fn ($sourceFile) => sprintf(
+            '%02d-%s',
+            $matterPakRoleOrder[$sourceFile->file_role] ?? 9,
+            $sourceFile->relative_path ?: $sourceFile->original_filename
+        ))
+        ->map(function ($sourceFile) use ($inspection, $sourceViewerType, $sourceRoleLabel, $sourceIcon, $sourceFileTitle) {
+            $viewerType = $sourceViewerType($sourceFile);
+            $downloadUrl = route('inspections.digital-twin.source-files.download', [$inspection, $sourceFile]);
+
+            return [
+                'id' => 'source-' . $sourceFile->id,
+                'title' => $sourceFileTitle($sourceFile),
+                'spatialModelId' => null,
+                'sourceFileId' => $sourceFile->id,
+                'captureSessionId' => $sourceFile->capture_session_id,
+                'provider' => $sourceFile->captureSession?->provider ?? 'matterport',
+                'providerLabel' => $sourceFile->captureSession?->provider_label ?? 'Matterport',
+                'sourceTypeLabel' => 'MatterPak ' . $sourceRoleLabel($sourceFile->file_role),
+                'viewerType' => $viewerType,
+                'fileUrl' => $downloadUrl,
+                'thumbnailUrl' => $viewerType === 'image' ? $downloadUrl : null,
+                'externalUrl' => null,
+                'downloadUrl' => $downloadUrl,
+                'runtimeFormat' => null,
+                'originalFormat' => $sourceFile->extension,
+                'accuracyClass' => $sourceFile->captureSession?->accuracy_class,
+                'isPrimary' => false,
+                'extension' => $sourceFile->extension,
+                'processingStatus' => $sourceFile->processing_status,
+                'matterPakMediaRole' => $sourceFile->file_role,
+                'icon' => $sourceIcon($viewerType, $sourceFile->file_role),
+            ];
+        })
+        ->values();
+
+    $matterPakTextureGallerySources = $sourceFiles
+        ->filter(fn ($sourceFile) => $sourceFile->parent_source_file_id
+            && $sourceFile->file_role === 'texture'
+            && $sourceFile->storage_path
+            && in_array(strtolower((string) $sourceFile->extension), ['jpg', 'jpeg', 'png', 'gif', 'webp'], true))
+        ->groupBy(fn ($sourceFile) => (int) $sourceFile->capture_session_id)
+        ->map(function ($textureFiles, $captureId) use ($inspection) {
+            $firstTexture = $textureFiles->sortBy('relative_path')->first();
+            $items = $textureFiles
+                ->sortBy(fn ($sourceFile) => $sourceFile->relative_path ?: $sourceFile->original_filename)
+                ->values()
+                ->map(function ($sourceFile) use ($inspection) {
+                    $url = route('inspections.digital-twin.source-files.download', [$inspection, $sourceFile]);
+
+                    return [
+                        'id' => 'source-' . $sourceFile->id,
+                        'title' => basename((string) ($sourceFile->relative_path ?: $sourceFile->original_filename)),
+                        'viewerType' => 'image',
+                        'fileUrl' => $url,
+                        'downloadUrl' => $url,
+                        'extension' => $sourceFile->extension,
+                        'fileRole' => $sourceFile->file_role,
+                        'fileSize' => $sourceFile->file_size,
+                    ];
+                })
+                ->all();
+
+            return [
+                'id' => 'matterpak-textures-capture-' . ($captureId ?: 'none'),
+                'title' => 'MatterPak texture maps',
+                'spatialModelId' => null,
+                'sourceFileId' => null,
+                'captureSessionId' => (int) $captureId ?: null,
+                'provider' => $firstTexture?->captureSession?->provider ?? 'matterport',
+                'providerLabel' => $firstTexture?->captureSession?->provider_label ?? 'Matterport',
+                'sourceTypeLabel' => 'MatterPak texture gallery',
+                'viewerType' => 'media_gallery',
+                'fileUrl' => null,
+                'thumbnailUrl' => null,
+                'externalUrl' => null,
+                'downloadUrl' => null,
+                'runtimeFormat' => null,
+                'originalFormat' => 'jpg',
+                'accuracyClass' => $firstTexture?->captureSession?->accuracy_class,
+                'isPrimary' => false,
+                'extension' => 'jpg',
+                'processingStatus' => 'uploaded',
+                'mediaItems' => $items,
+                'mediaCount' => count($items),
+                'matterPakMediaRole' => 'texture_gallery',
+                'icon' => 'mdi-image-multiple-outline',
+                'openSourceUrl' => null,
+            ];
+        })
+        ->values();
+
+    $viewerSources = $viewerSources
+        ->concat($sourceViewerSources)
+        ->concat($matterPakMediaSources)
+        ->concat($matterPakTextureGallerySources)
+        ->values();
 
     if ($viewerSources->isEmpty() && $legacyMatterportModel) {
         $viewerSources = collect([[
@@ -69,7 +314,136 @@
         ]]);
     }
 
-    $initialViewerSource = $viewerSources->firstWhere('isPrimary', true) ?: $viewerSources->first();
+    $modelsByCapture = $spatialModels->groupBy(fn ($model) => (int) $model->capture_session_id);
+    $sourcesByCapture = $sourceFiles->groupBy(fn ($sourceFile) => (int) $sourceFile->capture_session_id);
+    $jobsByCapture = $processingJobs->groupBy(fn ($processingJob) => (int) $processingJob->capture_session_id);
+    $markersByCapture = $issueMarkers->groupBy(fn ($marker) => (int) $marker->capture_session_id);
+    $ungroupedModelCount = $spatialModels->filter(fn ($model) => !$model->capture_session_id)->count();
+    $matterPakConvertAction = function ($sourceFile, $jobs) use ($inspection, $canManageDigitalTwin) {
+        if (!$canManageDigitalTwin || !$sourceFile || $sourceFile->file_role !== 'matterpak_archive') {
+            return null;
+        }
+
+        $jobs = collect($jobs);
+        $activeJob = $jobs
+            ->where('source_file_id', $sourceFile->id)
+            ->whereIn('status', ['queued', 'processing'])
+            ->sortByDesc('id')
+            ->first();
+        $latestSourceJob = $jobs
+            ->where('source_file_id', $sourceFile->id)
+            ->sortByDesc('id')
+            ->first();
+
+        if ($activeJob) {
+            $isProcessing = $activeJob->status === 'processing';
+
+            return [
+                'url' => route('inspections.digital-twin.source-files.convert', [$inspection, $sourceFile]),
+                'label' => $isProcessing ? 'Converting' : 'Conversion queued',
+                'title' => $isProcessing
+                    ? 'Blender conversion is already running for this MatterPak archive.'
+                    : 'MatterPak conversion is already queued for this archive.',
+                'icon' => 'mdi-progress-clock',
+                'disabled' => true,
+                'status' => $activeJob->status,
+            ];
+        }
+
+        $isRetry = $sourceFile->processing_status === 'failed' || $latestSourceJob?->status === 'failed';
+        $isReady = $sourceFile->processing_status === 'ready'
+            || $sourceFile->spatial_model_id
+            || $latestSourceJob?->status === 'ready';
+
+        return [
+            'url' => route('inspections.digital-twin.source-files.convert', [$inspection, $sourceFile]),
+            'label' => $isRetry ? 'Retry GLB' : ($isReady ? 'Reconvert GLB' : 'Convert to GLB'),
+            'title' => $isRetry
+                ? 'Retry Blender conversion for this MatterPak archive.'
+                : ($isReady
+                    ? 'Run Blender again and replace the browser-ready GLB for this same capture.'
+                    : 'Start Blender conversion for this MatterPak archive.'),
+            'icon' => $isRetry || $isReady ? 'mdi-refresh' : 'mdi-cube-send',
+            'disabled' => false,
+            'status' => $latestSourceJob?->status ?: $sourceFile->processing_status,
+        ];
+    };
+    $viewerSources = $viewerSources->map(function ($source) use ($inspection, $sourceFiles, $sourcesByCapture, $jobsByCapture, $canCreateIssueMarkers, $matterPakConvertAction) {
+        $captureId = (int) ($source['captureSessionId'] ?? 0);
+        $spatialModelId = (int) ($source['spatialModelId'] ?? 0);
+        $sourceFileId = (int) ($source['sourceFileId'] ?? 0);
+        $sessionSources = $captureId ? $sourcesByCapture->get($captureId, collect()) : collect();
+        $sessionJobs = $captureId ? $jobsByCapture->get($captureId, collect()) : collect();
+        $latestJob = $sessionJobs->sortByDesc('id')->first();
+        $primarySource = $sourceFileId ? $sourceFiles->firstWhere('id', $sourceFileId) : null;
+        $primarySource = $primarySource ?: ($sessionSources->firstWhere('parent_source_file_id', null) ?: $sessionSources->first());
+        $matterPakArchive = $sessionSources->firstWhere('file_role', 'matterpak_archive');
+        $convertAction = $matterPakConvertAction($matterPakArchive, $sessionJobs);
+        $openSourceUrl = array_key_exists('openSourceUrl', $source)
+            ? $source['openSourceUrl']
+            : ($primarySource?->storage_path
+                ? route('inspections.digital-twin.source-files.download', [$inspection, $primarySource])
+                : ($source['externalUrl'] ?? $source['downloadUrl'] ?? null));
+
+        return array_merge($source, [
+            'viewUrl' => $spatialModelId
+                ? route('inspections.digital-twin', [$inspection, 'model' => $spatialModelId]) . '#digitalTwinViewer'
+                : ($captureId
+                    ? route('inspections.digital-twin', [$inspection, 'capture' => $captureId]) . '#digitalTwinViewer'
+                    : route('inspections.digital-twin', $inspection) . '#digitalTwinViewer'),
+            'openSourceUrl' => $openSourceUrl,
+            'canAddFinding' => (bool) ($canCreateIssueMarkers && $captureId),
+            'addFindingCaptureSessionId' => $captureId ?: null,
+            'addFindingSpatialModelId' => $spatialModelId ?: null,
+            'addFindingSourceProvider' => $source['provider'] ?? 'manual',
+            'addFindingSourceReference' => $source['title'] ?? null,
+            'convertUrl' => $convertAction['url'] ?? null,
+            'convertLabel' => $convertAction['label'] ?? null,
+            'convertTitle' => $convertAction['title'] ?? null,
+            'convertIcon' => $convertAction['icon'] ?? null,
+            'convertDisabled' => (bool) ($convertAction['disabled'] ?? false),
+            'jobLabel' => $latestJob ? ucfirst(str_replace('_', ' ', (string) $latestJob->job_type)) : null,
+            'jobStatus' => $latestJob?->status,
+            'actionMeta' => trim(implode(' / ', array_filter([
+                $source['providerLabel'] ?? null,
+                $source['sourceTypeLabel'] ?? null,
+                $latestJob?->status ? ucfirst(str_replace('_', ' ', (string) $latestJob->status)) : null,
+            ]))),
+        ]);
+    })->values();
+    $requestedCaptureId = request()->integer('capture') ?: null;
+    $requestedModelId = request()->integer('model') ?: null;
+    $initialViewerSource = $viewerSources->first(function ($source) use ($requestedCaptureId, $requestedModelId) {
+        if ($requestedModelId && (int) ($source['spatialModelId'] ?? 0) === $requestedModelId) {
+            return true;
+        }
+
+        return $requestedCaptureId && (int) ($source['captureSessionId'] ?? 0) === $requestedCaptureId;
+    }) ?: ($viewerSources->firstWhere('isPrimary', true) ?: $viewerSources->first());
+    $markerLayerCounts = [
+        'critical' => $viewerMarkers->where('severity', 'critical')->count(),
+        'high' => $viewerMarkers->where('severity', 'high')->count(),
+        'medium' => $viewerMarkers->where('severity', 'medium')->count(),
+        'low' => $viewerMarkers->where('severity', 'low')->count(),
+        'phar' => $viewerMarkers->filter(fn ($marker) => !empty($marker['pharFindingId']))->count(),
+        'unlinked' => $viewerMarkers->filter(fn ($marker) => empty($marker['pharFindingId']))->count(),
+    ];
+    $markerBelongsToViewerSource = function ($marker, $source) {
+        $markerModelId = (int) ($marker['spatialModelId'] ?? 0);
+        $sourceModelId = (int) ($source['spatialModelId'] ?? 0);
+
+        if ($markerModelId && $sourceModelId) {
+            return $markerModelId === $sourceModelId;
+        }
+
+        $markerCaptureId = (int) ($marker['captureSessionId'] ?? 0);
+        $sourceCaptureId = (int) ($source['captureSessionId'] ?? 0);
+
+        return $markerCaptureId && $sourceCaptureId && $markerCaptureId === $sourceCaptureId;
+    };
+    $sourceMarkerCount = fn ($source) => $viewerMarkers
+        ->filter(fn ($marker) => $markerBelongsToViewerSource($marker, $source))
+        ->count();
     $iniBytes = function ($value) {
         $value = trim((string) $value);
         $number = (float) $value;
@@ -81,6 +455,23 @@
             'k' => (int) ($number * 1024),
             default => (int) $number,
         };
+    };
+    $formatFileSize = function ($bytes) {
+        $bytes = (float) ($bytes ?: 0);
+
+        if ($bytes >= 1024 * 1024 * 1024) {
+            return number_format($bytes / 1024 / 1024 / 1024, 2) . ' GB';
+        }
+
+        if ($bytes >= 1024 * 1024) {
+            return number_format($bytes / 1024 / 1024, 1) . ' MB';
+        }
+
+        if ($bytes >= 1024) {
+            return number_format($bytes / 1024, 1) . ' KB';
+        }
+
+        return number_format($bytes) . ' B';
     };
     $serverUploadBytes = min(
         $iniBytes(ini_get('upload_max_filesize')),
@@ -95,6 +486,21 @@
         'cancelled' => 'bg-secondary',
         default => 'bg-light text-dark',
     };
+    $uploadErrorFields = collect([
+        'provider',
+        'capture_type',
+        'source_type',
+        'display_name',
+        'source_file',
+        'external_url',
+        'thumbnail_file',
+        'status',
+        'accuracy_class',
+        'captured_at',
+        'notes',
+    ]);
+    $uploadPanelOpen = $uploadErrorFields->contains(fn ($field) => $errors->has($field));
+    $highlightCaptureId = (int) (session('digital_twin_capture_id') ?: ($requestedCaptureId ?: 0));
 @endphp
 
 <style>
@@ -155,6 +561,10 @@
         grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
         gap: 16px;
         align-items: start;
+    }
+
+    .twin-layout.twin-layout-full {
+        grid-template-columns: 1fr;
     }
 
     .twin-panel {
@@ -272,6 +682,45 @@
         background: #f8fbff;
     }
 
+    .twin-viewer-actionbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 14px;
+        border-bottom: 1px solid #e4ebf5;
+        background: #fff;
+    }
+
+    .twin-viewer-current {
+        min-width: 0;
+    }
+
+    .twin-viewer-current strong {
+        display: block;
+        overflow: hidden;
+        color: #0f172a;
+        font-size: 14px;
+        line-height: 1.25;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .twin-viewer-current small {
+        display: block;
+        color: #64748b;
+        font-size: 12px;
+        line-height: 1.35;
+    }
+
+    .twin-viewer-actions {
+        display: flex;
+        flex: 0 0 auto;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 8px;
+    }
+
     .twin-source-button {
         flex: 0 0 auto;
         display: inline-flex;
@@ -293,7 +742,7 @@
         color: #0b4bb3;
     }
 
-    .twin-source-button span {
+    .twin-source-button .twin-source-label {
         display: block;
         min-width: 0;
         overflow: hidden;
@@ -301,24 +750,144 @@
         white-space: nowrap;
     }
 
+    .twin-source-marker-count {
+        flex: 0 0 auto;
+        min-width: 22px;
+        height: 22px;
+        display: inline-grid;
+        place-items: center;
+        border-radius: 999px;
+        background: #172554;
+        color: #fff;
+        font-size: 11px;
+        font-style: normal;
+        font-weight: 700;
+    }
+
+    .twin-source-media-count {
+        flex: 0 0 auto;
+        min-width: 22px;
+        height: 22px;
+        display: inline-grid;
+        place-items: center;
+        border-radius: 999px;
+        background: #e2e8f0;
+        color: #334155;
+        font-size: 11px;
+        font-style: normal;
+        font-weight: 700;
+    }
+
+    .twin-showcase-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 340px;
+        min-height: clamp(620px, 72vh, 860px);
+    }
+
     .twin-viewer-stage {
-        min-height: 560px;
+        min-height: clamp(620px, 72vh, 860px);
         background: #07111f;
+    }
+
+    .twin-showcase-rail {
+        max-height: clamp(620px, 72vh, 860px);
+        border-left: 1px solid #e4ebf5;
+        background: #f8fbff;
+        overflow: auto;
+    }
+
+    .twin-showcase-rail-header {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        padding: 14px;
+        border-bottom: 1px solid #e4ebf5;
+        background: rgba(248, 251, 255, 0.96);
+        backdrop-filter: blur(8px);
+    }
+
+    .twin-showcase-rail-header h4 {
+        margin: 0;
+        color: #081c44;
+        font-size: 14px;
+        font-weight: 700;
+    }
+
+    .twin-marker-filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 12px;
+    }
+
+    .twin-filter-button {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 8px;
+        border: 1px solid #cbd8ea;
+        border-radius: 999px;
+        background: #fff;
+        color: #334155;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+
+    .twin-filter-button.is-active {
+        border-color: #1769e8;
+        background: #eaf2ff;
+        color: #0b4bb3;
+    }
+
+    .twin-showcase-marker-list {
+        padding: 12px;
     }
 
     .twin-three-stage,
-    .twin-panorama-stage {
+    .twin-panorama-stage,
+    .twin-point-cloud-stage {
         position: relative;
-        height: 560px;
-        min-height: 500px;
+        height: clamp(620px, 72vh, 860px);
+        min-height: 620px;
         background: #07111f;
     }
 
+    .twin-three-stage:focus,
+    .twin-point-cloud-stage:focus {
+        outline: 3px solid rgba(14, 165, 233, 0.55);
+        outline-offset: -3px;
+    }
+
     .twin-three-stage canvas,
-    .twin-panorama-stage canvas {
+    .twin-panorama-stage canvas,
+    .twin-point-cloud-stage canvas {
         display: block;
         width: 100% !important;
         height: 100% !important;
+    }
+
+    .twin-three-stage:fullscreen,
+    .twin-point-cloud-stage:fullscreen {
+        width: 100vw;
+        height: 100vh;
+        min-height: 100vh;
+    }
+
+    .twin-point-cloud-status {
+        position: absolute;
+        left: 14px;
+        bottom: 14px;
+        z-index: 4;
+        max-width: min(460px, calc(100% - 28px));
+        padding: 10px 12px;
+        border: 1px solid rgba(148, 163, 184, 0.48);
+        border-radius: 8px;
+        background: rgba(15, 23, 42, 0.78);
+        color: #e5eefb;
+        font-size: 12px;
+        line-height: 1.45;
+        backdrop-filter: blur(8px);
     }
 
     .twin-placement-hint {
@@ -355,12 +924,182 @@
         transform: translate(-50%, -50%);
     }
 
+    .twin-view-controls {
+        position: absolute;
+        top: 14px;
+        right: 14px;
+        z-index: 6;
+        display: grid;
+        gap: 8px;
+        padding: 8px;
+        border: 1px solid rgba(148, 163, 184, 0.46);
+        border-radius: 8px;
+        background: rgba(15, 23, 42, 0.78);
+        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
+        backdrop-filter: blur(8px);
+    }
+
+    .twin-view-control-pad {
+        display: grid;
+        grid-template-columns: repeat(3, 34px);
+        grid-template-rows: repeat(3, 34px);
+        gap: 5px;
+    }
+
+    .twin-view-control-row {
+        display: flex;
+        gap: 5px;
+    }
+
+    .twin-view-control-button {
+        width: 34px;
+        height: 34px;
+        display: inline-grid;
+        place-items: center;
+        border: 1px solid rgba(226, 232, 240, 0.22);
+        border-radius: 8px;
+        background: rgba(248, 250, 252, 0.1);
+        color: #f8fafc;
+        font-size: 18px;
+        line-height: 1;
+    }
+
+    .twin-view-control-button:hover,
+    .twin-view-control-button:focus,
+    .twin-view-control-button.is-active {
+        border-color: rgba(125, 211, 252, 0.75);
+        background: rgba(14, 165, 233, 0.32);
+        color: #fff;
+        outline: 0;
+    }
+
+    .twin-view-control-button.is-pad-up {
+        grid-column: 2;
+        grid-row: 1;
+    }
+
+    .twin-view-control-button.is-pad-left {
+        grid-column: 1;
+        grid-row: 2;
+    }
+
+    .twin-view-control-button.is-pad-reset {
+        grid-column: 2;
+        grid-row: 2;
+    }
+
+    .twin-view-control-button.is-pad-right {
+        grid-column: 3;
+        grid-row: 2;
+    }
+
+    .twin-view-control-button.is-pad-down {
+        grid-column: 2;
+        grid-row: 3;
+    }
+
+    .twin-marker-tooltip {
+        position: absolute;
+        right: 14px;
+        bottom: 14px;
+        z-index: 5;
+        max-width: min(320px, calc(100% - 28px));
+        padding: 12px;
+        border: 1px solid rgba(148, 163, 184, 0.55);
+        border-radius: 8px;
+        background: rgba(15, 23, 42, 0.88);
+        color: #e5eefb;
+        font-size: 12px;
+        line-height: 1.45;
+        backdrop-filter: blur(8px);
+    }
+
+    .twin-marker-tooltip strong {
+        display: block;
+        margin-bottom: 3px;
+        color: #fff;
+    }
+
     .twin-preview-image {
         width: 100%;
-        max-height: 640px;
+        height: clamp(620px, 72vh, 860px);
         display: block;
         object-fit: contain;
         background: #07111f;
+    }
+
+    .twin-media-gallery {
+        height: clamp(620px, 72vh, 860px);
+        min-height: 620px;
+        overflow: auto;
+        padding: 18px;
+        background: #07111f;
+    }
+
+    .twin-media-gallery-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 14px;
+        color: #e5eefb;
+    }
+
+    .twin-media-gallery-header h3 {
+        margin: 0;
+        color: #fff;
+        font-size: 15px;
+        font-weight: 700;
+    }
+
+    .twin-media-gallery-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+        gap: 12px;
+    }
+
+    .twin-media-gallery-item {
+        min-width: 0;
+        overflow: hidden;
+        border: 1px solid rgba(148, 163, 184, 0.34);
+        border-radius: 8px;
+        background: rgba(15, 23, 42, 0.82);
+        color: #e5eefb;
+        text-decoration: none;
+    }
+
+    .twin-media-gallery-item:hover,
+    .twin-media-gallery-item:focus {
+        border-color: rgba(125, 211, 252, 0.8);
+        color: #fff;
+        outline: 0;
+    }
+
+    .twin-media-gallery-thumb {
+        aspect-ratio: 4 / 3;
+        display: grid;
+        place-items: center;
+        background: #020617;
+    }
+
+    .twin-media-gallery-thumb img {
+        width: 100%;
+        height: 100%;
+        display: block;
+        object-fit: cover;
+    }
+
+    .twin-media-gallery-thumb i {
+        color: #fca5a5;
+        font-size: 42px;
+    }
+
+    .twin-media-gallery-caption {
+        padding: 9px 10px;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1.3;
+        overflow-wrap: anywhere;
     }
 
     .twin-viewer-card {
@@ -386,8 +1125,8 @@
 
     .twin-frame {
         width: 100%;
-        height: 560px;
-        min-height: 500px;
+        height: clamp(620px, 72vh, 860px);
+        min-height: 620px;
         border: 0;
         display: block;
         background: #07111f;
@@ -419,9 +1158,104 @@
         gap: 10px;
     }
 
+    .twin-capture-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+    }
+
+    .twin-capture-card {
+        border: 1px solid #dbe4f0;
+        border-radius: 8px;
+        background: #fff;
+        padding: 14px;
+    }
+
+    .twin-capture-card.is-highlighted {
+        border-color: #1769e8;
+        box-shadow: 0 0 0 3px rgba(23, 105, 232, 0.14);
+    }
+
+    .twin-capture-title {
+        color: #0f172a;
+        font-size: 15px;
+        font-weight: 700;
+        line-height: 1.25;
+    }
+
+    .twin-capture-files {
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px dashed #dbe4f0;
+    }
+
+    .twin-quality-strip {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+        gap: 8px;
+        margin-top: 10px;
+    }
+
+    .twin-quality-metric {
+        padding: 8px 10px;
+        border: 1px solid #dbe4f0;
+        border-radius: 8px;
+        background: #f8fbff;
+        color: #475569;
+        font-size: 12px;
+        line-height: 1.25;
+    }
+
+    .twin-quality-metric strong {
+        display: block;
+        margin-top: 3px;
+        color: #0f172a;
+        font-size: 13px;
+    }
+
+    .twin-source-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 5px 0;
+        color: #475569;
+        font-size: 12px;
+    }
+
+    .twin-source-row strong {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
     .twin-list-item {
         padding: 12px;
         box-shadow: none;
+    }
+
+    .twin-marker-card {
+        width: 100%;
+        border: 1px solid #dbe4f0;
+        color: inherit;
+        text-align: left;
+        cursor: pointer;
+    }
+
+    .twin-marker-card.is-active {
+        border-color: #1769e8;
+        background: #eaf2ff;
+        box-shadow: 0 0 0 3px rgba(23, 105, 232, 0.12);
+    }
+
+    .twin-marker-card.is-hidden {
+        display: none;
+    }
+
+    .twin-marker-card:disabled {
+        cursor: default;
+        opacity: 0.76;
     }
 
     .twin-list-item.is-child-source {
@@ -468,9 +1302,12 @@
     }
 
     @media (max-width: 1100px) {
+        .twin-layout.twin-layout-full,
         .twin-layout,
         .twin-form-grid,
-        .twin-advanced-inner {
+        .twin-capture-grid,
+        .twin-advanced-inner,
+        .twin-showcase-layout {
             grid-template-columns: 1fr;
         }
 
@@ -484,6 +1321,21 @@
         .twin-toolbar {
             align-items: flex-start;
             flex-direction: column;
+        }
+
+        .twin-viewer-actionbar {
+            align-items: stretch;
+            flex-direction: column;
+        }
+
+        .twin-viewer-actions {
+            justify-content: flex-start;
+        }
+
+        .twin-showcase-rail {
+            max-height: none;
+            border-top: 1px solid #e4ebf5;
+            border-left: 0;
         }
 
         .twin-frame,
@@ -502,7 +1354,7 @@
         <div>
             <h2 class="twin-title">{{ $propertyName }}</h2>
             <div class="twin-subtitle">
-                <span class="twin-pill">
+                <span class="twin-pill" title="{{ $inspectionRecordReference }}">
                     <i class="mdi mdi-clipboard-text-outline"></i>
                     {{ $inspectionReference }}
                 </span>
@@ -525,10 +1377,22 @@
     @if($canManageDigitalTwin)
         <section class="twin-panel">
             <div class="twin-panel-header">
-                <h3>Add Capture Source</h3>
-                <span class="badge bg-primary">Vendor neutral</span>
+                <div class="d-flex align-items-center gap-2">
+                    <h3>Add Capture Source</h3>
+                    <span class="badge bg-primary">Vendor neutral</span>
+                </div>
+                <button
+                    type="button"
+                    class="btn btn-outline-primary btn-sm"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#captureUploadPanel"
+                    aria-expanded="{{ $uploadPanelOpen ? 'true' : 'false' }}"
+                    aria-controls="captureUploadPanel">
+                    <i class="mdi mdi-plus-circle-outline me-1"></i>Add Capture
+                </button>
             </div>
-            <div class="twin-panel-body">
+            <div id="captureUploadPanel" class="collapse {{ $uploadPanelOpen ? 'show' : '' }}">
+                <div class="twin-panel-body">
                 <form method="POST" action="{{ route('inspections.digital-twin.models.store', $inspection) }}" enctype="multipart/form-data">
                     @csrf
                     <div class="twin-form-grid">
@@ -642,13 +1506,12 @@
                         </button>
                     </div>
                 </form>
+                </div>
             </div>
         </section>
     @endif
 
-    <div class="twin-layout">
-        <main>
-            <section class="twin-viewer">
+    <section class="twin-viewer" id="digitalTwinViewer">
                 <div class="twin-panel-header">
                     <h3>Digital Twin Viewer</h3>
                     @if($primaryModel)
@@ -668,30 +1531,180 @@
                         <script type="application/json" data-twin-sources>
                             @json($viewerSources)
                         </script>
+                        <script type="application/json" data-twin-markers>
+                            @json($viewerMarkers)
+                        </script>
+
+                        <div class="twin-viewer-actionbar" data-twin-viewer-actions>
+                            <div class="twin-viewer-current">
+                                <strong data-twin-action-title>{{ $initialViewerSource['title'] ?? 'Capture source' }}</strong>
+                                <small data-twin-action-meta>{{ $initialViewerSource['actionMeta'] ?? 'Capture source' }}</small>
+                            </div>
+                            <div class="twin-viewer-actions">
+                                <a
+                                    href="{{ $initialViewerSource['viewUrl'] ?? '#digitalTwinViewer' }}"
+                                    class="btn btn-outline-primary btn-sm"
+                                    data-twin-action-view>
+                                    <i class="mdi mdi-eye-outline me-1"></i>View Capture
+                                </a>
+                                @if($canCreateIssueMarkers)
+                                    <a
+                                        href="#issueMarkerPanel"
+                                        class="btn btn-outline-success btn-sm {{ empty($initialViewerSource['canAddFinding']) ? 'd-none' : '' }}"
+                                        data-twin-action-add-finding
+                                        data-twin-add-marker
+                                        data-capture-session-id="{{ $initialViewerSource['addFindingCaptureSessionId'] ?? '' }}"
+                                        data-spatial-model-id="{{ $initialViewerSource['addFindingSpatialModelId'] ?? '' }}"
+                                        data-source-provider="{{ $initialViewerSource['addFindingSourceProvider'] ?? 'manual' }}"
+                                        data-source-reference="{{ $initialViewerSource['addFindingSourceReference'] ?? '' }}">
+                                        <i class="mdi mdi-map-marker-plus-outline me-1"></i>Add Finding
+                                    </a>
+                                @endif
+                                <a
+                                    href="{{ $initialViewerSource['openSourceUrl'] ?? '#' }}"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    class="btn btn-light btn-sm {{ empty($initialViewerSource['openSourceUrl']) ? 'd-none' : '' }}"
+                                    data-twin-action-open-source>
+                                    <i class="mdi mdi-download-outline me-1"></i>Open Source
+                                </a>
+                                @if($canManageDigitalTwin)
+                                    <form
+                                        method="POST"
+                                        action="{{ $initialViewerSource['convertUrl'] ?? '#' }}"
+                                        class="d-inline-flex {{ empty($initialViewerSource['convertUrl']) ? 'd-none' : '' }}"
+                                        data-twin-action-convert-form>
+                                        @csrf
+                                        <button
+                                            type="submit"
+                                            class="btn btn-outline-warning btn-sm"
+                                            title="{{ $initialViewerSource['convertTitle'] ?? 'Start MatterPak GLB conversion' }}"
+                                            data-twin-action-convert
+                                            @disabled(!empty($initialViewerSource['convertDisabled']))>
+                                            <i class="mdi {{ $initialViewerSource['convertIcon'] ?? 'mdi-cube-send' }} me-1" data-twin-action-convert-icon></i>
+                                            <span data-twin-action-convert-label>{{ $initialViewerSource['convertLabel'] ?? 'Convert to GLB' }}</span>
+                                        </button>
+                                    </form>
+                                @endif
+                                <span class="badge bg-light text-dark align-self-center {{ empty($initialViewerSource['jobLabel']) ? 'd-none' : '' }}" data-twin-action-job>
+                                    {{ $initialViewerSource['jobLabel'] ?? '' }}
+                                </span>
+                            </div>
+                        </div>
 
                         <div class="twin-viewer-sourcebar" role="tablist" aria-label="Digital twin sources">
                             @foreach($viewerSources as $source)
+                                @php
+                                    $sourceMarkerTotal = $sourceMarkerCount($source);
+                                @endphp
                                 <button
                                     type="button"
                                     class="twin-source-button"
                                     data-twin-source-button="{{ $source['id'] }}"
                                     title="{{ $source['title'] }}">
-                                    <i class="mdi mdi-cube-outline"></i>
-                                    <span>
+                                    <i class="mdi {{ $source['icon'] ?? 'mdi-cube-outline' }}"></i>
+                                    <span class="twin-source-label">
                                         <strong>{{ $source['title'] }}</strong>
                                         <small class="d-block text-muted">{{ $source['providerLabel'] }} / {{ $source['sourceTypeLabel'] }}</small>
                                     </span>
+                                    @if($sourceMarkerTotal > 0)
+                                        <em class="twin-source-marker-count" title="{{ $sourceMarkerTotal }} issue marker{{ $sourceMarkerTotal === 1 ? '' : 's' }}">{{ $sourceMarkerTotal }}</em>
+                                    @elseif(!empty($source['mediaCount']))
+                                        <em class="twin-source-media-count" title="{{ $source['mediaCount'] }} media file{{ $source['mediaCount'] === 1 ? '' : 's' }}">{{ $source['mediaCount'] }}</em>
+                                    @endif
                                 </button>
                             @endforeach
                         </div>
 
-                        <div class="twin-viewer-stage" data-twin-stage>
-                            <div class="twin-viewer-card">
-                                <div>
-                                    <h3>Loading digital twin source</h3>
-                                    <p>The viewer is preparing this capture source.</p>
+                        <div class="twin-showcase-layout">
+                            <div class="twin-viewer-stage" data-twin-stage>
+                                <div class="twin-viewer-card">
+                                    <div>
+                                        <h3>Loading digital twin source</h3>
+                                        <p>The viewer is preparing this capture source.</p>
+                                    </div>
                                 </div>
                             </div>
+                            <aside class="twin-showcase-rail" data-twin-marker-rail>
+                                <div class="twin-showcase-rail-header">
+                                    <div class="d-flex align-items-center justify-content-between gap-2">
+                                        <h4>Issue Markers</h4>
+                                        <span class="badge bg-light text-dark">{{ $issueMarkers->count() }}</span>
+                                    </div>
+                                    @if($viewerMarkers->isNotEmpty())
+                                        <div class="twin-marker-filters" data-twin-marker-filters aria-label="Marker layers">
+                                            <button type="button" class="twin-filter-button is-active" data-twin-marker-filter="all">All {{ $viewerMarkers->count() }}</button>
+                                            @foreach(['critical' => 'Critical', 'high' => 'High', 'medium' => 'Medium', 'low' => 'Low'] as $severity => $label)
+                                                @if(($markerLayerCounts[$severity] ?? 0) > 0)
+                                                    <button type="button" class="twin-filter-button" data-twin-marker-filter="{{ $severity }}">{{ $label }} {{ $markerLayerCounts[$severity] }}</button>
+                                                @endif
+                                            @endforeach
+                                            @if(($markerLayerCounts['phar'] ?? 0) > 0)
+                                                <button type="button" class="twin-filter-button" data-twin-marker-filter="phar">PHAR {{ $markerLayerCounts['phar'] }}</button>
+                                            @endif
+                                            @if(($markerLayerCounts['unlinked'] ?? 0) > 0)
+                                                <button type="button" class="twin-filter-button" data-twin-marker-filter="unlinked">Needs PHAR {{ $markerLayerCounts['unlinked'] }}</button>
+                                            @endif
+                                        </div>
+                                    @endif
+                                </div>
+                                <div class="twin-showcase-marker-list">
+                                    @if($issueMarkers->isNotEmpty())
+                                        <div class="twin-list" data-twin-marker-list>
+                                            @foreach($issueMarkers as $marker)
+                                                @php
+                                                    $hasPosition = $marker->position_x !== null && $marker->position_y !== null && $marker->position_z !== null;
+                                                    $markerSourceTitle = $marker->spatialModel
+                                                        ? ($marker->spatialModel->display_name ?: $marker->spatialModel->source_type_label)
+                                                        : ($marker->captureSession?->provider_label ?: null);
+                                                    $markerHasPhar = (bool) $marker->phar_finding_id;
+                                                @endphp
+                                                <button
+                                                    type="button"
+                                                    class="twin-list-item twin-marker-card"
+                                                    data-twin-marker-card
+                                                    data-marker-id="{{ $marker->id }}"
+                                                    data-spatial-model-id="{{ $marker->spatial_model_id }}"
+                                                    data-capture-session-id="{{ $marker->capture_session_id }}"
+                                                    data-severity="{{ $marker->severity }}"
+                                                    data-status="{{ $marker->status }}"
+                                                    data-has-phar="{{ $markerHasPhar ? '1' : '0' }}"
+                                                    data-has-position="{{ $hasPosition ? '1' : '0' }}"
+                                                    @disabled(!$hasPosition)>
+                                                    <div class="twin-item-title">
+                                                        <span class="twin-marker-dot is-{{ $marker->severity }}"></span>{{ $marker->title }}
+                                                    </div>
+                                                    <div class="small text-muted mt-1">{{ $marker->description ?: 'No description recorded.' }}</div>
+                                                    <div class="twin-meta">
+                                                        <span>{{ ucfirst($marker->severity) }}</span>
+                                                        <span>{{ ucfirst(str_replace('_', ' ', $marker->status)) }}</span>
+                                                        <span>{{ $marker->room_name ?: 'location not recorded' }}</span>
+                                                        @if($marker->surface_label)
+                                                            <span>{{ $marker->surface_label }}</span>
+                                                        @endif
+                                                        @if($markerSourceTitle)
+                                                            <span>{{ $markerSourceTitle }}</span>
+                                                        @endif
+                                                        @if($markerHasPhar)
+                                                            <span>PHAR #{{ $marker->phar_finding_id }}</span>
+                                                        @else
+                                                            <span>Needs PHAR</span>
+                                                        @endif
+                                                        @if($marker->source_reference)
+                                                            <span>{{ $marker->source_reference }}</span>
+                                                        @endif
+                                                        @if($hasPosition)
+                                                            <span>X {{ $marker->position_x }}, Y {{ $marker->position_y }}, Z {{ $marker->position_z }}</span>
+                                                        @endif
+                                                    </div>
+                                                </button>
+                                            @endforeach
+                                        </div>
+                                    @else
+                                        <div class="twin-empty">No issue markers have been placed yet.</div>
+                                    @endif
+                                </div>
+                            </aside>
                         </div>
                     </div>
                 @else
@@ -704,148 +1717,169 @@
                         </div>
                     </div>
                 @endif
-            </section>
+    </section>
 
+    <div class="twin-layout {{ $canCreateIssueMarkers ? '' : 'twin-layout-full' }}">
+        <main>
             <section class="twin-panel">
                 <div class="twin-panel-header">
-                    <h3>Spatial Models & Evidence Layers</h3>
-                    <span class="badge bg-light text-dark">{{ $spatialModels->count() }} source{{ $spatialModels->count() === 1 ? '' : 's' }}</span>
+                    <h3>Capture Sessions</h3>
+                    <span class="badge bg-light text-dark">
+                        {{ $captureSessions->count() }} capture{{ $captureSessions->count() === 1 ? '' : 's' }}
+                    </span>
                 </div>
                 <div class="twin-panel-body">
-                    @if($spatialModels->isNotEmpty())
-                        <div class="twin-list">
-                            @foreach($spatialModels as $model)
-                                <div class="twin-list-item">
-                                    <div class="d-flex justify-content-between gap-2">
-                                        <div class="twin-item-title">{{ $model->display_name ?: $model->source_type_label }}</div>
-                                        <div class="d-flex flex-wrap gap-1 justify-content-end">
-                                            <span class="badge {{ $model->is_primary ? 'bg-primary' : 'bg-light text-dark' }}">{{ $model->is_primary ? 'Primary' : ucfirst($model->status) }}</span>
-                                            <span class="badge {{ $model->processing_status === 'ready' ? 'bg-success' : 'bg-warning text-dark' }}">
-                                                {{ ucfirst(str_replace('_', ' ', $model->processing_status)) }}
-                                            </span>
+                    @if($captureSessions->isNotEmpty())
+                        <div class="twin-capture-grid">
+                            @foreach($captureSessions as $session)
+                                @php
+                                    $sessionModels = $modelsByCapture->get((int) $session->id, collect());
+                                    $sessionSources = $sourcesByCapture->get((int) $session->id, collect());
+                                    $sessionJobs = $jobsByCapture->get((int) $session->id, collect());
+                                    $sessionMarkers = $markersByCapture->get((int) $session->id, collect());
+                                    $readyModel = $sessionModels->firstWhere('processing_status', 'ready') ?: $sessionModels->first();
+                                    $primarySource = $sessionSources->firstWhere('parent_source_file_id', null) ?: $sessionSources->first();
+                                    $matterPakArchive = $sessionSources->firstWhere('file_role', 'matterpak_archive');
+                                    $convertAction = $matterPakConvertAction($matterPakArchive, $sessionJobs);
+                                    $latestJob = $sessionJobs->sortByDesc('id')->first();
+                                    $sessionStatus = $latestJob?->status ?: ($readyModel?->processing_status ?: $session->status);
+                                    $sessionTitle = $readyModel?->display_name
+                                        ?: ($primarySource?->original_filename
+                                            ?: ($session->provider_label . ' ' . $session->capture_type_label));
+                                @endphp
+                                <article class="twin-capture-card {{ $highlightCaptureId === (int) $session->id ? 'is-highlighted' : '' }}">
+                                    <div class="d-flex justify-content-between gap-2 align-items-start">
+                                        <div>
+                                            <div class="twin-capture-title">{{ $sessionTitle }}</div>
+                                            <div class="twin-meta">
+                                                <span><i class="mdi mdi-home-map-marker me-1"></i>{{ $propertyName }}</span>
+                                                <span><i class="mdi mdi-clipboard-text-outline me-1"></i>{{ $inspectionReference }}</span>
+                                                <span><i class="mdi mdi-camera-outline me-1"></i>{{ $session->provider_label }}</span>
+                                                <span>{{ $session->capture_type_label }}</span>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <div class="twin-meta">
-                                        <span><i class="mdi mdi-camera-outline me-1"></i>{{ $model->provider_label }}</span>
-                                        <span><i class="mdi mdi-cube-outline me-1"></i>{{ $model->source_type_label }}</span>
-                                        <span><i class="mdi mdi-file-outline me-1"></i>{{ $model->original_format ?: 'format not recorded' }}</span>
-                                        <span><i class="mdi mdi-ruler-square me-1"></i>{{ $model->accuracy_class ?: 'accuracy not stated' }}</span>
-                                    </div>
-                                    @if($model->isRawPointCloud())
-                                        <div class="mt-3 d-flex flex-wrap align-items-center gap-2">
-                                            <span class="small text-muted">Raw point-cloud processing and tiling are handled outside ETOGO. Store converted/browser-ready output in Azure/AWS and attach its cloud URL here.</span>
-                                        </div>
-                                    @endif
-                                </div>
-                            @endforeach
-                        </div>
-                    @else
-                        <div class="twin-empty">No spatial models or evidence layers have been attached to this diagnosis yet.</div>
-                    @endif
-                </div>
-            </section>
-
-            <section class="twin-panel">
-                <div class="twin-panel-header">
-                    <h3>Uploaded Source Files</h3>
-                    <span class="badge bg-light text-dark">{{ $sourceFiles->count() }}</span>
-                </div>
-                <div class="twin-panel-body">
-                    @if($sourceFiles->isNotEmpty())
-                        <div class="twin-list">
-                            @foreach($sourceFiles as $sourceFile)
-                                <div class="twin-list-item {{ $sourceFile->parent_source_file_id ? 'is-child-source' : '' }}">
-                                    <div class="d-flex justify-content-between gap-2">
-                                        <div class="twin-item-title">
-                                            @if($sourceFile->parent_source_file_id)
-                                                <span class="text-muted">Extracted:</span>
-                                            @endif
-                                            {{ $sourceFile->relative_path ?: $sourceFile->original_filename }}
-                                        </div>
-                                        <span class="badge {{ $statusBadgeClass($sourceFile->processing_status) }}">
-                                            {{ $sourceFile->processing_status_label }}
+                                        <span class="badge {{ $statusBadgeClass($sessionStatus) }}">
+                                            {{ ucfirst(str_replace('_', ' ', (string) $sessionStatus)) }}
                                         </span>
                                     </div>
                                     <div class="twin-meta">
-                                        <span><i class="mdi mdi-file-outline me-1"></i>{{ strtoupper($sourceFile->extension) }}</span>
-                                        <span>{{ $sourceFile->source_type_label }}</span>
-                                        @if($sourceFile->file_role)
-                                            <span>{{ ucfirst(str_replace('_', ' ', $sourceFile->file_role)) }}</span>
+                                        <span>{{ $sessionModels->count() }} viewer layer{{ $sessionModels->count() === 1 ? '' : 's' }}</span>
+                                        <span>{{ $sessionSources->count() }} source record{{ $sessionSources->count() === 1 ? '' : 's' }}</span>
+                                        <span>{{ $sessionMarkers->count() }} marker{{ $sessionMarkers->count() === 1 ? '' : 's' }}</span>
+                                        @if($session->captured_at)
+                                            <span>Captured {{ $session->captured_at->format('M j, Y g:i A') }}</span>
                                         @endif
-                                        @if($sourceFile->file_size)
-                                            <span>{{ number_format($sourceFile->file_size / 1024 / 1024, 2) }} MB</span>
-                                        @endif
-                                        @if($sourceFile->storage_path)
-                                            <a href="{{ route('inspections.digital-twin.source-files.download', [$inspection, $sourceFile]) }}" target="_blank" rel="noopener noreferrer">Open source</a>
+                                        @if($latestJob?->completed_at)
+                                            <span>Processed {{ $latestJob->completed_at->format('M j, Y g:i A') }}</span>
                                         @endif
                                     </div>
-                                    @if($sourceFile->processing_status === 'awaiting_processing')
+
+                                    @if($readyModel?->isRawPointCloud())
                                         <div class="small text-muted mt-2">
-                                            This source is preserved and is waiting for the configured processing worker.
-                                        </div>
-                                    @elseif($sourceFile->processing_status === 'failed' && $sourceFile->processing_error)
-                                        <div class="small text-danger mt-2">
-                                            {{ $sourceFile->processing_error }}
+                                            Raw point-cloud processing and tiling are handled outside ETOGO. Attach browser-ready Potree/Cesium output as another capture source when available.
                                         </div>
                                     @endif
-                                </div>
-                            @endforeach
-                        </div>
-                    @else
-                        <div class="twin-empty">No original source files have been uploaded for this diagnosis yet.</div>
-                    @endif
-                </div>
-            </section>
 
-            <section class="twin-panel">
-                <div class="twin-panel-header">
-                    <h3>Twin Processing Jobs</h3>
-                    <span class="badge bg-light text-dark">{{ $processingJobs->count() }}</span>
-                </div>
-                <div class="twin-panel-body">
-                    @if($processingJobs->isNotEmpty())
-                        <div class="twin-list">
-                            @foreach($processingJobs as $processingJob)
-                                <div class="twin-list-item">
-                                    <div class="d-flex justify-content-between gap-2">
-                                        <div class="twin-item-title">{{ ucfirst(str_replace('_', ' ', $processingJob->job_type)) }}</div>
-                                        <span class="badge {{ $statusBadgeClass($processingJob->status) }}">
-                                            {{ $processingJob->status_label }}
-                                        </span>
-                                    </div>
-                                    <div class="twin-meta">
-                                        <span><i class="mdi mdi-cog-outline me-1"></i>{{ ucfirst($processingJob->processor) }}</span>
-                                        @if($processingJob->sourceFile)
-                                            <span><i class="mdi mdi-archive-outline me-1"></i>{{ $processingJob->sourceFile->original_filename }}</span>
-                                        @endif
-                                        @if($processingJob->queue_name)
-                                            <span>Queue: {{ $processingJob->queue_name }}</span>
-                                        @endif
-                                        @if($processingJob->started_at)
-                                            <span>Started {{ $processingJob->started_at->format('M j, Y g:i A') }}</span>
-                                        @endif
-                                        @if($processingJob->completed_at)
-                                            <span>Completed {{ $processingJob->completed_at->format('M j, Y g:i A') }}</span>
-                                        @endif
-                                    </div>
-                                    @if($processingJob->processing_error)
-                                        <div class="small text-danger mt-2">{{ $processingJob->processing_error }}</div>
-                                    @elseif($processingJob->status === 'queued')
-                                        <div class="small text-muted mt-2">Waiting for the digital twin queue worker to run Blender conversion.</div>
+                                    @if($latestJob?->processing_error)
+                                        <div class="small text-danger mt-2">{{ $latestJob->processing_error }}</div>
+                                    @elseif(in_array($sessionStatus, ['queued', 'processing', 'awaiting_processing'], true))
+                                        <div class="small text-muted mt-2">
+                                            This capture is stored under this property diagnosis and is waiting for processing before browser viewing.
+                                        </div>
                                     @endif
-                                </div>
+
+                                    @php
+                                        $modelMetadata = $readyModel ? ($readyModel->metadata ?: []) : [];
+                                        $jobMetadata = $latestJob ? ($latestJob->metadata ?: []) : [];
+                                        $conversionDiagnostics = $modelMetadata['conversion_diagnostics'] ?? $jobMetadata['conversion_diagnostics'] ?? [];
+                                        $materialTextures = $conversionDiagnostics['material_textures'] ?? [];
+                                        $textureSources = $conversionDiagnostics['texture_sources'] ?? [];
+                                        $pointPreview = $modelMetadata['point_cloud_preview'] ?? $jobMetadata['point_cloud_preview'] ?? [];
+                                        $glbBytes = $conversionDiagnostics['glb_output']['size_bytes'] ?? null;
+                                        $textureReferenceCount = $materialTextures['texture_reference_count'] ?? null;
+                                        $missingTextureCount = $materialTextures['missing_texture_count'] ?? null;
+                                        $textureSourceCount = $textureSources['texture_file_count'] ?? null;
+                                        $textureTotalBytes = $textureSources['texture_total_bytes'] ?? null;
+                                        $sampledPointCount = $pointPreview['sampled_point_count'] ?? null;
+                                        $sourcePointCount = $pointPreview['source_point_count'] ?? null;
+                                    @endphp
+                                    @if($glbBytes || $textureReferenceCount !== null || $textureSourceCount !== null || $sampledPointCount)
+                                        <div class="twin-quality-strip" aria-label="MatterPak conversion quality">
+                                            @if($glbBytes)
+                                                <div class="twin-quality-metric">
+                                                    Browser model
+                                                    <strong>{{ $formatFileSize($glbBytes) }} GLB</strong>
+                                                </div>
+                                            @endif
+                                            @if($textureReferenceCount !== null)
+                                                <div class="twin-quality-metric">
+                                                    Texture coverage
+                                                    <strong>{{ number_format((int) $textureReferenceCount) }} mapped / {{ number_format((int) ($missingTextureCount ?? 0)) }} missing</strong>
+                                                </div>
+                                            @endif
+                                            @if($textureSourceCount !== null)
+                                                <div class="twin-quality-metric">
+                                                    Source textures
+                                                    <strong>{{ number_format((int) $textureSourceCount) }} file{{ (int) $textureSourceCount === 1 ? '' : 's' }}{{ $textureTotalBytes ? ' / ' . $formatFileSize($textureTotalBytes) : '' }}</strong>
+                                                </div>
+                                            @endif
+                                            @if($sampledPointCount)
+                                                <div class="twin-quality-metric">
+                                                    Point preview
+                                                    <strong>{{ number_format((int) $sampledPointCount) }} of {{ number_format((int) ($sourcePointCount ?: $sampledPointCount)) }}</strong>
+                                                </div>
+                                            @endif
+                                        </div>
+                                    @endif
+
+                                    @if($sessionSources->isNotEmpty())
+                                        <div class="twin-capture-files">
+                                            @foreach($sessionSources->whereNull('parent_source_file_id')->take(3) as $sourceFile)
+                                                <div class="twin-source-row">
+                                                    <strong title="{{ $sourceFile->original_filename }}">{{ $sourceFile->original_filename }}</strong>
+                                                    <span class="badge {{ $statusBadgeClass($sourceFile->processing_status) }}">
+                                                        {{ $sourceFile->processing_status_label }}
+                                                    </span>
+                                                </div>
+                                            @endforeach
+                                            @if($sessionSources->whereNotNull('parent_source_file_id')->count() > 0)
+                                                <div class="small text-muted mt-1">
+                                                    {{ $sessionSources->whereNotNull('parent_source_file_id')->count() }} extracted MatterPak source record{{ $sessionSources->whereNotNull('parent_source_file_id')->count() === 1 ? '' : 's' }} preserved.
+                                                </div>
+                                            @endif
+                                        </div>
+                                    @endif
+
+                                    @if($convertAction)
+                                        <form method="POST" action="{{ $convertAction['url'] }}" class="d-inline-flex mt-3">
+                                            @csrf
+                                            <button
+                                                type="submit"
+                                                class="btn btn-outline-warning btn-sm"
+                                                title="{{ $convertAction['title'] }}"
+                                                @disabled($convertAction['disabled'])>
+                                                <i class="mdi {{ $convertAction['icon'] }} me-1"></i>{{ $convertAction['label'] }}
+                                            </button>
+                                        </form>
+                                    @endif
+                                </article>
                             @endforeach
                         </div>
+                        @if($ungroupedModelCount > 0)
+                            <div class="twin-empty mt-3">
+                                {{ $ungroupedModelCount }} legacy viewer layer{{ $ungroupedModelCount === 1 ? '' : 's' }} do not have a capture session yet. They still remain linked to {{ $inspectionReference }}.
+                            </div>
+                        @endif
                     @else
-                        <div class="twin-empty">No source-processing jobs have been queued for this diagnosis yet.</div>
+                        <div class="twin-empty">No captures have been submitted for this property diagnosis yet.</div>
                     @endif
                 </div>
             </section>
         </main>
 
-        <aside>
-            @if($canCreateIssueMarkers)
-                <section class="twin-panel">
+        @if($canCreateIssueMarkers)
+            <aside>
+                <section class="twin-panel" id="issueMarkerPanel">
                     <div class="twin-panel-header">
                         <h3>Add Issue Marker</h3>
                         <i class="mdi mdi-map-marker-plus-outline"></i>
@@ -898,6 +1932,60 @@
                                     @endforeach
                                 </select>
                             </div>
+                            @if(!$inspection->findings_report_shared_at && !in_array($inspection->status, ['findings_shared', 'client_committed', 'estimation_in_progress', 'estimation_completed', 'quotation_shared', 'quotation_approved', 'completed', 'approved'], true))
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input" type="checkbox" id="create_phar_finding" name="create_phar_finding" value="1" @checked(old('create_phar_finding'))>
+                                    <label class="form-check-label" for="create_phar_finding">
+                                        Create PHAR finding from this marker
+                                    </label>
+                                    <div class="small text-muted mt-1">
+                                        Use this when the marker is a new diagnosis item. You can finish system classification and costing in PHAR.
+                                    </div>
+                                </div>
+                                @if($buildingSystems->isNotEmpty())
+                                    <div class="mb-3">
+                                        <label class="twin-label" for="building_system_id">Building system</label>
+                                        <select id="building_system_id" name="building_system_id" class="form-select">
+                                            <option value="">Choose during PHAR review</option>
+                                            @foreach($buildingSystems as $system)
+                                                <option value="{{ $system->id }}" @selected(old('building_system_id') == $system->id)>{{ $system->name }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="twin-label" for="building_subsystem_id">Subsystem</label>
+                                        <select id="building_subsystem_id" name="building_subsystem_id" class="form-select">
+                                            <option value="">No subsystem selected</option>
+                                            @foreach($buildingSystems as $system)
+                                                @if($system->subsystems->isNotEmpty())
+                                                    <optgroup label="{{ $system->name }}">
+                                                        @foreach($system->subsystems as $subsystem)
+                                                            <option value="{{ $subsystem->id }}" @selected(old('building_subsystem_id') == $subsystem->id)>{{ $subsystem->name }}</option>
+                                                        @endforeach
+                                                    </optgroup>
+                                                @endif
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="twin-label" for="building_component_id">Component</label>
+                                        <select id="building_component_id" name="building_component_id" class="form-select">
+                                            <option value="">No component selected</option>
+                                            @foreach($buildingSystems as $system)
+                                                @foreach($system->subsystems as $subsystem)
+                                                    @if($subsystem->components->isNotEmpty())
+                                                        <optgroup label="{{ $system->name }} / {{ $subsystem->name }}">
+                                                            @foreach($subsystem->components as $component)
+                                                                <option value="{{ $component->id }}" @selected(old('building_component_id') == $component->id)>{{ $component->name }}</option>
+                                                            @endforeach
+                                                        </optgroup>
+                                                    @endif
+                                                @endforeach
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                @endif
+                            @endif
                             <div class="row g-2 mb-3">
                                 <div class="col-6">
                                     <label class="twin-label" for="source_provider">Source</label>
@@ -982,48 +2070,8 @@
                         </form>
                     </div>
                 </section>
-            @endif
-
-            <section class="twin-panel">
-                <div class="twin-panel-header">
-                    <h3>Issue Markers</h3>
-                    <span class="badge bg-light text-dark">{{ $issueMarkers->count() }}</span>
-                </div>
-                <div class="twin-panel-body">
-                    @if($issueMarkers->isNotEmpty())
-                        <div class="twin-list">
-                            @foreach($issueMarkers as $marker)
-                                <div class="twin-list-item">
-                                    <div class="twin-item-title">
-                                        <span class="twin-marker-dot is-{{ $marker->severity }}"></span>{{ $marker->title }}
-                                    </div>
-                                    <div class="small text-muted mt-1">{{ $marker->description ?: 'No description recorded.' }}</div>
-                                    <div class="twin-meta">
-                                        <span>{{ ucfirst($marker->severity) }}</span>
-                                        <span>{{ ucfirst(str_replace('_', ' ', $marker->source_provider)) }}</span>
-                                        <span>{{ $marker->room_name ?: 'location not recorded' }}</span>
-                                        @if($marker->surface_label)
-                                            <span>{{ $marker->surface_label }}</span>
-                                        @endif
-                                        @if($marker->confidence !== null)
-                                            <span>{{ $marker->confidence }}% confidence</span>
-                                        @endif
-                                        @if($marker->source_reference)
-                                            <span>{{ $marker->source_reference }}</span>
-                                        @endif
-                                        @if($marker->position_x !== null)
-                                            <span>X {{ $marker->position_x }}, Y {{ $marker->position_y }}, Z {{ $marker->position_z }}</span>
-                                        @endif
-                                    </div>
-                                </div>
-                            @endforeach
-                        </div>
-                    @else
-                        <div class="twin-empty">No issue markers have been placed yet.</div>
-                    @endif
-                </div>
-            </section>
-        </aside>
+            </aside>
+        @endif
     </div>
 </div>
 @endsection
@@ -1124,6 +2172,57 @@
                         submitButton.disabled = true;
                     }
                 }
+            });
+        });
+
+        document.addEventListener('DOMContentLoaded', function () {
+            var markerForm = document.querySelector('[data-issue-marker-form]');
+
+            if (!markerForm) {
+                return;
+            }
+
+            function setMarkerField(name, value, overwrite) {
+                var field = markerForm.querySelector('[name="' + name + '"]');
+
+                if (!field || (overwrite === false && field.value)) {
+                    return;
+                }
+
+                if (field.tagName === 'SELECT') {
+                    var hasOption = Array.from(field.options).some(function (option) {
+                        return option.value === String(value || '');
+                    });
+
+                    if (!hasOption) {
+                        return;
+                    }
+                }
+
+                field.value = value || '';
+                field.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+
+            document.querySelectorAll('[data-twin-add-marker]').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    setMarkerField('capture_session_id', button.dataset.captureSessionId || '');
+                    setMarkerField('spatial_model_id', button.dataset.spatialModelId || '');
+                    setMarkerField('source_provider', button.dataset.sourceProvider || 'manual');
+                    setMarkerField('source_reference', button.dataset.sourceReference || '', false);
+
+                    var createFinding = markerForm.querySelector('[name="create_phar_finding"]');
+                    var pharFinding = markerForm.querySelector('[name="phar_finding_id"]');
+                    if (createFinding && pharFinding && !pharFinding.value) {
+                        createFinding.checked = true;
+                    }
+
+                    markerForm.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+                    var title = markerForm.querySelector('[name="title"]');
+                    if (title && !title.value) {
+                        title.focus({ preventScroll: true });
+                    }
+                });
             });
         });
     </script>

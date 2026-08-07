@@ -2,6 +2,8 @@
 
 This document explains which capture sources can be attached to the ETOGO property digital twin, how staff upload them, and which formats need conversion before they can be viewed interactively in the browser.
 
+For the complete MatterPak-to-viewer-to-PHAR runbook and edit map, see `docs/MATTERPAK_DIGITAL_TWIN_FLOW.md`.
+
 ## Where Uploads Happen
 
 Capture sources are uploaded from the Property Digital Twin screen:
@@ -91,6 +93,7 @@ The current MatterPak flow uses:
 
 - The original MatterPak ZIP as the immutable source package.
 - Extracted `OBJ`, `MTL`, texture images, `XYZ`, floor-plan images, and PDF plan files as child `twin_source_files`.
+- A sampled `point-cloud-preview.json` source record generated from the MatterPak `XYZ` file when present.
 - A `twin_processing_jobs` row with `job_type = matterpak_obj_to_glb`.
 - Blender on a Laravel queue worker to convert OBJ/MTL/textures to a browser-ready GLB.
 - An existing `spatial_models` row only after GLB generation succeeds.
@@ -102,6 +105,7 @@ DIGITAL_TWIN_DISK=s3
 DIGITAL_TWIN_BLENDER_BINARY=/path/to/blender
 DIGITAL_TWIN_PROCESSING_QUEUE=digital-twin
 DIGITAL_TWIN_CONVERSION_TIMEOUT=3600
+DIGITAL_TWIN_POINT_CLOUD_PREVIEW_POINTS=30000
 DIGITAL_TWIN_UPLOAD_MAX_KB=102400
 ```
 
@@ -153,3 +157,4 @@ For GLB/glTF layers, staff can click directly on the 3D model surface to fill ma
 - Blender must be installed and available to the queue worker before MatterPak conversion can complete.
 - Generic OBJ uploads are preserved as source evidence; the current automatic Blender conversion is scoped to MatterPak ZIP.
 - E57/LAS/LAZ point-cloud conversion is planned for a later phase.
+- MatterPak `XYZ` files produce a sampled browser preview; the complete point cloud is still preserved as source evidence.

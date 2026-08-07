@@ -28,6 +28,10 @@ class StoreIssueMarkerRequest extends FormRequest
         if ($decoded !== []) {
             $this->merge($decoded);
         }
+
+        $this->merge([
+            'create_phar_finding' => $this->boolean('create_phar_finding'),
+        ]);
     }
 
     public function authorize(): bool
@@ -59,6 +63,10 @@ class StoreIssueMarkerRequest extends FormRequest
             'spatial_model_id' => ['nullable', 'integer', 'exists:spatial_models,id'],
             'capture_session_id' => ['nullable', 'integer', 'exists:capture_sessions,id'],
             'phar_finding_id' => ['nullable', 'integer', 'exists:phar_findings,id'],
+            'create_phar_finding' => ['nullable', 'boolean'],
+            'building_system_id' => ['nullable', 'integer', 'exists:building_systems,id'],
+            'building_subsystem_id' => ['nullable', 'integer', 'exists:building_subsystems,id'],
+            'building_component_id' => ['nullable', 'integer', 'exists:building_components,id'],
             'source_provider' => ['required', Rule::in(array_merge(array_keys(CaptureSession::PROVIDERS), ['manual']))],
             'marker_type' => ['required', 'string', 'max:80'],
             'title' => ['required', 'string', 'max:255'],

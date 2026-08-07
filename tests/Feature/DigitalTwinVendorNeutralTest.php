@@ -284,6 +284,190 @@ class DigitalTwinVendorNeutralTest extends TestCase
         $preview->assertSee('Queued');
     }
 
+    public function test_staff_can_start_matterpak_reconversion_from_ready_archive(): void
+    {
+        $this->useTwinTestDisk();
+        Queue::fake();
+
+        $staff = $this->createUserWithRole('Project Manager');
+        [, $inspection] = $this->createInspectionForClient();
+        $inspection->property->update(['project_manager_id' => $staff->id]);
+
+        $this->actingAs($staff, 'sanctum')
+            ->post(route('inspections.digital-twin.models.store', $inspection), [
+                'provider' => 'matterport',
+                'capture_type' => 'obj_mesh',
+                'source_type' => 'runtime_3d_model',
+                'display_name' => 'MatterPak package',
+                'source_file' => $this->fakeMatterPakUpload(),
+                'status' => 'active',
+                'is_primary' => '1',
+            ])
+            ->assertRedirect(route('inspections.digital-twin', $inspection));
+
+        $sourceFile = TwinSourceFile::where('inspection_id', $inspection->id)
+            ->where('file_role', 'matterpak_archive')
+            ->firstOrFail();
+        $firstJob = TwinProcessingJob::where('source_file_id', $sourceFile->id)->firstOrFail();
+
+        $spatialModel = SpatialModel::create([
+            'property_id' => $inspection->property_id,
+            'inspection_id' => $inspection->id,
+            'capture_session_id' => $sourceFile->capture_session_id,
+            'created_by' => $staff->id,
+            'provider' => 'matterport',
+            'source_type' => 'runtime_3d_model',
+            'display_name' => 'MatterPak browser-ready GLB',
+            'runtime_format' => 'glb',
+            'original_format' => 'matterpak_zip',
+            'file_path' => 'properties/test/twins/processed/model.glb',
+            'status' => 'active',
+            'processing_status' => 'ready',
+            'processed_at' => now(),
+        ]);
+
+        $sourceFile->update([
+            'spatial_model_id' => $spatialModel->id,
+            'processing_status' => 'ready',
+            'processing_error' => null,
+        ]);
+        $sourceFile->captureSession->update(['status' => 'ready']);
+        $firstJob->update([
+            'spatial_model_id' => $spatialModel->id,
+            'status' => 'ready',
+            'completed_at' => now(),
+        ]);
+
+        $viewer = $this->actingAs($staff, 'sanctum')
+            ->get(route('inspections.digital-twin', $inspection));
+
+        $viewer->assertOk();
+        $viewer->assertSee('Reconvert GLB');
+        $viewer->assertSee(route('inspections.digital-twin.source-files.convert', [$inspection, $sourceFile]), false);
+
+        $response = $this->actingAs($staff, 'sanctum')
+            ->post(route('inspections.digital-twin.source-files.convert', [$inspection, $sourceFile]));
+
+        $response->assertRedirect(route('inspections.digital-twin', [$inspection, 'capture' => $sourceFile->capture_session_id]));
+        $response->assertSessionHas('success');
+
+        $newJob = TwinProcessingJob::where('source_file_id', $sourceFile->id)
+            ->latest('id')
+            ->firstOrFail();
+
+        $this->assertNotSame($firstJob->id, $newJob->id);
+        $this->assertSame('queued', $newJob->status);
+        $this->assertSame('manual_digital_twin_convert_button', $newJob->metadata['triggered_from'] ?? null);
+
+        $sourceFile->refresh();
+        $this->assertSame('queued', $sourceFile->processing_status);
+        $this->assertSame('queued', $sourceFile->captureSession->fresh()->status);
+
+        Queue::assertPushed(ProcessMatterPakToGlb::class, 2);
+        Queue::assertPushed(ProcessMatterPakToGlb::class, function (ProcessMatterPakToGlb $job) use ($newJob) {
+            return $job->processingJobId === $newJob->id;
+        });
+    }
+
+    public function test_matterpak_upload_with_hosted_matterport_url_adds_walkthrough_layer(): void
+    {
+        $this->useTwinTestDisk();
+        Queue::fake();
+
+        $staff = $this->createUserWithRole('Project Manager');
+        [, $inspection] = $this->createInspectionForClient();
+        $inspection->property->update(['project_manager_id' => $staff->id]);
+
+        $response = $this->actingAs($staff, 'sanctum')
+            ->post(route('inspections.digital-twin.models.store', $inspection), [
+                'provider' => 'matterport',
+                'capture_type' => 'obj_mesh',
+                'source_type' => 'runtime_3d_model',
+                'display_name' => 'Office MatterPak',
+                'source_file' => $this->fakeMatterPakUpload(),
+                'external_url' => 'https://my.matterport.com/show/?m=office123',
+                'status' => 'active',
+                'is_primary' => '1',
+            ]);
+
+        $response->assertRedirect(route('inspections.digital-twin', $inspection));
+
+        $sourceFile = TwinSourceFile::where('inspection_id', $inspection->id)
+            ->where('file_role', 'matterpak_archive')
+            ->firstOrFail();
+
+        $this->assertDatabaseHas('spatial_models', [
+            'inspection_id' => $inspection->id,
+            'capture_session_id' => $sourceFile->capture_session_id,
+            'provider' => 'matterport',
+            'source_type' => 'hosted_tour',
+            'runtime_format' => 'hosted',
+            'provider_model_id' => 'office123',
+            'external_url' => 'https://my.matterport.com/show/?m=office123',
+            'processing_status' => 'ready',
+            'is_primary' => true,
+        ]);
+
+        $this->assertDatabaseHas('matterport_models', [
+            'inspection_id' => $inspection->id,
+            'model_sid' => 'office123',
+            'model_name' => 'Office MatterPak walkthrough',
+            'status' => 'active',
+        ]);
+
+        $viewer = $this->actingAs($staff, 'sanctum')
+            ->get(route('inspections.digital-twin', $inspection));
+
+        $viewer->assertOk();
+        $viewer->assertSee('Office MatterPak walkthrough');
+        $viewer->assertSee('"viewerType":"hosted_tour"', false);
+        $viewer->assertSee('"viewerType":"awaiting_processing"', false);
+        $viewer->assertSee('Conversion queued');
+
+        Queue::assertPushed(ProcessMatterPakToGlb::class, 1);
+    }
+
+    public function test_matterpak_convert_button_does_not_duplicate_active_conversion_job(): void
+    {
+        $this->useTwinTestDisk();
+        Queue::fake();
+
+        $staff = $this->createUserWithRole('Project Manager');
+        [, $inspection] = $this->createInspectionForClient();
+        $inspection->property->update(['project_manager_id' => $staff->id]);
+
+        $this->actingAs($staff, 'sanctum')
+            ->post(route('inspections.digital-twin.models.store', $inspection), [
+                'provider' => 'matterport',
+                'capture_type' => 'obj_mesh',
+                'source_type' => 'runtime_3d_model',
+                'display_name' => 'MatterPak package',
+                'source_file' => $this->fakeMatterPakUpload(),
+                'status' => 'active',
+                'is_primary' => '1',
+            ])
+            ->assertRedirect(route('inspections.digital-twin', $inspection));
+
+        $sourceFile = TwinSourceFile::where('inspection_id', $inspection->id)
+            ->where('file_role', 'matterpak_archive')
+            ->firstOrFail();
+
+        $viewer = $this->actingAs($staff, 'sanctum')
+            ->get(route('inspections.digital-twin', $inspection));
+
+        $viewer->assertOk();
+        $viewer->assertSee('Conversion queued');
+
+        $response = $this->actingAs($staff, 'sanctum')
+            ->post(route('inspections.digital-twin.source-files.convert', [$inspection, $sourceFile]));
+
+        $response->assertRedirect(route('inspections.digital-twin', [$inspection, 'capture' => $sourceFile->capture_session_id]));
+        $response->assertSessionHas('info');
+
+        $this->assertSame(1, TwinProcessingJob::where('source_file_id', $sourceFile->id)->count());
+        Queue::assertPushed(ProcessMatterPakToGlb::class, 1);
+    }
+
     public function test_matterpak_processing_extracts_files_and_fails_cleanly_without_blender(): void
     {
         $this->useTwinTestDisk();
@@ -341,11 +525,67 @@ class DigitalTwinVendorNeutralTest extends TestCase
 
         $this->assertDatabaseHas('twin_source_files', [
             'parent_source_file_id' => $sourceFile->id,
+            'relative_path' => 'matterpak-demo/colorplan_000.jpg',
+            'file_role' => 'floor_plan',
+            'source_type' => 'image',
+        ]);
+
+        $this->assertDatabaseHas('twin_source_files', [
+            'parent_source_file_id' => $sourceFile->id,
+            'relative_path' => 'matterpak-demo/colorplan.pdf',
+            'file_role' => 'floor_plan',
+            'source_type' => 'pdf',
+        ]);
+
+        $this->assertDatabaseHas('twin_source_files', [
+            'parent_source_file_id' => $sourceFile->id,
+            'relative_path' => 'matterpak-demo/ceilingcolorplan_000.jpg',
+            'file_role' => 'reflected_ceiling_plan',
+            'source_type' => 'image',
+        ]);
+
+        $this->assertDatabaseHas('twin_source_files', [
+            'parent_source_file_id' => $sourceFile->id,
+            'relative_path' => 'matterpak-demo/matterpak_readme.pdf',
+            'file_role' => 'supporting_source',
+            'source_type' => 'pdf',
+        ]);
+
+        $this->assertDatabaseHas('twin_source_files', [
+            'parent_source_file_id' => $sourceFile->id,
             'relative_path' => 'pointcloud/house.xyz',
             'file_role' => 'colour_point_cloud',
             'source_type' => 'other',
             'processing_status' => 'uploaded',
         ]);
+
+        $this->assertDatabaseHas('twin_source_files', [
+            'parent_source_file_id' => $sourceFile->id,
+            'relative_path' => 'generated/point-cloud-preview.json',
+            'file_role' => 'point_cloud_preview',
+            'source_type' => 'other',
+            'extension' => 'json',
+            'processing_status' => 'ready',
+        ]);
+
+        $pointCloudPreview = TwinSourceFile::where('inspection_id', $inspection->id)
+            ->where('file_role', 'point_cloud_preview')
+            ->firstOrFail();
+
+        Storage::disk('twin_test')->assertExists($pointCloudPreview->storage_path);
+        $previewPayload = json_decode(Storage::disk('twin_test')->get($pointCloudPreview->storage_path), true);
+        $this->assertSame('matterpak_xyz_preview', $previewPayload['format']);
+        $this->assertSame(1, $previewPayload['point_count']);
+        $this->assertSame(1, $previewPayload['source_point_count']);
+
+        $processingJob->refresh();
+        $jobDiagnostics = $processingJob->metadata['conversion_diagnostics'] ?? [];
+        $this->assertSame('matterpak_visual_preserve', $jobDiagnostics['quality_profile'] ?? null);
+        $this->assertSame(1, $jobDiagnostics['texture_sources']['texture_file_count'] ?? null);
+        $this->assertSame(strlen('fake-jpg-texture'), $jobDiagnostics['texture_sources']['texture_total_bytes'] ?? null);
+        $this->assertSame(1, $jobDiagnostics['material_textures']['texture_reference_count'] ?? null);
+        $this->assertSame(1, $jobDiagnostics['material_textures']['resolved_texture_count'] ?? null);
+        $this->assertSame(0, $jobDiagnostics['material_textures']['missing_texture_count'] ?? null);
 
         $this->assertDatabaseHas('twin_processing_jobs', [
             'id' => $processingJob->id,
@@ -357,7 +597,56 @@ class DigitalTwinVendorNeutralTest extends TestCase
             'processing_status' => 'failed',
         ]);
 
+        $viewer = $this->actingAs($staff, 'sanctum')
+            ->get(route('inspections.digital-twin', $inspection));
+
+        $viewer->assertOk();
+        $viewer->assertSee('MatterPak floor plan - colorplan_000.jpg');
+        $viewer->assertSee('MatterPak floor plan - colorplan.pdf');
+        $viewer->assertSee('MatterPak ceiling plan - ceilingcolorplan_000.jpg');
+        $viewer->assertSee('MatterPak document - matterpak_readme.pdf');
+        $viewer->assertSee('MatterPak point cloud preview');
+        $viewer->assertSee('MatterPak texture maps');
+        $viewer->assertSee('Texture coverage');
+        $viewer->assertSee('1 mapped / 0 missing');
+        $viewer->assertSee('Source textures');
+        $viewer->assertSee('"viewerType":"image"', false);
+        $viewer->assertSee('"viewerType":"pdf"', false);
+        $viewer->assertSee('"viewerType":"point_cloud_preview"', false);
+        $viewer->assertSee('"viewerType":"media_gallery"', false);
+        $viewer->assertSee('"mediaItems":[', false);
+        $viewer->assertSee('"mediaCount":1', false);
+
         $this->assertDatabaseCount('spatial_models', 0);
+    }
+
+    public function test_matterpak_blender_script_preserves_original_texture_quality(): void
+    {
+        $scriptMethod = new \ReflectionMethod(ProcessMatterPakToGlb::class, 'blenderConversionScript');
+        $scriptMethod->setAccessible(true);
+
+        $script = $scriptMethod->invoke(new ProcessMatterPakToGlb(1));
+
+        $this->assertStringContainsString('"export_image_format": "AUTO"', $script);
+        $this->assertStringContainsString('"export_keep_originals": True', $script);
+        $this->assertStringContainsString('"export_image_quality": 100', $script);
+        $this->assertStringContainsString('"export_draco_mesh_compression_enable": False', $script);
+        $this->assertStringContainsString('os.chdir(obj_directory)', $script);
+        $this->assertStringContainsString('material.use_backface_culling = False', $script);
+        $this->assertStringContainsString('set_image_colorspace(node.image, "sRGB"', $script);
+    }
+
+    public function test_matterpak_blender_binary_path_can_be_relative_to_project_root(): void
+    {
+        config(['digital_twin.blender.binary' => 'tools/blender/blender']);
+
+        $binaryPathMethod = new \ReflectionMethod(ProcessMatterPakToGlb::class, 'blenderBinaryPath');
+        $binaryPathMethod->setAccessible(true);
+
+        $this->assertSame(
+            base_path('tools/blender/blender'),
+            $binaryPathMethod->invoke(new ProcessMatterPakToGlb(1))
+        );
     }
 
     public function test_unsupported_twin_source_extension_is_rejected(): void
@@ -481,6 +770,119 @@ class DigitalTwinVendorNeutralTest extends TestCase
         $this->assertSame('mesh-uuid-123', $marker->object_uuid);
         $this->assertSame(['x' => 9.1, 'y' => 8.2, 'z' => 7.3], $marker->camera_position);
         $this->assertEquals(['x' => 1.0, 'y' => 2.0, 'z' => 3.0], $marker->camera_target);
+
+        $viewer = $this->actingAs($staff, 'sanctum')
+            ->get(route('inspections.digital-twin', $inspection));
+
+        $viewer->assertOk();
+        $viewer->assertSee('data-twin-markers', false);
+        $viewer->assertSee('data-twin-marker-card', false);
+        $viewer->assertSee('data-twin-action-view', false);
+        $viewer->assertSee('data-twin-action-add-finding', false);
+        $viewer->assertSee('data-twin-marker-filter="high"', false);
+        $viewer->assertSee('title="1 issue marker"', false);
+        $viewer->assertSee('"title":"Roof leak at north wall"', false);
+        $viewer->assertSee('"position":{"x":1.25,"y":2.5,"z":3.75}', false);
+        $viewer->assertSee('"cameraPosition":{"x":9.1,"y":8.2,"z":7.3}', false);
+        $viewer->assertSee('"cameraTarget":{"x":1,"y":2,"z":3}', false);
+        $viewer->assertSee('PHAR #' . $finding->id);
+    }
+
+    public function test_issue_marker_can_create_phar_finding_for_same_property_diagnosis(): void
+    {
+        $staff = $this->createUserWithRole('Project Manager');
+        [, $inspection] = $this->createInspectionForClient();
+        $inspection->property->update(['project_manager_id' => $staff->id]);
+
+        $captureSession = \App\Models\CaptureSession::create([
+            'property_id' => $inspection->property_id,
+            'inspection_id' => $inspection->id,
+            'captured_by' => $staff->id,
+            'provider' => 'manual_upload',
+            'capture_type' => 'glb_model',
+            'status' => 'ready',
+        ]);
+
+        $spatialModel = SpatialModel::create([
+            'property_id' => $inspection->property_id,
+            'inspection_id' => $inspection->id,
+            'capture_session_id' => $captureSession->id,
+            'created_by' => $staff->id,
+            'provider' => 'manual_upload',
+            'source_type' => 'runtime_3d_model',
+            'display_name' => 'Dining room capture',
+            'runtime_format' => 'glb',
+            'original_format' => 'glb',
+            'status' => 'active',
+            'processing_status' => 'ready',
+        ]);
+
+        $system = \App\Models\BuildingSystem::create([
+            'code' => 'INT',
+            'name' => 'Interior',
+            'slug' => 'interior',
+            'is_active' => true,
+        ]);
+        $subsystem = \App\Models\BuildingSubsystem::create([
+            'building_system_id' => $system->id,
+            'code' => 'INT-CEIL',
+            'name' => 'Ceilings',
+            'slug' => 'ceilings',
+            'is_active' => true,
+        ]);
+        $component = \App\Models\BuildingComponent::create([
+            'building_subsystem_id' => $subsystem->id,
+            'code' => 'INT-CEIL-DRY',
+            'name' => 'Drywall ceiling',
+            'slug' => 'drywall-ceiling',
+            'is_active' => true,
+        ]);
+
+        $response = $this->actingAs($staff, 'sanctum')
+            ->post(route('inspections.digital-twin.markers.store', $inspection), [
+                'spatial_model_id' => $spatialModel->id,
+                'capture_session_id' => $captureSession->id,
+                'create_phar_finding' => '1',
+                'building_system_id' => $system->id,
+                'building_subsystem_id' => $subsystem->id,
+                'building_component_id' => $component->id,
+                'source_provider' => 'manual_upload',
+                'marker_type' => 'issue',
+                'title' => 'Dining room ceiling stain',
+                'severity' => 'medium',
+                'status' => 'open',
+                'position_x' => '1.0000',
+                'position_y' => '2.0000',
+                'position_z' => '3.0000',
+                'room_name' => 'Dining room',
+                'surface_label' => 'Ceiling',
+                'source_reference' => 'Dining room capture',
+                'description' => 'Brown stain visible near the light fixture.',
+            ]);
+
+        $response->assertRedirect(route('inspections.digital-twin', $inspection));
+
+        $finding = PHARFinding::where('inspection_id', $inspection->id)->firstOrFail();
+        $marker = \App\Models\IssueMarker::where('inspection_id', $inspection->id)->firstOrFail();
+
+        $this->assertSame($inspection->property_id, $finding->property_id);
+        $this->assertSame('Dining room ceiling stain', $finding->task_question);
+        $this->assertSame('Interior', $finding->category);
+        $this->assertSame($system->id, $finding->building_system_id);
+        $this->assertSame($subsystem->id, $finding->building_subsystem_id);
+        $this->assertSame($component->id, $finding->building_component_id);
+        $this->assertSame($finding->id, $marker->phar_finding_id);
+        $this->assertSame($captureSession->id, $marker->capture_session_id);
+        $this->assertSame($spatialModel->id, $marker->spatial_model_id);
+
+        $inspection->refresh();
+        $jsonFinding = collect($inspection->findings)->firstWhere('issue', 'Dining room ceiling stain');
+        $this->assertSame('Dining room', $jsonFinding['location']);
+        $this->assertSame('Interior', $jsonFinding['system']);
+        $this->assertSame('Ceilings', $jsonFinding['subsystem']);
+        $this->assertSame('Drywall ceiling', $jsonFinding['component']);
+        $this->assertSame($captureSession->id, $jsonFinding['digital_twin']['capture_session_id']);
+        $this->assertSame($spatialModel->id, $jsonFinding['digital_twin']['spatial_model_id']);
     }
 
     public function test_staff_can_add_non_matterport_capture_sources_and_issue_markers(): void
@@ -575,6 +977,18 @@ class DigitalTwinVendorNeutralTest extends TestCase
         $viewer->assertOk();
         $viewer->assertSee('Property Digital Twin');
         $viewer->assertSee('Vendor neutral');
+        $viewer->assertSee('Capture Sessions');
+        $viewer->assertSee('View Capture');
+        $viewer->assertSee('Add Finding');
+        $viewer->assertSee('Create PHAR finding from this marker');
+        $viewer->assertSee('data-twin-add-marker', false);
+        $viewer->assertSee('data-twin-markers', false);
+        $viewer->assertSee('data-twin-marker-card', false);
+        $viewer->assertSee('data-twin-action-view', false);
+        $viewer->assertSee('data-twin-action-add-finding', false);
+        $viewer->assertSee('data-twin-action-open-source', false);
+        $viewer->assertDontSee('twin-capture-actions', false);
+        $viewer->assertSee('data-twin-marker-filter="high"', false);
         $viewer->assertSee('Kitchen north wall scan');
         $viewer->assertSee('Possible concealed pipe leak');
         $viewer->assertSee('data-issue-marker-form', false);
@@ -749,6 +1163,23 @@ class DigitalTwinVendorNeutralTest extends TestCase
         $this->assertDatabaseCount('spatial_models', 0);
     }
 
+    public function test_digital_twin_uses_property_diagnosis_number_instead_of_raw_record_id(): void
+    {
+        $staff = $this->createUserWithRole('Project Manager');
+        $this->createInspectionForClient();
+        [, $inspection] = $this->createInspectionForClient();
+        $inspection->property->update(['project_manager_id' => $staff->id]);
+
+        $this->assertGreaterThan(1, $inspection->id);
+
+        $response = $this->actingAs($staff, 'sanctum')
+            ->get(route('inspections.digital-twin', $inspection));
+
+        $response->assertOk();
+        $response->assertSee('Diagnosis #1');
+        $response->assertSee('Inspection record #' . $inspection->id);
+    }
+
     private function createUserWithRole(string $roleName): User
     {
         $role = Role::firstOrCreate([
@@ -785,7 +1216,16 @@ class DigitalTwinVendorNeutralTest extends TestCase
         $zip->addFromString('mesh/textures/wall.jpg', 'fake-jpg-texture');
         $zip->addFromString('floorplans/floor-plan.jpg', 'fake-floor-plan-image');
         $zip->addFromString('floorplans/reflected-ceiling-plan.pdf', '%PDF-1.4 fake');
+        $zip->addFromString('matterpak-demo/colorplan_000.jpg', 'fake-color-plan-image');
+        $zip->addFromString('matterpak-demo/colorplan.pdf', '%PDF-1.4 fake');
+        $zip->addFromString('matterpak-demo/ceilingcolorplan_000.jpg', 'fake-ceiling-color-plan-image');
+        $zip->addFromString('matterpak-demo/ceilingcolorplan.pdf', '%PDF-1.4 fake');
+        $zip->addFromString('matterpak-demo/matterpak_readme.pdf', '%PDF-1.4 fake readme');
         $zip->addFromString('pointcloud/house.xyz', "0 0 0 255 255 255\n");
+        $zip->addFromString('matterpak-demo', 'root package marker');
+        $zip->addFromString('matterpak-demo/package-manifest.txt', 'folder with same normalized name');
+        $zip->addFromString('__MACOSX/._matterpak-demo', 'macos-resource-fork');
+        $zip->addFromString('.DS_Store', 'macos-folder-metadata');
         $zip->close();
 
         return new UploadedFile($path, $name, 'application/zip', null, true);

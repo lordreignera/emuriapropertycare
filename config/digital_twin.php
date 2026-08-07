@@ -106,6 +106,7 @@ return [
         'material_extensions' => ['mtl'],
         'texture_extensions' => ['jpg', 'jpeg', 'png', 'webp', 'tif', 'tiff', 'bmp'],
         'document_extensions' => ['pdf'],
-        'plan_keywords' => ['floorplan', 'floor-plan', 'floor_plan', 'reflected', 'ceiling', 'rcp'],
+        'plan_keywords' => ['floorplan', 'floor-plan', 'floor_plan', 'colorplan', 'color-plan', 'color_plan', 'reflected', 'ceiling', 'rcp'],
+        'point_cloud_preview_points' => (int) env('DIGITAL_TWIN_POINT_CLOUD_PREVIEW_POINTS', 30000),
     ],
 ];
