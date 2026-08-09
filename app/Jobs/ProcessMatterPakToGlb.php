@@ -106,7 +106,7 @@ class ProcessMatterPakToGlb implements ShouldQueue
             $this->storeConversionDiagnostics($processingJob, $conversionDiagnostics, $pointCloudPreview);
 
             $glbPath = $workDirectory . DIRECTORY_SEPARATOR . 'matterpak-model.glb';
-            $this->convertObjToGlb((string) $objCandidate['local_path'], $glbPath, $workDirectory);
+            $this->convertObjToGlb((string) $objCandidate['local_path'], $glbPath, $workDirectory, $processingJob);
 
             if (!File::exists($glbPath) || File::size($glbPath) < 1) {
                 throw new RuntimeException('Blender finished without producing a GLB file.');
@@ -344,7 +344,7 @@ class ProcessMatterPakToGlb implements ShouldQueue
         return $extracted;
     }
 
-    private function convertObjToGlb(string $objPath, string $glbPath, string $workingDirectory): void
+    private function convertObjToGlb(string $objPath, string $glbPath, string $workingDirectory, TwinProcessingJob $processingJob): void
     {
         $blenderBinary = $this->blenderBinaryPath();
 
@@ -361,13 +361,96 @@ class ProcessMatterPakToGlb implements ShouldQueue
             $glbPath,
         ], $workingDirectory, null, null, (float) config('digital_twin.processing.timeout_seconds', 3600));
 
-        $process->run();
+        $startedAt = microtime(true);
+
+        try {
+            $process->run();
+        } catch (Throwable $exception) {
+            $diagnostics = [
+                'status' => 'exception',
+                'duration_seconds' => round(microtime(true) - $startedAt, 2),
+                'message' => Str::limit($exception->getMessage(), 2000, ''),
+                'obj_filename' => basename($objPath),
+                'glb_created' => File::exists($glbPath),
+                'glb_size_bytes' => File::exists($glbPath) ? File::size($glbPath) : 0,
+            ];
+
+            $this->storeBlenderDiagnostics($processingJob, $diagnostics);
+
+            throw new RuntimeException('Blender OBJ-to-GLB conversion could not run. ' . $diagnostics['message'], previous: $exception);
+        }
+
+        $diagnostics = $this->blenderProcessDiagnostics($process, $objPath, $glbPath, microtime(true) - $startedAt);
+        $this->storeBlenderDiagnostics($processingJob, $diagnostics);
 
         if (!$process->isSuccessful()) {
-            $error = trim($process->getErrorOutput()) ?: trim($process->getOutput());
-
-            throw new RuntimeException('Blender OBJ-to-GLB conversion failed. ' . Str::limit($error, 3000, ''));
+            throw new RuntimeException($this->blenderFailureMessage($diagnostics));
         }
+    }
+
+    private function blenderProcessDiagnostics(Process $process, string $objPath, string $glbPath, float $durationSeconds): array
+    {
+        $stderr = trim($process->getErrorOutput());
+        $stdout = trim($process->getOutput());
+        $exitCode = $process->getExitCode();
+
+        return [
+            'status' => $process->isSuccessful() ? 'ready' : 'failed',
+            'exit_code' => $exitCode,
+            'exit_code_text' => $process->getExitCodeText(),
+            'duration_seconds' => round($durationSeconds, 2),
+            'stdout' => Str::limit($stdout, 3000, ''),
+            'stderr' => Str::limit($stderr, 3000, ''),
+            'obj_filename' => basename($objPath),
+            'glb_created' => File::exists($glbPath),
+            'glb_size_bytes' => File::exists($glbPath) ? File::size($glbPath) : 0,
+            'likely_worker_memory_kill' => $this->isLikelyMemoryKill($exitCode, $stderr . "\n" . $stdout),
+        ];
+    }
+
+    private function blenderFailureMessage(array $diagnostics): string
+    {
+        $parts = ['Blender OBJ-to-GLB conversion failed.'];
+        $exitCode = $diagnostics['exit_code'] ?? null;
+        $exitText = trim((string) ($diagnostics['exit_code_text'] ?? ''));
+        $output = trim((string) ($diagnostics['stderr'] ?? '')) ?: trim((string) ($diagnostics['stdout'] ?? ''));
+
+        if ($exitCode !== null) {
+            $parts[] = 'Exit code ' . $exitCode . ($exitText !== '' ? " ({$exitText})." : '.');
+        }
+
+        if (!empty($diagnostics['likely_worker_memory_kill'])) {
+            $parts[] = 'Linux likely killed Blender during export, which is usually worker memory pressure. Retry after adding swap or using a larger converter Droplet.';
+        }
+
+        if ($output !== '') {
+            $parts[] = 'Blender output: ' . $output;
+        } else {
+            $parts[] = 'Blender returned no stdout/stderr. Check the worker journal and kernel logs for timeout or out-of-memory kill entries.';
+        }
+
+        return Str::limit(implode(' ', $parts), 6000, '');
+    }
+
+    private function isLikelyMemoryKill(?int $exitCode, string $output): bool
+    {
+        $output = strtolower($output);
+
+        return in_array($exitCode, [9, 137], true)
+            || str_contains($output, 'killed')
+            || str_contains($output, 'out of memory')
+            || str_contains($output, 'cannot allocate memory')
+            || str_contains($output, 'oom');
+    }
+
+    private function storeBlenderDiagnostics(TwinProcessingJob $processingJob, array $diagnostics): void
+    {
+        $metadata = $processingJob->metadata ?: [];
+        $conversionDiagnostics = $metadata['conversion_diagnostics'] ?? [];
+        $conversionDiagnostics['blender'] = $diagnostics;
+        $metadata['conversion_diagnostics'] = $conversionDiagnostics;
+
+        $processingJob->update(['metadata' => $metadata]);
     }
 
     private function blenderBinaryPath(): string

@@ -14,6 +14,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Models\Role;
@@ -917,6 +918,60 @@ class DigitalTwinVendorNeutralTest extends TestCase
             base_path('tools/blender/blender'),
             $binaryPathMethod->invoke(new ProcessMatterPakToGlb(1))
         );
+    }
+
+    public function test_matterpak_blender_failure_records_process_diagnostics(): void
+    {
+        $this->useTwinTestDisk();
+        config(['digital_twin.blender.binary' => PHP_BINARY]);
+
+        $staff = $this->createUserWithRole('Project Manager');
+        [, $inspection] = $this->createInspectionForClient();
+        $inspection->property->update(['project_manager_id' => $staff->id]);
+
+        $processingJob = TwinProcessingJob::create([
+            'property_id' => $inspection->property_id,
+            'inspection_id' => $inspection->id,
+            'created_by' => $staff->id,
+            'processor' => 'blender',
+            'job_type' => 'matterpak_obj_to_glb',
+            'queue_name' => 'digital-twin',
+            'status' => 'processing',
+            'timeout_seconds' => 3600,
+            'metadata' => [
+                'conversion_diagnostics' => [
+                    'quality_profile' => 'matterpak_visual_preserve',
+                ],
+            ],
+        ]);
+
+        $workDirectory = storage_path('framework/testing/blender-failure-' . $processingJob->id);
+        File::ensureDirectoryExists($workDirectory);
+        $objPath = $workDirectory . DIRECTORY_SEPARATOR . 'model.obj';
+        $glbPath = $workDirectory . DIRECTORY_SEPARATOR . 'model.glb';
+        File::put($objPath, "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n");
+
+        try {
+            $method = new \ReflectionMethod(ProcessMatterPakToGlb::class, 'convertObjToGlb');
+            $method->setAccessible(true);
+            $method->invoke(new ProcessMatterPakToGlb($processingJob->id), $objPath, $glbPath, $workDirectory, $processingJob);
+            $this->fail('The fake Blender process should fail.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('Blender OBJ-to-GLB conversion', $exception->getMessage());
+            $this->assertStringContainsString('Exit code', $exception->getMessage());
+        } finally {
+            File::deleteDirectory($workDirectory);
+        }
+
+        $processingJob->refresh();
+        $blenderDiagnostics = $processingJob->metadata['conversion_diagnostics']['blender'] ?? null;
+
+        $this->assertIsArray($blenderDiagnostics);
+        $this->assertSame('failed', $blenderDiagnostics['status']);
+        $this->assertArrayHasKey('exit_code', $blenderDiagnostics);
+        $this->assertArrayHasKey('stdout', $blenderDiagnostics);
+        $this->assertArrayHasKey('stderr', $blenderDiagnostics);
+        $this->assertArrayHasKey('duration_seconds', $blenderDiagnostics);
     }
 
     public function test_unsupported_twin_source_extension_is_rejected(): void
