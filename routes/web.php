@@ -135,6 +135,7 @@ Route::middleware([
             Route::post('/work-schedule', [App\Http\Controllers\InspectionController::class, 'storeWorkSchedule'])->name('work-schedule.store');
             Route::post('/assessment-schedule', [App\Http\Controllers\InspectionController::class, 'updateAssessmentSchedule'])->name('assessment-schedule.update');
             Route::get('/digital-twin', [App\Http\Controllers\DigitalTwinController::class, 'show'])->name('digital-twin');
+            Route::post('/digital-twin/uploads/direct', [App\Http\Controllers\DigitalTwinController::class, 'createDirectUpload'])->name('digital-twin.uploads.direct');
             Route::post('/digital-twin/models', [App\Http\Controllers\DigitalTwinController::class, 'storeSpatialModel'])->name('digital-twin.models.store');
             Route::get('/digital-twin/models/{spatialModel}/file', [App\Http\Controllers\DigitalTwinController::class, 'spatialModelFile'])->name('digital-twin.models.file');
             Route::get('/digital-twin/source-files/{twinSourceFile}/download', [App\Http\Controllers\DigitalTwinController::class, 'sourceFileDownload'])->name('digital-twin.source-files.download');

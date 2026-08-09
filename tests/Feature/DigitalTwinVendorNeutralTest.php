@@ -12,6 +12,7 @@ use App\Models\TwinSourceFile;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Models\Role;
@@ -282,6 +283,64 @@ class DigitalTwinVendorNeutralTest extends TestCase
         $preview->assertSee('MatterPak Demo.zip');
         $preview->assertSee('Twin processing');
         $preview->assertSee('Queued');
+    }
+
+    public function test_completed_direct_matterpak_upload_is_recorded_and_queued_for_conversion(): void
+    {
+        $this->useTwinTestDisk();
+        Queue::fake();
+
+        $staff = $this->createUserWithRole('Project Manager');
+        [, $inspection] = $this->createInspectionForClient();
+        $inspection->property->update(['project_manager_id' => $staff->id]);
+
+        $storagePath = "properties/{$inspection->property_id}/twins/inspections/{$inspection->id}/source/direct-matterpak.zip";
+        Storage::disk('twin_test')->put($storagePath, 'direct-uploaded-matterpak');
+
+        $token = Crypt::encryptString(json_encode([
+            'inspection_id' => $inspection->id,
+            'property_id' => $inspection->property_id,
+            'user_id' => $staff->id,
+            'storage_disk' => 'twin_test',
+            'storage_path' => $storagePath,
+            'stored_filename' => 'direct-matterpak.zip',
+            'original_filename' => 'Direct MatterPak.zip',
+            'extension' => 'zip',
+            'mime_type' => 'application/zip',
+            'file_size' => 24,
+            'expires_at' => now()->addMinutes(30)->toIso8601String(),
+        ], JSON_THROW_ON_ERROR));
+
+        $response = $this->actingAs($staff, 'sanctum')
+            ->post(route('inspections.digital-twin.models.store', $inspection), [
+                'provider' => 'matterport',
+                'capture_type' => 'obj_mesh',
+                'source_type' => 'runtime_3d_model',
+                'display_name' => 'Direct MatterPak',
+                'direct_upload_token' => $token,
+                'status' => 'active',
+                'is_primary' => '1',
+            ]);
+
+        $response->assertRedirect(route('inspections.digital-twin', $inspection));
+
+        $sourceFile = TwinSourceFile::where('inspection_id', $inspection->id)
+            ->where('file_role', 'matterpak_archive')
+            ->firstOrFail();
+
+        $this->assertSame($storagePath, $sourceFile->storage_path);
+        $this->assertSame('twin_test', $sourceFile->storage_disk);
+        $this->assertSame('Direct MatterPak.zip', $sourceFile->original_filename);
+        $this->assertSame('direct_to_private_bucket', $sourceFile->metadata['upload_strategy'] ?? null);
+
+        $processingJob = TwinProcessingJob::where('source_file_id', $sourceFile->id)->firstOrFail();
+
+        $this->assertSame('matterpak_obj_to_glb', $processingJob->job_type);
+        $this->assertSame('queued', $processingJob->status);
+
+        Queue::assertPushed(ProcessMatterPakToGlb::class, function (ProcessMatterPakToGlb $job) use ($processingJob) {
+            return $job->processingJobId === $processingJob->id;
+        });
     }
 
     public function test_staff_can_start_matterpak_reconversion_from_ready_archive(): void

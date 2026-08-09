@@ -473,11 +473,14 @@
 
         return number_format($bytes) . ' B';
     };
-    $serverUploadBytes = min(
+    $appUploadBytes = max(1, (int) config('digital_twin.upload_max_kilobytes', 512000)) * 1024;
+    $phpUploadBytes = min(
         $iniBytes(ini_get('upload_max_filesize')),
-        $iniBytes(ini_get('post_max_size')),
-        max(1, (int) config('digital_twin.upload_max_kilobytes', 102400)) * 1024
+        $iniBytes(ini_get('post_max_size'))
     );
+    $digitalTwinDisk = config('digital_twin.disk', config('filesystems.default', 'local'));
+    $directUploadEnabled = config("filesystems.disks.{$digitalTwinDisk}.driver") === 's3';
+    $serverUploadBytes = $directUploadEnabled ? $appUploadBytes : min($phpUploadBytes, $appUploadBytes);
     $serverUploadMb = max(1, (int) floor($serverUploadBytes / 1024 / 1024));
     $statusBadgeClass = fn ($status) => match ($status) {
         'ready' => 'bg-success',
@@ -632,6 +635,37 @@
 
     .twin-upload-warning.is-visible {
         display: block;
+    }
+
+    .twin-upload-progress {
+        display: none;
+        margin-top: 10px;
+    }
+
+    .twin-upload-progress.is-visible {
+        display: block;
+    }
+
+    .twin-upload-progress-track {
+        height: 8px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #e2e8f0;
+    }
+
+    .twin-upload-progress-bar {
+        width: 0%;
+        height: 100%;
+        border-radius: inherit;
+        background: #0ea5e9;
+        transition: width 0.18s ease;
+    }
+
+    .twin-upload-progress-label {
+        margin-top: 6px;
+        color: #475569;
+        font-size: 12px;
+        font-weight: 700;
     }
 
     .twin-advanced-fields {
@@ -1393,7 +1427,11 @@
             </div>
             <div id="captureUploadPanel" class="collapse {{ $uploadPanelOpen ? 'show' : '' }}">
                 <div class="twin-panel-body">
-                <form method="POST" action="{{ route('inspections.digital-twin.models.store', $inspection) }}" enctype="multipart/form-data">
+                <form
+                    method="POST"
+                    action="{{ route('inspections.digital-twin.models.store', $inspection) }}"
+                    enctype="multipart/form-data"
+                    data-direct-upload-url="{{ $directUploadEnabled ? route('inspections.digital-twin.uploads.direct', $inspection) : '' }}">
                     @csrf
                     <div class="twin-form-grid">
                         <div>
@@ -1437,6 +1475,12 @@
                             >
                             <small class="twin-help">GLB/glTF opens in the viewer. MatterPak ZIP is stored privately, extracted, and queued for Blender GLB conversion. E57/LAS/LAZ are preserved for later point-cloud processing.</small>
                             <div class="twin-upload-warning" id="sourceFileWarning"></div>
+                            <div class="twin-upload-progress" id="sourceFileUploadProgress" aria-live="polite">
+                                <div class="twin-upload-progress-track">
+                                    <div class="twin-upload-progress-bar" data-upload-progress-bar></div>
+                                </div>
+                                <div class="twin-upload-progress-label" data-upload-progress-label>Preparing secure upload...</div>
+                            </div>
                         </div>
                         <div>
                             <label class="twin-label" for="external_url">Cloud URL</label>
@@ -2082,11 +2126,19 @@
         document.addEventListener('DOMContentLoaded', function () {
             var sourceFile = document.getElementById('source_file');
             var warning = document.getElementById('sourceFileWarning');
+            var progress = document.getElementById('sourceFileUploadProgress');
+            var progressBar = progress ? progress.querySelector('[data-upload-progress-bar]') : null;
+            var progressLabel = progress ? progress.querySelector('[data-upload-progress-label]') : null;
             var originalFormat = document.getElementById('original_format');
             var runtimeFormat = document.getElementById('runtime_format');
             var captureType = document.getElementById('capture_type');
             var sourceType = document.getElementById('source_type');
-            var submitButton = sourceFile ? sourceFile.closest('form').querySelector('button[type="submit"]') : null;
+            var form = sourceFile ? sourceFile.closest('form') : null;
+            var submitButton = form ? form.querySelector('button[type="submit"]') : null;
+            var csrfToken = form ? (form.querySelector('input[name="_token"]') || {}).value : '';
+            var directUploadUrl = form ? (form.dataset.directUploadUrl || '') : '';
+            var directUploadTokenInput = null;
+            var directUploadReadyForSubmit = false;
 
             if (!sourceFile || !warning) {
                 return;
@@ -2117,11 +2169,133 @@
                 return (bytes / 1024 / 1024).toFixed(1) + ' MB';
             }
 
+            function setProgress(percent, label) {
+                if (!progress || !progressBar || !progressLabel) {
+                    return;
+                }
+
+                progress.classList.add('is-visible');
+                progressBar.style.width = Math.max(0, Math.min(100, percent)) + '%';
+                progressLabel.textContent = label;
+            }
+
+            function clearProgress() {
+                if (!progress || !progressBar || !progressLabel) {
+                    return;
+                }
+
+                progress.classList.remove('is-visible');
+                progressBar.style.width = '0%';
+                progressLabel.textContent = 'Preparing secure upload...';
+            }
+
+            function setDirectUploadToken(token) {
+                if (!form) {
+                    return;
+                }
+
+                if (!directUploadTokenInput) {
+                    directUploadTokenInput = form.querySelector('input[name="direct_upload_token"]');
+                }
+
+                if (!directUploadTokenInput) {
+                    directUploadTokenInput = document.createElement('input');
+                    directUploadTokenInput.type = 'hidden';
+                    directUploadTokenInput.name = 'direct_upload_token';
+                    form.appendChild(directUploadTokenInput);
+                }
+
+                directUploadTokenInput.value = token || '';
+            }
+
+            function uploadToPrivateBucket(file) {
+                setProgress(3, 'Requesting secure private-bucket upload...');
+
+                return fetch(directUploadUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken
+                    },
+                    body: JSON.stringify({
+                        original_filename: file.name,
+                        file_size: file.size,
+                        mime_type: file.type || 'application/octet-stream'
+                    })
+                })
+                    .then(function (response) {
+                        return response.json().then(function (payload) {
+                            if (!response.ok) {
+                                var message = payload.message || 'The secure upload could not be prepared.';
+                                var errors = payload.errors || {};
+                                if (errors.source_file && errors.source_file[0]) {
+                                    message = errors.source_file[0];
+                                }
+
+                                throw new Error(message);
+                            }
+
+                            return payload;
+                        });
+                    })
+                    .then(function (payload) {
+                        setProgress(8, 'Uploading directly to the private bucket...');
+
+                        return new Promise(function (resolve, reject) {
+                            var xhr = new XMLHttpRequest();
+                            xhr.open(payload.method || 'PUT', payload.url, true);
+
+                            Object.entries(payload.headers || {}).forEach(function (entry) {
+                                var key = entry[0];
+                                var value = entry[1];
+                                var lowered = key.toLowerCase();
+
+                                if (['host', 'content-length'].includes(lowered)) {
+                                    return;
+                                }
+
+                                xhr.setRequestHeader(key, value);
+                            });
+
+                            xhr.upload.onprogress = function (event) {
+                                if (!event.lengthComputable) {
+                                    setProgress(35, 'Uploading directly to the private bucket...');
+                                    return;
+                                }
+
+                                var percent = Math.round((event.loaded / event.total) * 90);
+                                setProgress(Math.max(8, percent), 'Uploading directly to the private bucket... ' + Math.min(99, percent) + '%');
+                            };
+
+                            xhr.onload = function () {
+                                if (xhr.status >= 200 && xhr.status < 300) {
+                                    setProgress(100, 'Upload complete. Saving capture record...');
+                                    setDirectUploadToken(payload.token);
+                                    resolve(payload);
+                                    return;
+                                }
+
+                                reject(new Error('The private bucket rejected the upload with status ' + xhr.status + '.'));
+                            };
+
+                            xhr.onerror = function () {
+                                reject(new Error('The browser could not reach the private bucket. Check the bucket CORS rules for this domain.'));
+                            };
+
+                            xhr.send(file);
+                        });
+                    });
+            }
+
             sourceFile.addEventListener('change', function () {
                 var file = sourceFile.files && sourceFile.files[0];
                 var maxBytes = parseInt(sourceFile.dataset.maxUploadBytes || '0', 10);
                 var maxMb = sourceFile.dataset.maxUploadMb || '100';
 
+                directUploadReadyForSubmit = false;
+                setDirectUploadToken('');
+                clearProgress();
                 warning.classList.remove('is-visible');
                 warning.textContent = '';
                 if (submitButton) {
@@ -2166,13 +2340,47 @@
                 }
 
                 if (maxBytes > 0 && file.size > maxBytes) {
-                    warning.textContent = 'This file is ' + formatBytes(file.size) + '. The current server upload limit is ' + maxMb + ' MB, so this upload will fail until the PHP request limit and DIGITAL_TWIN_UPLOAD_MAX_KB are increased.';
+                    warning.textContent = 'This file is ' + formatBytes(file.size) + '. The current digital twin upload limit is ' + maxMb + ' MB, so this upload will fail until DIGITAL_TWIN_UPLOAD_MAX_KB is increased.';
                     warning.classList.add('is-visible');
                     if (submitButton) {
                         submitButton.disabled = true;
                     }
                 }
             });
+
+            if (form && directUploadUrl) {
+                form.addEventListener('submit', function (event) {
+                    var file = sourceFile.files && sourceFile.files[0];
+
+                    if (!file || directUploadReadyForSubmit) {
+                        return;
+                    }
+
+                    event.preventDefault();
+
+                    if (submitButton) {
+                        submitButton.disabled = true;
+                    }
+
+                    warning.classList.remove('is-visible');
+                    warning.textContent = '';
+
+                    uploadToPrivateBucket(file)
+                        .then(function () {
+                            directUploadReadyForSubmit = true;
+                            sourceFile.disabled = true;
+                            form.submit();
+                        })
+                        .catch(function (error) {
+                            warning.textContent = error.message || 'The direct upload failed. Please try again.';
+                            warning.classList.add('is-visible');
+                            clearProgress();
+                            if (submitButton) {
+                                submitButton.disabled = false;
+                            }
+                        });
+                });
+            }
         });
 
         document.addEventListener('DOMContentLoaded', function () {

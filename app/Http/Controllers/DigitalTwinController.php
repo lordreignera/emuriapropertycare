@@ -17,10 +17,13 @@ use App\Models\SpatialModel;
 use App\Models\TwinProcessingJob;
 use App\Models\TwinSourceFile;
 use App\Services\MatterportHostedTourService;
+use Illuminate\Contracts\Encryption\DecryptException;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -119,13 +122,48 @@ class DigitalTwinController extends Controller
 
         $validated = $request->validated();
         $sourceFile = $request->file('source_file');
-        $classification = $this->classifyTwinSource($validated, $sourceFile);
-        $disk = config('digital_twin.disk', config('filesystems.default', 'local'));
+        $directUpload = $this->verifiedDirectUploadPayload($validated['direct_upload_token'] ?? null, $inspection);
+
+        if ($sourceFile && $directUpload) {
+            throw ValidationException::withMessages([
+                'source_file' => 'Submit either a browser file upload or a completed direct upload, not both.',
+            ]);
+        }
+
+        $classification = $this->classifyTwinSource($validated, $sourceFile, $directUpload);
+        $disk = $directUpload['storage_disk'] ?? config('digital_twin.disk', config('filesystems.default', 'local'));
         $sourceFilePath = null;
         $storedFilename = null;
         $fileMetadata = [];
 
-        if ($sourceFile) {
+        if ($directUpload) {
+            $sourceFilePath = $directUpload['storage_path'];
+            $storedFilename = $directUpload['stored_filename'];
+            $storage = Storage::disk($disk);
+
+            if (!$storage->exists($sourceFilePath)) {
+                throw ValidationException::withMessages([
+                    'source_file' => 'The direct upload was not found in private storage. Please choose the file and upload again.',
+                ]);
+            }
+
+            $actualSize = null;
+
+            try {
+                $actualSize = $storage->size($sourceFilePath);
+            } catch (Throwable) {
+                $actualSize = null;
+            }
+
+            $fileMetadata = [
+                'original_filename' => $directUpload['original_filename'],
+                'stored_filename' => $storedFilename,
+                'mime_type' => $directUpload['mime_type'] ?? null,
+                'file_size' => $actualSize ?: ($directUpload['file_size'] ?? null),
+                'checksum_sha256' => $directUpload['checksum_sha256'] ?? null,
+                'upload_strategy' => 'direct_to_private_bucket',
+            ];
+        } elseif ($sourceFile) {
             $storedFilename = Str::random(40) . '.' . $classification['extension'];
             $sourceFilePath = $sourceFile->storeAs(
                 "properties/{$inspection->property_id}/twins/inspections/{$inspection->id}/source",
@@ -146,7 +184,7 @@ class DigitalTwinController extends Controller
             ? $request->file('thumbnail_file')->store("properties/{$inspection->property_id}/twins/inspections/{$inspection->id}/thumbnails", $disk)
             : null;
 
-        $result = DB::transaction(function () use ($inspection, $validated, $sourceFile, $sourceFilePath, $storedFilename, $thumbnailPath, $disk, $classification, $fileMetadata) {
+        $result = DB::transaction(function () use ($inspection, $validated, $sourceFile, $directUpload, $sourceFilePath, $storedFilename, $thumbnailPath, $disk, $classification, $fileMetadata) {
             if (
                 !empty($validated['is_primary'])
                 && $classification['creates_spatial_model']
@@ -224,7 +262,7 @@ class DigitalTwinController extends Controller
                 ]);
             }
 
-            if ($sourceFile || $classification['records_source_file']) {
+            if ($sourceFile || $directUpload || $classification['records_source_file']) {
                 $twinSourceFile = TwinSourceFile::create([
                     'property_id' => $inspection->property_id,
                     'inspection_id' => $inspection->id,
@@ -252,6 +290,7 @@ class DigitalTwinController extends Controller
                         'selected_source_type' => $validated['source_type'],
                         'package_type' => $classification['package_type'] ?? null,
                         'classification_message' => $classification['message'],
+                        'upload_strategy' => $fileMetadata['upload_strategy'] ?? ($sourceFilePath ? 'laravel_multipart' : null),
                     ],
                 ]);
             }
@@ -313,6 +352,164 @@ class DigitalTwinController extends Controller
             ->route('inspections.digital-twin', $inspection)
             ->with('digital_twin_capture_id', $result['capture_session']?->id)
             ->with($result['spatial_model'] ? 'success' : 'info', $classification['message']);
+    }
+
+    public function createDirectUpload(Request $request, Inspection $inspection): JsonResponse
+    {
+        $this->authorizeInspectionAccess($inspection);
+
+        if (!$this->canManageDigitalTwin($inspection)) {
+            abort(403, 'You do not have permission to upload digital twin sources for this diagnosis.');
+        }
+
+        $inspection->loadMissing('property');
+
+        if (!$inspection->property) {
+            throw ValidationException::withMessages([
+                'source_file' => 'Attach a property to this inspection before adding digital twin data.',
+            ]);
+        }
+
+        $maxKilobytes = max(1, (int) config('digital_twin.upload_max_kilobytes', 512000));
+        $validated = $request->validate([
+            'original_filename' => ['required', 'string', 'max:255'],
+            'file_size' => ['required', 'integer', 'min:1', 'max:' . ($maxKilobytes * 1024)],
+            'mime_type' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $extension = $this->safeTwinExtension(strtolower((string) pathinfo($validated['original_filename'], PATHINFO_EXTENSION)));
+        $supportedExtensions = array_map('strtolower', (array) config('digital_twin.supported_extensions', []));
+
+        if (!in_array($extension, $supportedExtensions, true)) {
+            throw ValidationException::withMessages([
+                'source_file' => 'Upload a supported twin source file: GLB, glTF, OBJ, MatterPak or OBJ ZIP bundle, E57, LAS, LAZ, JPG, JPEG, PNG, WEBP, or PDF.',
+            ]);
+        }
+
+        $mimeType = strtolower(trim((string) ($validated['mime_type'] ?? ''))) ?: 'application/octet-stream';
+        $allowedMimeTypes = array_map('strtolower', (array) config("digital_twin.mime_types.{$extension}", []));
+
+        if ($allowedMimeTypes !== [] && !in_array($mimeType, $allowedMimeTypes, true)) {
+            throw ValidationException::withMessages([
+                'source_file' => 'The selected capture source does not match the expected file type for .' . $extension . ' files.',
+            ]);
+        }
+
+        $diskName = config('digital_twin.disk', config('filesystems.default', 'local'));
+        $driver = config("filesystems.disks.{$diskName}.driver");
+
+        if ($driver !== 's3') {
+            throw ValidationException::withMessages([
+                'source_file' => 'Direct uploads require the digital twin disk to be an S3-compatible private bucket.',
+            ]);
+        }
+
+        $storedFilename = Str::uuid()->toString() . '.' . $extension;
+        $storagePath = "properties/{$inspection->property_id}/twins/inspections/{$inspection->id}/source/{$storedFilename}";
+        $disk = Storage::disk($diskName);
+
+        try {
+            $temporaryUpload = $disk->temporaryUploadUrl(
+                $storagePath,
+                now()->addMinutes(30),
+                ['ContentType' => $mimeType]
+            );
+        } catch (Throwable $exception) {
+            throw ValidationException::withMessages([
+                'source_file' => 'Private bucket direct upload URL could not be created: ' . $exception->getMessage(),
+            ]);
+        }
+
+        $payload = [
+            'inspection_id' => $inspection->id,
+            'property_id' => $inspection->property_id,
+            'user_id' => Auth::id(),
+            'storage_disk' => $diskName,
+            'storage_path' => $storagePath,
+            'stored_filename' => $storedFilename,
+            'original_filename' => $validated['original_filename'],
+            'extension' => $extension,
+            'mime_type' => $mimeType,
+            'file_size' => (int) $validated['file_size'],
+            'expires_at' => now()->addMinutes(35)->toIso8601String(),
+        ];
+
+        $headers = collect($temporaryUpload['headers'] ?? [])
+            ->map(fn ($value) => is_array($value) ? implode(', ', $value) : (string) $value)
+            ->reject(fn ($value, $key) => in_array(strtolower((string) $key), ['host', 'content-length'], true))
+            ->all();
+
+        return response()->json([
+            'method' => 'PUT',
+            'url' => $temporaryUpload['url'],
+            'headers' => $headers,
+            'token' => Crypt::encryptString(json_encode($payload, JSON_THROW_ON_ERROR)),
+            'storage_path' => $storagePath,
+            'expires_at' => $payload['expires_at'],
+        ]);
+    }
+
+    private function verifiedDirectUploadPayload(?string $token, Inspection $inspection): ?array
+    {
+        if (!$token) {
+            return null;
+        }
+
+        try {
+            $payload = json_decode(Crypt::decryptString($token), true, flags: JSON_THROW_ON_ERROR);
+        } catch (DecryptException|\JsonException) {
+            throw ValidationException::withMessages([
+                'source_file' => 'The completed direct upload token is invalid. Please choose the file and upload again.',
+            ]);
+        }
+
+        if (!is_array($payload)) {
+            throw ValidationException::withMessages([
+                'source_file' => 'The completed direct upload token is invalid. Please choose the file and upload again.',
+            ]);
+        }
+
+        if (
+            (int) ($payload['inspection_id'] ?? 0) !== (int) $inspection->id
+            || (int) ($payload['property_id'] ?? 0) !== (int) $inspection->property_id
+            || (int) ($payload['user_id'] ?? 0) !== (int) Auth::id()
+        ) {
+            throw ValidationException::withMessages([
+                'source_file' => 'The completed direct upload does not belong to this property diagnosis.',
+            ]);
+        }
+
+        if (empty($payload['storage_disk']) || empty($payload['storage_path']) || empty($payload['original_filename'])) {
+            throw ValidationException::withMessages([
+                'source_file' => 'The completed direct upload is missing storage details.',
+            ]);
+        }
+
+        try {
+            $expiresAt = \Carbon\Carbon::parse((string) ($payload['expires_at'] ?? now()->subMinute()->toIso8601String()));
+        } catch (Throwable) {
+            $expiresAt = now()->subMinute();
+        }
+
+        if (now()->greaterThan($expiresAt)) {
+            throw ValidationException::withMessages([
+                'source_file' => 'The completed direct upload token expired. Please choose the file and upload again.',
+            ]);
+        }
+
+        $extension = $this->safeTwinExtension((string) ($payload['extension'] ?? pathinfo((string) $payload['original_filename'], PATHINFO_EXTENSION)));
+        $supportedExtensions = array_map('strtolower', (array) config('digital_twin.supported_extensions', []));
+
+        if (!in_array($extension, $supportedExtensions, true)) {
+            throw ValidationException::withMessages([
+                'source_file' => 'The completed direct upload has an unsupported file extension.',
+            ]);
+        }
+
+        $payload['extension'] = $extension;
+        $payload['stored_filename'] = $payload['stored_filename'] ?? basename((string) $payload['storage_path']);
+
+        return $payload;
     }
 
     public function convertMatterPakSource(Request $request, Inspection $inspection, TwinSourceFile $twinSourceFile): RedirectResponse
@@ -1005,11 +1202,12 @@ class DigitalTwinController extends Controller
         ];
     }
 
-    private function classifyTwinSource(array $validated, ?UploadedFile $file): array
+    private function classifyTwinSource(array $validated, ?UploadedFile $file, ?array $directUpload = null): array
     {
-        $extension = $this->detectTwinExtension($validated, $file);
+        $extension = $this->detectTwinExtension($validated, $file, $directUpload);
         $mappedSourceType = config("digital_twin.extension_source_types.{$extension}", 'other');
         $hasHostedReference = !empty($validated['external_url']) || !empty($validated['provider_model_id']);
+        $hasUploadedSource = $file || $directUpload;
         $isPanorama = $mappedSourceType === 'image'
             && (
                 ($validated['capture_type'] ?? null) === 'panorama'
@@ -1031,11 +1229,11 @@ class DigitalTwinController extends Controller
             'queues_matterpak_conversion' => false,
             'file_role' => null,
             'package_type' => null,
-            'original_filename' => $this->externalSourceName($validated, $extension),
+            'original_filename' => $this->externalSourceName($validated, $extension, $directUpload),
             'message' => 'Capture source added to the property digital twin.',
         ];
 
-        if (($validated['provider'] ?? null) === 'matterport' && $file && $extension === 'zip') {
+        if (($validated['provider'] ?? null) === 'matterport' && $hasUploadedSource && $extension === 'zip') {
             return array_merge($classification, [
                 'source_type' => config('digital_twin.matterpak.archive_source_type', 'obj_bundle'),
                 'spatial_source_type' => 'runtime_3d_model',
@@ -1053,7 +1251,7 @@ class DigitalTwinController extends Controller
             ]);
         }
 
-        if (($validated['provider'] ?? null) === 'matterport' && !$file) {
+        if (($validated['provider'] ?? null) === 'matterport' && !$hasUploadedSource) {
             return array_merge($classification, [
                 'source_type' => 'other',
                 'spatial_source_type' => 'hosted_tour',
@@ -1087,7 +1285,7 @@ class DigitalTwinController extends Controller
                 'processing_status' => 'ready',
                 'source_processing_status' => 'ready',
                 'creates_spatial_model' => true,
-                'records_source_file' => (bool) $hasHostedReference && !$file,
+                'records_source_file' => (bool) $hasHostedReference && !$hasUploadedSource,
                 'message' => 'GLB/glTF source uploaded and is ready for the Three.js viewer.',
             ]);
         }
@@ -1180,24 +1378,32 @@ class DigitalTwinController extends Controller
         ]);
     }
 
-    private function detectTwinExtension(array $validated, ?UploadedFile $file): string
+    private function detectTwinExtension(array $validated, ?UploadedFile $file, ?array $directUpload = null): string
     {
         if ($file) {
-            return strtolower((string) $file->getClientOriginalExtension());
+            return $this->safeTwinExtension(strtolower((string) $file->getClientOriginalExtension()));
+        }
+
+        if ($directUpload) {
+            return $this->safeTwinExtension(strtolower((string) ($directUpload['extension'] ?? pathinfo((string) ($directUpload['original_filename'] ?? ''), PATHINFO_EXTENSION))));
         }
 
         $externalPath = parse_url((string) ($validated['external_url'] ?? ''), PHP_URL_PATH);
-        $extension = strtolower((string) pathinfo((string) $externalPath, PATHINFO_EXTENSION));
+        $extension = $this->safeTwinExtension(strtolower((string) pathinfo((string) $externalPath, PATHINFO_EXTENSION)));
 
-        if ($extension !== '') {
+        if ($extension !== 'other') {
             return $extension;
         }
 
-        return strtolower(trim((string) ($validated['original_format'] ?? 'other'))) ?: 'other';
+        return $this->safeTwinExtension(strtolower(trim((string) ($validated['original_format'] ?? 'other'))));
     }
 
-    private function externalSourceName(array $validated, string $extension): string
+    private function externalSourceName(array $validated, string $extension, ?array $directUpload = null): string
     {
+        if (!empty($directUpload['original_filename'])) {
+            return (string) $directUpload['original_filename'];
+        }
+
         $externalPath = parse_url((string) ($validated['external_url'] ?? ''), PHP_URL_PATH);
         $basename = $externalPath ? basename($externalPath) : null;
 
@@ -1210,6 +1416,17 @@ class DigitalTwinController extends Controller
         }
 
         return 'external-source.' . ($extension ?: 'txt');
+    }
+
+    private function safeTwinExtension(string $extension): string
+    {
+        $extension = strtolower(trim($extension));
+
+        if ($extension === '' || !preg_match('/^[a-z0-9]{1,12}$/', $extension)) {
+            return 'other';
+        }
+
+        return $extension;
     }
 
     private function hasMatterportHostedReference(array $validated): bool

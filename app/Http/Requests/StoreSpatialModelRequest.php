@@ -72,11 +72,12 @@ class StoreSpatialModelRequest extends FormRequest
             'original_format' => ['nullable', 'string', 'max:40'],
             'provider_model_id' => ['nullable', 'string', 'max:255'],
             'external_url' => ['nullable', 'url', 'max:255'],
+            'direct_upload_token' => ['nullable', 'string', 'max:12000'],
             'source_file' => [
                 'nullable',
                 'file',
                 'extensions:' . $supportedExtensions,
-                'max:' . config('digital_twin.upload_max_kilobytes', 102400),
+                'max:' . config('digital_twin.upload_max_kilobytes', 512000),
             ],
             'thumbnail_file' => ['nullable', 'image', 'max:10240'],
             'status' => ['required', Rule::in(['draft', 'active', 'archived'])],
@@ -91,14 +92,19 @@ class StoreSpatialModelRequest extends FormRequest
     {
         $validator->after(function (Validator $validator) {
             $hasSourceFile = $this->hasFile('source_file');
+            $hasDirectUpload = filled($this->input('direct_upload_token'));
             $hasExternalUrl = filled($this->input('external_url'));
             $hasProviderModelId = filled($this->input('provider_model_id'));
 
-            if (!$hasSourceFile && !$hasExternalUrl && !$hasProviderModelId) {
+            if ($hasSourceFile && $hasDirectUpload) {
+                $validator->errors()->add('source_file', 'Submit either a browser file upload or a completed direct upload, not both.');
+            }
+
+            if (!$hasSourceFile && !$hasDirectUpload && !$hasExternalUrl && !$hasProviderModelId) {
                 $validator->errors()->add('source_file', 'Attach a file, external URL, or provider model ID for this capture source.');
             }
 
-            if ($this->input('provider') === 'matterport' && !$hasExternalUrl && !$hasProviderModelId && !$hasSourceFile) {
+            if ($this->input('provider') === 'matterport' && !$hasExternalUrl && !$hasProviderModelId && !$hasSourceFile && !$hasDirectUpload) {
                 $validator->errors()->add('provider_model_id', 'Matterport capture sources need a Matterport model ID, hosted tour URL, or MatterPak ZIP upload.');
             }
 

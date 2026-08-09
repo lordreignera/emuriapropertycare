@@ -21,17 +21,18 @@ For best inspection quality, attach both sources when available:
 2. `properties/{property}/digital-twin` resolves the correct inspection/diagnosis first. If more than one diagnosis exists, the user is sent to the inspection selector.
 3. `inspections/{inspection}/digital-twin` opens the single working viewer for that diagnosis. This is why a URL such as `/inspections/5/digital-twin` can be correct even when it is the first active diagnosis for the property: `5` is the database inspection record ID, while the UI shows the property-relative diagnosis number.
 4. Staff uploads a capture source from the same viewer screen.
-5. `DigitalTwinController::storeSpatialModel` validates the request, classifies the source, stores the original file privately, and creates a `CaptureSession`.
-6. For a MatterPak ZIP, the controller creates a parent `TwinSourceFile` with `file_role = matterpak_archive` and a `TwinProcessingJob` with `job_type = matterpak_obj_to_glb`.
-7. If the same upload also includes a Matterport hosted URL or SID, the controller creates a ready `SpatialModel` with `source_type = hosted_tour` for the same capture session. This gives the viewer a photographic walkthrough while the ZIP conversion continues.
-8. Staff can also click `Convert to GLB`, `Retry GLB`, or `Reconvert GLB` on an existing MatterPak archive. The button creates a fresh conversion job unless one is already queued or processing for that archive.
-9. The job is queued on `digital-twin`; run it locally with `php artisan queue:work --queue=digital-twin,default --timeout=3600 --tries=1`.
-10. `ProcessMatterPakToGlb` extracts the ZIP into temporary storage, skips macOS metadata and unsafe paths, and writes child `TwinSourceFile` rows for OBJ, MTL, textures, XYZ, floor plans, reflected ceiling plans, and supporting PDFs.
-11. The worker samples the MatterPak XYZ file into `point-cloud-preview.json`. The full XYZ remains preserved as a source file.
-12. The worker selects the largest OBJ mesh, checks the MTL texture references, records source-texture diagnostics, runs Blender, and exports `model.glb` with the `matterpak_visual_preserve` profile. That profile keeps original images when Blender supports it, uses maximum image quality when re-encoding is unavoidable, exports materials/UVs/normals/tangents, and disables Draco mesh compression.
-13. The generated GLB is saved privately under the property and inspection path, then a ready `SpatialModel` is created or updated for the capture session.
-14. The viewer receives all displayable sources from `show.blade.php` and renders them through `resources/js/digital-twin-viewer.js`.
-15. Staff can click the GLB surface to set marker coordinates, create/link a PHAR finding, and later add labour, materials, trade pricing, quotation approval, and costing through the existing PHAR workflow.
+5. For S3/R2-backed production storage, `DigitalTwinController::createDirectUpload` gives the browser a temporary private-bucket upload URL. The browser uploads the source file directly to the bucket with progress, then submits the capture form with a signed completion token. Local/non-S3 disks can still use the multipart fallback.
+6. `DigitalTwinController::storeSpatialModel` validates the request or signed direct-upload token, classifies the source, records the original private storage path, and creates a `CaptureSession`.
+7. For a MatterPak ZIP, the controller creates a parent `TwinSourceFile` with `file_role = matterpak_archive` and a `TwinProcessingJob` with `job_type = matterpak_obj_to_glb`.
+8. If the same upload also includes a Matterport hosted URL or SID, the controller creates a ready `SpatialModel` with `source_type = hosted_tour` for the same capture session. This gives the viewer a photographic walkthrough while the ZIP conversion continues.
+9. Staff can also click `Convert to GLB`, `Retry GLB`, or `Reconvert GLB` on an existing MatterPak archive. The button creates a fresh conversion job unless one is already queued or processing for that archive.
+10. The job is queued on `digital-twin`; run it locally with `php artisan queue:work --queue=digital-twin,default --timeout=3600 --tries=1`.
+11. `ProcessMatterPakToGlb` extracts the ZIP into temporary storage, skips macOS metadata and unsafe paths, and writes child `TwinSourceFile` rows for OBJ, MTL, textures, XYZ, floor plans, reflected ceiling plans, and supporting PDFs.
+12. The worker samples the MatterPak XYZ file into `point-cloud-preview.json`. The full XYZ remains preserved as a source file.
+13. The worker selects the largest OBJ mesh, checks the MTL texture references, records source-texture diagnostics, runs Blender, and exports `model.glb` with the `matterpak_visual_preserve` profile. That profile keeps original images when Blender supports it, uses maximum image quality when re-encoding is unavoidable, exports materials/UVs/normals/tangents, and disables Draco mesh compression.
+14. The generated GLB is saved privately under the property and inspection path, then a ready `SpatialModel` is created or updated for the capture session.
+15. The viewer receives all displayable sources from `show.blade.php` and renders them through `resources/js/digital-twin-viewer.js`.
+16. Staff can click the GLB surface to set marker coordinates, create/link a PHAR finding, and later add labour, materials, trade pricing, quotation approval, and costing through the existing PHAR workflow.
 
 ## Do Not Duplicate Views
 
@@ -47,7 +48,7 @@ Do not create separate MatterPak-only pages, property-only twin pages, or PHAR-o
 
 Routes:
 
-- `routes/web.php`: property digital twin route, inspection digital twin route, upload route, source download route, marker route, and the legacy Matterport redirect.
+- `routes/web.php`: property digital twin route, inspection digital twin route, direct upload URL route, capture completion/upload route, source download route, marker route, and the legacy Matterport redirect.
 
 Upload, access, and controller flow:
 
@@ -219,7 +220,7 @@ php artisan queue:work --queue=digital-twin,default --timeout=3600 --tries=1
 
 Best production approach for heavy MatterPak files:
 
-- Laravel Cloud web app receives the upload, stores the ZIP privately in Object Storage, and creates `TwinProcessingJob`.
+- Laravel Cloud web app prepares a temporary private-bucket upload URL, the browser uploads the ZIP directly to Object Storage, and Laravel receives only the completion token before creating `TwinProcessingJob`.
 - A dedicated worker process handles the `digital-twin` queue with higher memory/CPU than the web app.
 - If Laravel Cloud cannot include a reliable Blender binary in the worker image, keep Laravel Cloud as the app/queue owner and run Blender in a separate converter service/container. That service reads the same private object-storage file, writes the GLB back to the configured disk, and updates the same database job/model records or calls a signed internal endpoint.
 

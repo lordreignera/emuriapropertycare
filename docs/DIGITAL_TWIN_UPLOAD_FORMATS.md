@@ -106,7 +106,7 @@ DIGITAL_TWIN_BLENDER_BINARY=/path/to/blender
 DIGITAL_TWIN_PROCESSING_QUEUE=digital-twin
 DIGITAL_TWIN_CONVERSION_TIMEOUT=3600
 DIGITAL_TWIN_POINT_CLOUD_PREVIEW_POINTS=30000
-DIGITAL_TWIN_UPLOAD_MAX_KB=102400
+DIGITAL_TWIN_UPLOAD_MAX_KB=512000
 ```
 
 Run the queue worker with:
@@ -116,6 +116,8 @@ php artisan queue:work --queue=digital-twin,default --timeout=3600 --tries=1
 ```
 
 On Laravel Cloud, use Laravel Object Storage through the `s3` disk for persistent source files. The application filesystem is temporary and should only be used for extraction/conversion working files during one job.
+
+For large files, the inspection digital twin form requests a temporary private-bucket upload URL, uploads the selected file directly from the browser to the configured S3/R2 disk, then submits a completion token to Laravel. Laravel then creates the `CaptureSession`, `TwinSourceFile`, and, for MatterPak ZIPs, the `TwinProcessingJob`. If the configured digital twin disk is not S3-compatible, the form falls back to the older Laravel multipart upload path.
 
 ## Point Cloud Processing
 
@@ -152,7 +154,7 @@ For GLB/glTF layers, staff can click directly on the 3D model surface to fill ma
 
 ## Current Limitations
 
-- Large point-cloud files depend on PHP/WAMP upload limits and `DIGITAL_TWIN_UPLOAD_MAX_KB`.
+- Large source files on Laravel Cloud should use the direct-to-private-bucket upload flow. The app limit is controlled by `DIGITAL_TWIN_UPLOAD_MAX_KB`; the bucket must allow browser `PUT` requests from the Laravel Cloud domain through CORS.
 - Laravel Cloud production should use Object Storage/S3 for `DIGITAL_TWIN_DISK`.
 - Blender must be installed and available to the queue worker before MatterPak conversion can complete.
 - Generic OBJ uploads are preserved as source evidence; the current automatic Blender conversion is scoped to MatterPak ZIP.
