@@ -1233,7 +1233,7 @@ class DigitalTwinController extends Controller
             'message' => 'Capture source added to the property digital twin.',
         ];
 
-        if (($validated['provider'] ?? null) === 'matterport' && $hasUploadedSource && $extension === 'zip') {
+        if ($this->shouldQueueUploadedZipForConversion($validated, $file, $directUpload, $extension, (bool) $hasUploadedSource)) {
             return array_merge($classification, [
                 'source_type' => config('digital_twin.matterpak.archive_source_type', 'obj_bundle'),
                 'spatial_source_type' => 'runtime_3d_model',
@@ -1247,7 +1247,7 @@ class DigitalTwinController extends Controller
                 'queues_matterpak_conversion' => true,
                 'file_role' => 'matterpak_archive',
                 'package_type' => 'matterpak',
-                'message' => 'MatterPak ZIP stored privately. OBJ/MTL/textures will be converted to GLB by the queued Blender worker; XYZ, JPG and PDF files are preserved as source records.',
+                'message' => 'MatterPak/OBJ ZIP stored privately. OBJ/MTL/textures will be converted to GLB by the queued Blender worker; XYZ, JPG and PDF files are preserved as source records.',
             ]);
         }
 
@@ -1376,6 +1376,30 @@ class DigitalTwinController extends Controller
             'records_source_file' => true,
             'message' => 'Source file stored for the property twin.',
         ]);
+    }
+
+    private function shouldQueueUploadedZipForConversion(
+        array $validated,
+        ?UploadedFile $file,
+        ?array $directUpload,
+        string $extension,
+        bool $hasUploadedSource
+    ): bool {
+        if (!$hasUploadedSource || $extension !== 'zip') {
+            return false;
+        }
+
+        if (($validated['provider'] ?? null) === 'matterport') {
+            return true;
+        }
+
+        $filename = strtolower((string) ($directUpload['original_filename'] ?? $file?->getClientOriginalName() ?? ''));
+
+        return str_contains($filename, 'matterpak')
+            || (
+                ($validated['capture_type'] ?? null) === 'obj_mesh'
+                && ($validated['source_type'] ?? null) === 'runtime_3d_model'
+            );
     }
 
     private function detectTwinExtension(array $validated, ?UploadedFile $file, ?array $directUpload = null): string

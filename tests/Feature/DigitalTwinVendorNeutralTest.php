@@ -343,6 +343,63 @@ class DigitalTwinVendorNeutralTest extends TestCase
         });
     }
 
+    public function test_completed_direct_obj_zip_upload_queues_conversion_when_provider_is_manual_upload(): void
+    {
+        $this->useTwinTestDisk();
+        Queue::fake();
+
+        $staff = $this->createUserWithRole('Project Manager');
+        [, $inspection] = $this->createInspectionForClient();
+        $inspection->property->update(['project_manager_id' => $staff->id]);
+
+        $storagePath = "properties/{$inspection->property_id}/twins/inspections/{$inspection->id}/source/manual-matterpak.zip";
+        Storage::disk('twin_test')->put($storagePath, 'direct-uploaded-obj-bundle');
+
+        $token = Crypt::encryptString(json_encode([
+            'inspection_id' => $inspection->id,
+            'property_id' => $inspection->property_id,
+            'user_id' => $staff->id,
+            'storage_disk' => 'twin_test',
+            'storage_path' => $storagePath,
+            'stored_filename' => 'manual-matterpak.zip',
+            'original_filename' => 'RicohThetaZ1MatterPak-Z.zip',
+            'extension' => 'zip',
+            'mime_type' => 'application/zip',
+            'file_size' => 166500000,
+            'expires_at' => now()->addMinutes(30)->toIso8601String(),
+        ], JSON_THROW_ON_ERROR));
+
+        $response = $this->actingAs($staff, 'sanctum')
+            ->post(route('inspections.digital-twin.models.store', $inspection), [
+                'provider' => 'manual_upload',
+                'capture_type' => 'obj_mesh',
+                'source_type' => 'runtime_3d_model',
+                'display_name' => 'Manual MatterPak upload',
+                'direct_upload_token' => $token,
+                'status' => 'active',
+                'is_primary' => '1',
+            ]);
+
+        $response->assertRedirect(route('inspections.digital-twin', $inspection));
+
+        $sourceFile = TwinSourceFile::where('inspection_id', $inspection->id)
+            ->where('file_role', 'matterpak_archive')
+            ->firstOrFail();
+
+        $this->assertSame('obj_bundle', $sourceFile->source_type);
+        $this->assertSame('awaiting_processing', $sourceFile->processing_status);
+        $this->assertSame('RicohThetaZ1MatterPak-Z.zip', $sourceFile->original_filename);
+
+        $processingJob = TwinProcessingJob::where('source_file_id', $sourceFile->id)->firstOrFail();
+
+        $this->assertSame('matterpak_obj_to_glb', $processingJob->job_type);
+        $this->assertSame('queued', $processingJob->status);
+
+        Queue::assertPushed(ProcessMatterPakToGlb::class, function (ProcessMatterPakToGlb $job) use ($processingJob) {
+            return $job->processingJobId === $processingJob->id;
+        });
+    }
+
     public function test_staff_can_start_matterpak_reconversion_from_ready_archive(): void
     {
         $this->useTwinTestDisk();
