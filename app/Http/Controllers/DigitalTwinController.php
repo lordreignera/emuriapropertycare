@@ -595,6 +595,112 @@ class DigitalTwinController extends Controller
             ->with('success', 'MatterPak conversion started. Keep the digital-twin queue worker running to finish the GLB.');
     }
 
+    public function destroySourceFile(Request $request, Inspection $inspection, TwinSourceFile $twinSourceFile): RedirectResponse
+    {
+        $this->authorizeInspectionAccess($inspection);
+
+        if (!$this->canManageDigitalTwin($inspection)) {
+            abort(403, 'You do not have permission to remove digital twin sources for this diagnosis.');
+        }
+
+        $inspection->loadMissing('property');
+
+        if (
+            (int) $twinSourceFile->inspection_id !== (int) $inspection->id
+            || (int) $twinSourceFile->property_id !== (int) $inspection->property_id
+        ) {
+            abort(404);
+        }
+
+        if ($twinSourceFile->parent_source_file_id) {
+            return redirect()
+                ->route('inspections.digital-twin', $inspection)
+                ->with('error', 'Remove the original uploaded package instead of an extracted child source file.');
+        }
+
+        $sourceFiles = TwinSourceFile::query()
+            ->whereKey($twinSourceFile->id)
+            ->orWhere('parent_source_file_id', $twinSourceFile->id)
+            ->get();
+        $sourceFileIds = $sourceFiles->pluck('id');
+        $captureSessionId = $twinSourceFile->capture_session_id;
+
+        $activeJobExists = TwinProcessingJob::query()
+            ->where('inspection_id', $inspection->id)
+            ->whereIn('source_file_id', $sourceFileIds)
+            ->whereIn('status', ['queued', 'processing'])
+            ->exists();
+
+        if ($activeJobExists) {
+            return redirect()
+                ->route('inspections.digital-twin', [$inspection, 'capture' => $captureSessionId])
+                ->with('error', 'This capture has an active conversion job. Wait for it to finish or fail before removing the upload.');
+        }
+
+        $linkedSpatialModelIds = $sourceFiles
+            ->pluck('spatial_model_id')
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($linkedSpatialModelIds->isNotEmpty()) {
+            return redirect()
+                ->route('inspections.digital-twin', [$inspection, 'capture' => $captureSessionId])
+                ->with('error', 'This upload already produced a viewer model. Remove or archive that model before deleting the source package.');
+        }
+
+        $markerQuery = IssueMarker::query()->where('inspection_id', $inspection->id);
+
+        if ($captureSessionId) {
+            $markerQuery->where('capture_session_id', $captureSessionId);
+        } else {
+            $markerQuery->whereRaw('1 = 0');
+        }
+
+        if ($markerQuery->exists()) {
+            return redirect()
+                ->route('inspections.digital-twin', [$inspection, 'capture' => $captureSessionId])
+                ->with('error', 'This capture already has issue markers. Remove or relink those markers before deleting the upload.');
+        }
+
+        $processingJobs = TwinProcessingJob::query()
+            ->whereIn('source_file_id', $sourceFileIds)
+            ->get();
+        $storageObjects = $this->storedTwinSourceObjectsForDeletion($sourceFiles, $processingJobs);
+
+        try {
+            $this->deleteStoredTwinObjects($storageObjects);
+        } catch (Throwable $exception) {
+            return redirect()
+                ->route('inspections.digital-twin', [$inspection, 'capture' => $captureSessionId])
+                ->with('error', 'The upload could not be removed from private storage: ' . $exception->getMessage());
+        }
+
+        DB::transaction(function () use ($sourceFileIds, $twinSourceFile, $captureSessionId) {
+            TwinProcessingJob::whereIn('source_file_id', $sourceFileIds)->delete();
+            TwinSourceFile::whereIn('id', $sourceFileIds)->where('id', '!=', $twinSourceFile->id)->delete();
+            $twinSourceFile->delete();
+
+            if ($captureSessionId) {
+                $captureSession = CaptureSession::find($captureSessionId);
+
+                if (
+                    $captureSession
+                    && !$captureSession->twinSourceFiles()->exists()
+                    && !$captureSession->spatialModels()->exists()
+                    && !$captureSession->twinProcessingJobs()->exists()
+                    && !$captureSession->issueMarkers()->exists()
+                ) {
+                    $captureSession->delete();
+                }
+            }
+        });
+
+        return redirect()
+            ->route('inspections.digital-twin', $inspection)
+            ->with('success', 'Unconverted digital twin upload removed from this property diagnosis.');
+    }
+
     public function storeIssueMarker(StoreIssueMarkerRequest $request, Inspection $inspection): RedirectResponse
     {
         $inspection->loadMissing('property');
@@ -1089,6 +1195,50 @@ class DigitalTwinController extends Controller
         return $sourceFile->file_role === 'matterpak_archive'
             && strtolower((string) $sourceFile->extension) === 'zip'
             && ($sourceFile->metadata['package_type'] ?? null) === 'matterpak';
+    }
+
+    private function storedTwinSourceObjectsForDeletion($sourceFiles, $processingJobs): array
+    {
+        $defaultDisk = config('digital_twin.disk', config('filesystems.default', 'local'));
+        $objects = collect();
+
+        foreach ($sourceFiles as $sourceFile) {
+            if ($sourceFile->storage_path) {
+                $objects->push([
+                    'disk' => $sourceFile->storage_disk ?: $defaultDisk,
+                    'path' => $sourceFile->storage_path,
+                ]);
+            }
+        }
+
+        foreach ($processingJobs as $processingJob) {
+            if ($processingJob->input_storage_path) {
+                $objects->push([
+                    'disk' => $processingJob->input_storage_disk ?: $defaultDisk,
+                    'path' => $processingJob->input_storage_path,
+                ]);
+            }
+
+            if ($processingJob->output_storage_path) {
+                $objects->push([
+                    'disk' => $processingJob->output_storage_disk ?: $defaultDisk,
+                    'path' => $processingJob->output_storage_path,
+                ]);
+            }
+        }
+
+        return $objects
+            ->filter(fn (array $object) => filled($object['disk']) && filled($object['path']))
+            ->unique(fn (array $object) => $object['disk'] . '|' . $object['path'])
+            ->values()
+            ->all();
+    }
+
+    private function deleteStoredTwinObjects(array $storageObjects): void
+    {
+        foreach ($storageObjects as $object) {
+            Storage::disk($object['disk'])->delete($object['path']);
+        }
     }
 
     private function authorizeInspectionAccess(Inspection $inspection): void

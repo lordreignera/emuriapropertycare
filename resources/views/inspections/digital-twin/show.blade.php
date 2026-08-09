@@ -368,6 +368,40 @@
             'status' => $latestSourceJob?->status ?: $sourceFile->processing_status,
         ];
     };
+    $sourceDeleteAction = function ($sourceFile, $sessionSources, $sessionJobs, $sessionMarkers) use ($inspection, $canManageDigitalTwin) {
+        if (!$canManageDigitalTwin || !$sourceFile || $sourceFile->parent_source_file_id || !$sourceFile->storage_path) {
+            return null;
+        }
+
+        $relatedSourceIds = collect($sessionSources)
+            ->filter(fn ($sessionSource) => (int) $sessionSource->id === (int) $sourceFile->id || (int) $sessionSource->parent_source_file_id === (int) $sourceFile->id)
+            ->pluck('id')
+            ->values();
+        $hasActiveJob = collect($sessionJobs)
+            ->whereIn('source_file_id', $relatedSourceIds->all())
+            ->whereIn('status', ['queued', 'processing'])
+            ->isNotEmpty();
+        $hasLinkedModel = collect($sessionSources)
+            ->filter(fn ($sessionSource) => $relatedSourceIds->contains((int) $sessionSource->id))
+            ->pluck('spatial_model_id')
+            ->filter()
+            ->isNotEmpty();
+        $hasMarkers = collect($sessionMarkers)->isNotEmpty();
+        $disabled = $hasActiveJob || $hasLinkedModel || $hasMarkers;
+
+        return [
+            'url' => route('inspections.digital-twin.source-files.destroy', [$inspection, $sourceFile]),
+            'label' => 'Remove upload',
+            'title' => $hasActiveJob
+                ? 'This source is being converted. Wait for the conversion to finish or fail before removing it.'
+                : ($hasLinkedModel
+                    ? 'This source already produced a viewer model and cannot be removed from this cleanup action.'
+                    : ($hasMarkers
+                        ? 'This capture has issue markers. Remove or relink the markers before deleting the source.'
+                        : 'Remove this unconverted upload and its private source files.')),
+            'disabled' => $disabled,
+        ];
+    };
     $viewerSources = $viewerSources->map(function ($source) use ($inspection, $sourceFiles, $sourcesByCapture, $jobsByCapture, $canCreateIssueMarkers, $matterPakConvertAction) {
         $captureId = (int) ($source['captureSessionId'] ?? 0);
         $spatialModelId = (int) ($source['spatialModelId'] ?? 0);
@@ -1785,6 +1819,7 @@
                                     $primarySource = $sessionSources->firstWhere('parent_source_file_id', null) ?: $sessionSources->first();
                                     $matterPakArchive = $sessionSources->firstWhere('file_role', 'matterpak_archive');
                                     $convertAction = $matterPakConvertAction($matterPakArchive, $sessionJobs);
+                                    $deleteAction = $sourceDeleteAction($primarySource, $sessionSources, $sessionJobs, $sessionMarkers);
                                     $latestJob = $sessionJobs->sortByDesc('id')->first();
                                     $sessionStatus = $latestJob?->status ?: ($readyModel?->processing_status ?: $session->status);
                                     $sessionTitle = $readyModel?->display_name
@@ -1894,17 +1929,38 @@
                                         </div>
                                     @endif
 
-                                    @if($convertAction)
-                                        <form method="POST" action="{{ $convertAction['url'] }}" class="d-inline-flex mt-3">
-                                            @csrf
-                                            <button
-                                                type="submit"
-                                                class="btn btn-outline-warning btn-sm"
-                                                title="{{ $convertAction['title'] }}"
-                                                @disabled($convertAction['disabled'])>
-                                                <i class="mdi {{ $convertAction['icon'] }} me-1"></i>{{ $convertAction['label'] }}
-                                            </button>
-                                        </form>
+                                    @if($convertAction || $deleteAction)
+                                        <div class="d-flex flex-wrap gap-2 mt-3">
+                                            @if($convertAction)
+                                                <form method="POST" action="{{ $convertAction['url'] }}" class="d-inline-flex">
+                                                    @csrf
+                                                    <button
+                                                        type="submit"
+                                                        class="btn btn-outline-warning btn-sm"
+                                                        title="{{ $convertAction['title'] }}"
+                                                        @disabled($convertAction['disabled'])>
+                                                        <i class="mdi {{ $convertAction['icon'] }} me-1"></i>{{ $convertAction['label'] }}
+                                                    </button>
+                                                </form>
+                                            @endif
+                                            @if($deleteAction)
+                                                <form
+                                                    method="POST"
+                                                    action="{{ $deleteAction['url'] }}"
+                                                    class="d-inline-flex"
+                                                    onsubmit="return confirm('Remove this unconverted digital twin upload from this property diagnosis? This also removes its private source files.');">
+                                                    @csrf
+                                                    @method('DELETE')
+                                                    <button
+                                                        type="submit"
+                                                        class="btn btn-outline-danger btn-sm"
+                                                        title="{{ $deleteAction['title'] }}"
+                                                        @disabled($deleteAction['disabled'])>
+                                                        <i class="mdi mdi-delete-outline me-1"></i>{{ $deleteAction['label'] }}
+                                                    </button>
+                                                </form>
+                                            @endif
+                                        </div>
                                     @endif
                                 </article>
                             @endforeach

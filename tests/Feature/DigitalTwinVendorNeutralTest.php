@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Jobs\ProcessMatterPakToGlb;
+use App\Models\CaptureSession;
 use App\Models\Inspection;
 use App\Models\PHARFinding;
 use App\Models\Property;
@@ -398,6 +399,159 @@ class DigitalTwinVendorNeutralTest extends TestCase
         Queue::assertPushed(ProcessMatterPakToGlb::class, function (ProcessMatterPakToGlb $job) use ($processingJob) {
             return $job->processingJobId === $processingJob->id;
         });
+    }
+
+    public function test_staff_can_remove_unconverted_twin_upload_and_private_source_files(): void
+    {
+        $this->useTwinTestDisk();
+
+        $staff = $this->createUserWithRole('Project Manager');
+        [, $inspection] = $this->createInspectionForClient();
+        $inspection->property->update(['project_manager_id' => $staff->id]);
+
+        $archivePath = "properties/{$inspection->property_id}/twins/inspections/{$inspection->id}/source/stale-matterpak.zip";
+        $childPath = "properties/{$inspection->property_id}/twins/inspections/{$inspection->id}/source/extracted/floor-plan.jpg";
+        Storage::disk('twin_test')->put($archivePath, 'stale archive');
+        Storage::disk('twin_test')->put($childPath, 'stale extracted file');
+
+        $captureSession = CaptureSession::create([
+            'property_id' => $inspection->property_id,
+            'inspection_id' => $inspection->id,
+            'captured_by' => $staff->id,
+            'provider' => 'manual_upload',
+            'capture_type' => 'obj_mesh',
+            'status' => 'failed',
+        ]);
+
+        $sourceFile = TwinSourceFile::create([
+            'property_id' => $inspection->property_id,
+            'inspection_id' => $inspection->id,
+            'capture_session_id' => $captureSession->id,
+            'uploaded_by' => $staff->id,
+            'storage_disk' => 'twin_test',
+            'storage_path' => $archivePath,
+            'original_filename' => 'stale-matterpak.zip',
+            'stored_filename' => 'stale-matterpak.zip',
+            'extension' => 'zip',
+            'mime_type' => 'application/zip',
+            'file_size' => 13,
+            'source_type' => 'obj_bundle',
+            'file_role' => 'matterpak_archive',
+            'processing_status' => 'failed',
+            'metadata' => ['package_type' => 'matterpak'],
+        ]);
+
+        $childSourceFile = TwinSourceFile::create([
+            'parent_source_file_id' => $sourceFile->id,
+            'property_id' => $inspection->property_id,
+            'inspection_id' => $inspection->id,
+            'capture_session_id' => $captureSession->id,
+            'uploaded_by' => $staff->id,
+            'storage_disk' => 'twin_test',
+            'storage_path' => $childPath,
+            'original_filename' => 'floor-plan.jpg',
+            'stored_filename' => 'floor-plan.jpg',
+            'relative_path' => 'floorplans/floor-plan.jpg',
+            'extension' => 'jpg',
+            'mime_type' => 'image/jpeg',
+            'file_size' => 20,
+            'source_type' => 'image',
+            'file_role' => 'floor_plan',
+            'processing_status' => 'uploaded',
+        ]);
+
+        $processingJob = TwinProcessingJob::create([
+            'property_id' => $inspection->property_id,
+            'inspection_id' => $inspection->id,
+            'capture_session_id' => $captureSession->id,
+            'source_file_id' => $sourceFile->id,
+            'created_by' => $staff->id,
+            'processor' => 'blender',
+            'job_type' => 'matterpak_obj_to_glb',
+            'queue_name' => 'digital-twin',
+            'status' => 'failed',
+            'input_storage_disk' => 'twin_test',
+            'input_storage_path' => $archivePath,
+            'timeout_seconds' => 3600,
+        ]);
+
+        $response = $this->actingAs($staff, 'sanctum')
+            ->delete(route('inspections.digital-twin.source-files.destroy', [$inspection, $sourceFile]));
+
+        $response->assertRedirect(route('inspections.digital-twin', $inspection));
+        $response->assertSessionHas('success');
+
+        $this->assertDatabaseMissing('twin_source_files', ['id' => $sourceFile->id]);
+        $this->assertDatabaseMissing('twin_source_files', ['id' => $childSourceFile->id]);
+        $this->assertDatabaseMissing('twin_processing_jobs', ['id' => $processingJob->id]);
+        $this->assertDatabaseMissing('capture_sessions', ['id' => $captureSession->id]);
+        $this->assertFalse(Storage::disk('twin_test')->exists($archivePath));
+        $this->assertFalse(Storage::disk('twin_test')->exists($childPath));
+    }
+
+    public function test_staff_cannot_remove_twin_upload_while_conversion_is_active(): void
+    {
+        $this->useTwinTestDisk();
+
+        $staff = $this->createUserWithRole('Project Manager');
+        [, $inspection] = $this->createInspectionForClient();
+        $inspection->property->update(['project_manager_id' => $staff->id]);
+
+        $archivePath = "properties/{$inspection->property_id}/twins/inspections/{$inspection->id}/source/active-matterpak.zip";
+        Storage::disk('twin_test')->put($archivePath, 'active archive');
+
+        $captureSession = CaptureSession::create([
+            'property_id' => $inspection->property_id,
+            'inspection_id' => $inspection->id,
+            'captured_by' => $staff->id,
+            'provider' => 'manual_upload',
+            'capture_type' => 'obj_mesh',
+            'status' => 'processing',
+        ]);
+
+        $sourceFile = TwinSourceFile::create([
+            'property_id' => $inspection->property_id,
+            'inspection_id' => $inspection->id,
+            'capture_session_id' => $captureSession->id,
+            'uploaded_by' => $staff->id,
+            'storage_disk' => 'twin_test',
+            'storage_path' => $archivePath,
+            'original_filename' => 'active-matterpak.zip',
+            'stored_filename' => 'active-matterpak.zip',
+            'extension' => 'zip',
+            'mime_type' => 'application/zip',
+            'file_size' => 14,
+            'source_type' => 'obj_bundle',
+            'file_role' => 'matterpak_archive',
+            'processing_status' => 'processing',
+            'metadata' => ['package_type' => 'matterpak'],
+        ]);
+
+        $processingJob = TwinProcessingJob::create([
+            'property_id' => $inspection->property_id,
+            'inspection_id' => $inspection->id,
+            'capture_session_id' => $captureSession->id,
+            'source_file_id' => $sourceFile->id,
+            'created_by' => $staff->id,
+            'processor' => 'blender',
+            'job_type' => 'matterpak_obj_to_glb',
+            'queue_name' => 'digital-twin',
+            'status' => 'processing',
+            'input_storage_disk' => 'twin_test',
+            'input_storage_path' => $archivePath,
+            'timeout_seconds' => 3600,
+        ]);
+
+        $response = $this->actingAs($staff, 'sanctum')
+            ->delete(route('inspections.digital-twin.source-files.destroy', [$inspection, $sourceFile]));
+
+        $response->assertRedirect(route('inspections.digital-twin', [$inspection, 'capture' => $captureSession->id]));
+        $response->assertSessionHas('error');
+
+        $this->assertDatabaseHas('twin_source_files', ['id' => $sourceFile->id]);
+        $this->assertDatabaseHas('twin_processing_jobs', ['id' => $processingJob->id]);
+        $this->assertDatabaseHas('capture_sessions', ['id' => $captureSession->id]);
+        $this->assertTrue(Storage::disk('twin_test')->exists($archivePath));
     }
 
     public function test_staff_can_start_matterpak_reconversion_from_ready_archive(): void
