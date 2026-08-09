@@ -1,0 +1,19 @@
+services:
+  digital-twin-worker:
+    build:
+      context: ../../..
+      dockerfile: deploy/digitalocean/digital-twin-worker/Dockerfile
+    image: etogo-digital-twin-worker:latest
+    env_file:
+      - .env.worker
+    init: true
+    restart: unless-stopped
+    shm_size: 1gb
+    volumes:
+      - digital-twin-temp:/app/storage/app/private/tmp/digital-twin
+      - digital-twin-logs:/app/storage/logs
+    stop_grace_period: 90s
+
+volumes:
+  digital-twin-temp:
+  digital-twin-logs:
