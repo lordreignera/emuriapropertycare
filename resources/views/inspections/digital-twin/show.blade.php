@@ -2166,7 +2166,7 @@
                 }
 
                 if (maxBytes > 0 && file.size > maxBytes) {
-                    warning.textContent = 'This file is ' + formatBytes(file.size) + '. The current browser upload limit is ' + maxMb + ' MB, so this upload will fail until WAMP/PHP and the app limit are increased.';
+                    warning.textContent = 'This file is ' + formatBytes(file.size) + '. The current server upload limit is ' + maxMb + ' MB, so this upload will fail until the PHP request limit and DIGITAL_TWIN_UPLOAD_MAX_KB are increased.';
                     warning.classList.add('is-visible');
                     if (submitButton) {
                         submitButton.disabled = true;

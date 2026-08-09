@@ -17,7 +17,7 @@ return [
         env('APP_ENV') === 'production' ? env('FILESYSTEM_DISK', 'local') : 'local'
     ),
 
-    'upload_max_kilobytes' => (int) env('DIGITAL_TWIN_UPLOAD_MAX_KB', 102400),
+    'upload_max_kilobytes' => (int) env('DIGITAL_TWIN_UPLOAD_MAX_KB', 512000),
 
     'source_types' => [
         'glb',
