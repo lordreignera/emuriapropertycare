@@ -9,6 +9,8 @@ use App\Models\User;
 use App\Notifications\WorkPaymentReceivedNotification;
 use App\Notifications\InstallmentPaymentReceivedNotification;
 use App\Services\InspectionFeeConfirmationService;
+use App\Services\InspectionInvoiceSyncService;
+use App\Services\InstallmentPaymentService;
 use App\Services\InvoicePaymentService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -20,6 +22,8 @@ class StripeWebhookController extends Controller
     public function __construct(
         private readonly InspectionFeeConfirmationService $inspectionFeeConfirmationService,
         private readonly InvoicePaymentService $invoicePaymentService,
+        private readonly InstallmentPaymentService $installmentPaymentService,
+        private readonly InspectionInvoiceSyncService $inspectionInvoiceSyncService,
     ) {
     }
 
@@ -318,25 +322,54 @@ class StripeWebhookController extends Controller
      */
     private function confirmInstallmentPayment(\Stripe\PaymentIntent $intent, array $metadata, float $amount)
     {
-        DB::beginTransaction();
         try {
             $inspectionId = $metadata['inspection_id'] ?? null;
             if (!$inspectionId) {
                 throw new \Exception('No inspection_id in metadata');
             }
 
-            $inspection = Inspection::find($inspectionId);
+            $inspection = Inspection::with('property.user')->find($inspectionId);
             if (!$inspection) {
                 throw new \Exception("Inspection {$inspectionId} not found");
             }
 
-            $paid = (int) ($inspection->installments_paid ?? 0) + 1;
-            $total = (int) ($inspection->installment_months ?? 1);
+            if ($this->installmentPaymentService->hasRecorded($inspection, $intent->id)) {
+                Log::info('Installment payment webhook already applied', [
+                    'inspection_id' => $inspection->id,
+                    'payment_intent_id' => $intent->id,
+                ]);
 
-            $inspection->update([
-                'installments_paid' => $paid,
-                'arp_fully_paid_at' => $paid >= $total ? now() : null,
-            ]);
+                return;
+            }
+
+            $paid = (int) ($inspection->installments_paid ?? 0) + 1;
+            $total = max(1, (int) ($inspection->installment_months ?? 1));
+            $installAmount = (float) ($inspection->installment_amount ?? 0);
+
+            $this->assertPaymentIntentMatches($intent, [
+                'payment_type' => 'per_visit',
+                'inspection_id' => (string) $inspection->id,
+                'property_id' => (string) $inspection->property_id,
+                'client_user_id' => (string) ($inspection->property?->user_id ?? ''),
+                'visit_number' => (string) $paid,
+                'payment_plan' => (string) ($inspection->payment_plan ?? ''),
+            ], (int) round($installAmount * 100));
+
+            $result = $this->installmentPaymentService->apply($inspection, $intent->id);
+            $inspection = $result['inspection'];
+            $paid = $result['paid'];
+            $total = $result['total'];
+
+            if (!$result['applied']) {
+                Log::info('Installment payment webhook did not change state', [
+                    'inspection_id' => $inspection->id,
+                    'payment_intent_id' => $intent->id,
+                ]);
+
+                return;
+            }
+
+            $this->inspectionInvoiceSyncService->syncProjectInvoice($inspection->fresh(['property', 'project']));
 
             // Notify admins
             $adminRecipients = User::role(['Super Admin', 'Administrator', 'Project Manager'])
@@ -360,13 +393,33 @@ class StripeWebhookController extends Controller
                 'paid' => $paid,
                 'total' => $total,
             ]);
-
-            DB::commit();
         } catch (\Throwable $e) {
-            DB::rollBack();
             Log::error('Confirmation of installment payment failed', [
                 'error' => $e->getMessage(),
             ]);
+        }
+    }
+
+    private function assertPaymentIntentMatches(\Stripe\PaymentIntent $paymentIntent, array $expectedMetadata, int $expectedAmountCents): void
+    {
+        $metadata = method_exists($paymentIntent->metadata, 'toArray')
+            ? $paymentIntent->metadata->toArray()
+            : (array) $paymentIntent->metadata;
+
+        foreach ($expectedMetadata as $key => $expectedValue) {
+            if ((string) ($metadata[$key] ?? '') !== (string) $expectedValue) {
+                throw new \RuntimeException("Payment reference {$key} does not match.");
+            }
+        }
+
+        $actualAmountCents = (int) (($paymentIntent->amount_received ?? 0) ?: ($paymentIntent->amount ?? 0));
+        if ($actualAmountCents !== $expectedAmountCents) {
+            throw new \RuntimeException('Payment amount does not match the expected charge.');
+        }
+
+        $expectedCurrency = strtolower((string) config('cashier.currency', 'usd'));
+        if (strtolower((string) ($paymentIntent->currency ?? '')) !== $expectedCurrency) {
+            throw new \RuntimeException('Payment currency does not match.');
         }
     }
 }

@@ -16,6 +16,7 @@ use App\Services\BDCCalculator;
 use App\Services\DiagnosisPricingService;
 use App\Services\InspectionFeeConfirmationService;
 use App\Services\InspectionInvoiceSyncService;
+use App\Services\InstallmentPaymentService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -69,6 +70,7 @@ class InspectionController extends Controller
         private readonly InspectionFeeConfirmationService $inspectionFeeConfirmationService,
         private readonly InspectionInvoiceSyncService $inspectionInvoiceSyncService,
         private readonly DiagnosisPricingService $diagnosisPricingService,
+        private readonly InstallmentPaymentService $installmentPaymentService,
     )
     {
     }
@@ -1102,6 +1104,14 @@ class InspectionController extends Controller
                 throw new \RuntimeException('Payment not completed.');
             }
 
+            if ($this->installmentPaymentService->hasRecorded($inspection, $paymentIntent->id)) {
+                return response()->json([
+                    'success'  => true,
+                    'redirect' => route('client.inspections.report', $inspection->id),
+                    'message'  => 'Payment already confirmed.',
+                ]);
+            }
+
             $paid  = (int) ($inspection->installments_paid ?? 0) + 1;
             $total = (int) ($inspection->installment_months ?? 1);
             $installAmount = (float) ($inspection->installment_amount ?? 0);
@@ -1115,16 +1125,19 @@ class InspectionController extends Controller
                 'payment_plan' => (string) ($inspection->payment_plan ?? ''),
             ], (int) round($installAmount * 100));
 
-            $fields = [
-                'installments_paid'          => $paid,
-                'next_installment_due_date'  => null,
-                'arp_fully_paid_at'          => $paid >= $total ? now() : null,
-            ];
-
-            $inspection->update($fields);
+            $result = $this->installmentPaymentService->apply($inspection, $paymentIntent->id);
+            $inspection = $result['inspection'];
+            $paid = $result['paid'];
+            $total = $result['total'];
             $this->inspectionInvoiceSyncService->syncProjectInvoice($inspection->fresh(['property', 'project']));
 
-            DB::commit();
+            if (!$result['applied']) {
+                return response()->json([
+                    'success'  => true,
+                    'redirect' => route('client.inspections.report', $inspection->id),
+                    'message'  => 'Payment already confirmed.',
+                ]);
+            }
 
             $remaining      = $total - $paid;
             $isPerVisitPlan = ($inspection->payment_plan ?? 'full') === 'per_visit';
@@ -1164,7 +1177,6 @@ class InspectionController extends Controller
                 'message'  => $message,
             ]);
         } catch (\Throwable $e) {
-            DB::rollBack();
             \Log::error('Per-visit payment failed', [
                 'inspection_id' => $inspection->id,
                 'error'         => $e->getMessage(),
@@ -1471,10 +1483,14 @@ class InspectionController extends Controller
         $inspectionId = $request->get('inspection_id');
 
         if ($inspectionId) {
-            $inspection = Inspection::find($inspectionId);
-            if ($inspection) {
-                // Mark inspection as cancelled since payment wasn't completed
-                $inspection->update(['status' => 'cancelled']);
+            $inspection = Inspection::with('property')->find($inspectionId);
+            if ($inspection && $inspection->property && (int) $inspection->property->user_id === (int) Auth::id()) {
+                // Only cancel pending payment attempts, not inspections already accepted into operations.
+                if (($inspection->inspection_fee_status ?? 'pending') !== 'paid') {
+                    $inspection->update(['status' => 'cancelled']);
+                }
+            } elseif ($inspection) {
+                abort(403, 'Unauthorized access.');
             }
         }
 

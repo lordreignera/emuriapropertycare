@@ -5,15 +5,18 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreIssueMarkerRequest;
 use App\Http\Requests\StoreSpatialModelRequest;
 use App\Jobs\ProcessMatterPakToGlb;
+use App\Models\BuildingComponent;
+use App\Models\BuildingSubsystem;
+use App\Models\BuildingSystem;
 use App\Models\CaptureSession;
 use App\Models\Inspection;
 use App\Models\IssueMarker;
-use App\Models\MatterportModel;
 use App\Models\PHARFinding;
 use App\Models\Property;
 use App\Models\SpatialModel;
 use App\Models\TwinProcessingJob;
 use App\Models\TwinSourceFile;
+use App\Services\MatterportHostedTourService;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\UploadedFile;
@@ -21,6 +24,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class DigitalTwinController extends Controller
@@ -37,10 +41,12 @@ class DigitalTwinController extends Controller
             'captureSessions.capturedBy',
             'activeSpatialModels.creator',
             'activeSpatialModels.captureSession',
+            'twinSourceFiles.captureSession',
             'twinSourceFiles.uploader',
             'twinSourceFiles.childSourceFiles',
             'twinProcessingJobs.sourceFile',
             'issueMarkers.spatialModel',
+            'issueMarkers.captureSession',
             'issueMarkers.pharFinding',
             'pharFindings',
         ]);
@@ -59,10 +65,13 @@ class DigitalTwinController extends Controller
             'legacyMatterportModel' => $inspection->activeMatterportModel
                 ?: $inspection->matterportModels()->latest('id')->first(),
             'issueMarkers' => $inspection->issueMarkers->sortByDesc('id'),
+            'viewerMarkers' => $this->viewerMarkers($inspection->issueMarkers),
             'pharFindings' => $inspection->pharFindings->sortByDesc('id'),
+            'propertyDiagnosisNumber' => $this->propertyDiagnosisNumber($inspection),
             'providers' => CaptureSession::PROVIDERS,
             'captureTypes' => CaptureSession::CAPTURE_TYPES,
             'sourceTypes' => SpatialModel::SOURCE_TYPES,
+            'buildingSystems' => $this->activeBuildingSystems(),
             'canManageDigitalTwin' => $this->canManageDigitalTwin($inspection),
             'canCreateIssueMarkers' => $this->canCreateIssueMarkers($inspection),
             'backUrl' => $user->hasRole('Client')
@@ -138,7 +147,11 @@ class DigitalTwinController extends Controller
             : null;
 
         $result = DB::transaction(function () use ($inspection, $validated, $sourceFile, $sourceFilePath, $storedFilename, $thumbnailPath, $disk, $classification, $fileMetadata) {
-            if (!empty($validated['is_primary']) && $classification['creates_spatial_model']) {
+            if (
+                !empty($validated['is_primary'])
+                && $classification['creates_spatial_model']
+                && !$this->isMatterportHostedClassification($validated, $classification)
+            ) {
                 SpatialModel::where('inspection_id', $inspection->id)->update(['is_primary' => false]);
             }
 
@@ -167,7 +180,19 @@ class DigitalTwinController extends Controller
             $twinSourceFile = null;
             $processingJob = null;
 
-            if ($classification['creates_spatial_model']) {
+            if ($classification['creates_spatial_model'] && $this->isMatterportHostedClassification($validated, $classification)) {
+                $spatialModel = $this->attachMatterportHostedTour(
+                    $inspection,
+                    $captureSession,
+                    $validated,
+                    $thumbnailPath,
+                    [
+                        'storage_owner' => 'external',
+                        'source_file_type' => 'hosted_matterport_walkthrough',
+                        'classification_message' => $classification['message'],
+                    ]
+                );
+            } elseif ($classification['creates_spatial_model']) {
                 $spatialModel = SpatialModel::create([
                     'property_id' => $inspection->property_id,
                     'inspection_id' => $inspection->id,
@@ -232,41 +257,26 @@ class DigitalTwinController extends Controller
             }
 
             if (($classification['queues_matterpak_conversion'] ?? false) && $twinSourceFile) {
-                $processingJob = TwinProcessingJob::create([
-                    'property_id' => $inspection->property_id,
-                    'inspection_id' => $inspection->id,
-                    'capture_session_id' => $captureSession->id,
-                    'source_file_id' => $twinSourceFile->id,
-                    'created_by' => Auth::id(),
-                    'processor' => 'blender',
-                    'job_type' => 'matterpak_obj_to_glb',
-                    'queue_name' => config('digital_twin.processing.queue', 'digital-twin'),
-                    'status' => 'queued',
-                    'input_storage_disk' => $disk,
-                    'input_storage_path' => $sourceFilePath,
-                    'timeout_seconds' => config('digital_twin.processing.timeout_seconds', 3600),
-                    'metadata' => [
-                        'original_filename' => $fileMetadata['original_filename'] ?? $classification['original_filename'],
-                        'matterpak_source_file_id' => $twinSourceFile->id,
-                        'classification_message' => $classification['message'],
-                    ],
+                $processingJob = $this->createMatterPakProcessingJob($twinSourceFile, [
+                    'original_filename' => $fileMetadata['original_filename'] ?? $classification['original_filename'],
+                    'classification_message' => $classification['message'],
+                    'triggered_from' => 'matterpak_upload',
                 ]);
             }
 
-            if ($spatialModel && $spatialModel->provider === 'matterport' && $spatialModel->provider_model_id) {
-                MatterportModel::updateOrCreate(
-                    ['inspection_id' => $inspection->id],
+            if (($classification['queues_matterpak_conversion'] ?? false) && $twinSourceFile && $this->hasMatterportHostedReference($validated)) {
+                $spatialModel = $this->attachMatterportHostedTour(
+                    $inspection,
+                    $captureSession,
+                    $validated,
+                    $thumbnailPath,
                     [
-                        'property_id' => $inspection->property_id,
-                        'spatial_model_id' => $spatialModel->id,
-                        'created_by' => Auth::id(),
-                        'model_sid' => $spatialModel->provider_model_id,
-                        'model_name' => $spatialModel->display_name,
-                        'model_url' => $spatialModel->external_url,
-                        'status' => $spatialModel->status,
-                        'scanned_at' => $validated['captured_at'] ?? null,
-                        'notes' => $validated['notes'] ?? null,
-                    ]
+                        'storage_owner' => 'external',
+                        'paired_matterpak_source_file_id' => $twinSourceFile->id,
+                        'source_file_type' => 'hosted_matterport_walkthrough',
+                        'classification_message' => 'Hosted Matterport walkthrough added alongside MatterPak ZIP source.',
+                    ],
+                    $this->matterportHostedDisplayName($validated)
                 );
             }
 
@@ -274,13 +284,13 @@ class DigitalTwinController extends Controller
                 'spatial_model' => $spatialModel,
                 'source_file' => $twinSourceFile,
                 'processing_job' => $processingJob,
+                'capture_session' => $captureSession,
             ];
         });
 
         if ($result['processing_job'] instanceof TwinProcessingJob) {
             try {
-                ProcessMatterPakToGlb::dispatch($result['processing_job']->id)
-                    ->onQueue(config('digital_twin.processing.queue', 'digital-twin'));
+                $this->dispatchMatterPakProcessingJob($result['processing_job']);
             } catch (Throwable $exception) {
                 $result['processing_job']->update([
                     'status' => 'failed',
@@ -301,7 +311,91 @@ class DigitalTwinController extends Controller
 
         return redirect()
             ->route('inspections.digital-twin', $inspection)
+            ->with('digital_twin_capture_id', $result['capture_session']?->id)
             ->with($result['spatial_model'] ? 'success' : 'info', $classification['message']);
+    }
+
+    public function convertMatterPakSource(Request $request, Inspection $inspection, TwinSourceFile $twinSourceFile): RedirectResponse
+    {
+        $this->authorizeInspectionAccess($inspection);
+
+        if (!$this->canManageDigitalTwin($inspection)) {
+            abort(403, 'You do not have permission to convert MatterPak sources for this diagnosis.');
+        }
+
+        $inspection->loadMissing('property');
+
+        if (
+            (int) $twinSourceFile->inspection_id !== (int) $inspection->id
+            || (int) $twinSourceFile->property_id !== (int) $inspection->property_id
+        ) {
+            abort(404);
+        }
+
+        if (!$this->isMatterPakArchive($twinSourceFile)) {
+            return redirect()
+                ->route('inspections.digital-twin', $inspection)
+                ->with('error', 'Only MatterPak ZIP archive source files can be converted with Blender.');
+        }
+
+        if (!$twinSourceFile->storage_path) {
+            return redirect()
+                ->route('inspections.digital-twin', $inspection)
+                ->with('error', 'This MatterPak archive is missing its private storage path.');
+        }
+
+        $activeJob = $this->activeMatterPakProcessingJob($twinSourceFile);
+
+        if ($activeJob) {
+            return redirect()
+                ->route('inspections.digital-twin', [$inspection, 'capture' => $twinSourceFile->capture_session_id])
+                ->with('info', 'MatterPak conversion is already ' . str_replace('_', ' ', (string) $activeJob->status) . ' for this capture.');
+        }
+
+        $processingJob = DB::transaction(function () use ($twinSourceFile) {
+            $twinSourceFile->update([
+                'processing_status' => 'queued',
+                'processing_error' => null,
+            ]);
+
+            CaptureSession::whereKey($twinSourceFile->capture_session_id)->update([
+                'status' => 'queued',
+            ]);
+
+            return $this->createMatterPakProcessingJob($twinSourceFile, [
+                'original_filename' => $twinSourceFile->original_filename,
+                'triggered_from' => 'manual_digital_twin_convert_button',
+                'requested_at' => now()->toIso8601String(),
+                'previous_spatial_model_id' => $twinSourceFile->spatial_model_id,
+            ]);
+        });
+
+        try {
+            $this->dispatchMatterPakProcessingJob($processingJob);
+        } catch (Throwable $exception) {
+            $processingJob->update([
+                'status' => 'failed',
+                'processing_error' => $exception->getMessage(),
+                'completed_at' => now(),
+            ]);
+
+            $twinSourceFile->update([
+                'processing_status' => 'failed',
+                'processing_error' => $exception->getMessage(),
+            ]);
+
+            CaptureSession::whereKey($twinSourceFile->capture_session_id)->update([
+                'status' => 'failed',
+            ]);
+
+            return redirect()
+                ->route('inspections.digital-twin', [$inspection, 'capture' => $twinSourceFile->capture_session_id])
+                ->with('error', 'MatterPak conversion could not be queued: ' . $exception->getMessage());
+        }
+
+        return redirect()
+            ->route('inspections.digital-twin', [$inspection, 'capture' => $twinSourceFile->capture_session_id])
+            ->with('success', 'MatterPak conversion started. Keep the digital-twin queue worker running to finish the GLB.');
     }
 
     public function storeIssueMarker(StoreIssueMarkerRequest $request, Inspection $inspection): RedirectResponse
@@ -313,6 +407,17 @@ class DigitalTwinController extends Controller
         }
 
         $validated = $request->validated();
+        $validated = $this->normalizeMarkerFindingContext($validated);
+
+        if (
+            !empty($validated['create_phar_finding'])
+            && empty($validated['phar_finding_id'])
+            && !$this->canCreatePharFindingFromMarker($inspection)
+        ) {
+            return back()
+                ->withErrors(['create_phar_finding' => 'New PHAR findings cannot be created from markers after the findings report has been shared. Link this marker to an existing finding instead.'])
+                ->withInput();
+        }
 
         if (!empty($validated['spatial_model_id'])) {
             $belongsToInspection = SpatialModel::where('id', $validated['spatial_model_id'])
@@ -350,44 +455,360 @@ class DigitalTwinController extends Controller
             }
         }
 
-        $marker = IssueMarker::create([
-            'property_id' => $inspection->property_id,
-            'inspection_id' => $inspection->id,
-            'spatial_model_id' => $validated['spatial_model_id'] ?? null,
-            'capture_session_id' => $validated['capture_session_id'] ?? null,
-            'phar_finding_id' => $validated['phar_finding_id'] ?? null,
-            'created_by' => Auth::id(),
-            'source_provider' => $validated['source_provider'],
-            'marker_type' => $validated['marker_type'],
-            'title' => $validated['title'],
-            'severity' => $validated['severity'],
-            'status' => $validated['status'],
-            'position_x' => $validated['position_x'] ?? null,
-            'position_y' => $validated['position_y'] ?? null,
-            'position_z' => $validated['position_z'] ?? null,
-            'normal_x' => $validated['normal_x'] ?? null,
-            'normal_y' => $validated['normal_y'] ?? null,
-            'normal_z' => $validated['normal_z'] ?? null,
-            'camera_position' => $validated['camera_position'] ?? null,
-            'camera_target' => $validated['camera_target'] ?? null,
-            'object_uuid' => $validated['object_uuid'] ?? null,
-            'room_name' => $validated['room_name'] ?? null,
-            'surface_label' => $validated['surface_label'] ?? null,
-            'source_reference' => $validated['source_reference'] ?? null,
-            'confidence' => $validated['confidence'] ?? null,
-            'description' => $validated['description'] ?? null,
-            'metadata' => [
-                'created_from' => 'digital_twin_marker_form',
-            ],
-            'provenance' => $validated['provenance'] ?? [
-                'created_from' => 'digital_twin_marker_form',
+        $createdFinding = null;
+        $marker = DB::transaction(function () use ($inspection, $validated, &$createdFinding) {
+            $pharFindingId = $validated['phar_finding_id'] ?? null;
+
+            if (!empty($validated['create_phar_finding']) && !$pharFindingId) {
+                $createdFinding = $this->createPharFindingFromMarker($inspection, $validated);
+                $pharFindingId = $createdFinding->id;
+            }
+
+            return IssueMarker::create([
+                'property_id' => $inspection->property_id,
+                'inspection_id' => $inspection->id,
+                'spatial_model_id' => $validated['spatial_model_id'] ?? null,
+                'capture_session_id' => $validated['capture_session_id'] ?? null,
+                'phar_finding_id' => $pharFindingId,
+                'created_by' => Auth::id(),
                 'source_provider' => $validated['source_provider'],
-            ],
-        ]);
+                'marker_type' => $validated['marker_type'],
+                'title' => $validated['title'],
+                'severity' => $validated['severity'],
+                'status' => $validated['status'],
+                'position_x' => $validated['position_x'] ?? null,
+                'position_y' => $validated['position_y'] ?? null,
+                'position_z' => $validated['position_z'] ?? null,
+                'normal_x' => $validated['normal_x'] ?? null,
+                'normal_y' => $validated['normal_y'] ?? null,
+                'normal_z' => $validated['normal_z'] ?? null,
+                'camera_position' => $validated['camera_position'] ?? null,
+                'camera_target' => $validated['camera_target'] ?? null,
+                'object_uuid' => $validated['object_uuid'] ?? null,
+                'room_name' => $validated['room_name'] ?? null,
+                'surface_label' => $validated['surface_label'] ?? null,
+                'source_reference' => $validated['source_reference'] ?? null,
+                'confidence' => $validated['confidence'] ?? null,
+                'description' => $validated['description'] ?? null,
+                'metadata' => [
+                    'created_from' => 'digital_twin_marker_form',
+                    'created_phar_finding_id' => $createdFinding?->id,
+                ],
+                'provenance' => $validated['provenance'] ?? [
+                    'created_from' => 'digital_twin_marker_form',
+                    'source_provider' => $validated['source_provider'],
+                ],
+            ]);
+        });
 
         return redirect()
             ->route('inspections.digital-twin', $inspection)
-            ->with('success', "Issue marker {$marker->id} added to the property digital twin.");
+            ->with('success', $createdFinding
+                ? "Issue marker {$marker->id} added and PHAR finding {$createdFinding->id} created for this diagnosis."
+                : "Issue marker {$marker->id} added to the property digital twin.");
+    }
+
+    private function createPharFindingFromMarker(Inspection $inspection, array $markerData): PHARFinding
+    {
+        $inspection->refresh();
+
+        $jsonSeverity = in_array($markerData['severity'], ['critical', 'high', 'medium', 'low'], true)
+            ? $markerData['severity']
+            : 'medium';
+        $pharSeverity = $jsonSeverity === 'medium' ? 'moderate' : $jsonSeverity;
+        $priority = match ($jsonSeverity) {
+            'critical', 'high' => '1',
+            'medium' => '2',
+            default => '3',
+        };
+        $location = trim((string) ($markerData['room_name'] ?? ''));
+        $spot = trim((string) ($markerData['surface_label'] ?? ''));
+        $sourceReference = trim((string) ($markerData['source_reference'] ?? ''));
+        $description = trim((string) ($markerData['description'] ?? ''));
+        $issue = trim((string) $markerData['title']);
+        $systemId = $markerData['building_system_id'] ?? null;
+        $subsystemId = $markerData['building_subsystem_id'] ?? null;
+        $componentId = $markerData['building_component_id'] ?? null;
+        $systemName = $markerData['building_system_name'] ?? null;
+        $systemSlug = $markerData['building_system_slug'] ?? null;
+        $subsystemName = $markerData['building_subsystem_name'] ?? null;
+        $componentName = $markerData['building_component_name'] ?? null;
+
+        $finding = PHARFinding::create([
+            'inspection_id' => $inspection->id,
+            'property_id' => $inspection->property_id,
+            'building_system_id' => $systemId,
+            'building_subsystem_id' => $subsystemId,
+            'building_component_id' => $componentId,
+            'task_question' => $issue,
+            'category' => $systemName ?: 'Digital Twin',
+            'finding_type' => 'stand_alone',
+            'severity' => $pharSeverity,
+            'priority' => $priority,
+            'included_yn' => true,
+            'labour_hours' => 0,
+            'material_cost' => 0,
+            'notes' => $sourceReference !== '' ? 'Digital twin source: ' . $sourceReference : null,
+            'observed_condition' => $description !== '' ? $description : $issue,
+            'consequence_if_ignored' => null,
+            'remediation_strategy' => null,
+            'workflow_status' => 'observed',
+        ]);
+
+        $findings = collect($inspection->findings ?? [])->values();
+        $findings->push([
+            'building_system_id' => $systemId,
+            'system' => $systemName,
+            'system_slug' => $systemSlug,
+            'building_subsystem_id' => $subsystemId,
+            'building_component_id' => $componentId,
+            'subsystem' => $subsystemName,
+            'component' => $componentName,
+            'issue' => $issue,
+            'issue_description' => $description !== '' ? $description : $issue,
+            'location' => $location,
+            'spot' => $spot,
+            'severity' => $jsonSeverity,
+            'notes' => $sourceReference !== '' ? 'Digital twin source: ' . $sourceReference : '',
+            'recommendations' => [],
+            'recommendation_details' => '',
+            'affected_areas' => [[
+                'building_system_id' => $systemId,
+                'building_subsystem_id' => $subsystemId,
+                'building_component_id' => $componentId,
+                'location' => trim(implode(' / ', array_filter([$location, $spot]))) ?: null,
+                'impact_description' => $description !== '' ? $description : null,
+                'severity' => $pharSeverity,
+            ]],
+            'type' => $systemSlug,
+            'finding_photos' => [],
+            'risk_impact' => '',
+            'phar_labour_hours' => 0,
+            'phar_category' => $systemName ?: 'Digital Twin',
+            'phar_included_yn' => true,
+            'phar_notes' => $sourceReference !== '' ? 'Digital twin source: ' . $sourceReference : '',
+            'fulfillment_type' => 'decide_later',
+            'trade_application_id' => null,
+            'trade_quantity' => 1,
+            'trade_unit' => '',
+            'trade_scope_area' => $location,
+            'trade_duration_hours' => null,
+            'trade_materials_included' => false,
+            'trade_notes' => '',
+            'phar_materials' => [],
+            'digital_twin' => [
+                'capture_session_id' => $markerData['capture_session_id'] ?? null,
+                'spatial_model_id' => $markerData['spatial_model_id'] ?? null,
+                'source_reference' => $sourceReference ?: null,
+                'created_from_marker' => true,
+            ],
+        ]);
+
+        $inspection->forceFill(['findings' => $findings->all()])->save();
+
+        return $finding;
+    }
+
+    private function normalizeMarkerFindingContext(array $validated): array
+    {
+        $systemId = !empty($validated['building_system_id']) ? (int) $validated['building_system_id'] : null;
+        $subsystemId = !empty($validated['building_subsystem_id']) ? (int) $validated['building_subsystem_id'] : null;
+        $componentId = !empty($validated['building_component_id']) ? (int) $validated['building_component_id'] : null;
+
+        $system = $systemId ? BuildingSystem::find($systemId) : null;
+        $subsystem = $subsystemId ? BuildingSubsystem::find($subsystemId) : null;
+        $component = $componentId ? BuildingComponent::with('subsystem')->find($componentId) : null;
+
+        if ($systemId && !$system) {
+            throw ValidationException::withMessages([
+                'building_system_id' => 'Choose a valid building system.',
+            ]);
+        }
+
+        if ($subsystemId && !$subsystem) {
+            throw ValidationException::withMessages([
+                'building_subsystem_id' => 'Choose a valid building subsystem.',
+            ]);
+        }
+
+        if ($componentId && !$component) {
+            throw ValidationException::withMessages([
+                'building_component_id' => 'Choose a valid building component.',
+            ]);
+        }
+
+        if ($subsystem && $systemId && (int) $subsystem->building_system_id !== $systemId) {
+            throw ValidationException::withMessages([
+                'building_subsystem_id' => 'Selected subsystem does not belong to the selected building system.',
+            ]);
+        }
+
+        if ($component) {
+            if ($subsystemId && (int) $component->building_subsystem_id !== $subsystemId) {
+                throw ValidationException::withMessages([
+                    'building_component_id' => 'Selected component does not belong to the selected subsystem.',
+                ]);
+            }
+
+            if (!$subsystem) {
+                $subsystem = $component->subsystem;
+                $subsystemId = $subsystem?->id;
+            }
+        }
+
+        if ($subsystem && !$system) {
+            $system = BuildingSystem::find($subsystem->building_system_id);
+            $systemId = $system?->id;
+        }
+
+        if ($component && $subsystem && $systemId && (int) $subsystem->building_system_id !== $systemId) {
+            throw ValidationException::withMessages([
+                'building_component_id' => 'Selected component does not belong to the selected building system.',
+            ]);
+        }
+
+        return array_merge($validated, [
+            'building_system_id' => $systemId,
+            'building_subsystem_id' => $subsystemId,
+            'building_component_id' => $componentId,
+            'building_system_name' => $system?->name,
+            'building_system_slug' => $system?->slug,
+            'building_subsystem_name' => $subsystem?->name,
+            'building_component_name' => $component?->name,
+        ]);
+    }
+
+    private function viewerMarkers($markers)
+    {
+        return $markers
+            ->filter(fn (IssueMarker $marker) => $marker->position_x !== null && $marker->position_y !== null && $marker->position_z !== null)
+            ->map(function (IssueMarker $marker) {
+                $captureLabel = $marker->captureSession
+                    ? $marker->captureSession->provider_label . ' / ' . $marker->captureSession->capture_type_label
+                    : null;
+                $modelTitle = $marker->spatialModel
+                    ? ($marker->spatialModel->display_name ?: $marker->spatialModel->source_type_label)
+                    : null;
+
+                return [
+                    'id' => (int) $marker->id,
+                    'title' => $marker->title,
+                    'description' => $marker->description,
+                    'severity' => $marker->severity,
+                    'status' => $marker->status,
+                    'sourceProvider' => $marker->source_provider,
+                    'sourceProviderLabel' => CaptureSession::PROVIDERS[$marker->source_provider] ?? ucfirst(str_replace('_', ' ', (string) $marker->source_provider)),
+                    'markerType' => $marker->marker_type,
+                    'roomName' => $marker->room_name,
+                    'surfaceLabel' => $marker->surface_label,
+                    'sourceReference' => $marker->source_reference,
+                    'confidence' => $marker->confidence !== null ? (float) $marker->confidence : null,
+                    'spatialModelId' => $marker->spatial_model_id ? (int) $marker->spatial_model_id : null,
+                    'captureSessionId' => $marker->capture_session_id ? (int) $marker->capture_session_id : null,
+                    'pharFindingId' => $marker->phar_finding_id ? (int) $marker->phar_finding_id : null,
+                    'pharFindingLabel' => $this->pharFindingLabel($marker->pharFinding),
+                    'captureLabel' => $captureLabel,
+                    'modelTitle' => $modelTitle,
+                    'position' => [
+                        'x' => (float) $marker->position_x,
+                        'y' => (float) $marker->position_y,
+                        'z' => (float) $marker->position_z,
+                    ],
+                    'normal' => $this->viewerVector(
+                        $marker->normal_x,
+                        $marker->normal_y,
+                        $marker->normal_z
+                    ),
+                    'cameraPosition' => $this->viewerVectorFromPayload($marker->camera_position),
+                    'cameraTarget' => $this->viewerVectorFromPayload($marker->camera_target),
+                ];
+            })
+            ->values();
+    }
+
+    private function viewerVector($x, $y, $z): ?array
+    {
+        if ($x === null || $y === null || $z === null) {
+            return null;
+        }
+
+        return [
+            'x' => (float) $x,
+            'y' => (float) $y,
+            'z' => (float) $z,
+        ];
+    }
+
+    private function viewerVectorFromPayload($payload): ?array
+    {
+        if (is_string($payload)) {
+            $payload = json_decode($payload, true);
+        }
+
+        if (!is_array($payload)) {
+            return null;
+        }
+
+        return $this->viewerVector(
+            $payload['x'] ?? null,
+            $payload['y'] ?? null,
+            $payload['z'] ?? null
+        );
+    }
+
+    private function pharFindingLabel(?PHARFinding $finding): ?string
+    {
+        if (!$finding) {
+            return null;
+        }
+
+        return $finding->task_question
+            ?: $finding->observed_condition
+            ?: $finding->category
+            ?: 'Finding #' . $finding->id;
+    }
+
+    private function propertyDiagnosisNumber(Inspection $inspection): int
+    {
+        return max(1, Inspection::where('property_id', $inspection->property_id)
+            ->where('id', '<=', $inspection->id)
+            ->count());
+    }
+
+    private function activeBuildingSystems()
+    {
+        return BuildingSystem::with([
+            'subsystems' => fn ($query) => $query
+                ->where('is_active', true)
+                ->orderBy('sort_order')
+                ->orderBy('name'),
+            'subsystems.components' => fn ($query) => $query
+                ->where('is_active', true)
+                ->orderBy('sort_order')
+                ->orderBy('name'),
+        ])
+            ->where('is_active', true)
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get();
+    }
+
+    private function canCreatePharFindingFromMarker(Inspection $inspection): bool
+    {
+        if ($inspection->findings_report_shared_at) {
+            return false;
+        }
+
+        return !in_array($inspection->status, [
+            'findings_shared',
+            'client_committed',
+            'estimation_in_progress',
+            'estimation_completed',
+            'quotation_shared',
+            'quotation_approved',
+            'completed',
+            'approved',
+        ], true);
     }
 
     public function spatialModelFile(Inspection $inspection, SpatialModel $spatialModel)
@@ -426,6 +847,51 @@ class DigitalTwinController extends Controller
             $twinSourceFile->storage_disk ?: config('digital_twin.disk', config('filesystems.default', 'local')),
             $twinSourceFile->original_filename
         );
+    }
+
+    private function createMatterPakProcessingJob(TwinSourceFile $sourceFile, array $metadata = []): TwinProcessingJob
+    {
+        return TwinProcessingJob::create([
+            'property_id' => $sourceFile->property_id,
+            'inspection_id' => $sourceFile->inspection_id,
+            'capture_session_id' => $sourceFile->capture_session_id,
+            'source_file_id' => $sourceFile->id,
+            'spatial_model_id' => $sourceFile->spatial_model_id,
+            'created_by' => Auth::id(),
+            'processor' => 'blender',
+            'job_type' => 'matterpak_obj_to_glb',
+            'queue_name' => config('digital_twin.processing.queue', 'digital-twin'),
+            'status' => 'queued',
+            'input_storage_disk' => $sourceFile->storage_disk ?: config('digital_twin.disk', config('filesystems.default', 'local')),
+            'input_storage_path' => $sourceFile->storage_path,
+            'timeout_seconds' => config('digital_twin.processing.timeout_seconds', 3600),
+            'metadata' => array_merge([
+                'matterpak_source_file_id' => $sourceFile->id,
+            ], $metadata),
+        ]);
+    }
+
+    private function dispatchMatterPakProcessingJob(TwinProcessingJob $processingJob): void
+    {
+        ProcessMatterPakToGlb::dispatch($processingJob->id)
+            ->onQueue(config('digital_twin.processing.queue', 'digital-twin'));
+    }
+
+    private function activeMatterPakProcessingJob(TwinSourceFile $sourceFile): ?TwinProcessingJob
+    {
+        return TwinProcessingJob::query()
+            ->where('source_file_id', $sourceFile->id)
+            ->where('job_type', 'matterpak_obj_to_glb')
+            ->whereIn('status', ['queued', 'processing'])
+            ->latest('id')
+            ->first();
+    }
+
+    private function isMatterPakArchive(TwinSourceFile $sourceFile): bool
+    {
+        return $sourceFile->file_role === 'matterpak_archive'
+            && strtolower((string) $sourceFile->extension) === 'zip'
+            && ($sourceFile->metadata['package_type'] ?? null) === 'matterpak';
     }
 
     private function authorizeInspectionAccess(Inspection $inspection): void
@@ -744,6 +1210,59 @@ class DigitalTwinController extends Controller
         }
 
         return 'external-source.' . ($extension ?: 'txt');
+    }
+
+    private function hasMatterportHostedReference(array $validated): bool
+    {
+        if (($validated['provider'] ?? null) !== 'matterport') {
+            return false;
+        }
+
+        return !empty($validated['provider_model_id']) || !empty($validated['external_url']);
+    }
+
+    private function attachMatterportHostedTour(
+        Inspection $inspection,
+        CaptureSession $captureSession,
+        array $validated,
+        ?string $thumbnailPath,
+        array $metadata,
+        ?string $displayName = null
+    ): SpatialModel {
+        return app(MatterportHostedTourService::class)->attachToCaptureSession($inspection, $captureSession, [
+            'provider_model_id' => $validated['provider_model_id'] ?? null,
+            'external_url' => $validated['external_url'] ?? null,
+            'display_name' => $displayName ?? ($validated['display_name'] ?? null),
+            'status' => $validated['status'],
+            'is_primary' => !empty($validated['is_primary']),
+            'accuracy_class' => $validated['accuracy_class'] ?? null,
+            'thumbnail_path' => $thumbnailPath,
+            'captured_at' => $validated['captured_at'] ?? null,
+            'notes' => $validated['notes'] ?? null,
+            'created_by' => Auth::id(),
+            'metadata' => $metadata,
+        ]);
+    }
+
+    private function isMatterportHostedClassification(array $validated, array $classification): bool
+    {
+        return ($validated['provider'] ?? null) === 'matterport'
+            && ($classification['spatial_source_type'] ?? null) === 'hosted_tour';
+    }
+
+    private function matterportHostedDisplayName(array $validated): string
+    {
+        $displayName = trim((string) ($validated['display_name'] ?? ''));
+
+        if ($displayName === '') {
+            return 'Matterport hosted walkthrough';
+        }
+
+        if (preg_match('/\b(tour|walkthrough|showcase)\b/i', $displayName)) {
+            return $displayName;
+        }
+
+        return $displayName . ' walkthrough';
     }
 
     private function authorizedStorageResponse(string $path, ?string $disk, string $downloadName)

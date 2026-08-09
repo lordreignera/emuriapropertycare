@@ -1,6 +1,6 @@
 # Current System Flow Map
 
-Updated: August 5, 2026
+Updated: August 6, 2026
 
 This document describes the current ETOGO flow after the shift from a Matterport-first, pay-before-inspection model to a vendor-neutral property facts and diagnosis model.
 
@@ -9,6 +9,8 @@ This document describes the current ETOGO flow after the shift from a Matterport
 ETOGO is a vendor-neutral property facts, digital twin, diagnosis, remediation, and stewardship platform.
 
 Matterport, RESOLV, phone cameras, DSLR cameras, 360 cameras, drones, LiDAR, thermal cameras, BIM/CAD exports, PDFs, photos, and manual uploads are treated as capture sources. The application owns the property record, property facts, diagnosis records, issue markers, invoices, remediation workflow, and verification history.
+
+For the detailed MatterPak upload, Blender conversion, viewer, marker, and PHAR edit map, see `docs/MATTERPAK_DIGITAL_TWIN_FLOW.md`.
 
 ## Naming Rule
 
@@ -168,7 +170,7 @@ Current viewer behavior:
 - Hosted Matterport URLs can still be displayed as hosted walkthroughs.
 - GLB/glTF is recognized as a Three.js model type.
 - Images and PDFs are treated as viewable evidence.
-- MatterPak ZIP is stored privately, extracted into source-file metadata, and queued for Blender OBJ-to-GLB conversion where a worker is configured.
+- MatterPak ZIP is stored privately, extracted into source-file metadata, queued for Blender OBJ-to-GLB conversion, and displayed with related plans, documents, texture gallery, and sampled point-cloud preview when available.
 - E57, LAS, and LAZ are accepted as preserved source files and marked `awaiting_processing`; they are not opened directly in Three.js.
 - Generic OBJ/ZIP uploads are preserved as source packages unless a browser-ready derivative exists.
 
@@ -176,7 +178,7 @@ Current limitation:
 
 - The application stores vendor-neutral model/evidence records now.
 - GLB/glTF can be viewed immediately.
-- MatterPak conversion requires Blender to be installed on the queue worker.
+- MatterPak conversion requires Blender to be installed and configured on the queue worker.
 - E57/LAS/LAZ point-cloud processing is still a later processing-worker phase.
 
 ## MatterPak Processing
@@ -196,10 +198,11 @@ How it works:
 3. A parent `twin_source_files` record is created for the archive.
 4. A `twin_processing_jobs` record is created with `job_type = matterpak_obj_to_glb`.
 5. The worker extracts the ZIP into a temporary job folder and creates child `twin_source_files` records for OBJ, MTL, textures, XYZ, JPG and PDF files.
-6. The worker uses Blender to convert OBJ/MTL/textures into GLB.
-7. The generated GLB is uploaded to private storage.
-8. A browser-ready `spatial_models` record is created or updated only after GLB generation succeeds.
-9. If Blender or source files are missing, the job/source records are marked `failed` and no ready spatial model is created.
+6. The worker samples the MatterPak XYZ file into `point-cloud-preview.json` when point-cloud data exists.
+7. The worker uses Blender to convert OBJ/MTL/textures into GLB.
+8. The generated GLB is uploaded to private storage.
+9. A browser-ready `spatial_models` record is created or updated only after GLB generation succeeds.
+10. If Blender or source files are missing, the job/source records are marked `failed` and no ready spatial model is created.
 
 Worker command:
 
@@ -214,12 +217,13 @@ DIGITAL_TWIN_DISK=s3
 DIGITAL_TWIN_BLENDER_BINARY=/path/to/blender
 DIGITAL_TWIN_PROCESSING_QUEUE=digital-twin
 DIGITAL_TWIN_CONVERSION_TIMEOUT=3600
+DIGITAL_TWIN_POINT_CLOUD_PREVIEW_POINTS=30000
 ```
 
 Local status:
 
 - The MatterPak upload and queue feature exists.
-- The queue worker still needs Blender installed/configured before real conversion can complete.
+- The local WAMP setup can convert MatterPak when `DIGITAL_TWIN_BLENDER_BINARY` points at the installed Blender executable.
 - On Laravel Cloud, use Object Storage/S3 for persistent twin files. The app filesystem is temporary and should only hold per-job extraction files.
 
 ## Point-Cloud Processing
